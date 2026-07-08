@@ -9,6 +9,7 @@ import XPShop from "./screens/XPShop";
 import StudentProfile from "./screens/StudentProfile";
 import AdminDashboard from "./screens/AdminDashboard";
 import InstructorPanel from "./screens/InstructorPanel";
+import DesktopMascotPet from "./components/DesktopMascotPet";
 
 export type Screen =
   | "login"
@@ -25,7 +26,7 @@ export type Role = "student" | "admin" | "instructor";
 export type Theme = "light" | "dark";
 export type BackgroundTheme = "diagonal" | "blueprint" | "matrix" | "sunrise" | "graphite";
 export type AvatarStyle = "initials" | "pixel" | "coder" | "robot" | "silver";
-export type MentorMascot = "mino" | "nova" | "byte" | "sage";
+export type MentorMascot = "mino" | "nova" | "byte" | "sage" | "luna" | "kuro" | "ignis" | "sylph";
 export type ChatSkin = "classic" | "terminal" | "neon" | "paper";
 export type SkillMapSkin = "campaign" | "space" | "circuit" | "dungeon" | "route-blueprint";
 export type BadgeFrame = "streak" | "quiz" | "mindmap" | "rookie" | "explorer";
@@ -137,7 +138,7 @@ export default function App() {
   };
 
   return (
-    <div className={`theme-${theme} bg-theme-${backgroundTheme} pc-app-bg flex h-screen overflow-hidden text-slate-900`}>
+    <div className={`theme-${theme} ${theme === "dark" ? "dark" : ""} bg-theme-${backgroundTheme} pc-app-bg flex h-screen overflow-hidden text-slate-900`}>
       <Sidebar
         screen={screen}
         role={role}
@@ -151,6 +152,9 @@ export default function App() {
       <main className="flex-1 overflow-y-auto">
         {renderScreen()}
       </main>
+      {role === "student" && screen !== "workspace" && (
+        <DesktopMascotPet mascot={mentorMascot} activeScreen={screen} />
+      )}
     </div>
   );
 }

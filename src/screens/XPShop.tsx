@@ -60,6 +60,10 @@ const shopItems: ShopItem[] = [
   { id: "nova", category: "mentor", name: "Nova", desc: "Mentor nghiêm túc, tập trung mục tiêu.", cost: 360, tag: "Focus", preview: "shop-mentor-nova", levelReq: 2 },
   { id: "byte", category: "mentor", name: "Byte", desc: "Mentor vui tính, hợp học qua nhiệm vụ nhỏ.", cost: 360, tag: "Fun", preview: "shop-mentor-byte", levelReq: 2 },
   { id: "sage", category: "mentor", name: "Sage", desc: "Mentor Socratic, hay hỏi ngược để tự hiểu.", cost: 480, tag: "Socratic", preview: "shop-mentor-sage", levelReq: 3 },
+  { id: "luna", category: "mentor", name: "Mecha-Luna", desc: "Trợ lý Mecha thông minh siêu ngầu, phân tích logic chuẩn xác.", cost: 800, tag: "Anime / Mecha", preview: "shop-mentor-luna", levelReq: 3 },
+  { id: "kuro", category: "mentor", name: "Kuro (Neko)", desc: "Trợ lý mèo ninja đen dễ thương, phản xạ nhanh nhạy với lỗi cú pháp.", cost: 950, tag: "Cute / Neko", preview: "shop-mentor-kuro", levelReq: 4 },
+  { id: "ignis", category: "mentor", name: "Ignis (Dragon)", desc: "Linh thú rồng lửa ngầu lòi, thúc đẩy tinh thần học tập bùng cháy.", cost: 1200, tag: "Cool / Flame", preview: "shop-mentor-ignis", levelReq: 5 },
+  { id: "sylph", category: "mentor", name: "Sylph (Fairy)", desc: "Trợ lý tiên rừng thanh bình, giảng giải lý thuyết êm dịu dễ tiếp thu.", cost: 1500, tag: "Kawaii / Nature", preview: "shop-mentor-sylph", levelReq: 6 },
 
   { id: "classic", category: "chat", name: "Classic Chat", desc: "Sạch, sáng, dễ đọc.", cost: 0, tag: "Clean", preview: "shop-chat-classic", levelReq: 1 },
   { id: "terminal", category: "chat", name: "Terminal Chat", desc: "Khung chat đen, vibe lập trình.", cost: 300, tag: "CLI", preview: "shop-chat-terminal", levelReq: 2 },
@@ -80,12 +84,12 @@ const shopItems: ShopItem[] = [
 ];
 
 const categoryMeta: Record<ShopCategory, { label: string; icon: React.ReactNode }> = {
-  theme: { label: "Theme", icon: <Palette size={14} /> },
-  avatar: { label: "Avatar", icon: <UserRound size={14} /> },
-  mentor: { label: "Linh vật", icon: <Bot size={14} /> },
-  chat: { label: "Chat skin", icon: <MessageSquare size={14} /> },
-  map: { label: "Map skin", icon: <Map size={14} /> },
-  badge: { label: "Badge", icon: <ShieldCheck size={14} /> },
+  theme: { label: "Giao diện", icon: <Palette size={13} /> },
+  avatar: { label: "Ảnh đại diện", icon: <UserRound size={13} /> },
+  mentor: { label: "Mascot trợ lý", icon: <Bot size={13} /> },
+  chat: { label: "Khung trò chuyện", icon: <MessageSquare size={13} /> },
+  map: { label: "Bản đồ kỹ năng", icon: <Map size={13} /> },
+  badge: { label: "Huy hiệu danh hiệu", icon: <ShieldCheck size={13} /> },
 };
 
 interface Quest {
@@ -239,15 +243,15 @@ export default function XPShop({
       {subTab === "store" && (
         <div className="space-y-4">
           {/* CATEGORIES BUTTONS */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-2 flex gap-1.5 overflow-x-auto">
+          <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl p-1.5 flex gap-1 overflow-x-auto border border-slate-100 dark:border-slate-900/60 scrollbar-none">
             {(Object.keys(categoryMeta) as ShopCategory[]).map((id) => (
               <button
                 key={id}
                 onClick={() => setCategory(id)}
-                className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-300 cursor-pointer shrink-0 ${
                   category === id
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                    ? "theme-primary-bg text-white shadow-lg shadow-blue-500/20 scale-[1.03]"
+                    : "bg-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-900/40"
                 }`}
               >
                 {categoryMeta[id].icon}

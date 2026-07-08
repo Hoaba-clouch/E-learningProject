@@ -522,6 +522,13 @@ button:disabled {
     #ffffff !important;
 }
 
+.dark .chat-skin-neon {
+  background:
+    radial-gradient(circle at 25% 0%, rgba(129, 140, 248, 0.15), transparent 48%),
+    radial-gradient(circle at 90% 20%, rgba(16, 185, 129, 0.12), transparent 44%),
+    #0f172a !important;
+}
+
 .chat-skin-neon .ai-bubble {
   box-shadow: 0 0 24px rgba(var(--theme-primary-rgb), 0.18);
 }
@@ -531,6 +538,48 @@ button:disabled {
     linear-gradient(to bottom, rgba(37, 99, 235, 0.08) 1px, transparent 1px),
     #fffdf7 !important;
   background-size: 100% 18px !important;
+}
+
+.dark .chat-skin-paper {
+  background:
+    linear-gradient(to bottom, rgba(96, 165, 250, 0.06) 1px, transparent 1px),
+    #181612 !important;
+  background-size: 100% 18px !important;
+}
+
+.dark .chat-skin-neon,
+.dark .chat-skin-paper {
+  color: #cbd5e1 !important;
+}
+
+.dark .chat-skin-neon .text-slate-950,
+.dark .chat-skin-paper .text-slate-950,
+.dark .chat-skin-neon .text-slate-900,
+.dark .chat-skin-paper .text-slate-900,
+.dark .chat-skin-neon .text-slate-700,
+.dark .chat-skin-paper .text-slate-700 {
+  color: #f1f5f9 !important;
+}
+
+.dark .chat-skin-neon .text-slate-500,
+.dark .chat-skin-paper .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+.dark .chat-skin-neon .bg-slate-50,
+.dark .chat-skin-paper .bg-slate-50,
+.dark .chat-skin-neon .bg-white,
+.dark .chat-skin-paper .bg-white,
+.dark .chat-skin-neon .ai-input,
+.dark .chat-skin-paper .ai-input {
+  background: rgba(15, 23, 42, 0.75) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.dark .chat-skin-neon .ai-bubble,
+.dark .chat-skin-paper .ai-bubble {
+  background: rgba(30, 41, 59, 0.8) !important;
+  color: #f1f5f9 !important;
 }
 
 .skill-map {
@@ -803,6 +852,16 @@ button:disabled {
   }
 }
 
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.animate-flow-dash {
+  animation: flow-dash 1.2s linear infinite;
+}
+
 @keyframes skill-reward-float {
   0%, 100% {
     transform: translateY(0);
@@ -866,6 +925,7 @@ button:disabled {
 .theme-dark .surface,
 .theme-dark .bg-white {
   background-color: #111827 !important;
+  border-color: #1f2937 !important;
 }
 
 .theme-dark .bg-slate-50,
