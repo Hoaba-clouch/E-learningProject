@@ -1,0 +1,405 @@
+# ĐẶC TẢ NGHIỆP VỤ & CHỨC NĂNG CHI TIẾT (SRS v3.0)
+## Nền tảng học tập lập trình cá nhân hóa tích hợp AI — CODE-MIND / AIO
+
+> **Phiên bản:** 3.0 (Revised)  
+> **Ngày cập nhật:** Tháng 7/2026  
+> **Mục tiêu tài liệu:** Làm căn cứ thiết kế UI/UX Mockup (Figma), phát triển Backend API (FastAPI) và kiểm thử chức năng (QA Testing).
+
+---
+
+## MỤC LỤC
+
+1. [Tổng quan hệ thống](#1-tổng-quan-hệ-thống)
+2. [Cấu trúc nội dung khóa học phân cấp](#2-cấu-trúc-nội-dung-khóa-học-phân-cấp)
+3. [Phân quyền và Vai trò người dùng](#3-phân-quyền-và-vai-trò-người-dùng)
+4. [Nghiệp vụ vai trò ADMIN — Quản trị hệ thống](#4-nghiệp-vụ-vai-trò-admin--quản-trị-hệ-thống)
+5. [Nghiệp vụ vai trò GIẢNG VIÊN — Biên soạn nội dung & Quản lý lớp học](#5-nghiệp-vụ-vai-trò-giảng-viên--biên-soạn-nội-dung--quản-lý-lớp-học)
+6. [Nghiệp vụ vai trò HỌC VIÊN — Học tập, Mindmap Canvas & Nộp bài GitHub](#6-nghiệp-vụ-vai-trò-học-viên--học-tập-mindmap-canvas--nộp-bài-github)
+7. [Cơ chế cá nhân hóa VAK & Trợ lý học tập Socratic (AI Mentor)](#7-cơ-chế-cá-nhân-hóa-vak--trợ-lý-học-tập-socratic-ai-mentor)
+8. [Hệ thống Video ngắn tự động — Tech Reels](#8-hệ-thống-video-ngắn-tự-động--tech-reels)
+9. [Hệ thống Game hóa nâng cao (Gamification)](#9-hệ-thống-game-hóa-nâng-cao-gamification)
+10. [Đặc tả dữ liệu (Data Schemas)](#10-đặc-tả-dữ-liệu-data-schemas)
+11. [Danh sách màn hình UI cần thiết kế (Figma Checklist)](#11-danh-sách-màn-hình-ui-cần-thiết-kế-figma-checklist)
+12. [Yêu cầu phi chức năng](#12-yêu-cầu-phi-chức-năng)
+
+---
+
+## 1. Tổng quan hệ thống
+
+### 1.1. Định vị sản phẩm
+**Code-Mind (AIO)** là hệ sinh thái giáo dục công nghệ (EdTech) đột phá, kết hợp giữa việc học tập chủ động và đánh giá tư duy logic thông qua Sơ đồ tư duy (Mindmap) kết hợp thực hành viết code thực tế. Hệ thống giải quyết triệt để các rào cản về ngôn ngữ, sự quá tải tải lượng nhận thức của học viên và tình trạng gian lận học thuật bằng các tính năng hỗ trợ từ Trí tuệ Nhân tạo (AI).
+
+### 1.2. USP (Lợi thế cạnh tranh độc quyền)
+- **AI Đánh giá Logic đồ thị:** AI đối chiếu Sơ đồ khái niệm của học viên với Master Graph chuẩn của giảng viên để chỉ ra lỗi sai tư duy hệ thống thay vì chấm điểm đúng/sai đơn giản.
+- **AI Tự động tạo Video bài giảng (AIGC):** Chuyển đổi tài liệu PDF/Word thành video học tập có slide và giọng đọc tiếng Việt chuẩn chỉ trong 2 phút.
+- **Hệ thống Nộp bài GitHub 5 lớp bảo vệ:** Xác thực commits bằng GitHub OAuth, phân tích lịch sử commit tự nhiên, đối chiếu logic Mindmap và quét đạo văn chéo MOSS.
+- **Tech Reels (Video ngắn AI):** Feed video dọc 30 giây tóm tắt tin tức công nghệ hàng ngày do AI tự quét và sinh nội dung tự động.
+
+---
+
+## 2. Cấu trúc nội dung khóa học phân cấp
+
+Thay vì các bài học dạng danh sách phẳng, Code-Mind tổ chức nội dung học tập theo mô hình phân cấp chuyên nghiệp nhằm giảm tải lượng nhận thức, trong đó mỗi bài học nhỏ (Lesson) đều có Quiz bắt buộc để qua bài mới, còn bài tập Mindmap lớn hệ thống hóa kiến thức sẽ nằm ở cuối chương:
+
+```
+KHÓA HỌC (ví dụ: Lập trình hướng đối tượng - OOP)
+│
+└── CHƯƠNG (ví dụ: Chương 1: Kế thừa - Inheritance)
+    │
+    ├── 📖 BÀI HỌC 1.1: Khái niệm Kế thừa (Inheritance Basics)
+    │   ├── 📄 Phân hệ 1: Bài đọc (Lecture) — AI tóm tắt tài liệu tiếng Việt
+    │   ├── 🎬 Phân hệ 2: Video bài giảng — AI tự tạo từ tài liệu
+    │   └── ❓ Phân hệ 3: Lesson Quiz (Bắt buộc) — Vượt qua ≥ 70% để mở BÀI HỌC 1.2 🔒
+    │
+    ├── 📖 BÀI HỌC 1.2: Từ khóa extends và super
+    │   └── ... (Bài đọc → Video → Lesson Quiz)
+    │
+    ├── 🧠 THỰC HÀNH TỔNG HỢP CHƯƠNG (Mindmap - Tự chọn)
+    │   └── Vẽ sơ đồ tư duy hệ thống hóa toàn bộ kiến thức Chương 1 (+200 XP)
+    │
+    └── 💻 BÀI TẬP LỚN CHƯƠNG: Dự án thực hành Kế thừa (GitHub Submission - Bắt buộc)
+        └── Bắt buộc hoàn thành để tính điểm kết thúc Chương
+```
+
+---
+
+## 3. Phân quyền và Vai trò người dùng
+
+| Chức năng | Admin | Giảng viên | Học viên |
+|:---|:---:|:---:|:---:|
+| Quản lý tài khoản người dùng & phê duyệt lớp | ✅ | ❌ | ❌ |
+| Xem báo cáo thống kê toàn hệ thống | ✅ | ❌ | ❌ |
+| Tạo / Xóa Chương & Bài học | ✅ | ✅ | ❌ |
+| Upload tài liệu & Kích hoạt AI tạo Video | ✅ | ✅ | ❌ |
+| Biên soạn Master Graph cho bài học | ✅ | ✅ | ❌ |
+| Xem báo cáo lớp học (Heatmap Node) | ✅ | ✅ | ❌ |
+| Đăng nhập GitHub OAuth để liên kết tài khoản | ❌ | ❌ | ✅ |
+| Lướt Tech Reels cập nhật tin tức & làm Quiz nhanh | ❌ | ❌ | ✅ |
+| Vẽ Mindmap Canvas (Guided Mode 3 cấp) | ❌ | ❌ | ✅ |
+| Nộp bài tập thực hành qua link GitHub | ❌ | ❌ | ✅ |
+
+---
+
+## 4. Nghiệp vụ vai trò ADMIN — Quản trị hệ thống
+
+### 4.1. Quản lý tài khoản người dùng (User Account Management)
+
+#### USE-CASE 4.1.1: Tạo tài khoản Giảng viên mới
+- **Tác nhân:** Admin.
+- **Điều kiện tiên quyết:** Admin đã đăng nhập. Email của Giảng viên chưa tồn tại trong hệ thống.
+- **Luồng nghiệp vụ chính:**
+  1. Admin vào menu **"Quản lý tài khoản"** ➔ Click **"Thêm tài khoản Giảng viên"**.
+  2. Điền Form: Họ tên, Email, Số điện thoại, Khoa/Bộ môn phụ trách.
+  3. Click **"Tạo & Gửi lời mời"** ➔ Hệ thống tạo tài khoản ở trạng thái `PENDING_ACTIVATION` và tự động gửi email kích hoạt kèm link thiết lập mật khẩu lần đầu.
+  4. Giảng viên nhận email, click link kích hoạt và đặt mật khẩu để đăng nhập.
+- **Điều kiện sau:** Tài khoản Giảng viên chuyển sang trạng thái `ACTIVE`.
+- **Ngoại lệ:** Email trùng lặp ➔ Hệ thống báo lỗi *"Email đã được sử dụng"*.
+
+#### USE-CASE 4.1.2: Vô hiệu hóa tài khoản vi phạm (Account Suspension)
+- **Tác nhân:** Admin.
+- **Mô tả:** Admin khóa tài khoản của người dùng khi có dấu hiệu vi phạm chính sách (như chia sẻ tài khoản học tập cho nhiều người ngoài lớp).
+- **Luồng nghiệp vụ chính:**
+  1. Admin tìm kiếm tài khoản (học viên hoặc giảng viên) trong danh sách người dùng.
+  2. Click **"Vô hiệu hóa"** ➔ Chọn lý do khóa (Ví dụ: *"Vi phạm Single-Device Lock - Đăng nhập đa thiết bị"*).
+  3. Hệ thống đổi trạng thái tài khoản sang `SUSPENDED` và xóa toàn bộ các Token JWT đang hoạt động của tài khoản này khỏi Redis để buộc thiết bị đăng xuất ngay lập tức.
+- **Điều kiện sau:** Tài khoản không thể đăng nhập cho đến khi Admin kích hoạt lại.
+
+---
+
+### 4.2. Quản lý Lớp học & Phê duyệt học viên (Classroom & Enrollment Management)
+
+#### USE-CASE 4.2.1: Tạo lớp học mới và Phân công Giảng viên
+- **Tác nhân:** Admin.
+- **Điều kiện tiên quyết:** Đã có tài khoản Giảng viên phụ trách trong hệ thống.
+- **Luồng nghiệp vụ chính:**
+  1. Admin chọn menu **"Quản lý lớp học"** ➔ Click **"Tạo lớp mới"**.
+  2. Nhập: Tên lớp học (ví dụ: *Lập trình hướng đối tượng - Nhóm 01*), niên khóa, chọn Giảng viên phụ trách từ Dropdown.
+  3. Click **"Lưu lớp học"** ➔ Hệ thống tự động tạo mã lớp duy nhất (ví dụ: `CM-OOP-2026-01`).
+- **Điều kiện sau:** Lớp học được kích hoạt, Giảng viên được phân công sẽ thấy lớp học xuất hiện trên màn hình quản lý của mình.
+
+#### USE-CASE 4.2.2: Phê duyệt yêu cầu tham gia lớp của Học viên
+- **Tác nhân:** Admin.
+- **Luồng nghiệp vụ chính:**
+  1. Học viên nhập Mã lớp ở app cá nhân ➔ Tạo yêu cầu với trạng thái `PENDING`.
+  2. Admin nhận thông báo trên bảng điều khiển ➔ Vào danh sách duyệt.
+  3. Xem thông tin (Họ tên, mã sinh viên) ➔ Click **"Phê duyệt"** (Học viên vào lớp) hoặc **"Từ chối"** (Ghi rõ lý do).
+  4. Hệ thống gửi thông báo kết quả duyệt cho Học viên.
+
+---
+
+### 4.3. Báo cáo & Giám sát hệ thống (System Analytics & Session Monitoring)
+
+#### USE-CASE 4.3.1: Xem Dashboard thống kê toàn hệ thống
+- **Tác nhân:** Admin.
+- **Luồng nghiệp vụ chính:**
+  1. Admin vào màn hình **"Dashboard Thống kê"**.
+  2. Hệ thống hiển thị các số liệu tổng quan thời gian thực:
+     - Số lượng tài khoản đang hoạt động của từng nhóm vai trò.
+     - Chi phí sử dụng API AI (Token cost) tích lũy trong tháng.
+     - Tốc độ phản hồi trung bình của API.
+     - Số lượng lượt thi đấu League và tỷ lệ Streak hoàn thành bài học.
+  3. Admin chọn **"Xuất báo cáo hệ thống (.xlsx)"** để tải dữ liệu về máy.
+
+#### USE-CASE 4.3.2: Giám sát & Quản lý thiết bị đăng nhập (Session Lock Management)
+- **Tác nhân:** Admin.
+- **Mô tả:** Admin giám sát và hỗ trợ mở khóa thiết bị khi học viên đổi thiết bị cá nhân hoặc gặp lỗi khóa tài khoản.
+- **Luồng nghiệp vụ chính:**
+  1. Admin vào menu **"Quản lý phiên đăng nhập"**.
+  2. Xem danh sách các Session đang bị khóa/hoặc tài khoản đang hoạt động trên hệ thống lưu trong Redis.
+  3. Khi có yêu cầu hỗ trợ đổi thiết bị của Học viên ➔ Admin tìm kiếm học viên đó ➔ Click **"Đặt lại thiết bị đăng ký (Reset Device ID)"** ➔ Hệ thống xóa Device ID cũ đã lưu.
+- **Điều kiện sau:** Học viên có thể đăng nhập bằng thiết bị mới ở lần truy cập tiếp theo.
+
+---
+
+## 5. Nghiệp vụ vai trò GIẢNG VIÊN — Biên soạn nội dung & Quản lý lớp học
+
+### 5.1. Quản lý cấu trúc chương học và điều kiện hoàn thành (Course Syllabus & Chapter Management)
+- **Tác nhân:** Giảng viên.
+- **Mô tả:** Giảng viên thiết lập cấu trúc khóa học phân cấp (Chương -> Bài học) để kiểm soát lộ trình học tập của lớp.
+- **Luồng nghiệp vụ chính:**
+  1. Giảng viên vào màn hình **"Cấu trúc khóa học"** (Syllabus).
+  2. Tạo các **Chương học** lớn (ví dụ: *Chương 1: Kế thừa*).
+  3. Trong mỗi Chương, Giảng viên tạo các **Bài học nhỏ (Lessons)** (ví dụ: *Bài 1.1: Khái niệm Kế thừa*).
+  4. Mỗi Bài học nhỏ gồm 3 phân hệ nội dung: `LECTURE` (Bài đọc), `VIDEO` (Video AI tạo), và `QUIZ` (Lesson Quiz bắt buộc).
+  5. Cấu hình điều kiện mở bài tiếp theo: Học viên bắt buộc hoàn thành bài Quiz của bài học hiện tại với số điểm đạt ≥ 70% mới được mở khóa bài học nhỏ tiếp theo.
+  6. Ở cấp độ cuối mỗi Chương học, Giảng viên cấu hình thêm 2 bài tập lớn:
+     - **Bài tập vẽ Mindmap tổng hợp chương (Tự chọn):** Hệ thống hóa kiến thức toàn chương, nhận Bonus XP (+200 XP).
+     - **Bài tập lớn thực hành GitHub (Bắt buộc):** Thực hành code thực tế để tính điểm hoàn thành Chương. Tuy nhiên, bài nộp này không chặn việc mở khóa bài học nhỏ ở chương mới.
+
+### 5.2. Quy trình biên soạn Chương học & Kích hoạt AI tạo nội dung (AIGC Creation Flow)
+- **Tác nhân:** Giảng viên, AI Engine.
+- **Luồng nghiệp vụ chính:**
+  1. Giảng viên chọn Chương cần tạo nội dung ➔ Bấm **"Tạo bài giảng bằng AI"**.
+  2. Giảng viên upload tài liệu giảng dạy (`.pdf`, `.docx`) hoặc dán link tài liệu chuyên ngành.
+  3. Bấm **"Tạo nội dung tự động"** ➔ Hệ thống gửi file lên AI Engine để:
+     - Tạo văn bản tóm tắt tiếng Việt (Lecture).
+     - Tạo slide nháp kèm kịch bản thuyết minh (Script).
+     - Tạo bộ câu hỏi trắc nghiệm/kéo thả (Quiz).
+     - Tạo bản vẽ nháp sơ đồ tri thức (Master Graph).
+  4. Hệ thống hiển thị trạng thái hoàn thành từng phần và lưu trữ ở dạng Bản nháp (Draft) chờ giảng viên phê duyệt.
+
+### 5.3. Biên tập và Tinh chỉnh nội dung do AI tạo ra (AIGC Content Management)
+- **Tác nhân:** Giảng viên.
+- **Mô tả:** Đảm bảo tính chính xác về mặt học thuật bằng cách cho phép giảng viên biên tập lại các nội dung AI đã tự động tạo.
+- **Luồng nghiệp vụ chính:**
+  1. Giảng viên mở bài giảng đang ở trạng thái **Bản nháp (Draft)**.
+  2. **Biên tập Slide & Script:** Giảng viên sửa trực tiếp text trên slide hoặc thay đổi câu từ của Script thuyết minh (đặc biệt sửa các từ viết tắt chuyên ngành mà AI dịch chưa mượt). Bấm **"Render Video lại"** để FFmpeg sinh video mới nếu có sửa đổi.
+  3. **Biên tập Master Graph:** Mở công cụ vẽ **Master Graph Editor** ➔ Kéo thả các Node, thêm/xóa các quan hệ (`extends`, `implements`) để tạo sơ đồ đáp án chuẩn nhất.
+  4. **Biên tập Quiz:** Chỉnh sửa câu hỏi, đáp án đúng/sai, hoặc thêm câu hỏi mới từ ngân hàng đề thi.
+  5. Giảng viên bấm **"Phát hành (Publish)"** ➔ Bài học chính thức xuất hiện trên Dashboard của học viên.
+
+### 5.4. Trình duyệt và Phê duyệt Bài nộp GitHub (GitHub Review & Evaluation)
+- **Tác nhân:** Giảng viên.
+- **Mô tả:** Giảng viên đánh giá thực tế năng lực lập trình của học sinh thông qua báo cáo phân tích tự động từ GitHub.
+- **Luồng nghiệp vụ chính:**
+  1. Giảng viên nhận thông báo có bài nộp thực hành mới ➔ Vào màn hình **"Chấm bài GitHub"**.
+  2. Giao diện hiển thị danh sách bài nộp của cả lớp kèm các cờ cảnh báo của AI (ví dụ: 🔴 *Gắn cờ Đạo văn*, ⚠️ *Commit bất thường*).
+  3. Giảng viên click vào một bài nộp cụ thể để xem **Báo cáo quét 5 lớp của AI**:
+     - Xem tỷ lệ trùng lặp code chéo (MOSS).
+     - Xem lịch sử commit (Timeline) và điểm tin cậy (Integrity Score).
+     - Xem phần giải thích code (Walkthrough) do học viên viết.
+  4. Giảng viên xem đánh giá sơ bộ của AI, chạy thử code (nếu cần) ➔ Nhập điểm số cuối cùng, ghi nhận xét phản hồi chi tiết và bấm **"Gửi đánh giá"**.
+
+### 5.5. Xem nhiệt đồ khái niệm (Concept Heatmap)
+- **Tác nhân:** Giảng viên.
+- **Mô tả:** Xem trực quan phần kiến thức mà học sinh đang bị yếu để giảng lại trên lớp offline.
+- **Luồng nghiệp vụ chính:**
+  1. Giảng viên mở **"Nhiệt đồ lớp học"** của một chương cụ thể.
+  2. Sơ đồ Master Graph hiển thị với các dải màu nhiệt (Xanh -> Vàng -> Đỏ).
+  3. **Cơ chế gom dữ liệu:** Hệ thống tự động tính toán tỷ lệ lỗi sai của học viên liên quan đến từng Node khái niệm dựa trên:
+     - Số học sinh vẽ sai Node đó trên sơ đồ Mindmap.
+     - Số học sinh trả lời sai câu hỏi Quiz liên quan đến khái niệm đó.
+     - Số học sinh viết code bị lỗi liên quan đến khái niệm đó.
+  4. Vùng khái niệm nào có tỷ lệ sai tổng hợp > 60% sẽ chuyển sang **màu đỏ rực (Hotspot)**. Giảng viên click vào Node đỏ để xem danh sách chi tiết các học sinh đang bị hổng kiến thức này để can thiệp kịp thời.
+
+---
+
+## 6. Nghiệp vụ vai trò HỌC VIÊN — Học tập, Mindmap Canvas & Nộp bài GitHub
+
+### 6.1. Cổng học tập mở bài học mới (Learning Gate)
+Để đảm bảo lộ trình học tập khoa học nhưng vẫn tạo sự mượt mà không gây tắc nghẽn, hệ thống áp dụng cơ chế mở khóa sau:
+- **Điều kiện mở khóa Bài học nhỏ tiếp theo (Lesson Gate):** Học viên bắt buộc hoàn thành bài **Lesson Quiz (đạt ≥ 70%)** của bài học hiện tại để mở khóa bài học nhỏ tiếp theo trong Cây kỹ năng (Skill Tree).
+- **Định vị phần vẽ Mindmap (Hệ thống hóa kiến thức Chương):** Là bài tập thực hành **Tự chọn ở cuối Chương**. Học viên có thể vẽ Mindmap tổng hợp bất kỳ lúc nào để nhận Bonus XP (+200 XP), không chặn tiến trình mở bài học tiếp theo ở chương mới.
+- **Định vị phần nộp bài Code GitHub (Bài tập lớn Chương):** Là bài tập **Bắt buộc hoàn thành ở cấp độ Chương**. Học viên có thể tiếp tục học các bài học nhỏ ở chương mới, nhưng bắt buộc phải hoàn tất dự án thực hành GitHub này để được tính là hoàn thành Chương cũ và đủ điều kiện nhận Chứng chỉ cuối khóa.
+
+### 6.2. Không gian vẽ Mindmap tự chọn (Guided Mode 3 cấp)
+Khi học viên chọn chế độ "Hệ thống hóa kiến thức bằng Mindmap" trên Canvas (tích hợp bằng thư viện `React Flow`), hệ thống cung cấp **3 cấp độ tháo bánh phụ** hỗ trợ người học:
+- **Cấp 1 — Điền vào chỗ trống (Fill in the blank):** AI vẽ sẵn toàn bộ sơ đồ khung, ẩn nhãn các Node/Edge. Học viên chỉ cần gõ đúng tên khái niệm để hoàn thành.
+- **Cấp 2 — Hoàn thiện sơ đồ (Complete the Graph):** AI vẽ sẵn 60% sơ đồ cốt lõi, học viên phải vẽ thêm các Node phụ và các đường nối liên kết còn thiếu.
+- **Cấp 3 — Vẽ tự do hoàn toàn (Free Canvas):** Bảng vẽ trống, AI hiển thị cột gợi ý Keywords ở bên trái để học viên tự do sắp xếp tư duy.
+- **Cơ chế thưởng:** Hoàn thành sơ đồ tự chọn đạt điểm AI đánh giá ≥ 6/10 sẽ nhận được **Bonus XP cực lớn (+200 XP)** và tích lũy mở khóa Huy hiệu cao cấp.
+
+### 6.3. Nộp bài thực hành qua link GitHub & 5 lớp bảo mật trung thực học thuật
+Khi học viên làm bài tập thực hành viết mã nguồn thực tế, họ phải commit code lên GitHub cá nhân và dán link repository nộp bài vào hệ thống. Hệ thống chạy quy trình kiểm tra tự động qua 5 lớp bảo vệ:
+
+```
+                  ┌───────────────────────────────┐
+                  │   Học viên nộp link GitHub    │
+                  └───────────────┬───────────────┘
+                                  │
+      [Lớp 1]                     ▼
+      Xác thực GitHub OAuth ────► Repo có commit của tài khoản nộp?
+                                  │   (Không ➔ ❌ Từ chối)
+                                  │ Có
+      [Lớp 2]                     ▼
+      Lịch sử commit ───────────► Quá trình commit có tự nhiên không?
+                                  │   (Nghi vấn ➔ ⚠️ Gắn cờ)
+                                  │ Hợp lệ
+      [Lớp 3]                     ▼
+      Quét đạo văn chéo ────────► Mã nguồn giống bài khác trong lớp?
+                                  │   (Trùng > 80% ➔ ⚠️ Báo Giảng viên)
+                                  │ Khác biệt
+      [Lớp 4]                     ▼
+      Đối chiếu Logic ──────────► Code có khớp sơ đồ Mindmap đã vẽ?
+                                  │   (Mâu thuẫn ➔ ⚠️ Gắn cờ)
+                                  │ Khớp
+      [Lớp 5]                     ▼
+      Walkthrough bắt buộc ─────► Giải thích code ngắn gọn (≥ 100 từ)
+                                  │   (AI phát hiện copy/mơ hồ ➔ ⚠️ Gắn cờ)
+                                  ▼
+                    ✅ DUYỆT BÀI NỘP HỢP LỆ
+```
+
+---
+
+## 7. Cơ chế cá nhân hóa VAK & Trợ lý học tập Socratic (AI Mentor)
+
+### 7.1. Trắc nghiệm khảo sát phong cách học VAK (Onboarding Survey)
+- **Luồng nghiệp vụ:** Khi Học viên đăng nhập lần đầu tiên, hệ thống hiển thị bài test phong cách học gồm 5 câu hỏi tình huống đồ họa hóa (ví dụ: *"Khi tiếp cận một nguyên lý lập trình mới, bạn muốn: A. Xem sơ đồ/hình ảnh (Visual) / B. Nghe giải thích/podcast (Auditory) / C. Viết code chạy thử luôn (Kinesthetic)"*).
+- **Kết quả:** Hệ thống tính toán điểm số và dán nhãn phong cách học chính (`VISUAL`, `AUDITORY`, hoặc `KINESTHETIC`) vào Learner Profile của Học viên.
+
+### 7.2. Giao diện thích ứng động theo phong cách VAK (Adaptive UI)
+Tùy vào phong cách học đã xác định hoặc hành vi tự động ghi nhận trên hệ thống (log data), giao diện Workspace và bài học sẽ tự động tái cấu trúc:
+- **Visual (Thị giác):** Ưu tiên hiển thị sơ đồ tư duy Mindmap, tô sáng cú pháp code đậm nét, hiển thị lưu đồ thuật toán (Flowcharts) trực quan bên cạnh bài đọc.
+- **Auditory (Thính giác):** Kích hoạt widget **Text-to-Speech (TTS)** tự động đọc to bài tóm tắt lý thuyết bằng tiếng Việt, cung cấp các đoạn podcast ngắn tóm tắt bài giảng.
+- **Kinesthetic (Vận động):** Ưu tiên hiển thị môi trường viết code trực tuyến (Online Compiler) chạy thử ngay lập tức, các câu hỏi kéo thả tương tác, thay vì bắt đọc nhiều lý thuyết chữ.
+- **Tự động chuyển đổi:** Hệ thống theo dõi hành vi sử dụng (ví dụ: học viên hệ Visual nhưng liên tục bật TTS) để tự động cập nhật nhãn VAK của người dùng theo thời gian thực.
+
+### 7.3. Trợ lý học tập Socratic AI Mentor "Mino"
+- **Định nghĩa:** Trợ giảng AI đại diện bằng một nhân vật Avatar ảo tên **Mino** ở cột phải Workspace. Biểu cảm của Mino thay đổi theo hành động của học viên (Cười/Gật đầu khi làm đúng, Suy nghĩ/Nhíu mày khi học viên gặp lỗi sai logic).
+- **Triết lý Socratic (Hỏi đáp gợi mở):** Mino tuyệt đối không bao giờ đưa ra code đáp án hay chỉ thẳng câu trả lời. Mino sẽ dẫn dắt học viên tự tìm ra lời giải bằng các câu hỏi phản biện:
+  - *Ví dụ về Mindmap:* *"Tôi thấy bạn nối mũi tên extends từ Animal sang Dog. Hãy nghĩ xem: Lớp nào là lớp chuyên biệt hóa (lớp con) nhận thuộc tính từ lớp tổng quát (lớp cha)?"*
+  - *Ví dụ về Code:* *"Dòng số 8 đang gặp lỗi NullPointerException. Object 'user' của bạn đã được khởi tạo bằng từ khóa 'new' chưa?"*
+- **NLP Context Caching:** Trợ lý Mino sử dụng Gemini API kết hợp cơ chế Caching ngữ cảnh để ghi nhớ lịch sử chat của toàn bộ bài học, giúp việc giải đáp trơn tru với chi phí API tối ưu.
+
+---
+
+## 8. Hệ thống Video ngắn tự động — Tech Reels
+
+### 8.1. Trải nghiệm lướt video ngắn (TikTok-style Reels)
+- Học viên lướt các video dọc (9:16) thời lượng 30 giây cập nhật tin tức công nghệ mới nhất ngay trong ứng dụng Code-Mind.
+- Các video được AI tự động tạo hàng ngày bằng cách quét các nguồn RSS công nghệ quốc tế uy tín (Hacker News, Dev.to, TechCrunch), dịch thuật, viết script tiếng Việt, ghép slide HTML/CSS và chuyển văn bản thành giọng đọc (TTS).
+- **Quiz nhanh cuối video:** Sau 30 giây xem, hệ thống hiển thị câu hỏi trắc nghiệm nhanh 1 lựa chọn liên quan đến nội dung video. Trả lời đúng nhận **+10 XP** tức thì.
+- **Tương tác xã hội:** Thích (Like), Bình luận (Comment), Lưu bài (Save), Chia sẻ (Share) để tạo cộng đồng học tập sôi nổi. Có nút "Học sâu hơn" dẫn trực tiếp đến bài học tương ứng trong hệ thống.
+
+---
+
+## 9. Hệ thống Game hóa nâng cao (Gamification)
+
+Để tăng tỷ lệ giữ chân học viên (Retention), hệ thống bổ sung các cơ chế kích thích hành vi học tập hàng ngày:
+- **Hệ thống Streak (Chuỗi ngày):** Theo dõi số ngày liên tiếp học viên hoàn thành ít nhất 1 hoạt động học tập. Bỏ lỡ 1 ngày sẽ reset chuỗi về 0. Hệ thống tự động gửi thông báo nhắc nhở lúc 21h hàng ngày nếu chuỗi sắp đứt.
+- **Hệ thống Giải đấu (League System):** Chia học viên vào các phòng đấu 10 người cùng cấp độ hoạt động. Cuối tuần thăng hạng (Đồng ➔ Bạc ➔ Vàng) hoặc xuống hạng tùy thuộc vào XP kiếm được trong tuần.
+- **XP Shop (Cửa hàng đổi điểm):** Học viên sử dụng điểm XP tích lũy để mua các vật phẩm ảo:
+  - *Đóng băng Streak (Streak Freeze):* Cứu chuỗi ngày khi lỡ quên học 1 ngày.
+  - *Mở khóa Giao diện tối (Dark Mode).*
+  - *Tùy biến tên và diện mạo của Trợ giảng AI Mentor "Mino".*
+
+---
+
+## 10. Đặc tả dữ liệu (Data Schemas)
+
+### 10.1. Enum bổ sung
+
+```python
+class ContentBlockType(str, Enum):
+    LECTURE = "LECTURE"         # Bài đọc tóm tắt
+    VIDEO = "VIDEO"             # Video bài giảng (AI gen hoặc Link nhúng)
+    CODE = "CODE"               # Thực hành viết code
+    MINDMAP = "MINDMAP"         # Vẽ Mindmap tự chọn
+    QUIZ = "QUIZ"               # Quiz cuối chương
+
+class GuidedModeLevel(str, Enum):
+    FILL_IN_BLANK = "FILL_IN_BLANK"
+    COMPLETE_GRAPH = "COMPLETE_GRAPH"
+    FREE_CANVAS = "FREE_CANVAS"
+```
+
+### 10.2. Models cập nhật
+
+```python
+# Content Block (Phân hệ nội dung trong bài học)
+class ContentBlockModel(BaseModel):
+    id: UUID4
+    block_type: ContentBlockType
+    title: str
+    body_content: Optional[str]        # Nội dung text bài đọc hoặc script video
+    media_url: Optional[HttpUrl]       # Đường dẫn video hoặc file PDF
+    quick_quiz_id: Optional[UUID4]     # Liên kết đến quiz nếu là block QUIZ
+
+# Lesson (Bài học/Chương học mới)
+class LessonModel(BaseModel):
+    id: UUID4
+    chapter_title: str
+    class_ids: List[UUID4]
+    content_blocks: List[ContentBlockModel] # Danh sách 5 phân hệ
+    master_graph: Optional[MindmapGraph]     # Graph chuẩn của giảng viên
+    created_at: datetime
+
+# GitHub Submission (Nộp bài tập code nâng cấp)
+class GitHubSubmissionModel(BaseModel):
+    id: UUID4
+    student_id: UUID4
+    lesson_id: UUID4
+    repo_url: HttpUrl
+    branch_name: str = "main"
+    git_username: str
+    integrity_score: int               # Điểm tin cậy (0-100) đánh giá qua 5 lớp
+    code_explanation: str              # Walkthrough tối thiểu 100 từ
+    plagiarism_ratio: float            # Tỷ lệ trùng lặp code với lớp (MOSS)
+    is_flagged: bool = False           # Bị gắn cờ nghi vấn gian lận
+    submitted_at: datetime
+
+# Tech Reel (Video ngắn AI)
+class TechReelModel(BaseModel):
+    id: UUID4
+    title: str
+    video_url: HttpUrl
+    duration_seconds: int = 30
+    script_content: str
+    hashtags: List[str]
+    quiz_question: str
+    quiz_options: List[str]
+    quiz_correct_answer: str
+    created_at: datetime
+
+# User Stats (Thống kê học tập để chạy game hóa)
+class UserStatsModel(BaseModel):
+    user_id: UUID4
+    xp_points: int = 0
+    level: int = 1
+    current_streak: int = 0
+    last_active_date: date
+    current_league: str = "Đồng"       # Đồng -> Bạc -> Vàng
+    league_xp: int = 0                 # XP tích lũy trong tuần đấu hiện tại
+```
+
+---
+
+## 11. Danh sách màn hình UI cần thiết kế (Figma Checklist)
+
+| STT | Màn hình | Thành phần giao diện bắt buộc |
+|:---|:---|:---|
+| 1 | **Đăng nhập Google/GitHub** | Tích hợp nút đăng nhập bằng tài khoản GitHub (GitHub OAuth). |
+| 2 | **Dashboard Học viên (Cây kỹ năng)**| Hiển thị bản đồ Skill Tree dạng Node liên kết; thanh Streak ngọn lửa 🔥; thông báo thăng/xuống hạng League. |
+| 3 | **Workspace Học tập (3 Cột)** | Cột giữa tích hợp **Canvas React Flow** hỗ trợ Guided Mode vẽ sơ đồ tư duy; Nút chuyển đổi Tab vẽ sơ đồ và Tab gõ code thực tế. |
+| 4 | **Trang nộp bài GitHub** | Ô dán link Repo; Chọn Branch; Ô Textarea nhập giải thích code bắt buộc (Walkthrough) tối thiểu 100 từ. |
+| 5 | **Feed video ngắn Tech Reels** | Giao diện hiển thị video dọc 9:16, nút Thích/Bình luận ở cạnh phải, nút "Học sâu hơn" liên kết bài học, và Popup quiz nhanh xuất hiện ở giây 30. |
+| 6 | **Cửa hàng đổi điểm XP Shop** | Danh sách vật phẩm: Đóng băng Streak, Mở giao diện Dark Mode, Đổi Avatar trợ giảng Mino; hiển thị số dư XP. |
+
+---
+
+## 12. Yêu cầu phi chức năng
+
+- **Hiệu năng Render Video:** Hệ thống tạo video bài giảng AIGC phải chạy nền thông qua cơ chế bất đồng bộ (Queue/Celery) để tránh khóa request chính của giảng viên.
+- **Bảo mật GitHub API:** Sử dụng khóa OAuth Token được mã hóa an toàn, thu hồi quyền truy cập của hệ thống vào Repo của học viên ngay sau khi hoàn thành quét đánh giá.
+- **Tính năng Single-Device Lock:** Hệ thống phát hiện đăng nhập đa thiết bị đồng thời bằng cách kiểm tra Session ID trong cơ sở dữ liệu Redis bộ nhớ tạm. Khi thiết bị thứ hai đăng nhập, Session ID cũ bị ghi đè, đẩy tài khoản ở thiết bị thứ nhất ra ngoài (Concurrent Login Prevention) để bảo vệ bản quyền nội dung.
