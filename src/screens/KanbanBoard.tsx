@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -7,8 +7,10 @@ import {
   BookOpen,
   Bot,
   Calendar,
+  Check,
   CheckCircle2,
   CheckSquare,
+  ChevronDown,
   Clock,
   Clock3,
   Columns3,
@@ -418,6 +420,110 @@ const initialTasks: KanbanTask[] = [
   },
 ];
 
+
+export interface CustomSelectOption {
+  value: string | number;
+  label: string;
+  icon?: React.ReactNode;
+  sublabel?: string;
+}
+
+export interface CustomSelectProps {
+  value: string | number;
+  onChange: (val: any) => void;
+  options: CustomSelectOption[];
+  placeholder?: string;
+  className?: string;
+  menuClassName?: string;
+  buttonClassName?: string;
+}
+
+export function CustomSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Chọn...",
+  className = "",
+  menuClassName = "w-60",
+  buttonClassName = "",
+}: CustomSelectProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) {
+      document.addEventListener("mousedown", handleOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const selectedOption = options.find((o) => o.value === value);
+
+  return (
+    <div ref={containerRef} className={`relative inline-block text-left ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-2xs transition hover:border-slate-300 hover:bg-slate-50/80 focus:outline-hidden ${buttonClassName}`}
+      >
+        <div className="flex items-center gap-2 truncate">
+          {selectedOption?.icon}
+          <span className="truncate">{selectedOption?.label || placeholder}</span>
+        </div>
+        <ChevronDown
+          size={14}
+          className={`shrink-0 text-slate-400 transition-transform duration-200 ${
+            open ? "rotate-180 text-blue-600" : ""
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div
+          className={`absolute left-0 z-50 mt-1.5 ${menuClassName} origin-top-left rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-xl backdrop-blur-md transition-all animate-in fade-in zoom-in-95`}
+        >
+          <div className="max-h-60 overflow-y-auto space-y-0.5 pr-0.5">
+            {options.map((opt) => {
+              const isSelected = opt.value === value;
+              return (
+                <button
+                  key={String(opt.value)}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-xs font-medium transition text-left ${
+                    isSelected
+                      ? "bg-blue-50 text-blue-700 font-semibold shadow-2xs"
+                      : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {opt.icon}
+                    <div className="truncate">
+                      <p className="truncate leading-tight">{opt.label}</p>
+                      {opt.sublabel && (
+                        <p className="text-[10px] text-slate-400 truncate mt-0.5">{opt.sublabel}</p>
+                      )}
+                    </div>
+                  </div>
+                  {isSelected && <Check size={14} className="text-blue-600 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const columnsConfig: Array<{
   id: ColumnId;
   title: string;
@@ -469,6 +575,46 @@ export default function KanbanBoard() {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"team" | "my">("team");
+
+  const assigneeFilterOptions: CustomSelectOption[] = useMemo(() => [
+    {
+      value: "all",
+      label: "Tất cả thành viên",
+      icon: <Users size={13} className="text-slate-400" />,
+    },
+    ...teamMembers.map((m) => ({
+      value: m.name,
+      label: `${m.name} (${m.role})`,
+      icon: (
+        <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ${m.color}`}>
+          {m.avatar}
+        </span>
+      ),
+    })),
+  ], [teamMembers]);
+
+  const priorityFilterOptions: CustomSelectOption[] = useMemo(() => [
+    {
+      value: "all",
+      label: "Mọi độ ưu tiên",
+      icon: <Filter size={13} className="text-slate-400" />,
+    },
+    {
+      value: "high",
+      label: "Ưu tiên Cao (P0)",
+      icon: <span className="h-2 w-2 rounded-full bg-rose-500 shadow-xs" />,
+    },
+    {
+      value: "medium",
+      label: "Ưu tiên Vừa (P1)",
+      icon: <span className="h-2 w-2 rounded-full bg-amber-500 shadow-xs" />,
+    },
+    {
+      value: "low",
+      label: "Ưu tiên Thấp (P2)",
+      icon: <span className="h-2 w-2 rounded-full bg-slate-400 shadow-xs" />,
+    },
+  ], []);
 
   // Drag and Drop state
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
@@ -1111,31 +1257,23 @@ export default function KanbanBoard() {
               </button>
             </div>
 
-            {/* Dynamic Assignee Filter */}
-            <select
+            {/* Modern Custom Assignee Filter */}
+            <CustomSelect
               value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs focus:border-blue-500 focus:outline-hidden"
-            >
-              <option value="all">Tất cả thành viên</option>
-              {teamMembers.map((m) => (
-                <option key={m.id} value={m.name}>
-                  {m.name} ({m.role})
-                </option>
-              ))}
-            </select>
+              onChange={setFilterAssignee}
+              options={assigneeFilterOptions}
+              placeholder="Tất cả thành viên"
+              menuClassName="w-64"
+            />
 
-            {/* Priority Filter */}
-            <select
+            {/* Modern Custom Priority Filter */}
+            <CustomSelect
               value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs focus:border-blue-500 focus:outline-hidden"
-            >
-              <option value="all">Mọi độ ưu tiên</option>
-              <option value="high">Ưu tiên Cao (P0)</option>
-              <option value="medium">Ưu tiên Vừa (P1)</option>
-              <option value="low">Ưu tiên Thấp (P2)</option>
-            </select>
+              onChange={setFilterPriority}
+              options={priorityFilterOptions}
+              placeholder="Mọi độ ưu tiên"
+              menuClassName="w-48"
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -1914,34 +2052,37 @@ export default function KanbanBoard() {
                     <label className="mb-1.5 block text-xs font-semibold text-slate-700">
                       Tầng kiến trúc & Công nghệ:
                     </label>
-                    <select
+                    <CustomSelect
                       value={aiStack}
-                      onChange={(e) => setAiStack(e.target.value as TechStackKey)}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:border-purple-500 focus:outline-hidden"
-                    >
-                      {techStackOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => setAiStack(val as TechStackKey)}
+                      options={techStackOptions.map((opt) => ({
+                        value: opt.value,
+                        label: opt.label,
+                        sublabel: opt.defaultDesc,
+                      }))}
+                      placeholder="Chọn tầng kiến trúc..."
+                      className="w-full"
+                      buttonClassName="w-full py-2 bg-slate-50/50"
+                      menuClassName="w-80"
+                    />
                   </div>
 
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold text-slate-700">
                       Độ chi tiết phân rã:
                     </label>
-                    <select
+                    <CustomSelect
                       value={aiGranularity}
-                      onChange={(e) => setAiGranularity(Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:border-purple-500 focus:outline-hidden"
-                    >
-                      {granularityOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => setAiGranularity(Number(val))}
+                      options={granularityOptions.map((opt) => ({
+                        value: opt.value,
+                        label: opt.label,
+                      }))}
+                      placeholder="Chọn độ chi tiết..."
+                      className="w-full"
+                      buttonClassName="w-full py-2 bg-slate-50/50"
+                      menuClassName="w-80"
+                    />
                   </div>
                 </div>
 
@@ -2037,11 +2178,10 @@ export default function KanbanBoard() {
                       <div className="grid grid-cols-3 gap-2.5 text-xs">
                         <div>
                           <span className="text-[10px] text-slate-400 block mb-0.5">Phụ trách:</span>
-                          <select
+                          <CustomSelect
                             value={pt.assignee.name}
-                            onChange={(e) => {
+                            onChange={(name) => {
                               const updated = [...aiPreviewTasks];
-                              const name = e.target.value;
                               const targetMember = teamMembers.find((m) => m.name === name);
                               updated[idx].assignee = {
                                 name,
@@ -2050,33 +2190,41 @@ export default function KanbanBoard() {
                               };
                               setAiPreviewTasks(updated);
                             }}
-                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
-                          >
-                            {teamMembers.map((m) => (
-                              <option key={m.id} value={m.name}>
-                                {m.name} ({m.role})
-                              </option>
-                            ))}
-                          </select>
+                            options={teamMembers.map((m) => ({
+                              value: m.name,
+                              label: `${m.name} (${m.role})`,
+                              icon: (
+                                <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ${m.color}`}>
+                                  {m.avatar}
+                                </span>
+                              ),
+                            }))}
+                            className="w-full"
+                            buttonClassName="w-full py-1 text-[11px]"
+                            menuClassName="w-56"
+                          />
                         </div>
 
                         <div>
                           <span className="text-[10px] text-slate-400 block mb-0.5">Story Points:</span>
-                          <select
+                          <CustomSelect
                             value={pt.points}
-                            onChange={(e) => {
+                            onChange={(val) => {
                               const updated = [...aiPreviewTasks];
-                              updated[idx].points = Number(e.target.value);
+                              updated[idx].points = Number(val);
                               setAiPreviewTasks(updated);
                             }}
-                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
-                          >
-                            <option value={1}>1 Point</option>
-                            <option value={2}>2 Points</option>
-                            <option value={3}>3 Points</option>
-                            <option value={5}>5 Points</option>
-                            <option value={8}>8 Points</option>
-                          </select>
+                            options={[
+                              { value: 1, label: "1 Point" },
+                              { value: 2, label: "2 Points" },
+                              { value: 3, label: "3 Points" },
+                              { value: 5, label: "5 Points" },
+                              { value: 8, label: "8 Points" },
+                            ]}
+                            className="w-full"
+                            buttonClassName="w-full py-1 text-[11px]"
+                            menuClassName="w-40"
+                          />
                         </div>
 
                         <div>
