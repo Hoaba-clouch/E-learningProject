@@ -1759,103 +1759,77 @@ export default function KanbanBoard() {
 
           {/* Main Visuals Grid: Burndown Chart with Red Line + Velocity Chart */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-            {/* 1. SPRINT BURNDOWN CHART (7 cols) - MINIMALIST & TASTEFUL */}
-            <div className="lg:col-span-7 rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs flex flex-col justify-between">
-              {/* Header: Clean & Modern like Linear */}
-              <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+            {/* 1. SPRINT BURNDOWN CHART (7 cols) - REFINED CLASSIC */}
+            <div className="lg:col-span-7 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs flex flex-col justify-between">
+              {/* Header: Exact Classic Structure as requested */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <div>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
-                      <TrendingDown size={14} />
-                    </span>
-                    <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-                      Sprint Burndown
-                    </h3>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                      Sprint 1
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-2.5">
-                    <span className="text-3xl font-black tracking-tight text-slate-900">
-                      15 <span className="text-xs font-semibold text-slate-400">pts còn lại</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-                      ↓ 60.5% đã hoàn tất
-                    </span>
-                  </div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                    <TrendingDown size={16} className="text-rose-600" />
+                    Biểu đồ Sprint Burndown Chart (Đường Cháy việc)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Mô hình hóa sự suy giảm khối lượng công việc theo từng ngày thực tế
+                  </p>
                 </div>
 
-                {/* Minimalist Legend */}
-                <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+                {/* Legend */}
+                <div className="flex items-center gap-3.5 text-xs font-medium">
                   <div className="flex items-center gap-1.5">
-                    <span className="h-0.5 w-3.5 border-b-2 border-dashed border-slate-300" />
-                    <span>Lý tưởng</span>
+                    <span className="h-0.5 w-4 border-b-2 border-dashed border-slate-400" />
+                    <span className="text-slate-500">Lý tưởng (Ideal)</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-rose-500 shadow-xs" />
-                    <span className="font-semibold text-rose-600">Thực tế (Đường đỏ)</span>
+                    <span className="h-1 w-4 rounded-full bg-rose-500" />
+                    <span className="font-bold text-rose-600">Thực tế (Red Line)</span>
                   </div>
                 </div>
               </div>
 
-              {/* Minimalist SVG Chart (Smooth Bezier Spline, Zero Clutter) */}
-              <div className="w-full py-2">
-                <svg viewBox="0 0 500 210" className="w-full h-52 overflow-visible">
+              {/* Refined SVG Chart with Clean Micro-Pills on Every Point */}
+              <div className="relative w-full overflow-hidden rounded-xl bg-slate-50/50 p-2.5 border border-slate-100">
+                <svg viewBox="0 0 500 215" className="w-full h-52 overflow-visible">
                   <defs>
-                    <linearGradient id="softRoseGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.12" />
-                      <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
+                    <linearGradient id="refinedRedGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity="0.14" />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0.01" />
                     </linearGradient>
                   </defs>
 
-                  {/* Horizontal Faint Guide Lines */}
-                  {[
-                    { y: 25, label: "40" },
-                    { y: 65, label: "30" },
-                    { y: 105, label: "20" },
-                    { y: 145, label: "10" },
-                    { y: 185, label: "0" },
-                  ].map((grid, i) => (
-                    <g key={i}>
-                      <line
-                        x1="35"
-                        y1={grid.y}
-                        x2="480"
-                        y2={grid.y}
-                        stroke="#f1f5f9"
-                        strokeDasharray={i === 4 ? "none" : "4 4"}
-                        strokeWidth={i === 4 ? "1.5" : "1"}
-                      />
-                      <text
-                        x="25"
-                        y={grid.y + 3.5}
-                        textAnchor="end"
-                        fontSize="9.5"
-                        fill="#94a3b8"
-                        fontFamily="ui-monospace, monospace"
-                      >
-                        {grid.label}
-                      </text>
-                    </g>
-                  ))}
+                  {/* Horizontal Grid lines */}
+                  <line x1="45" y1="25" x2="475" y2="25" stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <text x="35" y="29" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-monospace, monospace">40p</text>
 
-                  {/* Day Axis Columns */}
+                  <line x1="45" y1="65" x2="475" y2="65" stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <text x="35" y="69" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-monospace, monospace">30p</text>
+
+                  <line x1="45" y1="105" x2="475" y2="105" stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <text x="35" y="109" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-monospace, monospace">20p</text>
+
+                  <line x1="45" y1="145" x2="475" y2="145" stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <text x="35" y="149" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-monospace, monospace">10p</text>
+
+                  <line x1="45" y1="185" x2="475" y2="185" stroke="#cbd5e1" strokeWidth="1.5" />
+                  <text x="35" y="189" textAnchor="end" fontSize="10" fill="#64748b" fontFamily="ui-monospace, monospace" fontWeight="bold">0p</text>
+
+                  {/* Vertical Day Grid Lines & Clean Labels */}
                   {[
-                    { day: "25/10", x: 45 },
-                    { day: "27/10", x: 117 },
-                    { day: "29/10", x: 190 },
-                    { day: "31/10", x: 262 },
-                    { day: "02/11", x: 335 },
-                    { day: "Hôm nay", x: 407, active: true },
-                    { day: "15/11", x: 480 },
+                    { day: "N1 (25/10)", x: 45 },
+                    { day: "N2 (27/10)", x: 116 },
+                    { day: "N3 (29/10)", x: 188 },
+                    { day: "N4 (31/10)", x: 260 },
+                    { day: "N5 (02/11)", x: 331 },
+                    { day: "N6 (Hôm nay)", x: 403, active: true },
+                    { day: "N7 (Cuối)", x: 475 },
                   ].map((d, i) => (
                     <g key={i}>
+                      <line x1={d.x} y1="25" x2={d.x} y2="185" stroke="#f1f5f9" />
                       <text
                         x={d.x}
                         y="202"
                         textAnchor="middle"
-                        fontSize="10"
-                        fill={d.active ? "#0f172a" : "#94a3b8"}
+                        fontSize="9.5"
+                        fill={d.active ? "#0f172a" : "#64748b"}
                         fontWeight={d.active ? "bold" : "normal"}
                       >
                         {d.day}
@@ -1863,105 +1837,95 @@ export default function KanbanBoard() {
                     </g>
                   ))}
 
-                  {/* IDEAL SPRINT LINE (Subtle Dashed Gray) */}
+                  {/* IDEAL LINE (Grey Dashed) from (45, 33) down to (475, 185) */}
                   <line
                     x1="45"
                     y1="33"
-                    x2="480"
+                    x2="475"
                     y2="185"
-                    stroke="#cbd5e1"
+                    stroke="#94a3b8"
                     strokeWidth="1.75"
-                    strokeDasharray="4 4"
+                    strokeDasharray="5 5"
                   />
 
-                  {/* SMOOTH CURVED AREA FILL */}
-                  <path
-                    d="M 45 33 C 80 33, 90 33, 117 33 C 150 33, 160 53, 190 53 C 220 53, 230 75, 262 75 C 295 75, 305 115, 335 115 C 365 115, 380 126, 407 126 L 407 185 L 45 185 Z"
-                    fill="url(#softRoseGradient)"
+                  {/* ACTUAL RED LINE AREA FILL */}
+                  <polygon
+                    points="45,33 116,33 188,53 260,73 331,113 403,125 403,185 45,185"
+                    fill="url(#refinedRedGradient)"
                   />
 
-                  {/* SMOOTH RED CURVE (ĐƯỜNG CONG MÀU ĐỎ TUYỆT ĐẸP) */}
-                  <path
-                    d="M 45 33 C 80 33, 90 33, 117 33 C 150 33, 160 53, 190 53 C 220 53, 230 75, 262 75 C 295 75, 305 115, 335 115 C 365 115, 380 126, 407 126"
+                  {/* ACTUAL RED LINE (ĐƯỜNG LINE MÀU ĐỎ SẮC NÉT) */}
+                  <polyline
                     fill="none"
-                    stroke="#f43f5e"
-                    strokeWidth="3"
+                    stroke="#ef4444"
+                    strokeWidth="3.25"
                     strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points="45,33 116,33 188,53 260,73 331,113 403,125"
                   />
 
-                  {/* Clean Minimalist Dots on Data Nodes (No Clunky Black Boxes) */}
+                  {/* Refined Points with Sleek Micro-Pills (38p, 38p, 33p, 28p, 18p, 15p) */}
                   {[
-                    { x: 45, y: 33 },
-                    { x: 117, y: 33 },
-                    { x: 190, y: 53 },
-                    { x: 262, y: 75 },
-                    { x: 335, y: 115 },
+                    { x: 45, y: 33, val: "38p" },
+                    { x: 116, y: 33, val: "38p" },
+                    { x: 188, y: 53, val: "33p" },
+                    { x: 260, y: 73, val: "28p" },
+                    { x: 331, y: 113, val: "18p" },
+                    { x: 403, y: 125, val: "15p", active: true },
                   ].map((pt, i) => (
-                    <circle
-                      key={i}
-                      cx={pt.x}
-                      cy={pt.y}
-                      r="3.5"
-                      fill="#ffffff"
-                      stroke="#f43f5e"
-                      strokeWidth="2"
-                    />
+                    <g key={i} className="cursor-pointer">
+                      {/* Active pulse for today */}
+                      {pt.active && (
+                        <circle cx={pt.x} cy={pt.y} r="8" fill="#ef4444" opacity="0.25" className="animate-ping" />
+                      )}
+
+                      {/* Crisp Node with White Center and Red Ring */}
+                      <circle
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={pt.active ? "5" : "4"}
+                        fill="#ffffff"
+                        stroke="#ef4444"
+                        strokeWidth="2.5"
+                      />
+
+                      {/* Refined Micro-Pill Badge Floating Above (Chữ nhật bo cong tinh tế) */}
+                      <rect
+                        x={pt.x - 14}
+                        y={pt.y - 19}
+                        width="28"
+                        height="15"
+                        rx="7.5"
+                        fill={pt.active ? "#ef4444" : "#1e293b"}
+                        stroke={pt.active ? "#ffffff" : "transparent"}
+                        strokeWidth="1"
+                        className="shadow-xs"
+                      />
+                      <text
+                        x={pt.x}
+                        y={pt.y - 8.5}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fill="#ffffff"
+                        fontWeight="bold"
+                        fontFamily="ui-monospace, monospace"
+                      >
+                        {pt.val}
+                      </text>
+                    </g>
                   ))}
-
-                  {/* Start Point Hint: 38p (Muted) */}
-                  <text
-                    x="45"
-                    y="22"
-                    textAnchor="middle"
-                    fontSize="9"
-                    fill="#94a3b8"
-                    fontFamily="ui-monospace, monospace"
-                  >
-                    38 pts
-                  </text>
-
-                  {/* LATEST POINT: TODAY (Hôm nay - Day 6) with Chic Floating Pill */}
-                  <g className="cursor-pointer">
-                    {/* Pulsing ring */}
-                    <circle cx="407" cy="126" r="9" fill="#f43f5e" opacity="0.2" className="animate-ping" />
-                    {/* Solid node */}
-                    <circle cx="407" cy="126" r="5" fill="#f43f5e" stroke="#ffffff" strokeWidth="2.5" />
-
-                    {/* Chic Minimalist Black Pill Badge Floating Above */}
-                    <rect
-                      x="381"
-                      y="94"
-                      width="52"
-                      height="22"
-                      rx="11"
-                      fill="#0f172a"
-                      className="shadow-sm"
-                    />
-                    <text
-                      x="407"
-                      y="108.5"
-                      textAnchor="middle"
-                      fontSize="9.5"
-                      fill="#ffffff"
-                      fontWeight="bold"
-                      fontFamily="ui-monospace, monospace"
-                    >
-                      15 pts
-                    </text>
-                  </g>
                 </svg>
               </div>
 
-              {/* Minimalist Linear-Style Status Footer */}
-              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
-                <div className="flex items-center gap-2 text-slate-600 font-medium">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              {/* Status Ribbon below chart */}
+              <div className="mt-3 flex items-center justify-between text-xs rounded-xl bg-slate-50 border border-slate-100 px-3.5 py-2">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-xs shrink-0" />
+                  <span className="font-medium text-[11px]">
+                    <strong className="text-slate-900">Đánh giá Sprint:</strong> Đường đỏ thực tế dốc đúng quỹ đạo, còn 15 Story Points cần đóng gói.
                   </span>
-                  <span>Đang bám sát đường lý tưởng • Dự kiến hoàn thành đúng hạn 15/11</span>
                 </div>
-                <span className="font-semibold text-slate-700 bg-slate-50 border border-slate-200/60 px-2.5 py-0.5 rounded-full text-[11px]">
+                <span className="font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full text-[11px]">
                   Hiệu suất 94%
                 </span>
               </div>
