@@ -1,0 +1,2 @@
+"""CodeMind MVP backend package."""
+
