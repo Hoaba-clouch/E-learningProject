@@ -46,6 +46,10 @@ import {
   Terminal,
   Timer,
   Trash2,
+  Activity,
+  PieChart,
+  Target,
+  TrendingDown,
   TrendingUp,
   Unlock,
   User,
@@ -1673,78 +1677,382 @@ export default function KanbanBoard() {
         </div>
       )}
 
-      {/* ── TAB 3: DYNAMIC ANTI-FREERIDER ANALYTICS ──────────────────────── */}
+      {/* ── TAB 3: PROJECT OVERVIEW, BURNDOWN CHART & ANTI-FREERIDER DASHBOARD ──────────────────────── */}
       {activeTab === "analytics" && (
-        <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs overflow-y-auto">
-          <div className="mb-6 flex items-center justify-between">
+        <div className="flex-1 space-y-5 overflow-y-auto pr-1 animate-in fade-in">
+          {/* Header & Quick Action */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
             <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Báo cáo Đóng góp Cá nhân (Anti-Freerider Metrics)
-              </h2>
-              <p className="text-xs text-slate-500">
-                Đánh giá khách quan khối lượng công việc thực tế của cả {teamMembers.length} thành viên trong nhóm đồ án.
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900">
+                  Báo cáo Tiến độ & Sức khỏe Dự án (Sprint Analytics)
+                </h2>
+                <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 border border-rose-200 flex items-center gap-1">
+                  <Activity size={12} className="text-rose-600 animate-pulse" />
+                  Burndown Chart Đường Đỏ
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Theo dõi đường cháy việc thực tế (Red line), vận tốc nhóm qua các Sprint và đóng góp của {teamMembers.length} thành viên.
               </p>
             </div>
-            <button
-              onClick={() => setMemberModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              <UserPlus size={13} />
-              Quản lý Thành viên
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setHandbookOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+              >
+                <BookOpen size={13} />
+                Tiêu chuẩn Scrum SS07
+              </button>
+              <button
+                onClick={() => setMemberModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                <UserPlus size={13} />
+                Quản lý Thành viên
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {teamMembers.map((member) => {
-              const stat = contribution[member.name];
-              const percent = stat?.percent || 0;
-              const points = stat?.donePts || 0;
-              const doneCount = stat?.tasksDone || 0;
+          {/* 4 Summary KPI Cards */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+              <span className="text-[11px] font-medium text-slate-400 block mb-1">Tổng Điểm Sprint:</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-slate-900">{sprintStats.totalPoints}</span>
+                <span className="text-xs font-bold text-slate-500">Story Points</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Cam kết 9 tasks trong Sprint 1</p>
+            </div>
 
-              const grade =
-                percent >= 40
-                  ? "A+ (Xuất sắc)"
-                  : percent >= 25
-                  ? "A (Rất tốt)"
-                  : percent >= 15
-                  ? "B+ (Đạt yêu cầu)"
-                  : "Cảnh báo (Thiếu đóng góp)";
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-xs">
+              <span className="text-[11px] font-medium text-emerald-700 block mb-1">Đã Hoàn Thành (Done):</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-emerald-700">{sprintStats.donePoints}</span>
+                <span className="text-xs font-bold text-emerald-600">pts ({sprintStats.percentDone}%)</span>
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200/60">
+                <div style={{ width: `${sprintStats.percentDone}%` }} className="h-full bg-emerald-500" />
+              </div>
+            </div>
 
-              return (
-                <div key={member.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 shadow-xs">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white font-bold text-sm shadow-sm ${member.color}`}>
-                      {member.avatar}
-                    </span>
-                    <div>
-                      <h3 className="font-bold text-slate-900">{member.name}</h3>
-                      <p className="text-xs text-slate-500">{member.role}</p>
-                    </div>
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/40 p-4 shadow-xs">
+              <span className="text-[11px] font-medium text-rose-700 block mb-1">Điểm Còn Lại (Remaining):</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-rose-600">
+                  {sprintStats.totalPoints - sprintStats.donePoints}
+                </span>
+                <span className="text-xs font-bold text-rose-600">pts (Đường Đỏ)</span>
+              </div>
+              <p className="text-[10px] text-rose-600/80 mt-1">Cần hoàn tất trước hạn 15/11</p>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 shadow-xs">
+              <span className="text-[11px] font-medium text-amber-700 block mb-1">Vận tốc Sprint (Velocity):</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-amber-800">36.5</span>
+                <span className="text-xs font-bold text-amber-700">SP / Sprint</span>
+              </div>
+              <p className="text-[10px] text-amber-700/80 mt-1">Đạt năng suất chuẩn công nghiệp</p>
+            </div>
+          </div>
+
+          {/* Main Visuals Grid: Burndown Chart with Red Line + Velocity Chart */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+            {/* 1. SPRINT BURNDOWN CHART (7 cols) */}
+            <div className="lg:col-span-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                    <TrendingDown size={16} className="text-rose-600" />
+                    Biểu đồ Sprint Burndown Chart (Đường Cháy việc)
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Mô hình hóa sự suy giảm khối lượng công việc theo từng ngày thực tế
+                  </p>
+                </div>
+
+                {/* Legend */}
+                <div className="flex items-center gap-3 text-[11px] font-medium">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-4 border-b-2 border-dashed border-slate-400" />
+                    <span className="text-slate-500">Lý tưởng (Ideal)</span>
                   </div>
-
-                  <div className="space-y-3 border-t border-slate-200/70 pt-3 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Tỷ lệ đóng góp:</span>
-                      <span className="font-bold text-slate-900">{percent}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Story Points hoàn thành:</span>
-                      <span className="font-mono font-bold text-slate-900">{points} pts</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Số task đã Done:</span>
-                      <span className="font-bold text-slate-900">{doneCount} tasks</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Đánh giá hệ thống:</span>
-                      <span className={`font-bold ${percent >= 25 ? "text-emerald-600" : "text-amber-600"}`}>
-                        {grade}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1 w-4 rounded-full bg-rose-500" />
+                    <span className="font-bold text-rose-600">Thực tế (Red Line)</span>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+
+              {/* Interactive SVG Chart */}
+              <div className="relative w-full overflow-hidden rounded-xl bg-slate-50/70 p-3 border border-slate-100">
+                <svg viewBox="0 0 500 220" className="w-full h-52 overflow-visible">
+                  <defs>
+                    <linearGradient id="redGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Horizontal Grid lines */}
+                  <line x1="45" y1="25" x2="475" y2="25" stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <text x="35" y="29" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="monospace">40p</text>
+
+                  <line x1="45" y1="65" x2="475" y2="65" stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <text x="35" y="69" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="monospace">30p</text>
+
+                  <line x1="45" y1="105" x2="475" y2="105" stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <text x="35" y="109" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="monospace">20p</text>
+
+                  <line x1="45" y1="145" x2="475" y2="145" stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <text x="35" y="149" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="monospace">10p</text>
+
+                  <line x1="45" y1="185" x2="475" y2="185" stroke="#cbd5e1" strokeWidth="1.5" />
+                  <text x="35" y="189" textAnchor="end" fontSize="10" fill="#64748b" fontFamily="monospace" fontWeight="bold">0p</text>
+
+                  {/* Vertical Day Lines & Labels */}
+                  {[
+                    { day: "N1 (25/10)", x: 45 },
+                    { day: "N2 (27/10)", x: 116 },
+                    { day: "N3 (29/10)", x: 188 },
+                    { day: "N4 (31/10)", x: 260 },
+                    { day: "N5 (02/11)", x: 331 },
+                    { day: "N6 (Hôm nay)", x: 403 },
+                    { day: "N7 (Cuối)", x: 475 },
+                  ].map((d, i) => (
+                    <g key={i}>
+                      <line x1={d.x} y1="25" x2={d.x} y2="185" stroke="#f1f5f9" />
+                      <text x={d.x} y="202" textAnchor="middle" fontSize="9.5" fill="#64748b" fontWeight={i === 5 ? "bold" : "normal"}>
+                        {d.day}
+                      </text>
+                    </g>
+                  ))}
+
+                  {/* IDEAL LINE (Grey Dashed) from (45, 33) down to (475, 185) */}
+                  <line
+                    x1="45"
+                    y1="33"
+                    x2="475"
+                    y2="185"
+                    stroke="#94a3b8"
+                    strokeWidth="2"
+                    strokeDasharray="5 5"
+                  />
+
+                  {/* ACTUAL RED LINE AREA FILL */}
+                  <polygon
+                    points="45,33 116,33 188,53 260,73 331,113 403,125 403,185 45,185"
+                    fill="url(#redGradient)"
+                  />
+
+                  {/* ACTUAL RED LINE (ĐƯỜNG LINE MÀU ĐỎ CỦA HUYNH) */}
+                  <polyline
+                    fill="none"
+                    stroke="#ef4444"
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points="45,33 116,33 188,53 260,73 331,113 403,125"
+                  />
+
+                  {/* Data Points on the Red Line */}
+                  {[
+                    { x: 45, y: 33, val: "38p" },
+                    { x: 116, y: 33, val: "38p" },
+                    { x: 188, y: 53, val: "33p" },
+                    { x: 260, y: 73, val: "28p" },
+                    { x: 331, y: 113, val: "18p" },
+                    { x: 403, y: 125, val: "15p" },
+                  ].map((pt, i) => (
+                    <g key={i} className="cursor-pointer group">
+                      {i === 5 && (
+                        <circle cx={pt.x} cy={pt.y} r="8" fill="#ef4444" opacity="0.3" className="animate-ping" />
+                      )}
+                      <circle
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={i === 5 ? "5.5" : "4.5"}
+                        fill="#ffffff"
+                        stroke="#ef4444"
+                        strokeWidth="2.5"
+                      />
+                      <rect
+                        x={pt.x - 14}
+                        y={pt.y - 20}
+                        width="28"
+                        height="14"
+                        rx="4"
+                        fill="#1e293b"
+                        opacity="0.9"
+                      />
+                      <text
+                        x={pt.x}
+                        y={pt.y - 10}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fill="#ffffff"
+                        fontWeight="bold"
+                        fontFamily="monospace"
+                      >
+                        {pt.val}
+                      </text>
+                    </g>
+                  ))}
+                </svg>
+              </div>
+
+              {/* Insight callout below chart */}
+              <div className="mt-3 flex items-center justify-between text-xs rounded-xl bg-slate-50 border border-slate-100 p-2.5">
+                <span className="text-slate-600 flex items-center gap-1.5 font-medium">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <strong>Đánh giá Sprint:</strong> Đường đỏ thực tế dốc đúng quỹ đạo, còn 15 Story Points cần đóng gói.
+                </span>
+                <span className="font-semibold text-blue-600">Hiệu suất 94%</span>
+              </div>
+            </div>
+
+            {/* 2. VELOCITY CHART & EPIC DISTRIBUTION (5 cols) */}
+            <div className="lg:col-span-5 space-y-4">
+              {/* Velocity Chart */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <BarChart3 size={15} className="text-blue-600" />
+                    Biểu đồ Vận tốc Nhóm (Velocity qua 4 Sprints)
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold text-slate-500">Session 07</span>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { name: "Sprint 1 (Kiến trúc & SRS)", committed: 38, done: 23, active: true },
+                    { name: "Sprint 2 (LMS & Sandbox)", committed: 35, done: 0, active: false },
+                    { name: "Sprint 3 (Kanban & WBS)", committed: 40, done: 0, active: false },
+                    { name: "Sprint 4 (Defense & Báo cáo)", committed: 32, done: 0, active: false },
+                  ].map((s, i) => (
+                    <div key={i} className="text-xs">
+                      <div className="flex justify-between text-[11px] font-medium mb-1">
+                        <span className={s.active ? "font-bold text-blue-700" : "text-slate-600"}>
+                          {s.name}
+                        </span>
+                        <span className="font-mono text-slate-500">
+                          {s.active ? `${s.done} / ${s.committed} pts` : `${s.committed} pts dự kiến`}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 flex">
+                        <div
+                          style={{ width: `${Math.round((s.done / s.committed) * 100)}%` }}
+                          className="bg-emerald-500"
+                        />
+                        <div
+                          style={{
+                            width: `${Math.round(((s.committed - s.done) / s.committed) * 100)}%`,
+                          }}
+                          className={s.active ? "bg-rose-400" : "bg-slate-200"}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Epic Distribution */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                <h4 className="text-xs font-bold text-slate-900 mb-2.5 flex items-center gap-1.5">
+                  <PieChart size={14} className="text-purple-600" />
+                  Cơ cấu Phân bổ Story Points theo Epic
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="rounded-lg bg-blue-50/60 p-2 border border-blue-100">
+                    <span className="text-blue-700 font-bold block">Architecture (H4)</span>
+                    <span className="text-slate-500">10 pts (Done 100%)</span>
+                  </div>
+                  <div className="rounded-lg bg-purple-50/60 p-2 border border-purple-100">
+                    <span className="text-purple-700 font-bold block">Documentation</span>
+                    <span className="text-slate-500">8 pts (Done 100%)</span>
+                  </div>
+                  <div className="rounded-lg bg-amber-50/60 p-2 border border-amber-100">
+                    <span className="text-amber-700 font-bold block">Code Grader Sandbox</span>
+                    <span className="text-slate-500">5 pts (In Progress)</span>
+                  </div>
+                  <div className="rounded-lg bg-teal-50/60 p-2 border border-teal-100">
+                    <span className="text-teal-700 font-bold block">AI Defense Room</span>
+                    <span className="text-slate-500">8 pts (Ready)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Section: Dynamic Anti-Freerider Member Cards */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Báo cáo Đóng góp Cá nhân (Thuật toán Anti-Freerider)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Đánh giá minh bạch và khách quan hiệu quả làm việc của từng thành viên
+                </p>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-400">
+                Chống ỷ lại & Gánh team
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {teamMembers.map((member) => {
+                const stat = contribution[member.name];
+                const percent = stat?.percent || 0;
+                const points = stat?.donePts || 0;
+                const doneCount = stat?.tasksDone || 0;
+
+                const grade =
+                  percent >= 40
+                    ? "A+ (Xuất sắc)"
+                    : percent >= 25
+                    ? "A (Rất tốt)"
+                    : percent >= 15
+                    ? "B+ (Đạt yêu cầu)"
+                    : "Cảnh báo (Thiếu đóng góp)";
+
+                return (
+                  <div key={member.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 shadow-xs">
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className={`flex h-11 w-11 items-center justify-center rounded-2xl text-white font-bold text-xs shadow-sm ${member.color}`}>
+                        {member.avatar}
+                      </span>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-xs">{member.name}</h4>
+                        <p className="text-[11px] text-slate-500">{member.role}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 border-t border-slate-200/70 pt-2.5 text-[11px]">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Tỷ lệ đóng góp:</span>
+                        <span className="font-bold text-slate-900">{percent}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Story Points hoàn thành:</span>
+                        <span className="font-mono font-bold text-slate-900">{points} pts</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Số task đã Done:</span>
+                        <span className="font-bold text-slate-900">{doneCount} tasks</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Đánh giá hệ thống:</span>
+                        <span className={`font-bold ${percent >= 25 ? "text-emerald-600" : "text-amber-600"}`}>
+                          {grade}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
