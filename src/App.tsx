@@ -155,7 +155,7 @@ export default function App() {
       <main className="flex-1 overflow-y-auto">
         {renderScreen()}
       </main>
-      {role === "student" && screen !== "workspace" && (
+      {role === "student" && screen !== "workspace" && screen !== "kanban" && (
         <DesktopMascotPet mascot={mentorMascot} activeScreen={screen} />
       )}
     </div>

@@ -764,7 +764,7 @@ export default function KanbanBoard() {
 
       {/* ── TAB 1: KANBAN BOARD WITH REAL DRAG AND DROP ──────────────────── */}
       {activeTab === "board" && (
-        <div className="grid flex-1 grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5 overflow-x-auto pb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5 items-start overflow-x-auto pb-10">
           {columnsConfig.map((col) => {
             const colTasks = filteredTasks.filter((t) => t.column === col.id);
             const isDraggingOver = dragOverCol === col.id;
@@ -776,16 +776,16 @@ export default function KanbanBoard() {
                 onDragOver={(e) => handleDragOver(e, col.id)}
                 onDragLeave={(e) => handleDragLeave(e, col.id)}
                 onDrop={(e) => handleDrop(e, col.id)}
-                className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/60 p-3 shadow-xs transition-all ${
+                className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/70 p-2.5 shadow-xs transition-all max-h-[calc(100vh-210px)] ${
                   col.borderTop
                 } border-t-4 ${
                   isDraggingOver
-                    ? "bg-blue-50/70 border-blue-400 ring-2 ring-blue-300 ring-opacity-50"
+                    ? "bg-blue-50/80 border-blue-400 ring-2 ring-blue-300/60"
                     : ""
                 }`}
               >
                 {/* Column Header */}
-                <div className="mb-3 flex items-center justify-between px-1">
+                <div className="mb-2.5 flex items-center justify-between px-1">
                   <div className="flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full ${col.dotColor}`} />
                     <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
@@ -804,18 +804,10 @@ export default function KanbanBoard() {
                 </div>
 
                 {/* Tasks Container */}
-                <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto pr-0.5 min-h-[300px]">
-                  {colTasks.length === 0 && (
-                    <div
-                      className={`flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed transition-all p-4 text-center ${
-                        isDraggingOver
-                          ? "border-blue-400 bg-blue-50/50"
-                          : "border-slate-300/80 bg-white/40"
-                      }`}
-                    >
-                      <p className="text-xs font-medium text-slate-400">
-                        {isDraggingOver ? "Thả thẻ vào đây" : "Kéo thẻ vào cột này"}
-                      </p>
+                <div className="flex flex-col gap-2 overflow-y-auto pr-0.5">
+                  {colTasks.length === 0 && isDraggingOver && (
+                    <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-blue-400 bg-blue-50/60 py-6 text-center">
+                      <p className="text-xs font-semibold text-blue-600">Thả thẻ vào đây</p>
                     </div>
                   )}
 
@@ -975,9 +967,9 @@ export default function KanbanBoard() {
                   })}
                 </div>
 
-                {/* Inline Quick Add Card */}
+                {/* Inline Quick Add Card - Trello Style */}
                 {inlineAddingCol === col.id ? (
-                  <div className="mt-2.5 rounded-xl border border-blue-300 bg-white p-2.5 shadow-sm">
+                  <div className="mt-1.5 rounded-xl border border-blue-400/80 bg-white p-2 shadow-xs">
                     <textarea
                       autoFocus
                       value={inlineTitle}
@@ -990,21 +982,21 @@ export default function KanbanBoard() {
                         if (e.key === "Escape") setInlineAddingCol(null);
                       }}
                       rows={2}
-                      placeholder="Nhập tên task và ấn Enter..."
+                      placeholder="Nhập tiêu đề cho thẻ này..."
                       className="w-full resize-none border-none text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
                     />
-                    <div className="flex items-center justify-end gap-1.5 pt-1">
-                      <button
-                        onClick={() => setInlineAddingCol(null)}
-                        className="rounded px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
-                      >
-                        Hủy
-                      </button>
+                    <div className="flex items-center gap-1.5 pt-1">
                       <button
                         onClick={() => handleInlineAdd(col.id)}
-                        className="rounded bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs"
                       >
                         Thêm thẻ
+                      </button>
+                      <button
+                        onClick={() => setInlineAddingCol(null)}
+                        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                      >
+                        <X size={16} />
                       </button>
                     </div>
                   </div>
@@ -1014,10 +1006,10 @@ export default function KanbanBoard() {
                       setInlineAddingCol(col.id);
                       setInlineTitle("");
                     }}
-                    className="mt-2.5 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300/80 bg-white/40 py-2 text-xs font-semibold text-slate-600 transition hover:border-blue-400 hover:bg-white hover:text-blue-600"
+                    className="mt-1 flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900"
                   >
-                    <Plus size={14} />
-                    <span>Thêm thẻ mới</span>
+                    <Plus size={15} />
+                    <span>Thêm thẻ</span>
                   </button>
                 )}
               </div>
