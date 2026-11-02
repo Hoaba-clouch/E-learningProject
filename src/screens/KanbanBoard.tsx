@@ -1,6 +1,7 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   Bot,
@@ -10,6 +11,8 @@ import {
   Clock,
   Clock3,
   Columns3,
+  Cpu,
+  Database,
   ExternalLink,
   Filter,
   Flame,
@@ -28,17 +31,23 @@ import {
   Paperclip,
   Plus,
   Search,
+  Settings2,
   Share2,
+  Shield,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Tag,
+  Terminal,
   Timer,
   Trash2,
   TrendingUp,
   Unlock,
   User,
   UserCheck,
+  UserPlus,
   Users,
+  Wrench,
   X,
   Zap,
 } from "lucide-react";
@@ -46,6 +55,23 @@ import {
 export type ColumnId = "backlog" | "ready" | "in-progress" | "review" | "done";
 export type Priority = "low" | "medium" | "high";
 export type TabView = "board" | "analytics" | "dependencies";
+export type TechStackKey =
+  | "ai"
+  | "backend"
+  | "database"
+  | "sandbox"
+  | "devops"
+  | "frontend"
+  | "fullstack"
+  | "custom";
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  avatar: string;
+  role: string;
+  color: string;
+}
 
 export interface ChecklistItem {
   id: string;
@@ -81,16 +107,22 @@ export interface KanbanTask {
   attachmentsCount: number;
 }
 
+const initialMembers: TeamMember[] = [
+  { id: "m1", name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch", color: "bg-blue-600" },
+  { id: "m2", name: "Quốc Huy", avatar: "QH", role: "Backend Dev", color: "bg-amber-500" },
+  { id: "m3", name: "Hoàng Long", avatar: "HL", role: "QA & AI Ops", color: "bg-teal-600" },
+];
+
 const initialTasks: KanbanTask[] = [
   {
     id: "task-1",
     code: "BE-01",
-    title: "Thiết kế CSDL ERD & Timezone UTC chuẩn ISO-8601",
+    title: "Thiết kế CSDL ERD & Timezone UTC chuẩn ISO-8601 (H4)",
     description: "Xây dựng 8 bảng core, quy chuẩn toàn bộ timestamp về UTC (H4) theo yêu cầu Thầy Phước.",
     column: "done",
     priority: "high",
     points: 5,
-    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
     estimateHours: 4,
     dueDate: "28/10",
     epic: "Architecture",
@@ -112,7 +144,7 @@ const initialTasks: KanbanTask[] = [
     column: "done",
     priority: "high",
     points: 8,
-    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
     estimateHours: 6,
     dueDate: "29/10",
     epic: "Documentation",
@@ -134,7 +166,7 @@ const initialTasks: KanbanTask[] = [
     column: "done",
     priority: "high",
     points: 5,
-    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
     estimateHours: 4,
     dueDate: "02/11",
     epic: "Backend Refactor",
@@ -243,7 +275,7 @@ const initialTasks: KanbanTask[] = [
     column: "in-progress",
     priority: "medium",
     points: 3,
-    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
     estimateHours: 3,
     dueDate: "07/11",
     epic: "Gamification",
@@ -294,10 +326,35 @@ const columnsConfig: Array<{
   { id: "done", title: "Done", dotColor: "bg-emerald-500", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700", borderTop: "border-t-emerald-500" },
 ];
 
+const techStackOptions = [
+  { value: "ai", label: "Trí tuệ nhân tạo (AI/ML & Socratic Prompting)", defaultDesc: "Tích hợp LLM, xây dựng guardrails sư phạm, kịch bản hội đồng phản biện." },
+  { value: "backend", label: "Backend Core (FastAPI + Layered Architecture)", defaultDesc: "Xây dựng service, router v1, schema Pydantic và ràng buộc nghiệp vụ H2/H3." },
+  { value: "database", label: "Cơ sở dữ liệu (ERD, Migrations SQLite/Postgres)", defaultDesc: "Thiết kế quan hệ thực thể, migration tự động và quy chuẩn ISO-8601 UTC (H4)." },
+  { value: "sandbox", label: "Sandbox & Security (Docker Isolated Runner)", defaultDesc: "Môi trường thực thi isolated, timeout 2000ms, sandbox chống memory leak." },
+  { value: "devops", label: "DevOps & CI/CD (GitHub Actions, Vercel, Docker Compose)", defaultDesc: "Quy trình CI tự động chạy smoke test, build container và deploy production." },
+  { value: "frontend", label: "Giao diện Frontend (React 19 + Tailwind CSS)", defaultDesc: "Thiết kế component, bảng kéo thả Kanban, hook API client trong src/api.ts." },
+  { value: "fullstack", label: "Toàn trình End-to-End (Fullstack Monorepo)", defaultDesc: "Tích hợp liền mạch từ UI React, RESTful API đến database SQLite và test suite." },
+  { value: "custom", label: "Tự nhập công nghệ khác (Custom Tech Stack)...", defaultDesc: "" },
+];
+
+const granularityOptions = [
+  { value: 2, label: "2 Thẻ (Việc nhỏ nhanh gọn: Code ➔ Test, ~4-6h)" },
+  { value: 3, label: "3 Thẻ (Chuẩn nguyên tử: Kiến trúc ➔ Backend Core ➔ Test QA, ~10-12h)" },
+  { value: 4, label: "4 Thẻ (Kèm giao diện: Kiến trúc ➔ Backend ➔ Test ➔ UI React, ~14-16h)" },
+  { value: 5, label: "5 Thẻ (Toàn diện Sprint: DB ➔ API ➔ Sandbox ➔ Test ➔ Docs & Slide, ~18-22h)" },
+  { value: 6, label: "6 Thẻ (Module lớn: Phân rã sâu từng component, ~24-30h)" },
+];
+
 export default function KanbanBoard() {
   const [tasks, setTasks] = useState<KanbanTask[]>(initialTasks);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialMembers);
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
   const [activeTab, setActiveTab] = useState<TabView>("board");
+
+  // Dynamic Member Management Modal
+  const [memberModalOpen, setMemberModalOpen] = useState(false);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState("Frontend Developer");
 
   // Filtering
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
@@ -320,9 +377,11 @@ export default function KanbanBoard() {
   const [aiStage, setAiStage] = useState<"input" | "preview">("input");
   const [aiFeatureName, setAiFeatureName] = useState("");
   const [aiDescription, setAiDescription] = useState("");
-  const [aiStack, setAiStack] = useState<"backend" | "frontend" | "docker" | "fullstack">("backend");
+  const [aiStack, setAiStack] = useState<TechStackKey>("backend");
+  const [aiCustomTech, setAiCustomTech] = useState("");
   const [aiGranularity, setAiGranularity] = useState<number>(3);
   const [aiIncludeH2, setAiIncludeH2] = useState(true);
+  const [aiSelectedMemberIds, setAiSelectedMemberIds] = useState<string[]>(["m1", "m2", "m3"]);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreviewTasks, setAiPreviewTasks] = useState<KanbanTask[]>([]);
 
@@ -341,31 +400,32 @@ export default function KanbanBoard() {
     return { totalPoints, donePoints, inProgPoints, percentDone };
   }, [tasks]);
 
-  // Anti-Freerider Contribution
+  // Anti-Freerider Contribution calculated dynamically for ANY number of members!
   const contribution = useMemo(() => {
-    const members: Record<string, { donePts: number; totalPts: number; tasksDone: number }> = {
-      "Minh Anh": { donePts: 0, totalPts: 0, tasksDone: 0 },
-      "Quốc Huy": { donePts: 0, totalPts: 0, tasksDone: 0 },
-      "Hoàng Long": { donePts: 0, totalPts: 0, tasksDone: 0 },
-    };
+    const memberStats: Record<string, { member: TeamMember; donePts: number; totalPts: number; tasksDone: number; percent: number }> = {};
+    
+    teamMembers.forEach((m) => {
+      memberStats[m.name] = { member: m, donePts: 0, totalPts: 0, tasksDone: 0, percent: 0 };
+    });
+
     tasks.forEach((t) => {
       const name = t.assignee.name;
-      if (members[name]) {
-        members[name].totalPts += t.points;
+      if (memberStats[name]) {
+        memberStats[name].totalPts += t.points;
         if (t.column === "done") {
-          members[name].donePts += t.points;
-          members[name].tasksDone += 1;
+          memberStats[name].donePts += t.points;
+          memberStats[name].tasksDone += 1;
         }
       }
     });
-    const totalDonePts = Object.values(members).reduce((s, m) => s + m.donePts, 0) || 1;
-    return {
-      minhAnh: Math.round((members["Minh Anh"].donePts / totalDonePts) * 100),
-      quocHuy: Math.round((members["Quốc Huy"].donePts / totalDonePts) * 100),
-      hoangLong: Math.round((members["Hoàng Long"].donePts / totalDonePts) * 100),
-      members,
-    };
-  }, [tasks]);
+
+    const totalDonePts = Object.values(memberStats).reduce((s, m) => s + m.donePts, 0) || 1;
+    Object.values(memberStats).forEach((stat) => {
+      stat.percent = Math.round((stat.donePts / totalDonePts) * 100);
+    });
+
+    return memberStats;
+  }, [tasks, teamMembers]);
 
   // Execute Move Task (with Constraint H2 enforcement)
   const moveTask = (taskId: string, targetCol: ColumnId) => {
@@ -424,6 +484,7 @@ export default function KanbanBoard() {
       setInlineAddingCol(null);
       return;
     }
+    const defaultAssignee = teamMembers[0] || { name: "Minh Anh", avatar: "MA", role: "Team Lead" };
     const newTask: KanbanTask = {
       id: `task-${Date.now()}`,
       code: `TSK-${Math.floor(Math.random() * 800 + 100)}`,
@@ -432,7 +493,7 @@ export default function KanbanBoard() {
       column: colId,
       priority: "medium",
       points: 3,
-      assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
+      assignee: { name: defaultAssignee.name, avatar: defaultAssignee.avatar, role: defaultAssignee.role },
       estimateHours: 3,
       dueDate: "15/11",
       epic: "Sprint Goal",
@@ -446,122 +507,206 @@ export default function KanbanBoard() {
     setInlineAddingCol(null);
   };
 
+  // Add Dynamic Team Member
+  const handleAddMember = () => {
+    if (!newMemberName.trim()) return;
+    const initials = newMemberName
+      .trim()
+      .split(" ")
+      .map((w) => w[0])
+      .slice(-2)
+      .join("")
+      .toUpperCase();
+    
+    const palette = ["bg-indigo-600", "bg-rose-600", "bg-purple-600", "bg-emerald-600", "bg-cyan-600"];
+    const randomColor = palette[teamMembers.length % palette.length];
+
+    const newMember: TeamMember = {
+      id: `m-${Date.now()}`,
+      name: newMemberName.trim(),
+      avatar: initials || "DEV",
+      role: newMemberRole.trim() || "Developer",
+      color: randomColor,
+    };
+
+    setTeamMembers((prev) => [...prev, newMember]);
+    setAiSelectedMemberIds((prev) => [...prev, newMember.id]);
+    setNewMemberName("");
+    setMemberModalOpen(false);
+  };
+
+  // Remove Dynamic Team Member
+  const handleRemoveMember = (memberId: string) => {
+    if (teamMembers.length <= 1) return;
+    setTeamMembers((prev) => prev.filter((m) => m.id !== memberId));
+    setAiSelectedMemberIds((prev) => prev.filter((id) => id !== memberId));
+  };
+
   // AI Presets
   const aiPresets = [
     {
       name: "Docker Sandbox Code Runner",
       desc: "Môi trường thực thi isolated sandbox chấm 5 test cases Deque, chặn memory leak và timeout 2s.",
-      stack: "docker" as const,
+      stack: "sandbox" as TechStackKey,
       count: 3,
     },
     {
       name: "Socratic AI Tutor Hint Ladder",
       desc: "Thang gợi ý sư phạm 3 nấc (Level 1, 2, 3), từ chối giải sẵn, sinh mã băm SHA-256 evidence.",
-      stack: "backend" as const,
+      stack: "ai" as TechStackKey,
       count: 3,
     },
     {
       name: "AI Defense Simulator (Hội đồng phản biện)",
       desc: "Phòng bảo vệ đồ án ảo: AI phản biện chất vấn sinh viên, đo mức độ hiểu code và cảnh báo gian lận.",
-      stack: "fullstack" as const,
+      stack: "fullstack" as TechStackKey,
       count: 4,
     },
     {
       name: "Anti-Freerider Git Analytics Engine",
       desc: "Thuật toán đo lường đóng góp thực tế từ commit GitHub, số task Done và test cases pass.",
-      stack: "backend" as const,
+      stack: "backend" as TechStackKey,
       count: 3,
     },
   ];
 
-  // AI WBS Generation Logic
+  // AI WBS Generation Logic dynamically distributing among SELECTED members!
   const handleGenerateWbs = () => {
     if (!aiFeatureName.trim()) return;
     setAiGenerating(true);
+
     setTimeout(() => {
       const stamp = Date.now();
       const parentId = `task-ai-${stamp}-1`;
-      const generated: KanbanTask[] = [
-        {
-          id: parentId,
-          code: `ARC-${Math.floor(Math.random() * 90 + 10)}`,
-          title: `Đặc tả Kiến trúc & Data Model: ${aiFeatureName.trim()}`,
-          description: `Phân tích yêu cầu (${aiStack}), thiết kế schema DDL chuẩn UTC và giao thức API. ${aiDescription ? "Ghi chú: " + aiDescription : ""}`,
-          column: "backlog",
-          priority: "high",
-          points: 5,
-          assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
-          estimateHours: 4,
-          dueDate: "14/11",
-          epic: aiFeatureName.trim(),
-          epicColor: "bg-blue-50 text-blue-700 border-blue-200",
-          checklist: [
-            { id: "ai-c1", text: "Thiết kế schema & Migration SQLite", done: false },
-            { id: "ai-c2", text: "Đặc tả Pydantic schemas DTO", done: false },
-          ],
-          commentsCount: 1,
-          attachmentsCount: 1,
-        },
-        {
-          id: `task-ai-${stamp}-2`,
-          code: `CORE-${Math.floor(Math.random() * 90 + 10)}`,
-          title: `Xây dựng Core Service & Endpoint: ${aiFeatureName.trim()}`,
-          description: `Hiện thực hóa logic nghiệp vụ trong app/services/ và router RESTful v1. Áp dụng ràng buộc H2/H3.`,
-          column: "backlog",
-          priority: "high",
-          points: 5,
-          assignee: { name: "Quốc Huy", avatar: "QH", role: "Backend Dev" },
-          estimateHours: 4.5,
-          dueDate: "18/11",
-          epic: aiFeatureName.trim(),
-          epicColor: "bg-amber-50 text-amber-700 border-amber-200",
-          dependsOn: aiIncludeH2 ? parentId : undefined,
-          checklist: [
-            { id: "ai-c3", text: "Viết logic core engine", done: false },
-            { id: "ai-c4", text: "Mount router vào api_v1_router", done: false },
-          ],
-          commentsCount: 0,
-          attachmentsCount: 0,
-        },
-        {
+
+      // Get list of active selected members
+      const activeMembers = teamMembers.filter((m) => aiSelectedMemberIds.includes(m.id));
+      const pool = activeMembers.length > 0 ? activeMembers : teamMembers;
+
+      const techLabel =
+        aiStack === "custom" && aiCustomTech.trim()
+          ? aiCustomTech.trim()
+          : techStackOptions.find((t) => t.value === aiStack)?.label || "Backend Architecture";
+
+      const generated: KanbanTask[] = [];
+
+      // Task 1: Architecture & Data Specs (assigned to 1st member)
+      const m1 = pool[0 % pool.length];
+      generated.push({
+        id: parentId,
+        code: `ARC-${Math.floor(Math.random() * 90 + 10)}`,
+        title: `Thiết kế Kiến trúc & Data Model: ${aiFeatureName.trim()}`,
+        description: `Đặc tả kỹ thuật [${techLabel}], phân tích schema CSDL, data contracts và sequence diagram. ${
+          aiDescription ? "Yêu cầu: " + aiDescription : ""
+        }`,
+        column: "backlog",
+        priority: "high",
+        points: 5,
+        assignee: { name: m1.name, avatar: m1.avatar, role: m1.role },
+        estimateHours: 4,
+        dueDate: "14/11",
+        epic: aiFeatureName.trim(),
+        epicColor: "bg-blue-50 text-blue-700 border-blue-200",
+        checklist: [
+          { id: "ai-c1", text: "Đặc tả schema database & DTO contracts", done: false },
+          { id: "ai-c2", text: "Vẽ sơ đồ luồng dữ liệu (Sequence diagram)", done: false },
+        ],
+        commentsCount: 1,
+        attachmentsCount: 1,
+      });
+
+      // Task 2: Core Engine / API Implementation (assigned to 2nd member if available)
+      const m2 = pool[1 % pool.length];
+      const task2Id = `task-ai-${stamp}-2`;
+      generated.push({
+        id: task2Id,
+        code: `CORE-${Math.floor(Math.random() * 90 + 10)}`,
+        title: `Xây dựng Core Logic Service: ${aiFeatureName.trim()}`,
+        description: `Hiện thực hóa logic nghiệp vụ, kết nối router RESTful, áp dụng ràng buộc nghiệp vụ H2/H3.`,
+        column: "backlog",
+        priority: "high",
+        points: 5,
+        assignee: { name: m2.name, avatar: m2.avatar, role: m2.role },
+        estimateHours: 4.5,
+        dueDate: "18/11",
+        epic: aiFeatureName.trim(),
+        epicColor: "bg-amber-50 text-amber-700 border-amber-200",
+        dependsOn: aiIncludeH2 ? parentId : undefined,
+        checklist: [
+          { id: "ai-c3", text: "Viết logic xử lý cốt lõi trong services/", done: false },
+          { id: "ai-c4", text: "Cấu hình API Endpoint và kiểm tra lỗi", done: false },
+        ],
+        commentsCount: 0,
+        attachmentsCount: 0,
+      });
+
+      // Task 3: Security & Automated Tests (assigned to 3rd member if available)
+      if (aiGranularity >= 3) {
+        const m3 = pool[2 % pool.length];
+        generated.push({
           id: `task-ai-${stamp}-3`,
           code: `QA-${Math.floor(Math.random() * 90 + 10)}`,
-          title: `Bộ Kiểm thử Tự động & Security QA: ${aiFeatureName.trim()}`,
+          title: `Bộ Kiểm thử Tự động & QA: ${aiFeatureName.trim()}`,
           description: `Viết 15 ca unit test tự động (test_layered_api.py), kiểm tra biên, timeout và exception handling.`,
           column: "backlog",
           priority: "medium",
           points: 3,
-          assignee: { name: "Hoàng Long", avatar: "HL", role: "QA & AI Ops" },
+          assignee: { name: m3.name, avatar: m3.avatar, role: m3.role },
           estimateHours: 3.5,
           dueDate: "20/11",
           epic: aiFeatureName.trim(),
           epicColor: "bg-teal-50 text-teal-700 border-teal-200",
-          dependsOn: aiIncludeH2 ? `task-ai-${stamp}-2` : undefined,
+          dependsOn: aiIncludeH2 ? task2Id : undefined,
           checklist: [
             { id: "ai-c5", text: "Viết 10 test cases happy path & edge cases", done: false },
             { id: "ai-c6", text: "Kiểm tra log telemetry analytics", done: false },
           ],
           commentsCount: 0,
           attachmentsCount: 1,
-        },
-      ];
+        });
+      }
 
+      // Task 4: Frontend UI Component (assigned to 4th member if available)
       if (aiGranularity >= 4) {
+        const m4 = pool[3 % pool.length];
         generated.push({
           id: `task-ai-${stamp}-4`,
           code: `FE-${Math.floor(Math.random() * 90 + 10)}`,
-          title: `Tích hợp Giao diện React & API Client: ${aiFeatureName.trim()}`,
+          title: `Giao diện Tương tác React: ${aiFeatureName.trim()}`,
           description: `Thiết kế UI component đồng bộ với hệ thống theme CodeMind, xử lý state loading/error.`,
           column: "backlog",
           priority: "medium",
           points: 3,
-          assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
+          assignee: { name: m4.name, avatar: m4.avatar, role: m4.role },
           estimateHours: 3,
           dueDate: "22/11",
           epic: aiFeatureName.trim(),
           epicColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
-          dependsOn: `task-ai-${stamp}-2`,
+          dependsOn: aiIncludeH2 ? task2Id : undefined,
           checklist: [{ id: "ai-c7", text: "Nối hook API client trong src/api.ts", done: false }],
+          commentsCount: 0,
+          attachmentsCount: 0,
+        });
+      }
+
+      // Task 5: Integration & Docs (assigned to 5th member if available)
+      if (aiGranularity >= 5) {
+        const m5 = pool[4 % pool.length];
+        generated.push({
+          id: `task-ai-${stamp}-5`,
+          code: `DOC-${Math.floor(Math.random() * 90 + 10)}`,
+          title: `Tài liệu Kỹ thuật & Slide Báo cáo: ${aiFeatureName.trim()}`,
+          description: `Cập nhật tài liệu SRS Master Blueprint, xuất file báo cáo tiến độ nộp Thầy Phước.`,
+          column: "backlog",
+          priority: "low",
+          points: 2,
+          assignee: { name: m5.name, avatar: m5.avatar, role: m5.role },
+          estimateHours: 2.5,
+          dueDate: "24/11",
+          epic: aiFeatureName.trim(),
+          epicColor: "bg-purple-50 text-purple-700 border-purple-200",
+          dependsOn: aiIncludeH2 ? `task-ai-${stamp}-3` : undefined,
+          checklist: [{ id: "ai-c8", text: "Cập nhật slide thuyết trình", done: false }],
           commentsCount: 0,
           attachmentsCount: 0,
         });
@@ -585,7 +730,7 @@ export default function KanbanBoard() {
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
-      if (viewMode === "my" && t.assignee.name !== "Minh Anh") return false;
+      if (viewMode === "my" && t.assignee.name !== (teamMembers[0]?.name || "Minh Anh")) return false;
       if (filterAssignee !== "all" && t.assignee.name !== filterAssignee) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
       if (searchQuery.trim()) {
@@ -597,13 +742,13 @@ export default function KanbanBoard() {
       }
       return true;
     });
-  }, [tasks, viewMode, filterAssignee, filterPriority, searchQuery]);
+  }, [tasks, viewMode, filterAssignee, filterPriority, searchQuery, teamMembers]);
 
   return (
     <div className="flex h-full flex-col bg-slate-50/60 p-6">
       {/* ── TOP CONTROL BAR (LINEAR / JIRA STYLE) ────────────────────────── */}
       <header className="mb-5 flex flex-col gap-4">
-        {/* Row 1: Project Identity & Primary Actions */}
+        {/* Row 1: Project Identity, Dynamic Team Roster & Primary Actions */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25">
@@ -619,7 +764,7 @@ export default function KanbanBoard() {
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                CodeMind Campus • Nhóm 3 người • Ràng buộc cứng H2 & Giám sát đóng góp Anti-Freerider
+                CodeMind Campus • Nhóm {teamMembers.length} thành viên • Ràng buộc cứng H2 & Đo lường đóng góp Anti-Freerider
               </p>
             </div>
           </div>
@@ -662,9 +807,22 @@ export default function KanbanBoard() {
               </button>
             </div>
 
+            {/* Manage Team Members Button */}
+            <button
+              onClick={() => setMemberModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+              title="Quản lý thành viên trong nhóm"
+            >
+              <Users size={14} className="text-blue-600" />
+              <span>Đội ngũ ({teamMembers.length})</span>
+            </button>
+
             {/* AI WBS Generator */}
             <button
-              onClick={() => setAiModalOpen(true)}
+              onClick={() => {
+                setAiModalOpen(true);
+                setAiStage("input");
+              }}
               className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 px-3.5 py-2 text-xs font-semibold text-purple-700 shadow-xs transition hover:border-purple-300 hover:shadow-sm"
             >
               <Sparkles size={15} className="text-purple-600 animate-pulse" />
@@ -673,7 +831,7 @@ export default function KanbanBoard() {
           </div>
         </div>
 
-        {/* Row 2: Sprint Progress & Anti-Freerider Contribution Ribbon */}
+        {/* Row 2: Sprint Progress & Dynamic Anti-Freerider Contribution Ribbon */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           {/* Sprint Points & Burndown Progress (5 cols) */}
           <div className="lg:col-span-5 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100 pb-3 lg:pb-0 lg:pr-5">
@@ -710,7 +868,7 @@ export default function KanbanBoard() {
             </div>
           </div>
 
-          {/* Anti-Freerider Team Contribution Bar (7 cols) */}
+          {/* Dynamic Anti-Freerider Team Contribution Bar (7 cols) */}
           <div className="lg:col-span-7 flex flex-col justify-between pl-0 lg:pl-2">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
@@ -718,44 +876,37 @@ export default function KanbanBoard() {
                   <Flame size={11} />
                 </span>
                 <span className="text-xs font-bold text-slate-800">
-                  Đo lường Đóng góp Thực tế (Anti-Freerider Algorithm):
+                  Đo lường Đóng góp Thực tế ({teamMembers.length} thành viên):
                 </span>
               </div>
-              <span className="text-[11px] text-slate-500">Đo theo Points & Test Evidence</span>
+              <span className="text-[11px] text-slate-500">Thuật toán Anti-Freerider</span>
             </div>
 
-            {/* Segmented Team Bar */}
+            {/* Segmented Team Bar dynamically rendered for all members */}
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 flex">
-              <div
-                style={{ width: `${contribution.minhAnh}%` }}
-                className="bg-blue-600 transition-all duration-500"
-                title={`Minh Anh (Lead): ${contribution.minhAnh}%`}
-              />
-              <div
-                style={{ width: `${contribution.quocHuy}%` }}
-                className="bg-amber-500 transition-all duration-500"
-                title={`Quốc Huy: ${contribution.quocHuy}%`}
-              />
-              <div
-                style={{ width: `${contribution.hoangLong}%` }}
-                className="bg-teal-500 transition-all duration-500"
-                title={`Hoàng Long: ${contribution.hoangLong}%`}
-              />
+              {teamMembers.map((member) => {
+                const stat = contribution[member.name];
+                return (
+                  <div
+                    key={member.id}
+                    style={{ width: `${stat?.percent || 0}%` }}
+                    className={`${member.color} transition-all duration-500`}
+                    title={`${member.name} (${member.role}): ${stat?.percent || 0}%`}
+                  />
+                );
+              })}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between mt-2 text-[11px]">
-              <span className="flex items-center gap-1.5 font-medium text-slate-700">
-                <span className="h-2 w-2 rounded-full bg-blue-600" />
-                Minh Anh ({contribution.minhAnh}% • {contribution.members["Minh Anh"].tasksDone} tasks)
-              </span>
-              <span className="flex items-center gap-1.5 font-medium text-slate-700">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Quốc Huy ({contribution.quocHuy}% • {contribution.members["Quốc Huy"].tasksDone} tasks)
-              </span>
-              <span className="flex items-center gap-1.5 font-medium text-slate-700">
-                <span className="h-2 w-2 rounded-full bg-teal-500" />
-                Hoàng Long ({contribution.hoangLong}% • {contribution.members["Hoàng Long"].tasksDone} tasks)
-              </span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px]">
+              {teamMembers.map((member) => {
+                const stat = contribution[member.name];
+                return (
+                  <span key={member.id} className="flex items-center gap-1.5 font-medium text-slate-700">
+                    <span className={`h-2 w-2 rounded-full ${member.color}`} />
+                    {member.name} ({stat?.percent || 0}% • {stat?.tasksDone || 0} tasks)
+                  </span>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -774,7 +925,7 @@ export default function KanbanBoard() {
                 }`}
               >
                 <Users size={13} />
-                Toàn nhóm (3)
+                Toàn nhóm ({teamMembers.length})
               </button>
               <button
                 onClick={() => setViewMode("my")}
@@ -789,16 +940,18 @@ export default function KanbanBoard() {
               </button>
             </div>
 
-            {/* Assignee Filter */}
+            {/* Dynamic Assignee Filter */}
             <select
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
               className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs focus:border-blue-500 focus:outline-hidden"
             >
               <option value="all">Tất cả thành viên</option>
-              <option value="Minh Anh">Minh Anh (Lead)</option>
-              <option value="Quốc Huy">Quốc Huy (Backend)</option>
-              <option value="Hoàng Long">Hoàng Long (QA)</option>
+              {teamMembers.map((m) => (
+                <option key={m.id} value={m.name}>
+                  {m.name} ({m.role})
+                </option>
+              ))}
             </select>
 
             {/* Priority Filter */}
@@ -889,6 +1042,10 @@ export default function KanbanBoard() {
 
                     const doneChecklist = task.checklist.filter((c) => c.done).length;
                     const totalChecklist = task.checklist.length;
+
+                    // Match assignee color from dynamic team
+                    const memberMeta = teamMembers.find((m) => m.name === task.assignee.name);
+                    const avatarColor = memberMeta?.color || "bg-blue-600";
 
                     return (
                       <div
@@ -1003,13 +1160,7 @@ export default function KanbanBoard() {
                         <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
                           <div className="flex items-center gap-1.5">
                             <span
-                              className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white shadow-xs ${
-                                task.assignee.name === "Minh Anh"
-                                  ? "bg-blue-600"
-                                  : task.assignee.name === "Quốc Huy"
-                                  ? "bg-amber-500"
-                                  : "bg-teal-600"
-                              }`}
+                              className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white shadow-xs ${avatarColor}`}
                               title={`${task.assignee.name} (${task.assignee.role})`}
                             >
                               {task.assignee.avatar}
@@ -1172,7 +1323,7 @@ export default function KanbanBoard() {
         </div>
       )}
 
-      {/* ── TAB 3: ANTI-FREERIDER ANALYTICS ──────────────────────────────── */}
+      {/* ── TAB 3: DYNAMIC ANTI-FREERIDER ANALYTICS ──────────────────────── */}
       {activeTab === "analytics" && (
         <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs overflow-y-auto">
           <div className="mb-6 flex items-center justify-between">
@@ -1181,85 +1332,159 @@ export default function KanbanBoard() {
                 Báo cáo Đóng góp Cá nhân (Anti-Freerider Metrics)
               </h2>
               <p className="text-xs text-slate-500">
-                Đánh giá khách quan khối lượng công việc thực tế của từng thành viên trong đồ án thực tập.
+                Đánh giá khách quan khối lượng công việc thực tế của cả {teamMembers.length} thành viên trong nhóm đồ án.
               </p>
             </div>
-            <button className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
-              <Share2 size={13} />
-              Xuất Báo cáo cho Thầy Phước
+            <button
+              onClick={() => setMemberModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              <UserPlus size={13} />
+              Quản lý Thành viên
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {[
-              {
-                name: "Minh Anh",
-                role: "Team Lead & Architecture",
-                avatar: "MA",
-                color: "border-blue-500 bg-blue-500",
-                points: contribution.members["Minh Anh"].donePts,
-                tasksDone: contribution.members["Minh Anh"].tasksDone,
-                percent: contribution.minhAnh,
-                grade: "A+ (Xuất sắc)",
-                strengths: "Kiến trúc hệ thống, backend layered, tài liệu SRS",
-              },
-              {
-                name: "Quốc Huy",
-                role: "Backend & Logic Developer",
-                avatar: "QH",
-                color: "border-amber-500 bg-amber-500",
-                points: contribution.members["Quốc Huy"].donePts,
-                tasksDone: contribution.members["Quốc Huy"].tasksDone,
-                percent: contribution.quocHuy,
-                grade: "B+ (Tốt)",
-                strengths: "Docker sandbox, Socratic AI hint ladder",
-              },
-              {
-                name: "Hoàng Long",
-                role: "QA & AI Ops",
-                avatar: "HL",
-                color: "border-teal-500 bg-teal-500",
-                points: contribution.members["Hoàng Long"].donePts,
-                tasksDone: contribution.members["Hoàng Long"].tasksDone,
-                percent: contribution.hoangLong,
-                grade: "B (Đạt)",
-                strengths: "Test cases, slide thuyết trình, kịch bản phản biện",
-              },
-            ].map((member) => (
-              <div key={member.name} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 shadow-xs">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white font-bold text-sm shadow-sm ${member.color}`}>
-                    {member.avatar}
-                  </span>
-                  <div>
-                    <h3 className="font-bold text-slate-900">{member.name}</h3>
-                    <p className="text-xs text-slate-500">{member.role}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {teamMembers.map((member) => {
+              const stat = contribution[member.name];
+              const percent = stat?.percent || 0;
+              const points = stat?.donePts || 0;
+              const doneCount = stat?.tasksDone || 0;
+
+              const grade =
+                percent >= 40
+                  ? "A+ (Xuất sắc)"
+                  : percent >= 25
+                  ? "A (Rất tốt)"
+                  : percent >= 15
+                  ? "B+ (Đạt yêu cầu)"
+                  : "Cảnh báo (Thiếu đóng góp)";
+
+              return (
+                <div key={member.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 shadow-xs">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white font-bold text-sm shadow-sm ${member.color}`}>
+                      {member.avatar}
+                    </span>
+                    <div>
+                      <h3 className="font-bold text-slate-900">{member.name}</h3>
+                      <p className="text-xs text-slate-500">{member.role}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 border-t border-slate-200/70 pt-3 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Tỷ lệ đóng góp:</span>
+                      <span className="font-bold text-slate-900">{percent}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Story Points hoàn thành:</span>
+                      <span className="font-mono font-bold text-slate-900">{points} pts</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Số task đã Done:</span>
+                      <span className="font-bold text-slate-900">{doneCount} tasks</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Đánh giá hệ thống:</span>
+                      <span className={`font-bold ${percent >= 25 ? "text-emerald-600" : "text-amber-600"}`}>
+                        {grade}
+                      </span>
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-                <div className="space-y-3 border-t border-slate-200/70 pt-3 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Tỷ lệ đóng góp:</span>
-                    <span className="font-bold text-slate-900">{member.percent}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Story Points hoàn thành:</span>
-                    <span className="font-mono font-bold text-slate-900">{member.points} pts</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Số task đã Done:</span>
-                    <span className="font-bold text-slate-900">{member.tasksDone} tasks</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Đánh giá sơ bộ:</span>
-                    <span className="font-bold text-emerald-600">{member.grade}</span>
-                  </div>
-                  <div className="pt-2 text-[11px] text-slate-500 border-t border-slate-200/40">
-                    <strong>Trọng tâm:</strong> {member.strengths}
-                  </div>
+      {/* ── MANAGE TEAM MEMBERS MODAL ────────────────────────────────────── */}
+      {memberModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                  <Users size={18} />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Quản lý Thành viên Nhóm</h3>
+                  <p className="text-xs text-slate-500">Thêm hoặc bớt thành viên để AI phân rã chuẩn</p>
                 </div>
               </div>
-            ))}
+              <button onClick={() => setMemberModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Members List */}
+            <div className="space-y-2 mb-4 max-h-56 overflow-y-auto pr-1">
+              {teamMembers.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between rounded-xl border border-slate-200 p-2.5 bg-slate-50/50"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-full text-white text-[11px] font-bold ${m.color}`}>
+                      {m.avatar}
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">{m.name}</p>
+                      <p className="text-[10px] text-slate-500">{m.role}</p>
+                    </div>
+                  </div>
+                  {teamMembers.length > 1 && (
+                    <button
+                      onClick={() => handleRemoveMember(m.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 transition"
+                      title="Xóa thành viên"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Add New Member Input */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 mb-5">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <UserPlus size={14} className="text-blue-600" /> Thêm thành viên mới:
+              </span>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                  placeholder="Họ và tên (ví dụ: Nguyễn Văn Nam)"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-hidden"
+                />
+                <input
+                  type="text"
+                  value={newMemberRole}
+                  onChange={(e) => setNewMemberRole(e.target.value)}
+                  placeholder="Vai trò (ví dụ: DevOps / UI Designer)"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-hidden"
+                />
+              </div>
+              <button
+                onClick={handleAddMember}
+                disabled={!newMemberName.trim()}
+                className="w-full rounded-xl bg-blue-600 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50"
+              >
+                + Thêm vào Nhóm
+              </button>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setMemberModalOpen(false)}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+              >
+                Hoàn tất
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1317,7 +1542,7 @@ export default function KanbanBoard() {
         </div>
       )}
 
-      {/* ── AI TASK DECOMPOSITION (WBS GENERATOR) MODAL ────────────────────── */}
+      {/* ── UPGRADED AI WBS STUDIO (DYNAMIC TEAM & EXPANDED STACKS) ──────── */}
       {aiModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
           <div className="w-full max-w-2xl rounded-3xl border border-purple-200 bg-white p-6 shadow-2xl max-h-[90vh] flex flex-col">
@@ -1333,7 +1558,7 @@ export default function KanbanBoard() {
                   </h3>
                   <p className="text-xs text-slate-500">
                     {aiStage === "input"
-                      ? "Cung cấp đủ ngữ cảnh kỹ thuật để AI phân rã chuẩn xác, tránh thiếu dữ liệu"
+                      ? "Cung cấp đủ ngữ cảnh kỹ thuật & phân bổ thành viên linh hoạt"
                       : "Xem trước, tùy chỉnh người phụ trách và xác nhận trước khi nạp vào Backlog"}
                   </p>
                 </div>
@@ -1400,7 +1625,64 @@ export default function KanbanBoard() {
                   />
                 </div>
 
-                {/* Tech Specs & User Story Description */}
+                {/* Dynamic Team Members Selection */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-700">
+                      Thành viên tham gia thực hiện ({aiSelectedMemberIds.length}/{teamMembers.length} người):
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (aiSelectedMemberIds.length === teamMembers.length) {
+                            setAiSelectedMemberIds([]);
+                          } else {
+                            setAiSelectedMemberIds(teamMembers.map((m) => m.id));
+                          }
+                        }}
+                        className="text-[11px] font-semibold text-purple-600 hover:underline"
+                      >
+                        {aiSelectedMemberIds.length === teamMembers.length ? "Bỏ chọn hết" : "Chọn tất cả"}
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setMemberModalOpen(true)}
+                        className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <UserPlus size={12} /> Quản lý danh sách
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {teamMembers.map((m) => {
+                      const isSelected = aiSelectedMemberIds.includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            setAiSelectedMemberIds((prev) =>
+                              isSelected ? prev.filter((id) => id !== m.id) : [...prev, m.id]
+                            );
+                          }}
+                          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+                            isSelected
+                              ? "border-purple-300 bg-purple-50 text-purple-900 shadow-2xs font-semibold"
+                              : "border-slate-200 bg-slate-50 text-slate-500 opacity-60"
+                          }`}
+                        >
+                          <span className={`h-2 w-2 rounded-full ${m.color}`} />
+                          <span>{m.name}</span>
+                          <span className="text-[10px] text-slate-400">({m.role})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Tech Specs Description */}
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-slate-700">
                     Yêu cầu kỹ thuật & Tiêu chí nghiệm thu (Acceptance Criteria):
@@ -1422,13 +1704,14 @@ export default function KanbanBoard() {
                     </label>
                     <select
                       value={aiStack}
-                      onChange={(e) => setAiStack(e.target.value as any)}
+                      onChange={(e) => setAiStack(e.target.value as TechStackKey)}
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:border-purple-500 focus:outline-hidden"
                     >
-                      <option value="backend">Backend (FastAPI + SQLite Layered)</option>
-                      <option value="frontend">Frontend (React 19 + Tailwind CSS)</option>
-                      <option value="docker">Docker Sandbox (Isolated Runner)</option>
-                      <option value="fullstack">Fullstack End-to-End System</option>
+                      {techStackOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -1441,11 +1724,30 @@ export default function KanbanBoard() {
                       onChange={(e) => setAiGranularity(Number(e.target.value))}
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:border-purple-500 focus:outline-hidden"
                     >
-                      <option value={3}>3 Thẻ: Kiến trúc ➔ Backend Core ➔ Test QA</option>
-                      <option value={4}>4 Thẻ: Kiến trúc ➔ Backend ➔ Test QA ➔ Giao diện</option>
+                      {granularityOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
+
+                {/* Custom Tech Stack Input if selected "custom" */}
+                {aiStack === "custom" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-purple-800">
+                      Nhập công nghệ tùy chỉnh của Huynh:
+                    </label>
+                    <input
+                      type="text"
+                      value={aiCustomTech}
+                      onChange={(e) => setAiCustomTech(e.target.value)}
+                      placeholder="Ví dụ: FastAPI + Docker Sandbox + WebSocket + PostgreSQL..."
+                      className="w-full rounded-xl border border-purple-300 bg-purple-50/30 px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-500 focus:outline-hidden"
+                    />
+                  </div>
+                )}
 
                 {/* Constraints Checklist */}
                 <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-3 text-xs">
@@ -1464,7 +1766,7 @@ export default function KanbanBoard() {
                     </label>
                     <label className="flex items-center gap-1.5">
                       <input type="checkbox" checked readOnly className="rounded border-slate-300 text-purple-600" />
-                      <span>Chia đều cho 3 thành viên trong nhóm</span>
+                      <span>Chia đều cho các thành viên được chọn</span>
                     </label>
                     <label className="flex items-center gap-1.5">
                       <input type="checkbox" checked readOnly className="rounded border-slate-300 text-purple-600" />
@@ -1487,7 +1789,7 @@ export default function KanbanBoard() {
                     AI đã phân rã thành công {aiPreviewTasks.length} task nguyên tử:
                   </span>
                   <span className="text-[11px] text-slate-500">
-                    Huynh có thể chỉnh sửa tên, người làm hoặc số giờ trước khi nạp
+                    Huynh có thể đổi người làm hoặc số giờ trước khi nạp
                   </span>
                 </div>
 
@@ -1528,18 +1830,21 @@ export default function KanbanBoard() {
                             onChange={(e) => {
                               const updated = [...aiPreviewTasks];
                               const name = e.target.value;
+                              const targetMember = teamMembers.find((m) => m.name === name);
                               updated[idx].assignee = {
                                 name,
-                                avatar: name === "Minh Anh" ? "MA" : name === "Quốc Huy" ? "QH" : "HL",
-                                role: name === "Minh Anh" ? "Team Lead" : name === "Quốc Huy" ? "Backend Dev" : "QA & AI Ops",
+                                avatar: targetMember?.avatar || "DEV",
+                                role: targetMember?.role || "Developer",
                               };
                               setAiPreviewTasks(updated);
                             }}
                             className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
                           >
-                            <option value="Minh Anh">Minh Anh (Lead)</option>
-                            <option value="Quốc Huy">Quốc Huy (Backend)</option>
-                            <option value="Hoàng Long">Hoàng Long (QA)</option>
+                            {teamMembers.map((m) => (
+                              <option key={m.id} value={m.name}>
+                                {m.name} ({m.role})
+                              </option>
+                            ))}
                           </select>
                         </div>
 
@@ -1554,6 +1859,7 @@ export default function KanbanBoard() {
                             }}
                             className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
                           >
+                            <option value={1}>1 Point</option>
                             <option value={2}>2 Points</option>
                             <option value={3}>3 Points</option>
                             <option value={5}>5 Points</option>
@@ -1609,7 +1915,7 @@ export default function KanbanBoard() {
                     Đóng
                   </button>
                   <button
-                    disabled={aiGenerating || !aiFeatureName.trim()}
+                    disabled={aiGenerating || !aiFeatureName.trim() || aiSelectedMemberIds.length === 0}
                     onClick={handleGenerateWbs}
                     className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50"
                   >

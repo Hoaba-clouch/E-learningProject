@@ -59,6 +59,9 @@ const mascotConfig: Record<MentorMascot, { name: string; color: string; ringColo
 };
 
 export default function DesktopMascotPet({ mascot, activeScreen }: Props) {
+  if (activeScreen === "kanban" || activeScreen === "workspace") {
+    return null;
+  }
   const [petState, setPetState] = useState<PetState>("idle");
   const [speech, setSpeech] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
