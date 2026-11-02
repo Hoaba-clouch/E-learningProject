@@ -1248,96 +1248,588 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
 
           {/* ── SPLIT-VIEW CODE LAB ────────────────────────────────────────── */}
           {view === "lesson" && tab === "code" && (
-            <div className="surface overflow-hidden rounded-xl flex flex-col" style={{ minHeight: "520px" }}>
-              {/* Toolbar */}
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-2.5 shrink-0">
+            <div className="surface overflow-hidden rounded-2xl flex flex-col border border-slate-200 dark:border-slate-800 shadow-sm" style={{ minHeight: "720px", height: "calc(100vh - 210px)" }}>
+              {/* ── TOP TOOLBAR ────────────────────────────────────────────── */}
+              <div className="flex flex-wrap items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 px-4 py-2.5 shrink-0 gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1.5">
                     <span className="h-3 w-3 rounded-full bg-red-400" />
                     <span className="h-3 w-3 rounded-full bg-amber-400" />
                     <span className="h-3 w-3 rounded-full bg-emerald-400" />
                   </div>
-                  <span className="font-mono text-xs font-bold text-slate-500 dark:text-slate-400">Main.java</span>
-                  <span className="rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 text-[10px] font-bold">Code Lab</span>
+
+                  {/* Language Selector */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs font-semibold">
+                    {(["python", "java", "cpp"] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => handleLanguageChange(lang)}
+                        className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                          selectedLanguage === lang
+                            ? "bg-blue-600 text-white shadow-xs font-bold"
+                            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                        }`}
+                      >
+                        {lang === "python" ? "Python 3.12" : lang === "java" ? "Java 21" : "C++ 20"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Docker Sandbox Isolated Status */}
+                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 text-[11px] font-semibold">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Docker Sandbox: Node-04</span>
+                    <span className="text-emerald-300 dark:text-emerald-700">|</span>
+                    <span>Seccomp Active (128MB)</span>
+                  </div>
                 </div>
+
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={runAiReview}
-                    disabled={aiReviewLoading}
-                    className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/50 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 disabled:opacity-60 transition"
+                    onClick={() => setShowProblemSpec(!showProblemSpec)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                      showProblemSpec
+                        ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300"
+                        : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    }`}
+                    title="Bật/tắt mô tả đề bài"
                   >
-                    <Bot size={13} />
-                    {aiReviewLoading ? "AI đang phân tích..." : "Chạy thử AI"}
+                    <FileText size={13} />
+                    <span className="hidden md:inline">Đề bài</span>
                   </button>
+
                   <button
-                    onClick={runCode}
-                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition"
+                    onClick={resetStarterCode}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                    title="Khôi phục mã nguồn ban đầu"
                   >
-                    <PlayCircle size={13} />
-                    Chạy ▶
+                    <RotateCcw size={13} />
+                    <span className="hidden md:inline">Reset</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveCodePaneTab("hints")}
+                    className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/50 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition shadow-xs cursor-pointer"
+                  >
+                    <Lightbulb size={13} />
+                    <span>Gợi ý Socratic</span>
+                    {Object.keys(unlockedHints).length > 0 && (
+                      <span className="ml-1 rounded-full bg-purple-200 dark:bg-purple-800 px-1.5 py-0.2 text-[10px]">
+                        {Object.keys(unlockedHints).length}/3
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={runSandbox}
+                    disabled={isRunningSandbox}
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/60 px-4 py-1.5 text-xs font-bold text-white transition shadow-sm cursor-pointer"
+                  >
+                    {isRunningSandbox ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" />
+                        <span>Đang chạy test...</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle size={14} />
+                        <span>Chạy Sandbox</span>
+                        <span className="hidden lg:inline text-[10px] opacity-75 font-normal ml-1">Ctrl+Enter</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
 
-              {/* Split body */}
-              <div className="flex flex-1 min-h-0">
-                {/* LEFT: Editor with line numbers */}
-                <div className="flex flex-1 bg-slate-950 overflow-auto">
-                  {/* Line numbers */}
-                  <div className="select-none text-right px-3 pt-4 pb-4 font-mono text-xs leading-7 text-slate-600 border-r border-slate-800 shrink-0">
-                    {codeValue.split("\n").map((_, i) => (
-                      <div key={i}>{i + 1}</div>
-                    ))}
+              {/* ── 3-PANE WORKSPACE BODY ──────────────────────────────────── */}
+              <div className="flex flex-1 min-h-0 overflow-hidden">
+                {/* 1. LEFT PANE: PROBLEM SPEC & CONSTRAINTS (Collapsible) */}
+                {showProblemSpec && (
+                  <div className="w-72 lg:w-80 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-4 overflow-y-auto shrink-0 flex flex-col gap-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 text-[10px] font-bold">
+                        Bài 04 • Cấu trúc dữ liệu
+                      </span>
+                      <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                        Độ khó: Medium
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Bộ nhớ đệm Lịch sử Duyệt web (Bounded Page Tracker)
+                    </h3>
+
+                    <div className="space-y-2 text-slate-600 dark:text-slate-300 leading-5">
+                      <p>
+                        Thiết kế lớp <code className="font-mono font-bold text-blue-600 dark:text-blue-400">PageTracker</code> lưu trữ lịch sử tối đa <strong>3 trang gần nhất</strong> của người dùng theo nguyên tắc FIFO.
+                      </p>
+                      <p>
+                        Mỗi khi gọi <code className="font-mono text-slate-800 dark:text-slate-200">visit(page)</code>, trang mới được đẩy vào cuối hàng đợi. Nếu dung lượng vượt quá 3, trang cũ nhất tự động bị đẩy ra.
+                      </p>
+                    </div>
+
+                    {/* Constraints Box */}
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase tracking-wider">
+                        <Cpu size={12} className="text-blue-500" />
+                        <span>Ràng buộc kỹ thuật</span>
+                      </div>
+                      <ul className="space-y-1 text-[11px] text-slate-500 dark:text-slate-400 list-disc list-inside">
+                        <li>Dung lượng cố định: <code className="font-mono text-slate-700 dark:text-slate-300 font-bold">maxlen = 3</code></li>
+                        <li>Độ phức tạp: <code className="font-mono text-emerald-600 font-bold">O(1)</code> cho thao tác visit</li>
+                        <li>Giới hạn Sandbox: <code className="font-mono">2000ms</code>, <code className="font-mono">128MB RAM</code></li>
+                        <li className="text-amber-600 dark:text-amber-400 font-medium">
+                          <strong>Ca biên:</strong> Không lưu chuỗi rỗng <code className="font-mono">""</code>, <code className="font-mono">null</code> hoặc khoảng trắng!
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* Example Box */}
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 space-y-1.5">
+                      <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                        Ví dụ mẫu:
+                      </div>
+                      <div className="bg-slate-100 dark:bg-slate-900 rounded-lg p-2 font-mono text-[10px] leading-4 text-slate-700 dark:text-slate-300">
+                        visit("/home")<br />
+                        visit("/shop")<br />
+                        visit("/cart")<br />
+                        visit("/checkout")<br />
+                        <span className="text-emerald-600 dark:text-emerald-400"># Output: ["/shop", "/cart", "/checkout"]</span>
+                      </div>
+                    </div>
                   </div>
-                  {/* Code textarea */}
-                  <textarea
-                    value={codeValue}
-                    onChange={(e) => setCodeValue(e.target.value)}
-                    spellCheck={false}
-                    className="flex-1 resize-none bg-transparent p-4 font-mono text-sm leading-7 text-slate-100 outline-none min-w-0"
-                    style={{ tabSize: 2 }}
-                  />
+                )}
+
+                {/* 2. CENTER PANE: CODE EDITOR WITH LINE NUMBERS */}
+                <div className="flex flex-1 flex-col bg-slate-950 min-w-0 overflow-hidden">
+                  {/* File Header */}
+                  <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-1.5 bg-slate-950 text-slate-400 text-[11px] font-mono shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Code2 size={13} className="text-blue-400" />
+                      <span className="font-bold text-slate-200">
+                        {selectedLanguage === "python" ? "PageTracker.py" : selectedLanguage === "java" ? "PageTracker.java" : "PageTracker.cpp"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-slate-500 text-[10px]">
+                      <span>UTF-8</span>
+                      <span>4 Spaces</span>
+                      <span>{codeValue.split("\n").length} dòng</span>
+                    </div>
+                  </div>
+
+                  {/* Editor body */}
+                  <div className="flex flex-1 min-h-0 overflow-auto">
+                    {/* Line numbers */}
+                    <div className="select-none text-right px-3 pt-3 pb-3 font-mono text-xs leading-6 text-slate-600 border-r border-slate-800/80 shrink-0">
+                      {codeValue.split("\n").map((_, i) => (
+                        <div key={i}>{i + 1}</div>
+                      ))}
+                    </div>
+                    {/* Textarea */}
+                    <textarea
+                      value={codeValue}
+                      onChange={(e) => setCodeValue(e.target.value)}
+                      spellCheck={false}
+                      className="flex-1 resize-none bg-transparent p-3 font-mono text-xs leading-6 text-slate-100 outline-none min-w-0"
+                      style={{ tabSize: 4 }}
+                    />
+                  </div>
+
+                  {/* Editor footer */}
+                  <div className="border-t border-slate-800/80 bg-slate-900/90 px-4 py-1.5 text-[10px] text-slate-400 flex items-center justify-between shrink-0">
+                    <span>💡 Phím tắt: <strong className="text-slate-300">Ctrl + Enter</strong> để thực thi sandbox</span>
+                    <span className="text-emerald-400 font-mono">Isolated Container Ready</span>
+                  </div>
                 </div>
 
-                {/* RIGHT: Output panel */}
-                <div className="w-72 shrink-0 flex flex-col border-l border-slate-800 bg-slate-950">
-                  {/* Console header */}
-                  <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2 shrink-0">
-                    <Code2 size={12} className="text-emerald-400" />
-                    <span className="font-mono text-[10px] font-bold text-slate-400 uppercase tracking-widest">Console Output</span>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-3 space-y-1">
-                    {consoleOutput.map((line, i) => (
-                      <div
-                        key={i}
-                        className={`font-mono text-xs leading-5 ${
-                          line.startsWith("$") ? "text-slate-400" :
-                          line.includes("error") || line.includes("Error") ? "text-red-400" :
-                          line === "" ? "h-3" :
-                          "text-emerald-300"
-                        }`}
-                      >{line}</div>
-                    ))}
+                {/* 3. RIGHT PANE: TEST SUITE & SOCRATIC HINTS & CONSOLE */}
+                <div className="w-80 xl:w-96 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col shrink-0 min-h-0">
+                  {/* Pane Navigation */}
+                  <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 shrink-0">
+                    <button
+                      onClick={() => setActiveCodePaneTab("tests")}
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer ${
+                        activeCodePaneTab === "tests"
+                          ? "border-blue-600 text-blue-600 dark:text-blue-400 font-bold bg-white dark:bg-slate-950"
+                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      🧪 Test Cases ({submissionResult ? `${submissionResult.passed_count}/${submissionResult.total_count}` : "5"})
+                    </button>
+                    <button
+                      onClick={() => setActiveCodePaneTab("hints")}
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer ${
+                        activeCodePaneTab === "hints"
+                          ? "border-purple-600 text-purple-600 dark:text-purple-400 font-bold bg-white dark:bg-slate-950"
+                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      💡 Gợi ý AI ({Object.keys(unlockedHints).length}/3)
+                    </button>
+                    <button
+                      onClick={() => setActiveCodePaneTab("console")}
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer ${
+                        activeCodePaneTab === "console"
+                          ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-slate-950"
+                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      📜 Console
+                    </button>
                   </div>
 
-                  {/* AI Review panel */}
-                  {(aiReviewLines.length > 0 || aiReviewLoading) && (
-                    <div className="border-t border-slate-800 p-3 space-y-1.5 shrink-0">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Bot size={11} className="text-purple-400" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">AI Code Review</span>
-                        {aiReviewLoading && <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse ml-auto" />}
+                  {/* TAB CONTENT: 🧪 TEST CASES */}
+                  {activeCodePaneTab === "tests" && (
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                      {!submissionResult ? (
+                        <div className="text-center py-10 px-4 space-y-3">
+                          <div className="h-12 w-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
+                            <Layers size={24} />
+                          </div>
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                            Chưa có dữ liệu kiểm thử
+                          </h4>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-4">
+                            Nhấn nút <strong className="text-emerald-600">"Chạy Sandbox"</strong> ở trên hoặc <strong className="text-slate-700 dark:text-slate-300">Ctrl + Enter</strong> để khởi chạy 5 ca kiểm thử biên.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Result Summary Bar */}
+                          <div className={`rounded-xl p-3 border ${
+                            submissionResult.status === "passed"
+                              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                              : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"
+                          }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className={`text-xs font-bold flex items-center gap-1.5 ${
+                                submissionResult.status === "passed" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"
+                              }`}>
+                                {submissionResult.status === "passed" ? (
+                                  <>
+                                    <CheckCircle size={15} />
+                                    <span>5/5 Ca kiểm thử ĐẠT (All Passed)</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertTriangle size={15} />
+                                    <span>{submissionResult.passed_count}/{submissionResult.total_count} Ca kiểm thử ĐẠT</span>
+                                  </>
+                                )}
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-500 font-bold">
+                                {submissionResult.execution_time_ms}ms • {submissionResult.memory_mb}MB
+                              </span>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all duration-500 ${
+                                  submissionResult.status === "passed" ? "bg-emerald-500" : "bg-amber-500"
+                                }`}
+                                style={{ width: `${(submissionResult.passed_count / submissionResult.total_count) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* List of 5 Test Cases */}
+                          <div className="space-y-1.5">
+                            {submissionResult.test_cases.map((tc) => {
+                              const isSelected = selectedTestCaseId === tc.id;
+                              const isPassed = tc.status === "passed";
+                              return (
+                                <div
+                                  key={tc.id}
+                                  onClick={() => setSelectedTestCaseId(tc.id)}
+                                  className={`rounded-lg border p-2.5 transition cursor-pointer text-xs ${
+                                    isSelected
+                                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 shadow-xs"
+                                      : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900"
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-2">
+                                      {isPassed ? (
+                                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0 mt-0.5" />
+                                      ) : (
+                                        <XCircle size={15} className="text-red-500 shrink-0 mt-0.5" />
+                                      )}
+                                      <div>
+                                        <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                                          <span>Test {tc.id}: {tc.title}</span>
+                                          {tc.is_edge_case && (
+                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                              Edge Case
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                          {tc.duration_ms}ms • {tc.memory_mb}MB
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                      isPassed ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" : "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300"
+                                    }`}>
+                                      {isPassed ? "Pass" : "Fail"}
+                                    </span>
+                                  </div>
+
+                                  {/* Expanded details when selected */}
+                                  {isSelected && (
+                                    <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5 text-[11px] font-mono">
+                                      <div>
+                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">ĐẦU VÀO (INPUT):</span>
+                                        <div className="bg-slate-100 dark:bg-slate-900 p-1.5 rounded text-slate-800 dark:text-slate-200 break-all">
+                                          {tc.input}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">KẾT QUẢ MONG ĐỢI:</span>
+                                        <div className="bg-slate-100 dark:bg-slate-900 p-1.5 rounded text-emerald-600 dark:text-emerald-400 break-all">
+                                          {tc.expected_output}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">KẾT QUẢ THỰC TẾ:</span>
+                                        <div className={`p-1.5 rounded break-all ${
+                                          isPassed ? "bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300" : "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900"
+                                        }`}>
+                                          {tc.actual_output}
+                                        </div>
+                                      </div>
+
+                                      {tc.failure_reason && (
+                                        <div className="mt-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 font-sans text-[11px] space-y-1">
+                                          <div className="font-bold flex items-center gap-1">
+                                            <AlertCircle size={12} />
+                                            <span>Chẩn đoán lỗi biên:</span>
+                                          </div>
+                                          <div>{tc.failure_reason}</div>
+                                          <button
+                                            onClick={() => setActiveCodePaneTab("hints")}
+                                            className="mt-1 font-bold text-purple-700 dark:text-purple-300 underline cursor-pointer"
+                                          >
+                                            💡 Xem hướng dẫn Socratic để khắc phục →
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB CONTENT: 💡 SOCRATIC HINTS LADDER */}
+                  {activeCodePaneTab === "hints" && (
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                      {/* Academic Guardrail Policy Banner */}
+                      <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 p-3 space-y-1 text-xs">
+                        <div className="flex items-center gap-1.5 font-bold text-purple-800 dark:text-purple-300">
+                          <ShieldCheck size={14} />
+                          <span>Socratic Guardrail Độc Quyền</span>
+                        </div>
+                        <p className="text-[11px] text-purple-700 dark:text-purple-400 leading-4">
+                          Hệ thống cam kết không bao giờ đưa ra lời giải hoàn chỉnh. Thay vào đó, AI mở khóa 3 nấc tư duy để sinh viên tự hoàn thiện mã nguồn.
+                        </p>
                       </div>
-                      {aiReviewLines.map((line, i) => (
-                        <div key={i} className="font-mono text-[10px] leading-4 text-slate-300">{line}</div>
-                      ))}
+
+                      {/* 3 Hint Levels */}
+                      <div className="space-y-2">
+                        {[1, 2, 3].map((lvl) => {
+                          const isUnlocked = !!unlockedHints[lvl];
+                          const isLoading = loadingHintLevel === lvl;
+                          const title =
+                            lvl === 1
+                              ? "Nấc 1: Khái niệm & Nguyên lý FIFO Deque"
+                              : lvl === 2
+                              ? "Nấc 2: Phân tích Ca kiểm thử biên (Edge Case)"
+                              : "Nấc 3: Thuật toán định hướng / Mã giả (Pseudo-code)";
+
+                          return (
+                            <div
+                              key={lvl}
+                              className={`rounded-xl border p-3 transition ${
+                                isUnlocked
+                                  ? "border-purple-300 dark:border-purple-700 bg-white dark:bg-slate-900 shadow-xs"
+                                  : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                    isUnlocked ? "bg-purple-600 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                                  }`}>
+                                    {lvl}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                    {title}
+                                  </span>
+                                </div>
+                                {!isUnlocked && (
+                                  <button
+                                    onClick={() => handleUnlockHint(lvl)}
+                                    disabled={isLoading}
+                                    className="rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white px-2.5 py-1 text-[11px] font-bold transition shadow-xs cursor-pointer"
+                                  >
+                                    {isLoading ? "Đang mở..." : "Mở gợi ý"}
+                                  </button>
+                                )}
+                              </div>
+
+                              {isUnlocked && (
+                                <div className="mt-2.5 pt-2 border-t border-purple-100 dark:border-purple-900/50 text-[11px] text-slate-700 dark:text-slate-300 leading-5">
+                                  <div className="whitespace-pre-line">
+                                    {unlockedHints[lvl].hint_text}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 text-xs space-y-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-200">
+                          Hỏi đáp trực tiếp với AI Mentor?
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Huynh có thể nhắn trực tiếp vào khung chat bên phải màn hình. Socratic Mentor sẽ phản biện dựa trên mã nguồn hiện tại của huynh.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB CONTENT: 📜 CONSOLE TERMINAL */}
+                  {activeCodePaneTab === "console" && (
+                    <div className="flex-1 flex flex-col bg-slate-950 text-slate-300 font-mono text-xs overflow-hidden">
+                      <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2 shrink-0">
+                        <Terminal size={12} className="text-emerald-400" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          Container Standard Output
+                        </span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-3 space-y-1 text-[11px] leading-5">
+                        {consoleOutput.map((line, i) => (
+                          <div
+                            key={i}
+                            className={`${
+                              line.startsWith("$")
+                                ? "text-cyan-400 font-bold"
+                                : line.includes("FAILED") || line.includes("error") || line.includes("Error")
+                                ? "text-red-400 font-bold"
+                                : line.includes("PASSED") || line.includes("Thực thi")
+                                ? "text-emerald-400"
+                                : line.startsWith("[")
+                                ? "text-slate-400"
+                                : "text-slate-200"
+                            }`}
+                          >
+                            {line}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="border-t border-slate-800 bg-slate-900 px-4 py-2 text-[10px] text-slate-500 shrink-0">
-                Code Lab · Luyện tập tại đây, nộp bài chương tại mục "Bài tập cuối chương"
+              {/* ── FOOTER BAR ────────────────────────────────────────────── */}
+              <div className="border-t border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 px-4 py-2 text-[11px] text-slate-600 dark:text-slate-400 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={13} className="text-emerald-500" />
+                  <span>Chuẩn chấm bài: Docker Runc Sandbox • Đo độ phức tạp O(1) • 5 Ca kiểm thử biên</span>
+                </div>
+                {submissionResult?.sha256 && (
+                  <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
+                    <span>Audit Hash:</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-bold">{submissionResult.sha256.slice(0, 16)}...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── MODAL: PROOF OF SELF-CORRECTION (SHA-256 AUDIT CERTIFICATE) ── */}
+          {showSelfCorrectionCert && submissionResult && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+              <div className="surface w-full max-w-lg rounded-2xl border border-amber-300 dark:border-amber-700 shadow-2xl p-6 space-y-4 relative">
+                <button
+                  onClick={() => setShowSelfCorrectionCert(false)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+
+                <div className="text-center space-y-2">
+                  <div className="h-14 w-14 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-700 flex items-center justify-center mx-auto shadow-sm">
+                    <Award size={32} />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Chứng thực Tư duy Độc lập
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    (Proof of Independent Self-Correction & Academic Integrity)
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-3.5 space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+                  <p className="leading-5">
+                    Hệ thống xác nhận học viên đã <strong className="text-slate-900 dark:text-white">chủ động nhận diện lỗi kiểm thử biên (Edge Case)</strong>, tham khảo gợi ý sư phạm và tự hoàn thiện mã nguồn đạt chuẩn công nghiệp <strong>5/5 Test Cases</strong> mà không sao chép code giải sẵn.
+                  </p>
+
+                  {/* SHA-256 Box */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Mã băm liêm chính học thuật (SHA-256):
+                    </span>
+                    <div className="flex items-center justify-between gap-2 bg-slate-950 text-emerald-400 p-2 rounded-lg font-mono text-[11px] break-all border border-slate-800">
+                      <span>{submissionResult.sha256}</span>
+                      <button
+                        onClick={() => handleCopySha(submissionResult.sha256)}
+                        className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer shrink-0"
+                        title="Sao chép SHA-256"
+                      >
+                        {copiedSha ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Audit Timeline */}
+                  <div className="space-y-1 pt-1 border-t border-slate-200 dark:border-slate-800 text-[11px]">
+                    <div className="flex items-center gap-2 text-red-500 font-medium">
+                      <span>1. Thất bại:</span>
+                      <span>Ca kiểm thử số 5 (Bị nhiễm chuỗi rỗng "")</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
+                      <span>2. Tham vấn:</span>
+                      <span>Tiếp thu nguyên lý Guard Clause từ Socratic AI</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span>3. Thành công:</span>
+                      <span>Tự bổ sung điều kiện lọc, đạt 5/5 ca kiểm thử biên!</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                    <Sparkles size={14} />
+                    <span>+100 XP Tự sửa bài</span>
+                  </div>
+                  <button
+                    onClick={() => setShowSelfCorrectionCert(false)}
+                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white transition shadow-sm cursor-pointer"
+                  >
+                    Xác nhận & Tiếp tục học
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1404,6 +1896,7 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {messages.map((item, index) => {
               const isMentorMessage = item.from === "mentor";
+              const isGuardrail = Boolean((item as any).isGuardrail);
               return (
                 <div key={index} className={`flex gap-2 ${isMentorMessage ? "items-start" : "items-start justify-end"}`}>
                   {isMentorMessage && (
@@ -1411,16 +1904,35 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
                       {mentor.emoji}
                     </span>
                   )}
-                  <div className={`ai-bubble max-w-[230px] rounded-2xl px-3.5 py-3 text-sm leading-6 ${
+                  <div className={`ai-bubble max-w-[245px] rounded-2xl px-3.5 py-3 text-xs leading-5 ${
                     isMentorMessage
-                      ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                      ? isGuardrail
+                        ? "bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                       : "theme-primary-bg text-white"
                   }`}>
+                    {isGuardrail && (
+                      <div className="mb-1.5 flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                        <ShieldCheck size={12} />
+                        <span>Socratic Guardrail Active</span>
+                      </div>
+                    )}
                     {item.text}
                   </div>
                 </div>
               );
             })}
+            {isAskingAi && (
+              <div className="flex gap-2 items-start">
+                <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${mentor.color} text-white text-sm`}>
+                  {mentor.emoji}
+                </span>
+                <div className="ai-bubble rounded-2xl px-3.5 py-2 text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <RefreshCw size={12} className="animate-spin text-purple-500" />
+                  <span>Socratic Tutor đang phản biện...</span>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 p-3 text-xs text-slate-500 dark:text-slate-400">
               <Sparkles size={14} className="theme-primary-text" />
