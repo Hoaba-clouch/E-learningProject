@@ -38,6 +38,8 @@
    - 6.4. Cơ chế Đồng bộ Dữ liệu Real-time (WebSocket) & External Calendar
 7. [DANH MỤC RESTFUL API & WEBSOCKET CONTRACT](#7-danh-mục-restful-api--websocket-contract)
 8. [PHÂN CÔNG CÔNG VIỆC NHÓM 3 NGƯỜI & LỘ TRÌNH 4 TUẦN](#8-phân-công-công-việc-nhóm-3-người--lộ-trình-4-tuần)
+9. [QUY TRÌNH PHÁT TRIỂN PHẦN MỀM AGILE / SCRUM CHUẨN CÔNG NGHIỆP](#9-quy-trình-phát-triển-phần-mềm-agile--scrum-chuẩn-công-nghiệp)
+10. [PHÂN TÍCH THIẾT KẾ HỆ THỐNG TOÀN DIỆN (UML & CHUẨN HÓA CSDL 3NF)](#10-phân-tích-thiết-kế-hệ-thống-toàn-diện-uml--chuẩn-hóa-csdl-3nf)
 
 ---
 
@@ -591,3 +593,312 @@ erDiagram
   - Kiểm thử toàn diện hệ thống: Kiểm tra xử lý múi giờ UTC, test tải WebSocket, bảo mật Sandbox.
   - Đóng gói toàn bộ hệ thống bằng Docker Compose (chạy 1 lệnh `docker-compose up` là lên toàn bộ Web + API + DB).
   - Viết Báo cáo thực tập hoàn chỉnh theo mẫu của trường và thiết kế slide bảo vệ đồ án.
+
+---
+
+# 9. QUY TRÌNH PHÁT TRIỂN PHẦN MỀM AGILE / SCRUM CHUẨN CÔNG NGHIỆP
+
+Nhằm đáp ứng các yêu cầu khắt khe của Hội đồng đánh giá và Giảng viên hướng dẫn Thầy Nguyễn Phước, đồ án CodeMind Campus được vận hành nghiêm ngặt theo khung quy trình **Agile / Scrum** công nghiệp (đúc kết từ chương trình đào tạo kỹ sư phần mềm chuẩn Rikkei Education).
+
+### 9.1. Tuyên ngôn Agile, 4 Giá trị Cốt lõi & 12 Nguyên tắc Vận hành (Session 02)
+- **4 Giá trị Cốt lõi (Agile Manifesto):**
+  1. *Cá nhân và sự tương tác* hơn là quy trình và công cụ.
+  2. *Phần mềm chạy tốt* hơn là tài liệu đầy đủ mà không thực thi được.
+  3. *Cộng tác với người dùng/giảng viên* hơn là đàm phán hợp đồng.
+  4. *Phản hồi với sự thay đổi* hơn là bám sát một kế hoạch cứng nhắc.
+- **Áp dụng vào CodeMind Campus:** Nhóm chia nhỏ lộ trình thành các Sprint 1 tuần, liên tục đưa tính năng lên Vercel và kiểm thử tự động, tiếp thu phản hồi hàng tuần từ Thầy Phước để tinh chỉnh nghiệp vụ.
+
+### 9.2. 3 Trụ cột Scrum & 3 Vai trò Cốt lõi trong Nhóm Đồ án
+1. **3 Trụ cột Thực thi (Empirical Process Control):**
+   - **Minh bạch (Transparency):** Mọi công việc, mã nguồn, lỗi phát sinh và tiến độ đều được hiển thị trực quan 100% trên Bảng Kanban, cây phụ thuộc H2 và báo cáo Git Analytics.
+   - **Thanh tra (Inspection):** Đội ngũ định kỳ kiểm tra chỉ số Velocity, Burndown Chart và các ca kiểm thử tự động để phát hiện sớm các nguy cơ trễ hạn.
+   - **Thích nghi (Adaptation):** Sẵn sàng tái cấu trúc mã nguồn (như đợt refactor từ Monolithic sang Clean 3-Tier Layered Architecture) khi phát sinh rủi ro kỹ thuật.
+2. **Phân định 3 Vai trò trong Nhóm 3 người:**
+   - **Product Owner (PO):** Phụ trách định hướng giá trị sản phẩm, quản lý Product Backlog và tiêu chí nghiệm thu (Acceptance Criteria).
+   - **Scrum Master (SM):** Đảm bảo nhóm tuân thủ quy trình Agile, gỡ bỏ blocker kỹ thuật (H2) và duy trì nhịp độ làm việc.
+   - **Developers (Development Team):** Chịu trách nhiệm thiết kế kiến trúc, viết code, viết test cases và đóng gói container.
+
+### 9.3. Tiêu chuẩn D.E.E.P cho Product Backlog & INVEST cho User Story (Session 03)
+- **Tiêu chuẩn D.E.E.P cho 100 Task trong Backlog:**
+  - **D - Detailed appropriately:** Các task trong Sprint 1 được phân rã nguyên tử (2 - 5 giờ làm việc), kèm mã task rõ ràng (`BE-01`, `SAND-01`); các task thuộc Sprint xa hơn được mô tả ở cấp độ Epic/High-level.
+  - **E - Estimated:** Toàn bộ thẻ việc đều được gán điểm nỗ lực theo dãy số Fibonacci (1, 2, 3, 5, 8 Story Points).
+  - **E - Emergent:** Backlog là một thực thể sống, liên tục được bổ sung và tinh chỉnh sau mỗi buổi review với giảng viên.
+  - **P - Prioritized:** Thứ tự ưu tiên được sắp xếp khoa học dựa trên ma trận MoSCoW và Ràng buộc cứng H2.
+- **Tiêu chuẩn INVEST cho User Story:**
+  - Mọi yêu cầu đều được chuẩn hóa theo cú pháp:
+    $$	ext{As a } \langle 	ext{Role} angle, 	ext{ I want } \langle 	ext{Action/Goal} angle, 	ext{ So that } \langle 	ext{Business Benefit} angle$$
+  - Đảm bảo 6 tiêu chí: **I**ndependent (Độc lập), **N**egotiable (Thương lượng được), **V**aluable (Mang lại giá trị), **E**stimable (Ước lượng được), **S**mall (Vừa vặn trong Sprint), **T**estable (Kiểm thử được nghiệm thu).
+
+### 9.4. Kỹ thuật Phân cấp Ưu tiên MoSCoW (Session 05)
+Toàn bộ tính năng và tác vụ trong CodeMind Campus được phân loại nghiêm ngặt:
+- **Must have (M - Bắt buộc phải có):** Các ràng buộc kỹ thuật cốt lõi (H1 - H4), Docker Sandbox cách ly, Socratic AI Hint 3 nấc, CSDL UTC ISO-8601. Thiếu các tính năng này đồ án bị đánh giá không đạt yêu cầu.
+- **Should have (S - Nên có):** Tích hợp kiểm thử tự động CI/CD, Mô phỏng bảo vệ đồ án AI Defense Simulator, Bảng xếp hạng Anti-Freerider.
+- **Could have (C - Có thể có):** Giao diện cá nhân hóa Theme IDE, Animation linh vật Pet, Âm thanh thông báo khi pass test.
+- **Won't have (W - Tạm hoãn sang kỳ sau):** Trắc nghiệm tâm lý VARK ảo, hỗ trợ đa ngôn ngữ quốc tế (i18n).
+
+### 9.5. Acceptance Criteria (Cú pháp Gherkin) vs Definition of Done (DoD)
+Dự án phân định rạch ròi giữa 2 khái niệm thường bị nhầm lẫn:
+1. **Acceptance Criteria (AC - Tiêu chí Nghiệm thu Nghiệp vụ):**
+   - Viết theo chuẩn cú pháp **Gherkin**:
+     - `GIVEN` [Tiền điều kiện / Ngữ cảnh ban đầu]
+     - `WHEN` [Hành động người dùng hoặc sự kiện hệ thống kích hoạt]
+     - `THEN` [Kết quả mong đợi có thể kiểm chứng được]
+   - *Ví dụ mẫu cho Sandbox Runner:*
+     - `GIVEN` sinh viên submit mã nguồn hàm Deque bằng Python
+     - `WHEN` nhấn nút "Chạy kiểm thử"
+     - `THEN` Docker Sandbox thực thi an toàn trong < 2000ms và trả về trạng thái 5/5 ca test pass.
+2. **Definition of Done (DoD - Tiêu chuẩn Kỹ thuật Hoàn thành Chung):**
+   - Áp dụng bắt buộc cho **mọi task** trước khi được kéo vào cột `Done`:
+     - [x] Code biên dịch thành công, vượt qua 100% test cases trong isolated runner.
+     - [x] Tuân thủ Kiến trúc 3 tầng (Router $	o$ Service $	o$ Data Layer).
+     - [x] Không có cảnh báo Type/Lint nghiêm trọng, toàn bộ timestamp chuẩn ISO-8601 UTC.
+     - [x] Được ít nhất 1 thành viên review mã nguồn và giải phóng ràng buộc phụ thuộc H2.
+
+### 9.6. Ước lượng Fibonacci, Planning Poker & Biểu đồ Burndown Chart (Session 07)
+- **Chuỗi số Fibonacci (1, 2, 3, 5, 8, 13):** Sử dụng các số Fibonacci để ước lượng Story Points vì độ bất định tăng theo hàm số mũ khi kích thước công việc lớn dần. Bất kỳ task nào có điểm $\ge 8$ đều bắt buộc phải kích hoạt **AI WBS Studio** để phân rã thành các task nguyên tử 2 - 5 điểm.
+- **Vận tốc Sprint (Velocity):** Nhóm duy trì vận tốc trung bình **35 - 40 Story Points / Sprint**, đảm bảo toàn bộ 100 task hoàn thành đúng tiến độ trước kỳ bảo vệ chính thức.
+- **Burndown Chart:** Theo dõi lượng điểm Story Points còn lại theo từng ngày thực tế, giúp Scrum Master cảnh báo nguy cơ trễ hạn sớm từ 3 ngày trước deadline.
+
+### 9.7. Quy trình 5 Bước Sprint Retrospective & Văn hóa "No Blame Culture" (Session 09)
+Vào cuối mỗi Sprint, nhóm tổ chức phiên họp Cải tiến Quy trình (Retrospective) theo quy trình 5 bước chuẩn quốc tế:
+1. **Set the Stage:** Tạo không gian trao đổi cởi mở, tôn trọng, thiết lập tư duy *"No Blame Culture"* (tập trung vào lỗ hổng quy trình thay vì đổ lỗi cá nhân).
+2. **Gather Data:** Thu thập số liệu khách quan từ GitHub commit history, kết quả test cases sandbox và biểu đồ đóng góp Anti-Freerider.
+3. **Generate Insights:** Áp dụng kỹ thuật "5 Whys" để tìm ra nguyên nhân gốc rễ (Root Cause) của các blocker hoặc task bị trễ hạn.
+4. **Decide What to Do:** Lựa chọn chính xác 1 đến 2 hành động cải tiến cụ thể theo chuẩn **SMART** cho Sprint tiếp theo.
+5. **Close the Retrospective:** Ghi nhận những nỗ lực và đóng góp xuất sắc của đồng đội trong nhóm.
+
+---
+
+# 10. PHÂN TÍCH THIẾT KẾ HỆ THỐNG TOÀN DIỆN (UML & CHUẨN HÓA CSDL 3NF)
+
+### 10.1. Tư duy Problem Solver vs Thợ gõ code (Fred Brooks - Session 01)
+Triết lý thiết kế của CodeMind Campus bắt nguồn từ câu nói bất hủ của Frederick P. Brooks Jr. (*The Mythical Man-Month*):
+> *"Phần khó nhất của việc xây dựng một hệ thống phần mềm là quyết định chính xác những gì cần phải xây dựng... Công nghệ chỉ là công cụ. Giá trị thực sự nằm ở việc giải quyết đúng bài toán trước khi viết dòng code đầu tiên."*
+
+Hệ thống được thiết kế để giải quyết tận gốc 3 bài toán lớn của giáo dục CNTT:
+1. Chấm dứt tình trạng gian lận copy paste code đối phó nhờ **Socratic AI Tutor** (chỉ gợi ý tư duy, không cấp lời giải).
+2. Loại bỏ vấn nạn "gánh team / ỷ lại" trong đồ án nhóm nhờ thuật toán **Anti-Freerider Metrics**.
+3. Xóa bỏ nỗi sợ hãi khi bảo vệ đồ án nhờ phòng mô phỏng **AI Defense Simulator**.
+
+### 10.2. Ma trận Yêu cầu Chức năng (FR) & Phi chức năng (NFR) (Session 03)
+
+| Mã | Phân loại | Mô tả Chi tiết | Tiêu chuẩn Nghiệm thu |
+| :--- | :--- | :--- | :--- |
+| **FR-01** | Functional | LMS Quản lý Bài tập Lập trình Tuần | Giảng viên tạo đề Markdown, cấu hình 5 ca test công nghiệp. |
+| **FR-02** | Functional | Code Runner Sandbox Cách ly Độc lập | Chạy code sinh viên nộp trong Docker container an toàn. |
+| **FR-03** | Functional | Socratic AI Tutor Hint Ladder 3 Nấc | Hướng dẫn mở dần Hint 1 $	o$ 2 $	o$ 3, khóa cứng không lộ code. |
+| **FR-04** | Functional | Bảng Kanban Đồ án & Ràng buộc H2 | Kéo thả HTML5, chặn di chuyển nếu task tiền đề chưa `Done`. |
+| **FR-05** | Functional | AI Task Decomposition (WBS Studio) | Tự động phân rã module thành 2-6 task nguyên tử cho nhóm. |
+| **FR-06** | Functional | Thuật toán Anti-Freerider Metrics | Tính tỷ lệ đóng góp thực tế từ Git commit, test pass & task Done. |
+| **FR-07** | Functional | AI Defense Simulator Hội đồng Ảo | AI Senior Tech Lead chất vấn phản biện đồ án theo kịch bản khó. |
+| **NFR-01** | Performance | Thời gian thực thi Sandbox | Timeout tối đa $2000	ext{ ms}$, phản hồi API RESTful $< 300	ext{ ms}$. |
+| **NFR-02** | Security | Cách ly Tiến trình (Process Isolation) | Chặn toàn bộ system call can thiệp OS, giới hạn RAM $128	ext{ MB}$. |
+| **NFR-03** | Data Integrity | Quy chuẩn Múi giờ UTC (H4) | Toàn bộ timestamp lưu trữ ở định dạng ISO-8601 UTC chuẩn hóa. |
+| **NFR-04** | Maintainability| Kiến trúc 3 Tầng Phân rã Độc lập | Tách biệt Presentation, Business Logic và Data Access Layer. |
+
+### 10.3. Sơ đồ Use Case Diagram Tổng thể Hệ thống (Session 04)
+Sơ đồ Use Case chuẩn UML thể hiện tương tác giữa 4 Actor chính (Sinh viên, Giảng viên, AI Mentor Agent, Quản trị viên) cùng các quan hệ `<<include>>` và `<<extend>>`:
+
+```mermaid
+usecaseDiagram
+    actor "Sinh viên" as Student
+    actor "Giảng viên" as Teacher
+    actor "Socratic AI Tutor" as AI_Agent
+    actor "Quản trị viên" as Admin
+
+    package "CodeMind Campus Platform" {
+        usecase "Đăng nhập hệ thống" as UC_Login
+        usecase "Xem bài tập & Docs tuần" as UC_ViewLesson
+        usecase "Nộp bài lập trình (Git/Upload)" as UC_SubmitCode
+        usecase "Thực thi kiểm thử Sandbox" as UC_RunSandbox
+        usecase "Yêu cầu gợi ý Socratic" as UC_AskHint
+        usecase "Quản lý Bảng Kanban Đồ án" as UC_ManageKanban
+        usecase "Phân rã WBS bằng AI" as UC_AI_WBS
+        usecase "Luyện phản biện AI Defense" as UC_AIDefense
+        usecase "Chấm điểm & Giám sát đóng góp" as UC_GradeAntiFreerider
+        usecase "Quản lý lớp học & Thiết lập Test Cases" as UC_ManageClass
+    }
+
+    Student --> UC_Login
+    Student --> UC_ViewLesson
+    Student --> UC_SubmitCode
+    Student --> UC_AskHint
+    Student --> UC_ManageKanban
+    Student --> UC_AIDefense
+
+    Teacher --> UC_Login
+    Teacher --> UC_ManageClass
+    Teacher --> UC_GradeAntiFreerider
+
+    Admin --> UC_Login
+
+    UC_SubmitCode ..> UC_RunSandbox : <<include>>
+    UC_RunSandbox <.. UC_AskHint : <<extend>> (khi fail test)
+    UC_ManageKanban ..> UC_AI_WBS : <<extend>>
+    UC_AskHint --> AI_Agent
+    UC_AIDefense --> AI_Agent
+```
+
+### 10.4. Sơ đồ Hoạt động (Activity Diagram) Luồng Chấm Bài & Gợi Ý Socratic (Session 04)
+
+```mermaid
+graph TD
+    Start([Sinh viên nộp code qua Git / Upload]) --> Validate{Mã nguồn hợp lệ?}
+    Validate -- Không --> ErrInput[Báo lỗi định dạng file / compile syntax] --> EndErr([Kết thúc lỗi])
+    Validate -- Có --> Dispatch[Đưa vào Docker Sandbox Runner]
+    Dispatch --> RunTest[Thực thi bộ 5 Test Cases công nghiệp]
+    RunTest --> TimeoutCheck{Thời gian chạy > 2000ms?}
+    TimeoutCheck -- Có --> Terminate[Kill tiến trình & Báo lỗi TLE] --> LogFail[Ghi log trạng thái Fail]
+    TimeoutCheck -- Không --> CheckAllPass{Pass 5/5 Test Cases?}
+    CheckAllPass -- Đạt 100% --> GenSHA[Tạo mã băm SHA-256 Self-Correction Evidence]
+    GenSHA --> AwardXP[Cộng EXP, cập nhật Daily Streak & Heatmap]
+    AwardXP --> Success([Nộp bài thành công - Đạt điểm tối đa])
+    CheckAllPass -- Thất bại --> LockAns[Kích hoạt Guardrail từ chối đưa đáp án]
+    LockAns --> CheckLevel{Mức độ gợi ý yêu cầu?}
+    CheckLevel -- Mức 1 --> Hint1[Hint 1: Nhắc lại khái niệm lý thuyết cốt lõi]
+    CheckLevel -- Mức 2 --> Hint2[Hint 2: Chỉ ra ca test case biên bị fail]
+    CheckLevel -- Mức 3 --> Hint3[Hint 3: Hướng dẫn thuật toán từng bước pseudo-code]
+    Hint1 --> AllowRetry[Cho phép sinh viên tự debug và nộp lại]
+    Hint2 --> AllowRetry
+    Hint3 --> AllowRetry
+    AllowRetry --> Start
+```
+
+### 10.5. Sơ đồ Lớp (Class Diagram) Chuẩn UML Hướng Đối Tượng (Session 06)
+
+```mermaid
+classDiagram
+    class User {
+        -String id
+        -String username
+        -String email
+        -String role
+        +login(password) Boolean
+        +getPreferences() Preferences
+    }
+
+    class Student {
+        -Int currentStreak
+        -Int totalExp
+        -List~String~ badges
+        +submitAssignment(assignmentId, code) Submission
+        +requestHint(submissionId, level) HintResponse
+    }
+
+    class Instructor {
+        -String department
+        +createAssignment(title, specMarkdown) Assignment
+        +reviewTeamContribution(projectId) ContributionReport
+    }
+
+    class Assignment {
+        -String id
+        -String title
+        -String specMarkdown
+        -DateTime deadlineUtc
+        -List~TestCase~ testCases
+        +validateSubmission(code) TestResult
+    }
+
+    class TestCase {
+        -String id
+        -String inputData
+        -String expectedOutput
+        -Int timeoutMs
+        +execute(sandboxRunner) Boolean
+    }
+
+    class Submission {
+        -String id
+        -String commitHash
+        -DateTime submittedAtUtc
+        -String status
+        -Int passedTestsCount
+        -String sha256Evidence
+        +evaluate() Score
+    }
+
+    class KanbanTask {
+        -String id
+        -String code
+        -String title
+        -String column
+        -Int points
+        -String moscow
+        -String dependsOn
+        +canMoveTo(targetColumn) Boolean
+        +checkDoD() Boolean
+    }
+
+    class SocraticHintEngine {
+        -String systemGuardrails
+        +generateHint(code, failedTest, level) String
+        +verifyNoDirectSolution(hintText) Boolean
+    }
+
+    User <|-- Student : Kế thừa
+    User <|-- Instructor : Kế thừa
+    Student "1" --> "*" Submission : Tạo
+    Assignment "1" *-- "1..*" TestCase : Composition
+    Assignment "1" --> "*" Submission : Chứa
+    Submission ..> SocraticHintEngine : Tham chiếu khi fail
+    Student "1" --> "*" KanbanTask : Nhận phụ trách
+```
+
+### 10.6. Sơ đồ Tuần tự (Sequence Diagram) Tương tác 3 Tầng Thực Thi (Session 09)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor SinhVien as Sinh viên (Client)
+    participant Router as Presentation (FastAPI Router)
+    participant Service as Business Logic (Code Evaluator)
+    participant Sandbox as Docker Sandbox Runner
+    participant DB as Data Layer (SQLite / Postgres)
+    participant AI as Socratic AI Tutor (LLM)
+
+    SinhVien->>Router: POST /v1/submissions (code, assignment_id)
+    Router->>Router: Xác thực JWT & Validate Pydantic Schema
+    Router->>Service: submit_and_evaluate(code, assignment_id)
+    Service->>DB: Lấy danh mục 5 Test Cases chuẩn
+    DB-->>Service: Danh sách Test Cases (input, expected)
+    Service->>Sandbox: Execute code in isolated container (timeout: 2000ms)
+    Sandbox-->>Service: Test Results (4/5 passed, Test #3 failed: empty queue)
+    
+    alt Trường hợp Fail test case
+        Service->>DB: Ghi nhận Submission trạng thái "failed"
+        Service->>AI: Gửi context code + failed test (Kèm Socratic Guardrails)
+        AI-->>Service: Tạo Socratic Hint Level 1 (Khái niệm chỉ mục deque)
+        Service-->>Router: Trả về kết quả 4/5 pass + Hint Level 1
+        Router-->>SinhVien: Hiển thị lỗi biên & Khung hướng dẫn tự sửa
+    else Trường hợp Pass 100% (5/5)
+        Service->>Service: Sinh mã băm SHA-256 Self-Correction Evidence
+        Service->>DB: Lưu Submission trạng thái "passed", cập nhật EXP & Streak
+        Service-->>Router: Trả về kết quả 5/5 pass + SHA-256 Signature
+        Router-->>SinhVien: Thông báo thành công, mở khóa huy hiệu mới
+    end
+```
+
+### 10.7. Chứng minh Chuẩn hóa Cơ sở Dữ liệu 3NF (Session 15)
+Lược đồ cơ sở dữ liệu của CodeMind Campus tuân thủ nghiêm ngặt **Dạng chuẩn 3 (Third Normal Form - 3NF)**:
+1. **Dạng chuẩn 1 (1NF - Atomic Values):**
+   - Mọi thuộc tính trong tất cả các bảng (`users`, `assignments`, `test_cases`, `submissions`, `kanban_tasks`, `socratic_logs`) đều chứa giá trị nguyên tử (Atomic). Không có trường nào lưu danh sách mảng phức hợp hay trường đa trị lặp lại.
+2. **Dạng chuẩn 2 (2NF - No Partial Dependency):**
+   - Đạt 1NF và toàn bộ các thuộc tính không khóa đều phụ thuộc hàm toàn phần vào khóa chính. Với các bảng quan hệ nhiều-nhiều (như bảng gán quyền `project_members`), các thuộc tính liên kết đều phụ thuộc vào toàn bộ cặp khóa `(project_id, user_id)`.
+3. **Dạng chuẩn 3 (3NF - No Transitive Dependency):**
+   - Đạt 2NF và loại bỏ hoàn toàn các phụ thuộc bắc cầu ($X 	o Y 	o Z$).
+   - *Ví dụ minh chứng:* Bảng `submissions` chỉ lưu `assignment_id` và `user_id`. Thông tin chi tiết về lớp học hay giảng viên phụ trách môn học đó không được lưu lặp lại trong `submissions` mà phải truy vấn thông qua bảng `assignments` và `classrooms`. Điều này ngăn chặn triệt để hiện tượng dư thừa dữ liệu (Data Redundancy) và dị thường khi cập nhật (Update Anomaly).
+4. **Chuẩn hóa Timestamp UTC ISO-8601 (Ràng buộc cứng H4):**
+   - Mọi trường thời gian (`created_at`, `updated_at`, `submitted_at`, `due_date`) đều được định kiểu `TIMESTAMPTZ` (hoặc chuỗi ISO-8601 UTC kết thúc bằng `Z`), bảo đảm tính toàn vẹn khi đồng bộ giữa các múi giờ khác nhau.
+
+### 10.8. Mô hình Kiến trúc 3 Tầng (3-Tier Clean Layered Architecture - Session 17)
+Hệ thống được tổ chức phân tầng rõ rệt theo chuẩn công nghiệp:
+1. **Tầng Trình diễn (Presentation Layer):**
+   - **Frontend:** React 19 + Tailwind CSS + Lucide Icons (Tương tác mượt mà, Bảng kéo thả Kanban Trello-style, AI Studio).
+   - **API Gateway:** FastAPI `APIRouter` trong `backend/app/api/v1/` (Chỉ làm nhiệm vụ Parse HTTP request, validate schema Pydantic và trả về JSON chuẩn).
+2. **Tầng Nghiệp vụ (Business Logic Layer):**
+   - Đặt trong `backend/app/services/` (`ai_tutor.py`, `code_evaluator.py`, `analytics.py`).
+   - Chịu trách nhiệm thực thi toàn bộ quy tắc nghiệp vụ: Ràng buộc phụ thuộc H2, Kiểm soát gợi ý Socratic không lộ code, Thuật toán tính chỉ số Anti-Freerider, Xử lý timeout sandbox. Tầng này hoàn toàn độc lập với giao diện và hệ quản trị CSDL.
+3. **Tầng Truy cập Dữ liệu (Data Access Layer):**
+   - Đặt trong `backend/app/core/` (`database.py`, `timezone.py`, `security.py`).
+   - Phụ trách kết nối CSDL (SQLAlchemy ORM, SQLite/PostgreSQL), quản lý transaction, cơ chế tự động migration schema không downtime (`_migrate_existing_tables`), và chuẩn hóa múi giờ UTC.

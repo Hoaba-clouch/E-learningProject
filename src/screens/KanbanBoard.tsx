@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
+  BookOpen,
   Bot,
   Calendar,
   CheckCircle2,
@@ -14,12 +15,14 @@ import {
   Cpu,
   Database,
   ExternalLink,
+  FileText,
   Filter,
   Flame,
   FolderKanban,
   GitBranch,
   GitCommit,
   GitPullRequest,
+  GraduationCap,
   GripVertical,
   Layers,
   Link2,
@@ -54,6 +57,7 @@ import {
 
 export type ColumnId = "backlog" | "ready" | "in-progress" | "review" | "done";
 export type Priority = "low" | "medium" | "high";
+export type MoscowPriority = "must" | "should" | "could" | "wont";
 export type TabView = "board" | "analytics" | "dependencies";
 export type TechStackKey =
   | "ai"
@@ -79,6 +83,12 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+export interface UserStory {
+  role: string;
+  want: string;
+  benefit: string;
+}
+
 export interface KanbanTask {
   id: string;
   code: string;
@@ -86,7 +96,11 @@ export interface KanbanTask {
   description: string;
   column: ColumnId;
   priority: Priority;
-  points: number; // Story points (1, 2, 3, 5, 8)
+  moscow?: MoscowPriority;
+  userStory?: UserStory;
+  acceptanceCriteria?: string;
+  definitionOfDone?: ChecklistItem[];
+  points: number; // Story points (1, 2, 3, 5, 8, 13)
   assignee: {
     name: string;
     avatar: string;
@@ -107,6 +121,13 @@ export interface KanbanTask {
   attachmentsCount: number;
 }
 
+export const defaultDoD = (isDone = false): ChecklistItem[] => [
+  { id: "dod-1", text: "Code vượt qua 100% test cases trong Docker sandbox độc lập", done: isDone },
+  { id: "dod-2", text: "Tuân thủ Kiến trúc 3 tầng (Router -> Service -> Data Layer)", done: isDone },
+  { id: "dod-3", text: "Không có lỗi Type/Lint, timestamp chuẩn ISO-8601 UTC (H4)", done: isDone },
+  { id: "dod-4", text: "Được ít nhất 1 thành viên review và giải phóng Ràng buộc H2", done: isDone },
+];
+
 const initialMembers: TeamMember[] = [
   { id: "m1", name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch", color: "bg-blue-600" },
   { id: "m2", name: "Quốc Huy", avatar: "QH", role: "Backend Dev", color: "bg-amber-500" },
@@ -121,12 +142,20 @@ const initialTasks: KanbanTask[] = [
     description: "Xây dựng 8 bảng core, quy chuẩn toàn bộ timestamp về UTC (H4) theo yêu cầu Thầy Phước.",
     column: "done",
     priority: "high",
+    moscow: "must",
     points: 5,
     assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
     estimateHours: 4,
     dueDate: "28/10",
     epic: "Architecture",
     epicColor: "bg-blue-50 text-blue-700 border-blue-200",
+    userStory: {
+      role: "Kiến trúc sư hệ thống",
+      want: "thiết kế ERD chuẩn hóa 3NF và quy định múi giờ UTC ISO-8601",
+      benefit: "dữ liệu không bị phân mảnh hay sai lệch timestamp giữa client và server (H4)",
+    },
+    acceptanceCriteria: "Given cơ sở dữ liệu khởi tạo\nWhen các bảng lưu trữ thông tin thời gian\nThen timestamp được quy đổi về UTC theo ISO-8601 và schema đạt chuẩn 3NF",
+    definitionOfDone: defaultDoD(true),
     checklist: [
       { id: "c1", text: "Vẽ sơ đồ ERD 8 thực thể chính", done: true },
       { id: "c2", text: "Tạo migration SQLite & Index", done: true },
@@ -143,12 +172,20 @@ const initialTasks: KanbanTask[] = [
     description: "Đặc tả các ràng buộc cứng H1-H4, kịch bản Socratic và cơ chế chống Free-rider cho báo cáo Thầy.",
     column: "done",
     priority: "high",
+    moscow: "must",
     points: 8,
     assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
     estimateHours: 6,
     dueDate: "29/10",
     epic: "Documentation",
     epicColor: "bg-purple-50 text-purple-700 border-purple-200",
+    userStory: {
+      role: "Hội đồng & Giảng viên",
+      want: "tài liệu SRS Master Blueprint chuẩn IEEE 830",
+      benefit: "nắm bắt toàn diện các ràng buộc cứng H1-H4 và lộ trình đồ án thực tế",
+    },
+    acceptanceCriteria: "Given yêu cầu nghiệm thu môn học\nWhen xuất tài liệu đặc tả hệ thống\nThen văn bản có đủ 10 chương chuẩn PTTKHT, Agile Scrum và danh mục Product Backlog",
+    definitionOfDone: defaultDoD(true),
     checklist: [
       { id: "c1", text: "Khảo sát và gạch bỏ các tính năng ảo (VARK)", done: true },
       { id: "c2", text: "Viết đặc tả Hard Constraints H1-H4", done: true },
@@ -165,12 +202,20 @@ const initialTasks: KanbanTask[] = [
     description: "Tách nhỏ 650 dòng monolithic thành core, schemas, services, api v1 cô lập lỗi.",
     column: "done",
     priority: "high",
+    moscow: "must",
     points: 5,
     assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
     estimateHours: 4,
     dueDate: "02/11",
     epic: "Backend Refactor",
     epicColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    userStory: {
+      role: "Backend Developer",
+      want: "tách biệt hệ thống theo kiến trúc 3 tầng (3-tier Architecture)",
+      benefit: "cô lập lỗi, dễ bảo trì và phân định rõ ràng giữa Router, Service và Data Layer",
+    },
+    acceptanceCriteria: "Given backend monolithic 650 dòng\nWhen tái cấu trúc sang Layered Clean Architecture\nThen schemas, services, core tách riêng và smoke test 100% pass",
+    definitionOfDone: defaultDoD(true),
     checklist: [
       { id: "c1", text: "Tách app/core/database.py", done: true },
       { id: "c2", text: "Tách app/services/ai_tutor.py", done: true },
@@ -187,6 +232,7 @@ const initialTasks: KanbanTask[] = [
     description: "Đánh giá an toàn mã nguồn deque: maxlen, boundary cases, xử lý chuỗi rỗng.",
     column: "in-progress",
     priority: "high",
+    moscow: "must",
     points: 5,
     assignee: { name: "Quốc Huy", avatar: "QH", role: "Backend Dev" },
     estimateHours: 4,
@@ -194,6 +240,18 @@ const initialTasks: KanbanTask[] = [
     epic: "Code Grader",
     epicColor: "bg-amber-50 text-amber-700 border-amber-200",
     dependsOn: "task-3",
+    userStory: {
+      role: "Sinh viên lập trình",
+      want: "chạy 5 test cases trên môi trường Docker Sandbox cô lập",
+      benefit: "biết chính xác kết quả pass/fail trong < 2000ms mà không làm sập server",
+    },
+    acceptanceCriteria: "Given sinh viên nộp bài hàm deque\nWhen nhấn Chạy kiểm thử\nThen sandbox thực thi 5 test cases và trả về kết quả từng test trong thời gian < 2s",
+    definitionOfDone: [
+      { id: "dod-1", text: "Code vượt qua 100% test cases trong Docker sandbox độc lập", done: true },
+      { id: "dod-2", text: "Tuân thủ Kiến trúc 3 tầng (Router -> Service -> Data Layer)", done: true },
+      { id: "dod-3", text: "Không có lỗi Type/Lint, timestamp chuẩn ISO-8601 UTC (H4)", done: false },
+      { id: "dod-4", text: "Được ít nhất 1 thành viên review và giải phóng Ràng buộc H2", done: false },
+    ],
     checklist: [
       { id: "c1", text: "Thiết lập môi trường isolated sandbox", done: true },
       { id: "c2", text: "Viết bộ 5 test cases chuẩn công nghiệp", done: true },
@@ -209,6 +267,7 @@ const initialTasks: KanbanTask[] = [
     description: "Tuyệt đối không đưa đáp án; hướng dẫn mở dần Hint 1 -> Hint 2 -> Hint 3.",
     column: "review",
     priority: "high",
+    moscow: "must",
     points: 5,
     assignee: { name: "Quốc Huy", avatar: "QH", role: "Backend Dev" },
     estimateHours: 4.5,
@@ -216,6 +275,18 @@ const initialTasks: KanbanTask[] = [
     epic: "AI Pedagogy",
     epicColor: "bg-rose-50 text-rose-700 border-rose-200",
     dependsOn: "task-4",
+    userStory: {
+      role: "Sinh viên gặp lỗi thuật toán",
+      want: "nhận gợi ý Socratic theo thang 3 nấc sư phạm",
+      benefit: "tự hiểu nguyên lý để sửa code thay vì bị AI mớm đáp án hoàn chỉnh",
+    },
+    acceptanceCriteria: "Given sinh viên chưa vượt qua test case\nWhen yêu cầu trợ giúp từ AI Tutor\nThen hệ thống mở khóa tuần tự Hint 1 -> Hint 2 -> Hint 3 và khóa không lộ giải",
+    definitionOfDone: [
+      { id: "dod-1", text: "Code vượt qua 100% test cases trong Docker sandbox độc lập", done: true },
+      { id: "dod-2", text: "Tuân thủ Kiến trúc 3 tầng (Router -> Service -> Data Layer)", done: true },
+      { id: "dod-3", text: "Không có lỗi Type/Lint, timestamp chuẩn ISO-8601 UTC (H4)", done: true },
+      { id: "dod-4", text: "Được ít nhất 1 thành viên review và giải phóng Ràng buộc H2", done: false },
+    ],
     checklist: [
       { id: "c1", text: "Cấu hình Guardrails từ chối đưa code hoàn chỉnh", done: true },
       { id: "c2", text: "Ràng buộc mở tuần tự (Sequence lock)", done: true },
@@ -232,6 +303,7 @@ const initialTasks: KanbanTask[] = [
     description: "AI đóng vai giảng viên phản biện khó tính, xoáy sâu vào các điểm yếu của đồ án.",
     column: "ready",
     priority: "medium",
+    moscow: "should",
     points: 8,
     assignee: { name: "Hoàng Long", avatar: "HL", role: "QA & AI Ops" },
     estimateHours: 5,
@@ -239,6 +311,13 @@ const initialTasks: KanbanTask[] = [
     epic: "Defense Room",
     epicColor: "bg-teal-50 text-teal-700 border-teal-200",
     dependsOn: "task-5",
+    userStory: {
+      role: "Sinh viên bảo vệ đồ án",
+      want: "luyện tập chất vấn với Hội đồng phản biện AI",
+      benefit: "rèn luyện phản xạ kỹ thuật và phát hiện trước lỗ hổng bảo mật/kiến trúc",
+    },
+    acceptanceCriteria: "Given đồ án đã hoàn thành các module cốt lõi\nWhen sinh viên bắt đầu phiên bảo vệ\nThen AI chất vấn xoay quanh Docker sandbox, 3NF và thuật toán Anti-Freerider",
+    definitionOfDone: defaultDoD(false),
     checklist: [
       { id: "c1", text: "Thu thập danh mục 20 câu hỏi Thầy Phước hay hỏi", done: false },
       { id: "c2", text: "Tích hợp prompt Socratic phản biện", done: false },
@@ -253,6 +332,7 @@ const initialTasks: KanbanTask[] = [
     description: "Đảm bảo mã nguồn nộp lên không làm treo máy chủ hoặc bypass sandbox.",
     column: "backlog",
     priority: "medium",
+    moscow: "should",
     points: 3,
     assignee: { name: "Hoàng Long", avatar: "HL", role: "QA & AI Ops" },
     estimateHours: 3.5,
@@ -260,6 +340,13 @@ const initialTasks: KanbanTask[] = [
     epic: "Testing",
     epicColor: "bg-slate-50 text-slate-700 border-slate-200",
     dependsOn: "task-4",
+    userStory: {
+      role: "QA Engineer",
+      want: "50 ca kiểm thử tự động cho router và services",
+      benefit: "hệ thống không phát sinh lỗi hồi quy (regression) khi thêm tính năng mới",
+    },
+    acceptanceCriteria: "Given pull request mới tạo\nWhen kích hoạt chạy bộ test smoke\nThen 50 test cases hoàn thành với tỷ lệ 100% pass và thời gian dưới 10s",
+    definitionOfDone: defaultDoD(false),
     checklist: [
       { id: "c1", text: "Viết test case biên bộ nhớ", done: false },
       { id: "c2", text: "Viết test case injection chuỗi rỗng", done: false },
@@ -274,12 +361,25 @@ const initialTasks: KanbanTask[] = [
     description: "Trực quan hóa năng lực lập trình viên: CleanCode, Debugging, Teamwork.",
     column: "in-progress",
     priority: "medium",
+    moscow: "could",
     points: 3,
     assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
     estimateHours: 3,
     dueDate: "07/11",
     epic: "Gamification",
     epicColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    userStory: {
+      role: "Sinh viên",
+      want: "theo dõi biểu đồ Radar 5 trục kỹ năng và chuỗi ngày code Streak",
+      benefit: "duy trì động lực rèn luyện mỗi ngày và nhìn thấy sự tiến bộ rõ rệt",
+    },
+    acceptanceCriteria: "Given sinh viên nộp bài thành công\nWhen vào trang Dashboard cá nhân\nThen radar chart cập nhật điểm số và ô vuông streak sáng màu xanh",
+    definitionOfDone: [
+      { id: "dod-1", text: "Code vượt qua 100% test cases trong Docker sandbox độc lập", done: true },
+      { id: "dod-2", text: "Tuân thủ Kiến trúc 3 tầng (Router -> Service -> Data Layer)", done: false },
+      { id: "dod-3", text: "Không có lỗi Type/Lint, timestamp chuẩn ISO-8601 UTC (H4)", done: false },
+      { id: "dod-4", text: "Được ít nhất 1 thành viên review và giải phóng Ràng buộc H2", done: false },
+    ],
     checklist: [
       { id: "c1", text: "Vẽ SVG ngũ giác Radar Chart", done: true },
       { id: "c2", text: "Tạo ô vuông xanh GitHub Contribution", done: false },
@@ -294,6 +394,7 @@ const initialTasks: KanbanTask[] = [
     description: "Tính % đóng góp dựa trên số task Done, commit Git và test evidence thật.",
     column: "backlog",
     priority: "low",
+    moscow: "must",
     points: 5,
     assignee: { name: "Quốc Huy", avatar: "QH", role: "Backend Dev" },
     estimateHours: 4,
@@ -301,6 +402,13 @@ const initialTasks: KanbanTask[] = [
     epic: "Team Analytics",
     epicColor: "bg-cyan-50 text-cyan-700 border-cyan-200",
     dependsOn: "task-3",
+    userStory: {
+      role: "Giảng viên chấm điểm đồ án",
+      want: "thuật toán tự động phân tích tỷ lệ đóng góp thực tế của từng thành viên",
+      benefit: "chấm điểm công bằng, phát hiện hiện tượng ỷ lại hoặc gánh team",
+    },
+    acceptanceCriteria: "Given nhóm sinh viên thực hiện đồ án\nWhen đến kỳ đánh giá tiến độ\nThen hệ thống tính toán % dựa trên Story points Done và xếp loại A/B/C tự động",
+    definitionOfDone: defaultDoD(false),
     checklist: [
       { id: "c1", text: "Thu thập lịch sử commit từ GitHub API", done: false },
       { id: "c2", text: "Tính chỉ số cày cuốc (Effort score)", done: false },
@@ -388,6 +496,11 @@ export default function KanbanBoard() {
   // Quick Inline Add Task
   const [inlineAddingCol, setInlineAddingCol] = useState<ColumnId | null>(null);
   const [inlineTitle, setInlineTitle] = useState("");
+
+  // Engineering & Agile Scrum Handbook Modal
+  const [handbookOpen, setHandbookOpen] = useState(false);
+  const [handbookTab, setHandbookTab] = useState<"scrum" | "pttk">("scrum");
+  const [taskDetailTab, setTaskDetailTab] = useState<"general" | "engineering">("general");
 
   const getTaskById = (id: string) => tasks.find((t) => t.id === id);
 
@@ -489,15 +602,23 @@ export default function KanbanBoard() {
       id: `task-${Date.now()}`,
       code: `TSK-${Math.floor(Math.random() * 800 + 100)}`,
       title: inlineTitle.trim(),
-      description: "Thẻ công việc phân rã từ Sprint Backlog.",
+      description: "Thẻ công việc phân rã từ Sprint Backlog theo chuẩn Scrum.",
       column: colId,
       priority: "medium",
+      moscow: "should",
       points: 3,
       assignee: { name: defaultAssignee.name, avatar: defaultAssignee.avatar, role: defaultAssignee.role },
       estimateHours: 3,
       dueDate: "15/11",
       epic: "Sprint Goal",
       epicColor: "bg-blue-50 text-blue-700 border-blue-200",
+      userStory: {
+        role: "Nhóm phát triển",
+        want: `triển khai ${inlineTitle.trim()}`,
+        benefit: "đạt mục tiêu Sprint Goal đã cam kết trong Sprint Planning",
+      },
+      acceptanceCriteria: `Given yêu cầu ${inlineTitle.trim()}\nWhen thực hiện hoàn tất\nThen đáp ứng tiêu chuẩn nghiệm thu và vượt qua 4 tiêu chí DoD`,
+      definitionOfDone: defaultDoD(false),
       checklist: [],
       commentsCount: 0,
       attachmentsCount: 0,
@@ -596,17 +717,25 @@ export default function KanbanBoard() {
         id: parentId,
         code: `ARC-${Math.floor(Math.random() * 90 + 10)}`,
         title: `Thiết kế Kiến trúc & Data Model: ${aiFeatureName.trim()}`,
-        description: `Đặc tả kỹ thuật [${techLabel}], phân tích schema CSDL, data contracts và sequence diagram. ${
+        description: `Đặc tả kỹ thuật [${techLabel}], phân tích schema CSDL 3NF, data contracts và sequence diagram. ${
           aiDescription ? "Yêu cầu: " + aiDescription : ""
         }`,
         column: "backlog",
         priority: "high",
+        moscow: "must",
         points: 5,
         assignee: { name: m1.name, avatar: m1.avatar, role: m1.role },
         estimateHours: 4,
         dueDate: "14/11",
         epic: aiFeatureName.trim(),
         epicColor: "bg-blue-50 text-blue-700 border-blue-200",
+        userStory: {
+          role: "Kiến trúc sư phần mềm",
+          want: `thiết kế cấu trúc dữ liệu và API contract cho ${aiFeatureName.trim()}`,
+          benefit: "hệ thống hoạt động nhất quán, chuẩn hóa 3NF và tuân thủ múi giờ UTC (H4)",
+        },
+        acceptanceCriteria: `Given yêu cầu ${aiFeatureName.trim()}\nWhen thiết kế kiến trúc\nThen schema CSDL đạt chuẩn 3NF và vẽ đủ sơ đồ tuần tự (Sequence Diagram)`,
+        definitionOfDone: defaultDoD(false),
         checklist: [
           { id: "ai-c1", text: "Đặc tả schema database & DTO contracts", done: false },
           { id: "ai-c2", text: "Vẽ sơ đồ luồng dữ liệu (Sequence diagram)", done: false },
@@ -622,9 +751,10 @@ export default function KanbanBoard() {
         id: task2Id,
         code: `CORE-${Math.floor(Math.random() * 90 + 10)}`,
         title: `Xây dựng Core Logic Service: ${aiFeatureName.trim()}`,
-        description: `Hiện thực hóa logic nghiệp vụ, kết nối router RESTful, áp dụng ràng buộc nghiệp vụ H2/H3.`,
+        description: `Hiện thực hóa logic nghiệp vụ theo Kiến trúc 3 tầng, kết nối router RESTful, áp dụng ràng buộc nghiệp vụ H2/H3.`,
         column: "backlog",
         priority: "high",
+        moscow: "must",
         points: 5,
         assignee: { name: m2.name, avatar: m2.avatar, role: m2.role },
         estimateHours: 4.5,
@@ -632,6 +762,13 @@ export default function KanbanBoard() {
         epic: aiFeatureName.trim(),
         epicColor: "bg-amber-50 text-amber-700 border-amber-200",
         dependsOn: aiIncludeH2 ? parentId : undefined,
+        userStory: {
+          role: "Backend Developer",
+          want: `hiện thực hóa logic xử lý trong services/ cho ${aiFeatureName.trim()}`,
+          benefit: "xử lý nghiệp vụ an toàn, đúng ràng buộc và có API endpoint hoàn chỉnh",
+        },
+        acceptanceCriteria: `Given thiết kế kiến trúc đã sẵn sàng\nWhen client gửi request nghiệp vụ\nThen server xử lý chuẩn xác và trả về HTTP 200 OK`,
+        definitionOfDone: defaultDoD(false),
         checklist: [
           { id: "ai-c3", text: "Viết logic xử lý cốt lõi trong services/", done: false },
           { id: "ai-c4", text: "Cấu hình API Endpoint và kiểm tra lỗi", done: false },
@@ -650,6 +787,7 @@ export default function KanbanBoard() {
           description: `Viết 15 ca unit test tự động (test_layered_api.py), kiểm tra biên, timeout và exception handling.`,
           column: "backlog",
           priority: "medium",
+          moscow: "should",
           points: 3,
           assignee: { name: m3.name, avatar: m3.avatar, role: m3.role },
           estimateHours: 3.5,
@@ -657,6 +795,13 @@ export default function KanbanBoard() {
           epic: aiFeatureName.trim(),
           epicColor: "bg-teal-50 text-teal-700 border-teal-200",
           dependsOn: aiIncludeH2 ? task2Id : undefined,
+          userStory: {
+            role: "QA & Test Engineer",
+            want: `xây dựng bộ 15 ca kiểm thử tự động cho ${aiFeatureName.trim()}`,
+            benefit: "đảm bảo chất lượng mã nguồn và ngăn chặn lỗi hồi quy (regression)",
+          },
+          acceptanceCriteria: `Given service đã hoàn thành\nWhen chạy lệnh kiểm thử tự động\nThen 100% test cases pass và thời gian phản hồi dưới 300ms`,
+          definitionOfDone: defaultDoD(false),
           checklist: [
             { id: "ai-c5", text: "Viết 10 test cases happy path & edge cases", done: false },
             { id: "ai-c6", text: "Kiểm tra log telemetry analytics", done: false },
@@ -676,6 +821,7 @@ export default function KanbanBoard() {
           description: `Thiết kế UI component đồng bộ với hệ thống theme CodeMind, xử lý state loading/error.`,
           column: "backlog",
           priority: "medium",
+          moscow: "should",
           points: 3,
           assignee: { name: m4.name, avatar: m4.avatar, role: m4.role },
           estimateHours: 3,
@@ -683,6 +829,13 @@ export default function KanbanBoard() {
           epic: aiFeatureName.trim(),
           epicColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
           dependsOn: aiIncludeH2 ? task2Id : undefined,
+          userStory: {
+            role: "Frontend Developer",
+            want: `xây dựng giao diện trực quan cho ${aiFeatureName.trim()}`,
+            benefit: "người dùng thao tác mượt mà và nhận thông báo phản hồi nhanh chóng",
+          },
+          acceptanceCriteria: `Given API endpoint đã mở\nWhen người dùng thao tác trên màn hình\nThen giao diện render đúng trạng thái và không gây crash UI`,
+          definitionOfDone: defaultDoD(false),
           checklist: [{ id: "ai-c7", text: "Nối hook API client trong src/api.ts", done: false }],
           commentsCount: 0,
           attachmentsCount: 0,
@@ -699,6 +852,7 @@ export default function KanbanBoard() {
           description: `Cập nhật tài liệu SRS Master Blueprint, xuất file báo cáo tiến độ nộp Thầy Phước.`,
           column: "backlog",
           priority: "low",
+          moscow: "could",
           points: 2,
           assignee: { name: m5.name, avatar: m5.avatar, role: m5.role },
           estimateHours: 2.5,
@@ -706,6 +860,13 @@ export default function KanbanBoard() {
           epic: aiFeatureName.trim(),
           epicColor: "bg-purple-50 text-purple-700 border-purple-200",
           dependsOn: aiIncludeH2 ? `task-ai-${stamp}-3` : undefined,
+          userStory: {
+            role: "Giảng viên & Đội ngũ",
+            want: `tài liệu đặc tả và slide thuyết trình cho ${aiFeatureName.trim()}`,
+            benefit: "chứng minh tính hoàn thiện của đề án trước Hội đồng nghiệm thu",
+          },
+          acceptanceCriteria: `Given module đã phát triển xong\nWhen nghiệm thu Sprint\nThen tài liệu SRS và slide cập nhật đầy đủ cấu trúc và kết quả đo lường`,
+          definitionOfDone: defaultDoD(false),
           checklist: [{ id: "ai-c8", text: "Cập nhật slide thuyết trình", done: false }],
           commentsCount: 0,
           attachmentsCount: 0,
@@ -815,6 +976,16 @@ export default function KanbanBoard() {
             >
               <Users size={14} className="text-blue-600" />
               <span>Đội ngũ ({teamMembers.length})</span>
+            </button>
+
+            {/* Engineering & Agile Scrum Handbook Button */}
+            <button
+              onClick={() => setHandbookOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-2xs hover:bg-indigo-100 transition"
+              title="Cẩm nang quy chuẩn Kỹ nghệ phần mềm & Agile/Scrum"
+            >
+              <BookOpen size={14} className="text-indigo-600" />
+              <span>Cẩm nang Kỹ nghệ</span>
             </button>
 
             {/* AI WBS Generator */}
@@ -1079,6 +1250,23 @@ export default function KanbanBoard() {
                           </div>
 
                           <div className="flex items-center gap-1">
+                            {/* MoSCoW Badge */}
+                            {task.moscow && (
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                  task.moscow === "must"
+                                    ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                    : task.moscow === "should"
+                                    ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                    : task.moscow === "could"
+                                    ? "bg-sky-50 text-sky-700 border border-sky-200"
+                                    : "bg-slate-50 text-slate-600 border border-slate-200"
+                                }`}
+                                title={`Phân loại MoSCoW: ${task.moscow.toUpperCase()} HAVE`}
+                              >
+                                {task.moscow.toUpperCase()}
+                              </span>
+                            )}
                             {/* Story Points */}
                             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-600">
                               {task.points}p
@@ -1104,9 +1292,16 @@ export default function KanbanBoard() {
                         </h3>
 
                         {/* Description */}
-                        <p className="mb-2.5 line-clamp-2 text-[11px] leading-relaxed text-slate-500">
+                        <p className="mb-2 line-clamp-2 text-[11px] leading-relaxed text-slate-500">
                           {task.description}
                         </p>
+
+                        {/* User Story preview if exists */}
+                        {task.userStory && (
+                          <div className="mb-2 rounded-lg bg-slate-50/90 border border-slate-100 p-1.5 text-[10px] text-slate-600 leading-snug line-clamp-2">
+                            <span className="font-bold text-slate-700">Story:</span> Là <span className="text-blue-600 font-semibold">{task.userStory.role}</span>, tôi muốn {task.userStory.want}...
+                          </div>
+                        )}
 
                         {/* Hard Constraint H2 Dependency Status */}
                         {task.dependsOn && parentTask && (
@@ -1153,6 +1348,23 @@ export default function KanbanBoard() {
                                 className="h-full bg-blue-500"
                               />
                             </div>
+                          </div>
+                        )}
+
+                        {/* DoD Compliance Badge */}
+                        {task.definitionOfDone && task.definitionOfDone.length > 0 && (
+                          <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-600">
+                            <ShieldCheck
+                              size={12}
+                              className={
+                                task.definitionOfDone.filter((d) => d.done).length === task.definitionOfDone.length
+                                  ? "text-emerald-600"
+                                  : "text-slate-400"
+                              }
+                            />
+                            <span className="font-medium">
+                              DoD: {task.definitionOfDone.filter((d) => d.done).length}/{task.definitionOfDone.length} tiêu chuẩn
+                            </span>
                           </div>
                         )}
 
@@ -1938,12 +2150,12 @@ export default function KanbanBoard() {
         </div>
       )}
 
-      {/* ── TASK DETAIL MODAL (LINEAR / JIRA STYLE) ────────────────────────── */}
+      {/* ── TASK DETAIL MODAL (LINEAR / JIRA STYLE WITH SCRUM & SE SPECS) ────────────────────────── */}
       {selectedTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl overflow-hidden">
             {/* Header */}
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
                   #{selectedTask.code}
@@ -1951,6 +2163,21 @@ export default function KanbanBoard() {
                 <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${selectedTask.epicColor}`}>
                   {selectedTask.epic}
                 </span>
+                {selectedTask.moscow && (
+                  <span
+                    className={`rounded px-2 py-0.5 text-xs font-bold uppercase ${
+                      selectedTask.moscow === "must"
+                        ? "bg-rose-100 text-rose-700 border border-rose-200"
+                        : selectedTask.moscow === "should"
+                        ? "bg-amber-100 text-amber-800 border border-amber-200"
+                        : selectedTask.moscow === "could"
+                        ? "bg-sky-100 text-sky-800 border border-sky-200"
+                        : "bg-slate-100 text-slate-700 border border-slate-200"
+                    }`}
+                  >
+                    MoSCoW: {selectedTask.moscow.toUpperCase()}
+                  </span>
+                )}
                 <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono font-bold text-slate-700">
                   {selectedTask.points} Story Points
                 </span>
@@ -1960,97 +2187,514 @@ export default function KanbanBoard() {
               </button>
             </div>
 
-            {/* Title & Description */}
-            <h2 className="mb-2 text-base font-bold text-slate-900">{selectedTask.title}</h2>
-            <p className="mb-4 text-xs leading-relaxed text-slate-600">{selectedTask.description}</p>
-
-            {/* Details Grid */}
-            <div className="mb-4 grid grid-cols-2 gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3.5 text-xs">
-              <div>
-                <span className="text-slate-400 block mb-0.5">Người phụ trách:</span>
-                <span className="font-semibold text-slate-800">
-                  {selectedTask.assignee.name} ({selectedTask.assignee.role})
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 block mb-0.5">Thời lượng ước tính:</span>
-                <span className="font-semibold text-slate-800">{selectedTask.estimateHours} giờ làm việc</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block mb-0.5">Trạng thái cột:</span>
-                <span className="font-bold uppercase text-blue-700">{selectedTask.column}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block mb-0.5">Hạn chót (Deadline):</span>
-                <span className="font-semibold text-slate-800">{selectedTask.dueDate}</span>
-              </div>
+            {/* Tab Switcher inside Modal */}
+            <div className="mb-3 flex border-b border-slate-100">
+              <button
+                onClick={() => setTaskDetailTab("general")}
+                className={`pb-2 text-xs font-semibold transition border-b-2 mr-4 ${
+                  taskDetailTab === "general"
+                    ? "border-blue-600 text-blue-600 font-bold"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Tổng quan & Checklist
+              </button>
+              <button
+                onClick={() => setTaskDetailTab("engineering")}
+                className={`pb-2 text-xs font-semibold transition border-b-2 flex items-center gap-1.5 ${
+                  taskDetailTab === "engineering"
+                    ? "border-indigo-600 text-indigo-600 font-bold"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <GraduationCap size={14} />
+                Quy chuẩn Kỹ nghệ Scrum (User Story, AC Gherkin, DoD)
+              </button>
             </div>
 
-            {/* Checklist */}
-            {selectedTask.checklist.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
-                  <ListChecks size={14} className="text-blue-600" />
-                  Danh sách việc cần làm (Checklist):
-                </h4>
-                <div className="space-y-1.5 rounded-xl border border-slate-200 p-2.5 bg-slate-50/50">
-                  {selectedTask.checklist.map((item) => (
-                    <label
-                      key={item.id}
-                      className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={item.done}
-                        onChange={() => {
-                          const updated = selectedTask.checklist.map((c) =>
-                            c.id === item.id ? { ...c, done: !c.done } : c
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+              {taskDetailTab === "general" ? (
+                <>
+                  {/* Title & Description */}
+                  <div>
+                    <h2 className="mb-1 text-base font-bold text-slate-900">{selectedTask.title}</h2>
+                    <p className="text-xs leading-relaxed text-slate-600">{selectedTask.description}</p>
+                  </div>
+
+                  {/* Details Grid */}
+                  <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3.5 text-xs">
+                    <div>
+                      <span className="text-slate-400 block mb-0.5">Người phụ trách:</span>
+                      <span className="font-semibold text-slate-800">
+                        {selectedTask.assignee.name} ({selectedTask.assignee.role})
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block mb-0.5">Thời lượng ước tính:</span>
+                      <span className="font-semibold text-slate-800">{selectedTask.estimateHours} giờ làm việc</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block mb-0.5">Trạng thái cột:</span>
+                      <span className="font-bold uppercase text-blue-700">{selectedTask.column}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block mb-0.5">Hạn chót (Deadline):</span>
+                      <span className="font-semibold text-slate-800">{selectedTask.dueDate}</span>
+                    </div>
+                  </div>
+
+                  {/* Checklist */}
+                  {selectedTask.checklist.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                        <ListChecks size={14} className="text-blue-600" />
+                        Danh sách việc cần làm (Checklist):
+                      </h4>
+                      <div className="space-y-1.5 rounded-xl border border-slate-200 p-2.5 bg-slate-50/50">
+                        {selectedTask.checklist.map((item) => (
+                          <label
+                            key={item.id}
+                            className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={item.done}
+                              onChange={() => {
+                                const updated = selectedTask.checklist.map((c) =>
+                                  c.id === item.id ? { ...c, done: !c.done } : c
+                                );
+                                setSelectedTask({ ...selectedTask, checklist: updated });
+                                setTasks((prev) =>
+                                  prev.map((t) =>
+                                    t.id === selectedTask.id ? { ...t, checklist: updated } : t
+                                  )
+                                );
+                              }}
+                              className="rounded border-slate-300 text-blue-600"
+                            />
+                            <span className={item.done ? "line-through text-slate-400" : ""}>{item.text}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Move Column Selector */}
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                    <span className="text-xs font-semibold text-slate-700">Chuyển sang cột:</span>
+                    <div className="flex gap-1.5">
+                      {columnsConfig.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            moveTask(selectedTask.id, c.id);
+                            setSelectedTask((prev) => (prev ? { ...prev, column: c.id } : null));
+                          }}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            selectedTask.column === c.id
+                              ? "bg-slate-900 text-white"
+                              : "border border-slate-200 bg-white text-slate-600 hover:border-blue-400"
+                          }`}
+                        >
+                          {c.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-3.5">
+                  {/* User Story (INVEST Framework) */}
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                        <FileText size={14} className="text-blue-600" />
+                        Cấu trúc User Story (Chuẩn INVEST - Rikkei SS03):
+                      </span>
+                      <span className="text-[10px] font-mono uppercase bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">
+                        Agile SS03
+                      </span>
+                    </div>
+                    {selectedTask.userStory ? (
+                      <div className="space-y-1 text-xs leading-relaxed text-slate-700">
+                        <p>
+                          <span className="font-bold text-slate-900">Là (Role): </span>
+                          <span className="text-blue-700 font-semibold">{selectedTask.userStory.role}</span>
+                        </p>
+                        <p>
+                          <span className="font-bold text-slate-900">Tôi muốn (Goal): </span>
+                          <span>{selectedTask.userStory.want}</span>
+                        </p>
+                        <p>
+                          <span className="font-bold text-slate-900">Để mang lại lợi ích (Benefit): </span>
+                          <span className="text-emerald-700 font-medium">{selectedTask.userStory.benefit}</span>
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 italic">Chưa có User Story chi tiết.</p>
+                    )}
+                  </div>
+
+                  {/* Acceptance Criteria (Gherkin Syntax) */}
+                  <div className="rounded-2xl border border-purple-200 bg-purple-50/40 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                        <ListChecks size={14} className="text-purple-600" />
+                        Tiêu chí Nghiệm thu (Acceptance Criteria - Cú pháp Gherkin):
+                      </span>
+                      <span className="text-[10px] font-mono uppercase bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-semibold">
+                        Agile SS05
+                      </span>
+                    </div>
+                    {selectedTask.acceptanceCriteria ? (
+                      <div className="rounded-xl border border-purple-100 bg-white p-3 font-mono text-[11px] leading-relaxed text-slate-800">
+                        {selectedTask.acceptanceCriteria.split("\n").map((line, idx) => {
+                          const isGiven = line.startsWith("Given");
+                          const isWhen = line.startsWith("When");
+                          const isThen = line.startsWith("Then");
+                          return (
+                            <div key={idx} className="py-0.5">
+                              {isGiven && <span className="font-bold text-blue-600">GIVEN </span>}
+                              {isWhen && <span className="font-bold text-amber-600">WHEN </span>}
+                              {isThen && <span className="font-bold text-emerald-600">THEN </span>}
+                              {!isGiven && !isWhen && !isThen && <span>{line}</span>}
+                              {(isGiven || isWhen || isThen) && (
+                                <span>{line.replace(/^(Given|When|Then)\s*/i, "")}</span>
+                              )}
+                            </div>
                           );
-                          setSelectedTask({ ...selectedTask, checklist: updated });
-                          setTasks((prev) =>
-                            prev.map((t) =>
-                              t.id === selectedTask.id ? { ...t, checklist: updated } : t
-                            )
-                          );
-                        }}
-                        className="rounded border-slate-300 text-blue-600"
-                      />
-                      <span className={item.done ? "line-through text-slate-400" : ""}>{item.text}</span>
-                    </label>
-                  ))}
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 italic">Chưa thiết lập cú pháp Gherkin.</p>
+                    )}
+                  </div>
+
+                  {/* Definition of Done (DoD) Checklist */}
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-emerald-600" />
+                        Tiêu chuẩn Hoàn thành Chung (Definition of Done - DoD):
+                      </span>
+                      <span className="text-[10px] font-mono uppercase bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-semibold">
+                        4 Tiêu chuẩn Công nghiệp
+                      </span>
+                    </div>
+                    <div className="space-y-2 rounded-xl border border-emerald-100 bg-white p-3">
+                      {(selectedTask.definitionOfDone || defaultDoD(false)).map((item) => (
+                        <label
+                          key={item.id}
+                          className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.done}
+                            onChange={() => {
+                              const currentDoD = selectedTask.definitionOfDone || defaultDoD(false);
+                              const updated = currentDoD.map((d) =>
+                                d.id === item.id ? { ...d, done: !d.done } : d
+                              );
+                              setSelectedTask({ ...selectedTask, definitionOfDone: updated });
+                              setTasks((prev) =>
+                                prev.map((t) =>
+                                  t.id === selectedTask.id ? { ...t, definitionOfDone: updated } : t
+                                )
+                              );
+                            }}
+                            className="rounded border-slate-300 text-emerald-600"
+                          />
+                          <span className={item.done ? "font-semibold text-emerald-800 line-through opacity-80" : "text-slate-700"}>
+                            {item.text}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {/* Move Column Selector */}
-            <div className="mb-5 flex items-center justify-between border-t border-slate-100 pt-3.5">
-              <span className="text-xs font-semibold text-slate-700">Chuyển sang cột:</span>
-              <div className="flex gap-1.5">
-                {columnsConfig.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      moveTask(selectedTask.id, c.id);
-                      setSelectedTask((prev) => (prev ? { ...prev, column: c.id } : null));
-                    }}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                      selectedTask.column === c.id
-                        ? "bg-slate-900 text-white"
-                        : "border border-slate-200 bg-white text-slate-600 hover:border-blue-400"
-                    }`}
-                  >
-                    {c.title}
-                  </button>
-                ))}
-              </div>
+              )}
             </div>
 
-            <div className="flex justify-end">
+            {/* Modal Footer */}
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+              <span className="text-[11px] text-slate-400">
+                Tuân thủ quy chuẩn IEEE 830, Rikkei Education & Ràng buộc H1-H4
+              </span>
               <button
                 onClick={() => setSelectedTask(null)}
                 className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ENGINEERING & AGILE SCRUM HANDBOOK MODAL (RIKKEI EDUCATION SYLLABUS) ────────── */}
+      {handbookOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700 shadow-xs">
+                  <GraduationCap size={22} />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Cẩm nang Kỹ nghệ Phần mềm & Agile Scrum
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Đúc kết bộ bài giảng Phân tích thiết kế hệ thống & Scrum (Rikkei Education) cho Đề án CodeMind
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setHandbookOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Tab Switcher */}
+            <div className="mb-4 flex rounded-2xl border border-slate-200 bg-slate-100/70 p-1">
+              <button
+                onClick={() => setHandbookTab("scrum")}
+                className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
+                  handbookTab === "scrum"
+                    ? "bg-white text-indigo-700 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                1. Quy trình Agile / Scrum (SS02 - SS09)
+              </button>
+              <button
+                onClick={() => setHandbookTab("pttk")}
+                className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
+                  handbookTab === "pttk"
+                    ? "bg-white text-indigo-700 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                2. Phân tích Thiết kế Hệ thống & UML (SS01 - SS17)
+              </button>
+            </div>
+
+            {/* Handbook Content Body */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4 text-xs text-slate-700">
+              {handbookTab === "scrum" ? (
+                <>
+                  {/* Pillar 1: 3 Trụ cột & 3 Vai trò */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">1</span>
+                      3 Trụ cột Scrum & 3 Vai trò Cốt lõi (Session 02)
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2.5 mb-2">
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60 shadow-2xs">
+                        <p className="font-bold text-blue-700">Minh bạch (Transparency)</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Mọi task, blocker H2 và story points đều hiển thị công khai trên Kanban.</p>
+                      </div>
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60 shadow-2xs">
+                        <p className="font-bold text-amber-700">Thanh tra (Inspection)</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Thường xuyên kiểm tra tiến độ, burn-down velocity và chất lượng mã nguồn.</p>
+                      </div>
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60 shadow-2xs">
+                        <p className="font-bold text-emerald-700">Thích nghi (Adaptation)</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Sẵn sàng điều chỉnh kế hoạch Sprint khi có góp ý từ Thầy Phước.</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      <strong>3 Vai trò:</strong> Product Owner (Định hướng sản phẩm), Scrum Master (Điều phối, gỡ bỏ blocker), Developers (Đội ngũ kỹ thuật).
+                    </p>
+                  </div>
+
+                  {/* Pillar 2: D.E.E.P Backlog & INVEST User Story */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-purple-700 font-bold text-[10px]">2</span>
+                      Tiêu chuẩn D.E.E.P cho Product Backlog & INVEST cho User Story (Session 03)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 mb-2">
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
+                        <p className="font-bold text-purple-700 mb-1">Tiêu chuẩn D.E.E.P Backlog:</p>
+                        <ul className="space-y-0.5 text-[11px] list-disc list-inside text-slate-600">
+                          <li><strong>D</strong>etailed appropriately: Task đỉnh chi tiết, đáy là Epic</li>
+                          <li><strong>E</strong>stimated: Toàn bộ thẻ đều có điểm Fibonacci</li>
+                          <li><strong>E</strong>mergent: Backlog liên tục tiến hóa theo Sprint</li>
+                          <li><strong>P</strong>rioritized: Luôn ưu tiên theo mức độ quan trọng</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
+                        <p className="font-bold text-indigo-700 mb-1">Tiêu chuẩn INVEST User Story:</p>
+                        <ul className="space-y-0.5 text-[11px] list-disc list-inside text-slate-600">
+                          <li><strong>I</strong>ndependent: Độc lập tối đa giữa các Story</li>
+                          <li><strong>N</strong>egotiable: Có thể thương lượng phạm vi</li>
+                          <li><strong>V</strong>aluable: Mang lại giá trị cho người dùng cuối</li>
+                          <li><strong>E</strong>stimable: Đội ngũ có thể ước lượng được</li>
+                          <li><strong>S</strong>mall: Kích thước vừa vặn cho 1 Sprint (2-5h)</li>
+                          <li><strong>T</strong>estable: Có tiêu chí nghiệm thu kiểm thử được</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pillar 3: MoSCoW & Gherkin vs DoD */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-700 font-bold text-[10px]">3</span>
+                      Phân loại MoSCoW & Cú pháp Gherkin vs Definition of Done (Session 05)
+                    </h4>
+                    <div className="grid grid-cols-4 gap-2 mb-2 text-center text-[11px]">
+                      <div className="rounded-xl bg-rose-50 border border-rose-200 p-2 text-rose-800 font-bold">
+                        M - Must Have<br/><span className="text-[10px] font-normal text-rose-600">Bắt buộc hoàn thành</span>
+                      </div>
+                      <div className="rounded-xl bg-amber-50 border border-amber-200 p-2 text-amber-800 font-bold">
+                        S - Should Have<br/><span className="text-[10px] font-normal text-amber-600">Nên có trong bản MVP</span>
+                      </div>
+                      <div className="rounded-xl bg-sky-50 border border-sky-200 p-2 text-sky-800 font-bold">
+                        C - Could Have<br/><span className="text-[10px] font-normal text-sky-600">Gia tăng trải nghiệm</span>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 border border-slate-200 p-2 text-slate-700 font-bold">
+                        W - Won't Have<br/><span className="text-[10px] font-normal text-slate-500">Dời sang giai đoạn sau</span>
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-white p-2.5 border border-slate-200/60 text-[11px]">
+                      <span className="font-bold text-slate-800">Phân biệt AC và DoD: </span>
+                      <strong>AC (Acceptance Criteria)</strong> là tiêu chí nghiệm thu riêng cho từng Story (Given - When - Then). Còn <strong>DoD (Definition of Done)</strong> là tiêu chuẩn kỹ thuật chung bắt buộc cho MỌI task (100% test pass, Clean 3 tầng, Lint pass, Review PR).
+                    </div>
+                  </div>
+
+                  {/* Pillar 4: Fibonacci & Retro 5 Bước */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">4</span>
+                      Dãy Fibonacci (1, 2, 3, 5, 8) & Quy trình 5 Bước Retrospective (Session 07, 09)
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mb-2">
+                      Dãy số Fibonacci phản ánh độ bất định tăng phi tuyến tính. Task trên 8 Story Points bắt buộc phải chẻ nhỏ (WBS) để kiểm soát rủi ro.
+                    </p>
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-[11px] text-emerald-900">
+                      <strong>5 Bước Retrospective (Văn hóa "No Blame Culture"):</strong>
+                      <ol className="list-decimal list-inside space-y-0.5 mt-1">
+                        <li><strong>Set the Stage:</strong> Khởi động, tạo môi trường cởi mở, tin tưởng</li>
+                        <li><strong>Gather Data:</strong> Thu thập số liệu Velocity, Burndown, task Done/Fail</li>
+                        <li><strong>Generate Insights:</strong> Phân tích nguyên nhân gốc rễ (Root Cause)</li>
+                        <li><strong>Decide What to Do:</strong> Đưa ra 1 - 2 hành động cải tiến SMART</li>
+                        <li><strong>Close:</strong> Đúc kết, ghi nhận nỗ lực đồng đội</li>
+                      </ol>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* PTTK 1: Problem Solver vs Thợ gõ code */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px]">1</span>
+                      Tư duy Problem Solver vs Thợ gõ code (Fred Brooks - Session 01)
+                    </h4>
+                    <blockquote className="border-l-4 border-indigo-500 pl-3 italic text-[11px] text-indigo-950 mb-2">
+                      "Phần khó nhất của việc xây dựng phần mềm là quyết định chính xác những gì cần phải xây dựng. Công nghệ chỉ là công cụ. Giá trị thực sự nằm ở việc giải quyết đúng bài toán trước khi viết dòng code đầu tiên."
+                    </blockquote>
+                    <p className="text-[11px] text-slate-600">
+                      CodeMind Campus áp dụng triệt để nguyên lý này: Socratic AI Tutor không đưa code sẵn mà hướng dẫn sinh viên tìm nguyên nhân gốc rễ (Root Cause) của lỗi thuật toán.
+                    </p>
+                  </div>
+
+                  {/* PTTK 2: Ma trận FR vs NFR */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">2</span>
+                      Phân định Yêu cầu Chức năng (FR) & Phi chức năng (NFR - Session 03)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 text-[11px]">
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
+                        <p className="font-bold text-blue-700 mb-1">Functional Requirements (FR):</p>
+                        <ul className="space-y-0.5 list-disc list-inside text-slate-600">
+                          <li>LMS Lập trình & nộp bài qua Git / kéo thả</li>
+                          <li>Sandbox chấm tự động 5 test cases Deque</li>
+                          <li>Socratic AI Tutor gợi ý theo 3 nấc (Hint Ladder)</li>
+                          <li>Bảng Kanban Ràng buộc H2 & Anti-Freerider</li>
+                          <li>AI Defense Simulator giả lập Hội đồng phản biện</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
+                        <p className="font-bold text-purple-700 mb-1">Non-Functional Requirements (NFR):</p>
+                        <ul className="space-y-0.5 list-disc list-inside text-slate-600">
+                          <li><strong>Hiệu năng:</strong> Sandbox timeout &lt; 2000ms, API &lt; 300ms</li>
+                          <li><strong>Bảo mật:</strong> Docker isolated process chống memory leak</li>
+                          <li><strong>Chuẩn hóa dữ liệu:</strong> Timestamp chuẩn ISO-8601 UTC (H4)</li>
+                          <li><strong>Độ sẵn sàng:</strong> Kiến trúc Layered độc lập chịu tải cao</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PTTK 3: 4 Biểu đồ UML Cốt lõi */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-bold text-[10px]">3</span>
+                      4 Biểu đồ UML Cốt lõi trong Thiết kế Hệ thống (Session 05, 07, 09)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="rounded-xl bg-white p-2 border border-slate-200/60">
+                        <p className="font-bold text-slate-800">1. Use Case Diagram (SS05)</p>
+                        <p className="text-slate-500 mt-0.5">Mô hình hóa Actors (Sinh viên, Giảng viên, AI Mentor) cùng quan hệ &lt;&lt;include&gt;&gt; (Chấm bài include Sandbox) và &lt;&lt;extend&gt;&gt; (Hint AI).</p>
+                      </div>
+                      <div className="rounded-xl bg-white p-2 border border-slate-200/60">
+                        <p className="font-bold text-slate-800">2. Activity Diagram (SS05)</p>
+                        <p className="text-slate-500 mt-0.5">Biểu diễn luồng công việc chấm code, rẽ nhánh điều kiện Pass 5/5 sinh hash SHA-256 vs Fail mở Hint 1-3.</p>
+                      </div>
+                      <div className="rounded-xl bg-white p-2 border border-slate-200/60">
+                        <p className="font-bold text-slate-800">3. Class Diagram (SS07)</p>
+                        <p className="text-slate-500 mt-0.5">Cấu trúc OOP với thuộc tính, phương thức, Access Modifiers (+, -, #) và quan hệ Association / Composition giữa các Entity.</p>
+                      </div>
+                      <div className="rounded-xl bg-white p-2 border border-slate-200/60">
+                        <p className="font-bold text-slate-800">4. Sequence Diagram (SS09)</p>
+                        <p className="text-slate-500 mt-0.5">Trực quan hóa thông điệp đồng bộ/bất đồng bộ theo trục thời gian giữa React UI, FastAPI Router, Service, Docker và Database.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PTTK 4: Chuẩn hóa 3NF & Kiến trúc 3 Tầng */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">4</span>
+                      Chuẩn hóa CSDL 3NF & Kiến trúc 3 Tầng Phân Tách (Session 15, 17)
+                    </h4>
+                    <div className="space-y-2 text-[11px]">
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
+                        <p className="font-bold text-emerald-800 mb-1">3 Cấp độ Chuẩn hóa CSDL (3NF):</p>
+                        <p className="text-slate-600">
+                          <strong>1NF:</strong> Mọi thuộc tính đều là giá trị nguyên tử (Atomic).<br/>
+                          <strong>2NF:</strong> Đạt 1NF và loại bỏ phụ thuộc một phần vào khóa chính phức hợp.<br/>
+                          <strong>3NF:</strong> Đạt 2NF và loại bỏ toàn bộ phụ thuộc bắc cầu (Transitive dependency) giữa Users, Submissions và TestCases.
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
+                        <p className="font-bold text-indigo-800 mb-1">Mô hình Kiến trúc 3 Tầng (3-Tier Clean Architecture):</p>
+                        <p className="text-slate-600">
+                          • <strong>Presentation Layer:</strong> React 19 UI & FastAPI Router (Validation, Response JSON).<br/>
+                          • <strong>Business Logic Layer:</strong> Services (Socratic Tutor, Sandbox Runner, Anti-freerider Engine).<br/>
+                          • <strong>Data Access Layer:</strong> SQLAlchemy Models, Migrations & SQLite/PostgreSQL (UTC ISO-8601 H4).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+              <span className="text-[11px] text-slate-400">
+                Chương trình chuẩn Rikkei Education • Thầy Nguyễn Phước hướng dẫn
+              </span>
+              <button
+                onClick={() => setHandbookOpen(false)}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+              >
+                Đã hiểu quy chuẩn
               </button>
             </div>
           </div>
