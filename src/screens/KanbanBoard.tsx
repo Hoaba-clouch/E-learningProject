@@ -315,10 +315,16 @@ export default function KanbanBoard() {
     blockingTask: KanbanTask;
   } | null>(null);
 
-  // AI Modal
+  // AI Modal State
   const [aiModalOpen, setAiModalOpen] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiStage, setAiStage] = useState<"input" | "preview">("input");
+  const [aiFeatureName, setAiFeatureName] = useState("");
+  const [aiDescription, setAiDescription] = useState("");
+  const [aiStack, setAiStack] = useState<"backend" | "frontend" | "docker" | "fullstack">("backend");
+  const [aiGranularity, setAiGranularity] = useState<number>(3);
+  const [aiIncludeH2, setAiIncludeH2] = useState(true);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiPreviewTasks, setAiPreviewTasks] = useState<KanbanTask[]>([]);
 
   // Quick Inline Add Task
   const [inlineAddingCol, setInlineAddingCol] = useState<ColumnId | null>(null);
@@ -440,76 +446,140 @@ export default function KanbanBoard() {
     setInlineAddingCol(null);
   };
 
-  // AI WBS Generation
+  // AI Presets
+  const aiPresets = [
+    {
+      name: "Docker Sandbox Code Runner",
+      desc: "Môi trường thực thi isolated sandbox chấm 5 test cases Deque, chặn memory leak và timeout 2s.",
+      stack: "docker" as const,
+      count: 3,
+    },
+    {
+      name: "Socratic AI Tutor Hint Ladder",
+      desc: "Thang gợi ý sư phạm 3 nấc (Level 1, 2, 3), từ chối giải sẵn, sinh mã băm SHA-256 evidence.",
+      stack: "backend" as const,
+      count: 3,
+    },
+    {
+      name: "AI Defense Simulator (Hội đồng phản biện)",
+      desc: "Phòng bảo vệ đồ án ảo: AI phản biện chất vấn sinh viên, đo mức độ hiểu code và cảnh báo gian lận.",
+      stack: "fullstack" as const,
+      count: 4,
+    },
+    {
+      name: "Anti-Freerider Git Analytics Engine",
+      desc: "Thuật toán đo lường đóng góp thực tế từ commit GitHub, số task Done và test cases pass.",
+      stack: "backend" as const,
+      count: 3,
+    },
+  ];
+
+  // AI WBS Generation Logic
   const handleGenerateWbs = () => {
-    if (!aiPrompt.trim()) return;
+    if (!aiFeatureName.trim()) return;
     setAiGenerating(true);
     setTimeout(() => {
       const stamp = Date.now();
       const parentId = `task-ai-${stamp}-1`;
-      const newItems: KanbanTask[] = [
+      const generated: KanbanTask[] = [
         {
           id: parentId,
-          code: `AI-${Math.floor(Math.random() * 90 + 10)}`,
-          title: `Kiến trúc & Đặc tả Module: ${aiPrompt}`,
-          description: "Phân tích luồng nghiệp vụ, vẽ sequence diagram và thiết lập interface.",
+          code: `ARC-${Math.floor(Math.random() * 90 + 10)}`,
+          title: `Đặc tả Kiến trúc & Data Model: ${aiFeatureName.trim()}`,
+          description: `Phân tích yêu cầu (${aiStack}), thiết kế schema DDL chuẩn UTC và giao thức API. ${aiDescription ? "Ghi chú: " + aiDescription : ""}`,
           column: "backlog",
           priority: "high",
           points: 5,
           assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
           estimateHours: 4,
-          dueDate: "15/11",
-          epic: "WBS AI",
-          epicColor: "bg-purple-50 text-purple-700 border-purple-200",
+          dueDate: "14/11",
+          epic: aiFeatureName.trim(),
+          epicColor: "bg-blue-50 text-blue-700 border-blue-200",
           checklist: [
-            { id: "ai1", text: "Đặc tả schema database", done: false },
-            { id: "ai2", text: "Viết interface router", done: false },
+            { id: "ai-c1", text: "Thiết kế schema & Migration SQLite", done: false },
+            { id: "ai-c2", text: "Đặc tả Pydantic schemas DTO", done: false },
           ],
           commentsCount: 1,
           attachmentsCount: 1,
         },
         {
           id: `task-ai-${stamp}-2`,
-          code: `AI-${Math.floor(Math.random() * 90 + 10)}`,
-          title: `Xây dựng Core Logic Backend: ${aiPrompt}`,
-          description: "Viết dịch vụ FastAPI, tích hợp sandbox test runner và guardrails.",
+          code: `CORE-${Math.floor(Math.random() * 90 + 10)}`,
+          title: `Xây dựng Core Service & Endpoint: ${aiFeatureName.trim()}`,
+          description: `Hiện thực hóa logic nghiệp vụ trong app/services/ và router RESTful v1. Áp dụng ràng buộc H2/H3.`,
           column: "backlog",
-          priority: "medium",
+          priority: "high",
           points: 5,
           assignee: { name: "Quốc Huy", avatar: "QH", role: "Backend Dev" },
           estimateHours: 4.5,
           dueDate: "18/11",
-          epic: "WBS AI",
-          epicColor: "bg-purple-50 text-purple-700 border-purple-200",
-          dependsOn: parentId,
-          checklist: [{ id: "ai3", text: "Viết logic xử lý cốt lõi", done: false }],
+          epic: aiFeatureName.trim(),
+          epicColor: "bg-amber-50 text-amber-700 border-amber-200",
+          dependsOn: aiIncludeH2 ? parentId : undefined,
+          checklist: [
+            { id: "ai-c3", text: "Viết logic core engine", done: false },
+            { id: "ai-c4", text: "Mount router vào api_v1_router", done: false },
+          ],
           commentsCount: 0,
           attachmentsCount: 0,
         },
         {
           id: `task-ai-${stamp}-3`,
-          code: `AI-${Math.floor(Math.random() * 90 + 10)}`,
-          title: `Bộ kiểm thử Tự động & QA: ${aiPrompt}`,
-          description: "Viết bộ kiểm thử 10 ca mô phỏng luồng bất thường và đánh giá hiệu năng.",
+          code: `QA-${Math.floor(Math.random() * 90 + 10)}`,
+          title: `Bộ Kiểm thử Tự động & Security QA: ${aiFeatureName.trim()}`,
+          description: `Viết 15 ca unit test tự động (test_layered_api.py), kiểm tra biên, timeout và exception handling.`,
           column: "backlog",
           priority: "medium",
           points: 3,
           assignee: { name: "Hoàng Long", avatar: "HL", role: "QA & AI Ops" },
-          estimateHours: 3,
+          estimateHours: 3.5,
           dueDate: "20/11",
-          epic: "WBS AI",
-          epicColor: "bg-purple-50 text-purple-700 border-purple-200",
-          dependsOn: `task-ai-${stamp}-2`,
-          checklist: [{ id: "ai4", text: "Viết test cases", done: false }],
+          epic: aiFeatureName.trim(),
+          epicColor: "bg-teal-50 text-teal-700 border-teal-200",
+          dependsOn: aiIncludeH2 ? `task-ai-${stamp}-2` : undefined,
+          checklist: [
+            { id: "ai-c5", text: "Viết 10 test cases happy path & edge cases", done: false },
+            { id: "ai-c6", text: "Kiểm tra log telemetry analytics", done: false },
+          ],
           commentsCount: 0,
-          attachmentsCount: 0,
+          attachmentsCount: 1,
         },
       ];
-      setTasks((prev) => [...prev, ...newItems]);
+
+      if (aiGranularity >= 4) {
+        generated.push({
+          id: `task-ai-${stamp}-4`,
+          code: `FE-${Math.floor(Math.random() * 90 + 10)}`,
+          title: `Tích hợp Giao diện React & API Client: ${aiFeatureName.trim()}`,
+          description: `Thiết kế UI component đồng bộ với hệ thống theme CodeMind, xử lý state loading/error.`,
+          column: "backlog",
+          priority: "medium",
+          points: 3,
+          assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead" },
+          estimateHours: 3,
+          dueDate: "22/11",
+          epic: aiFeatureName.trim(),
+          epicColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
+          dependsOn: `task-ai-${stamp}-2`,
+          checklist: [{ id: "ai-c7", text: "Nối hook API client trong src/api.ts", done: false }],
+          commentsCount: 0,
+          attachmentsCount: 0,
+        });
+      }
+
+      setAiPreviewTasks(generated);
       setAiGenerating(false);
-      setAiModalOpen(false);
-      setAiPrompt("");
-    }, 1200);
+      setAiStage("preview");
+    }, 1100);
+  };
+
+  const confirmAiTasks = () => {
+    setTasks((prev) => [...prev, ...aiPreviewTasks]);
+    setAiModalOpen(false);
+    setAiStage("input");
+    setAiFeatureName("");
+    setAiDescription("");
+    setAiPreviewTasks([]);
   };
 
   // Filtered Tasks
@@ -1250,72 +1320,313 @@ export default function KanbanBoard() {
       {/* ── AI TASK DECOMPOSITION (WBS GENERATOR) MODAL ────────────────────── */}
       {aiModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-lg rounded-3xl border border-purple-200 bg-white p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
+          <div className="w-full max-w-2xl rounded-3xl border border-purple-200 bg-white p-6 shadow-2xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-purple-500 to-indigo-600 text-white shadow-sm shadow-purple-500/20">
                   <Sparkles size={20} />
                 </span>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
-                    AI Task Decomposition (WBS Generator)
+                    AI Task Decomposition Studio (WBS Generator)
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Phân rã tính năng lớn thành 3 task nguyên tử kèm quan hệ H2
+                    {aiStage === "input"
+                      ? "Cung cấp đủ ngữ cảnh kỹ thuật để AI phân rã chuẩn xác, tránh thiếu dữ liệu"
+                      : "Xem trước, tùy chỉnh người phụ trách và xác nhận trước khi nạp vào Backlog"}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setAiModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                onClick={() => {
+                  setAiModalOpen(false);
+                  setAiStage("input");
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="mb-4">
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700">
-                Nhập tính năng / Mục tiêu cần phân rã:
-              </label>
-              <textarea
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                rows={3}
-                placeholder="Ví dụ: Tích hợp phòng bảo vệ đồ án ảo AI Defense Room với kịch bản câu hỏi hóc búa..."
-                className="w-full rounded-2xl border border-slate-200 p-3 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-500 focus:outline-hidden"
-              />
-            </div>
+            {/* STAGE 1: GUIDED STRUCTURED INPUTS */}
+            {aiStage === "input" && (
+              <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+                {/* 1-Click Presets */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    Chọn nhanh mẫu đồ án thực tế (1-Click Presets):
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {aiPresets.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => {
+                          setAiFeatureName(preset.name);
+                          setAiDescription(preset.desc);
+                          setAiStack(preset.stack);
+                          setAiGranularity(preset.count);
+                        }}
+                        className={`rounded-xl border p-2.5 text-left transition ${
+                          aiFeatureName === preset.name
+                            ? "border-purple-400 bg-purple-50/70 shadow-xs"
+                            : "border-slate-200 bg-slate-50/50 hover:border-purple-200 hover:bg-purple-50/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-800 mb-0.5">
+                          <span>{preset.name}</span>
+                          <span className="text-[10px] uppercase font-mono font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
+                            {preset.stack}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 line-clamp-1">{preset.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="mb-5 rounded-2xl border border-purple-100 bg-purple-50/50 p-3.5 text-xs text-slate-600">
-              <p className="font-bold text-purple-900 mb-1">Quy chuẩn phân rã của Hệ thống:</p>
-              <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-600">
-                <li>Tự động chia thành: 1 task Kiến trúc (Lead), 1 task Backend API, 1 task Unit Test (QA).</li>
-                <li>Tự động gắn quan hệ phụ thuộc H2 để tránh code chồng chéo.</li>
-                <li>Gán Story Points và thời lượng ước tính hợp lý (2 - 5 giờ).</li>
-              </ul>
-            </div>
+                {/* Feature Name */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    Tên Tính năng / Module nghiệp vụ: <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={aiFeatureName}
+                    onChange={(e) => setAiFeatureName(e.target.value)}
+                    placeholder="Ví dụ: Docker Sandbox Code Runner, Socratic AI Tutor, AI Defense Room..."
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-500 focus:outline-hidden"
+                  />
+                </div>
 
-            <div className="flex justify-end gap-2.5">
-              <button
-                onClick={() => setAiModalOpen(false)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Hủy
-              </button>
-              <button
-                disabled={aiGenerating || !aiPrompt.trim()}
-                onClick={handleGenerateWbs}
-                className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50"
-              >
-                {aiGenerating ? (
-                  <>
-                    <Sparkles size={14} className="animate-spin" />
-                    <span>Đang phân rã WBS...</span>
-                  </>
-                ) : (
-                  <>
-                    <Bot size={14} />
-                    <span>Tạo 3 thẻ vào Backlog</span>
-                  </>
-                )}
-              </button>
+                {/* Tech Specs & User Story Description */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    Yêu cầu kỹ thuật & Tiêu chí nghiệm thu (Acceptance Criteria):
+                  </label>
+                  <textarea
+                    value={aiDescription}
+                    onChange={(e) => setAiDescription(e.target.value)}
+                    rows={2}
+                    placeholder="Mô tả cụ thể: input/output, giới hạn thời gian (timeout 2s), các trường hợp ngoại lệ..."
+                    className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-500 focus:outline-hidden"
+                  />
+                </div>
+
+                {/* Tech Stack & Granularity */}
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                      Tầng kiến trúc & Công nghệ:
+                    </label>
+                    <select
+                      value={aiStack}
+                      onChange={(e) => setAiStack(e.target.value as any)}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:border-purple-500 focus:outline-hidden"
+                    >
+                      <option value="backend">Backend (FastAPI + SQLite Layered)</option>
+                      <option value="frontend">Frontend (React 19 + Tailwind CSS)</option>
+                      <option value="docker">Docker Sandbox (Isolated Runner)</option>
+                      <option value="fullstack">Fullstack End-to-End System</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                      Độ chi tiết phân rã:
+                    </label>
+                    <select
+                      value={aiGranularity}
+                      onChange={(e) => setAiGranularity(Number(e.target.value))}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:border-purple-500 focus:outline-hidden"
+                    >
+                      <option value={3}>3 Thẻ: Kiến trúc ➔ Backend Core ➔ Test QA</option>
+                      <option value={4}>4 Thẻ: Kiến trúc ➔ Backend ➔ Test QA ➔ Giao diện</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Constraints Checklist */}
+                <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-3 text-xs">
+                  <span className="font-bold text-purple-900 block mb-1.5">
+                    Các quy tắc kỹ nghệ tự động áp dụng:
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={aiIncludeH2}
+                        onChange={(e) => setAiIncludeH2(e.target.checked)}
+                        className="rounded border-slate-300 text-purple-600"
+                      />
+                      <span>Tự động liên kết Ràng buộc cứng H2</span>
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-purple-600" />
+                      <span>Chia đều cho 3 thành viên trong nhóm</span>
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-purple-600" />
+                      <span>Ước lượng thời gian nguyên tử (2 - 5 giờ)</span>
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-purple-600" />
+                      <span>Cho phép xem lại trước khi chốt nạp</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STAGE 2: PREVIEW & CUSTOMIZE BEFORE CONFIRMING */}
+            {aiStage === "preview" && (
+              <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-600 bg-purple-50/70 p-2.5 rounded-xl border border-purple-200">
+                  <span className="font-semibold text-purple-900">
+                    AI đã phân rã thành công {aiPreviewTasks.length} task nguyên tử:
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Huynh có thể chỉnh sửa tên, người làm hoặc số giờ trước khi nạp
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {aiPreviewTasks.map((pt, idx) => (
+                    <div
+                      key={pt.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 shadow-2xs space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="font-mono text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                            #{pt.code}
+                          </span>
+                          <input
+                            type="text"
+                            value={pt.title}
+                            onChange={(e) => {
+                              const updated = [...aiPreviewTasks];
+                              updated[idx].title = e.target.value;
+                              setAiPreviewTasks(updated);
+                            }}
+                            className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 focus:border-purple-500 focus:outline-hidden"
+                          />
+                        </div>
+                        {pt.dependsOn && (
+                          <span className="text-[10px] font-medium text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                            H2 Phụ thuộc Task #{idx}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2.5 text-xs">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block mb-0.5">Phụ trách:</span>
+                          <select
+                            value={pt.assignee.name}
+                            onChange={(e) => {
+                              const updated = [...aiPreviewTasks];
+                              const name = e.target.value;
+                              updated[idx].assignee = {
+                                name,
+                                avatar: name === "Minh Anh" ? "MA" : name === "Quốc Huy" ? "QH" : "HL",
+                                role: name === "Minh Anh" ? "Team Lead" : name === "Quốc Huy" ? "Backend Dev" : "QA & AI Ops",
+                              };
+                              setAiPreviewTasks(updated);
+                            }}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                          >
+                            <option value="Minh Anh">Minh Anh (Lead)</option>
+                            <option value="Quốc Huy">Quốc Huy (Backend)</option>
+                            <option value="Hoàng Long">Hoàng Long (QA)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-400 block mb-0.5">Story Points:</span>
+                          <select
+                            value={pt.points}
+                            onChange={(e) => {
+                              const updated = [...aiPreviewTasks];
+                              updated[idx].points = Number(e.target.value);
+                              setAiPreviewTasks(updated);
+                            }}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                          >
+                            <option value={2}>2 Points</option>
+                            <option value={3}>3 Points</option>
+                            <option value={5}>5 Points</option>
+                            <option value={8}>8 Points</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-400 block mb-0.5">Thời lượng (giờ):</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={pt.estimateHours}
+                            onChange={(e) => {
+                              const updated = [...aiPreviewTasks];
+                              updated[idx].estimateHours = Number(e.target.value);
+                              setAiPreviewTasks(updated);
+                            }}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Modal Footer */}
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+              {aiStage === "preview" ? (
+                <>
+                  <button
+                    onClick={() => setAiStage("input")}
+                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <span>⬅️ Chỉnh sửa lại đầu vào</span>
+                  </button>
+                  <button
+                    onClick={confirmAiTasks}
+                    className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>Xác nhận nạp {aiPreviewTasks.length} thẻ vào Backlog</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setAiModalOpen(false)}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    disabled={aiGenerating || !aiFeatureName.trim()}
+                    onClick={handleGenerateWbs}
+                    className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {aiGenerating ? (
+                      <>
+                        <Sparkles size={14} className="animate-spin" />
+                        <span>Đang phân rã WBS...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bot size={14} />
+                        <span>Phân rã & Xem trước (Preview)</span>
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
