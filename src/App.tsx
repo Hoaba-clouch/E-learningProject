@@ -10,6 +10,7 @@ import StudentProfile from "./screens/StudentProfile";
 import AdminDashboard from "./screens/AdminDashboard";
 import InstructorPanel from "./screens/InstructorPanel";
 import DesktopMascotPet from "./components/DesktopMascotPet";
+import KanbanBoard from "./screens/KanbanBoard";
 
 export type Screen =
   | "login"
@@ -20,7 +21,8 @@ export type Screen =
   | "xp-shop"
   | "profile"
   | "admin"
-  | "instructor";
+  | "instructor"
+  | "kanban";
 
 export type Role = "student" | "admin" | "instructor";
 export type Theme = "light" | "dark";
@@ -133,6 +135,7 @@ export default function App() {
       );
       case "admin": return <AdminDashboard />;
       case "instructor": return <InstructorPanel />;
+      case "kanban": return <KanbanBoard />;
       default: return <StudentDashboard avatarStyle={avatarStyle} skillMapSkin={skillMapSkin} badgeFrame={badgeFrame} onNavigate={setScreen} />;
     }
   };

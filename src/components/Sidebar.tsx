@@ -3,6 +3,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ChevronRight,
+  Columns3,
   GitFork,
   GraduationCap,
   LayoutDashboard,
@@ -38,6 +39,7 @@ interface NavItem {
 
 const items: NavItem[] = [
   { id: "student-dashboard", label: "Tổng quan", icon: <LayoutDashboard size={17} />, roles: ["student"] },
+  { id: "kanban", label: "Dự án & Kanban", icon: <Columns3 size={17} />, roles: ["student", "instructor"] },
   { id: "profile", label: "Hồ sơ", icon: <UserRound size={17} />, roles: ["student"] },
   { id: "workspace", label: "Không gian học", icon: <BookOpen size={17} />, roles: ["student"] },
   { id: "reels", label: "Tech Reels", icon: <Play size={17} />, roles: ["student"] },
