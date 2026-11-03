@@ -900,6 +900,11 @@ export default function KanbanBoard() {
     setDraggingTaskId(taskId);
   };
 
+  const handleDragEnd = () => {
+    setDraggingTaskId(null);
+    setDragOverCol(null);
+  };
+
   const handleDragOver = (e: React.DragEvent, colId: ColumnId) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -910,13 +915,19 @@ export default function KanbanBoard() {
 
   const handleDragLeave = (e: React.DragEvent, colId: ColumnId) => {
     e.preventDefault();
-    if (dragOverCol === colId) {
-      setDragOverCol(null);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
+      if (dragOverCol === colId) {
+        setDragOverCol(null);
+      }
     }
   };
 
   const handleDrop = (e: React.DragEvent, colId: ColumnId) => {
     e.preventDefault();
+    e.stopPropagation();
     const taskId = e.dataTransfer.getData("text/plain") || draggingTaskId;
     setDraggingTaskId(null);
     setDragOverCol(null);
@@ -1524,7 +1535,7 @@ export default function KanbanBoard() {
                 </div>
 
                 {/* Tasks Container */}
-                <div className="flex flex-col gap-2 overflow-y-auto pr-0.5">
+                <div onDragOver={(e) => handleDragOver(e, col.id)} onDrop={(e) => handleDrop(e, col.id)} className="flex flex-col gap-2 overflow-y-auto pr-0.5 min-h-[80px]">
                   {colTasks.length === 0 && isDraggingOver && (
                     <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-blue-400 bg-blue-50/60 py-6 text-center">
                       <p className="text-xs font-semibold text-blue-600">Thả thẻ vào đây</p>
@@ -1549,6 +1560,9 @@ export default function KanbanBoard() {
                         key={task.id}
                         draggable={true}
                         onDragStart={(e) => handleDragStart(e, task.id)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => handleDragOver(e, col.id)}
+                        onDrop={(e) => handleDrop(e, col.id)}
                         onClick={() => setSelectedTask(task)}
                         className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl border bg-white p-3.5 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md ${
                           isDragging
