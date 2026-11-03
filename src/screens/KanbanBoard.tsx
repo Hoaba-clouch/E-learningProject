@@ -1381,8 +1381,15 @@ export default function KanbanBoard() {
                               size={13}
                               className="text-slate-300 group-hover:text-slate-500"
                             />
-                            <span className="font-mono text-[10px] font-bold text-slate-600">
+                            <span className="font-mono text-[10px] font-bold text-slate-600 flex items-center gap-1">
                               #{task.code}
+                              {isLocked && parentTask && (
+                                <Lock
+                                  size={11}
+                                  className="text-rose-500 shrink-0"
+                                  title={`Chờ #${parentTask.code} (${parentTask.assignee.name})`}
+                                />
+                              )}
                             </span>
                             <span
                               className={`rounded-md border px-1.5 py-0.2 text-[10px] font-semibold ${task.epicColor}`}
@@ -1397,12 +1404,12 @@ export default function KanbanBoard() {
                               <span
                                 className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
                                   task.moscow === "must"
-                                    ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                    ? "bg-rose-50 text-rose-600"
                                     : task.moscow === "should"
-                                    ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                    ? "bg-amber-50 text-amber-700"
                                     : task.moscow === "could"
-                                    ? "bg-sky-50 text-sky-700 border border-sky-200"
-                                    : "bg-slate-50 text-slate-600 border border-slate-200"
+                                    ? "bg-sky-50 text-sky-600"
+                                    : "bg-slate-100 text-slate-500"
                                 }`}
                                 title={`Phân loại MoSCoW: ${task.moscow.toUpperCase()} HAVE`}
                               >
@@ -1433,13 +1440,7 @@ export default function KanbanBoard() {
                           {task.title}
                         </h3>
 
-                        {/* Only show blocked dependency warning when actually locked */}
-                        {task.dependsOn && parentTask && isLocked && (
-                          <div className="mb-2 flex items-center gap-1 rounded bg-rose-50 border border-rose-200/80 px-2 py-0.5 text-[10px] font-medium text-rose-700">
-                            <Lock size={10} className="shrink-0" />
-                            <span className="truncate">Chờ #{parentTask.code} ({parentTask.assignee.name})</span>
-                          </div>
-                        )}
+
 
                         {/* Clean Minimalist Footer */}
                         <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
@@ -1458,6 +1459,15 @@ export default function KanbanBoard() {
 
                           {/* Subtle micro badges: Checklist, DoD, Due Date */}
                           <div className="flex items-center gap-2 text-slate-400 text-[10px] shrink-0">
+                            {task.dependsOn && parentTask && isLocked && (
+                              <span
+                                className="flex items-center gap-0.5 text-[10px] text-rose-500 font-medium"
+                                title={`Chờ #${parentTask.code} (${parentTask.assignee.name})`}
+                              >
+                                <Lock size={10} />
+                                <span>#{parentTask.code}</span>
+                              </span>
+                            )}
                             {totalChecklist > 0 && (
                               <span
                                 className={`flex items-center gap-0.5 font-medium ${
