@@ -44,7 +44,27 @@ import {
   PlayCircle,
   ChevronsLeft,
   ChevronsRight,
+  AlertCircle,
+  AlertTriangle,
+  Award,
+  Check,
+  CheckCircle,
+  Copy,
+  Cpu,
+  Layers,
+  Lightbulb,
+  RefreshCw,
+  ShieldCheck,
+  Terminal,
+  XCircle,
 } from "lucide-react";
+import {
+  submitCodeToSandbox,
+  askSocraticTutor,
+  openSocraticHint,
+  type SubmissionResult,
+  type HintResponse,
+} from "../api";
 import type { ChatSkin, MentorMascot } from "../App";
 
 interface LearningWorkspaceProps {
@@ -345,6 +365,83 @@ const mentorConfig: Record<MentorMascot, { name: string; mark: string; mode: str
   sylph: { name: "Sylph", mark: "SP", mode: "kawaii / tiên", hint: "Để tiên gió nâng đỡ tư duy OOP của huynh.", emoji: "🧚", color: "bg-teal-500" },
 };
 
+const starterCodeSnippets: Record<"python" | "java" | "cpp", string> = {
+  python: `from collections import deque
+
+class PageTracker:
+    """
+    CodeMind Campus - Bounded Page Tracker (Python 3.12)
+    Đặc tả:
+      - Dung lượng bộ đệm tối đa 3 trang gần nhất (FIFO).
+      - Ràng buộc biên: Tuyệt đối bỏ qua chuỗi rỗng "" hoặc khoảng trắng "   ".
+    """
+    def __init__(self, maxlen: int = 3):
+        self.history = deque(maxlen=maxlen)
+
+    def visit(self, page: str) -> None:
+        # TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng trước khi append!
+        # Ví dụ: if not page or not page.strip(): return
+        self.history.append(page)
+
+    def get_history(self) -> list:
+        return list(self.history)
+`,
+  java: `import java.util.*;
+
+public class PageTracker {
+    /*
+     * CodeMind Campus - Bounded Page Tracker (Java 21)
+     * Đặc tả: Dung lượng tối đa 3 trang gần nhất theo nguyên tắc FIFO.
+     * Ràng buộc biên: Bỏ qua chuỗi rỗng "" hoặc null hoặc chỉ toàn dấu cách.
+     */
+    private Deque<String> history = new ArrayDeque<>();
+    private final int maxlen = 3;
+
+    public void visit(String page) {
+        // TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng trước khi thêm!
+        // Ví dụ: if (page == null || page.trim().isEmpty()) return;
+        if (history.size() >= maxlen) {
+            history.pollFirst();
+        }
+        history.addLast(page);
+    }
+
+    public List<String> getHistory() {
+        return new ArrayList<>(history);
+    }
+}
+`,
+  cpp: `#include <iostream>
+#include <deque>
+#include <string>
+#include <vector>
+
+class PageTracker {
+    /*
+     * CodeMind Campus - Bounded Page Tracker (C++ 20)
+     * Đặc tả: Bounded Deque dung lượng tối đa 3 trang (FIFO).
+     */
+private:
+    std::deque<std::string> history;
+    size_t maxlen = 3;
+
+public:
+    void visit(const std::string& page) {
+        // TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng!
+        // Ví dụ: if (page.empty() || page.find_first_not_of(" \\t") == std::string::npos) return;
+        if (history.size() >= maxlen) {
+            history.pop_front();
+        }
+        history.push_back(page);
+    }
+
+    std::vector<std::string> get_history() const {
+        return std::vector<std::string>(history.begin(), history.end());
+    }
+};
+`,
+};
+
 export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWorkspaceProps) {
   const [tab, setTab] = useState<Tab>("lecture");
   const [view, setView] = useState<WorkspaceView>("lesson");
@@ -373,11 +470,23 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
   const [audioProgress, setAudioProgress] = useState(0.38);
   const [audioSpeed, setAudioSpeed] = useState("1x");
   const audioIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Code Lab state
-  const [codeValue, setCodeValue] = useState(`class Animal {\n  void speak() {\n    System.out.println("...");\n  }\n}\n\nclass Dog extends Animal {\n  @Override\n  void speak() {\n    System.out.println("Woof!");\n  }\n}\n\nclass Main {\n  public static void main(String[] args) {\n    Animal pet = new Dog();\n    pet.speak(); // runtime dispatch\n  }\n}`);
-  const [consoleOutput, setConsoleOutput] = useState<string[]>(["Ready. Press \"Run\" to execute."]);
-  const [aiReviewLines, setAiReviewLines] = useState<string[]>([]);
-  const [aiReviewLoading, setAiReviewLoading] = useState(false);
+  // Code Lab state - Industrial 3-Pane Runner
+  const [selectedLanguage, setSelectedLanguage] = useState<"python" | "java" | "cpp">("python");
+  const [codeValue, setCodeValue] = useState<string>(starterCodeSnippets.python);
+  const [consoleOutput, setConsoleOutput] = useState<string[]>([
+    "Sẵn sàng thực thi. Nhấn \"Chạy Sandbox\" (Ctrl + Enter) để biên dịch & kiểm thử cô lập.",
+  ]);
+  const [isRunningSandbox, setIsRunningSandbox] = useState<boolean>(false);
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+  const [selectedTestCaseId, setSelectedTestCaseId] = useState<number>(5);
+  const [activeCodePaneTab, setActiveCodePaneTab] = useState<"tests" | "hints" | "console">("tests");
+  const [unlockedHints, setUnlockedHints] = useState<Record<number, HintResponse>>({});
+  const [loadingHintLevel, setLoadingHintLevel] = useState<number | null>(null);
+  const [showSelfCorrectionCert, setShowSelfCorrectionCert] = useState<boolean>(false);
+  const [hasFailedBefore, setHasFailedBefore] = useState<boolean>(false);
+  const [copiedSha, setCopiedSha] = useState<boolean>(false);
+  const [showProblemSpec, setShowProblemSpec] = useState<boolean>(true);
+  const [isAskingAi, setIsAskingAi] = useState<boolean>(false);
   const [message, setMessage] = useState("");
   const [nodes, setNodes, onNodesChange] = useNodesState(initialMindmapNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialMindmapEdges);
@@ -470,33 +579,100 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
     setQuizTimer(30); setTimerRunning(true);
   };
 
-  const runCode = () => {
-    setConsoleOutput(["$ javac Main.java", "$ java Main", "Woof!", "", "Process finished with exit code 0"]);
-    window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success", text: "Code chạy thành công rồi huynh! 🎉" } }));
+  const handleLanguageChange = (lang: "python" | "java" | "cpp") => {
+    setSelectedLanguage(lang);
+    setCodeValue(starterCodeSnippets[lang]);
+    setSubmissionResult(null);
+    setSelectedTestCaseId(5);
   };
 
-  const runAiReview = () => {
-    setAiReviewLoading(true);
-    setAiReviewLines([]);
-    const lines = [
-      "✅ Đặt tên class đúng PascalCase — tốt!",
-      "✅ Dùng @Override annotation — tốt!",
-      "⚠️  speak() trong Animal nên dùng abstract hoặc có body rõ hơn.",
-      "💡 Gợi ý: thêm field tên động vật để cá nhân hóa output.",
-      "💡 Nên thêm JavaDoc cho từng method để đảm bảo code sạch.",
-      "📊 Điểm Code sạch ước lượng: 78 / 100",
-    ];
-    let i = 0;
-    const id = setInterval(() => {
-      setAiReviewLines((prev) => [...prev, lines[i]]);
-      i++;
-      if (i >= lines.length) {
-        clearInterval(id);
-        setAiReviewLoading(false);
-        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success", text: "AI đã chấm điểm xong! 78/100 điểm sạch!" } }));
-      }
-    }, 420);
+  const resetStarterCode = () => {
+    setCodeValue(starterCodeSnippets[selectedLanguage]);
+    setSubmissionResult(null);
   };
+
+  const runSandbox = async () => {
+    setIsRunningSandbox(true);
+    setConsoleOutput((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] 🚀 $ docker-sandbox run --runtime=runc --lang=${selectedLanguage}`,
+      `[${new Date().toLocaleTimeString()}] 🔒 Cô lập bộ nhớ (128MB Limit), kích hoạt Seccomp Profile không mạng...`,
+      `[${new Date().toLocaleTimeString()}] ⚙️ Thực thi 5 ca kiểm thử biên (Edge Test Suite)...`,
+    ]);
+
+    try {
+      const res = await submitCodeToSandbox(codeValue, selectedLanguage);
+      setSubmissionResult(res);
+
+      const logs = res.test_cases.map((tc) =>
+        tc.status === "passed"
+          ? `  ✔ [PASSED] Test ${tc.id}: ${tc.title} (${tc.duration_ms}ms, ${tc.memory_mb}MB)`
+          : `  ❌ [FAILED] Test ${tc.id} [EDGE CASE]: ${tc.title} (${tc.duration_ms}ms) -> ${tc.failure_reason || "Lỗi logic biên"}`
+      );
+
+      setConsoleOutput((prev) => [
+        ...prev,
+        ...logs,
+        `[${new Date().toLocaleTimeString()}] 🏁 Tổng kết: ${res.passed_count}/${res.total_count} Passed. Container: ${res.container_id}`,
+      ]);
+
+      if (res.passed_count === 5) {
+        if (hasFailedBefore) {
+          setShowSelfCorrectionCert(true);
+        }
+        window.dispatchEvent(
+          new CustomEvent("pet-state-change", {
+            detail: { state: "success", text: "Tuyệt đỉnh! Huynh đã vượt qua toàn bộ 5/5 ca kiểm thử biên! 🎉" },
+          })
+        );
+      } else {
+        setHasFailedBefore(true);
+        setSelectedTestCaseId(5);
+        setActiveCodePaneTab("tests");
+        window.dispatchEvent(
+          new CustomEvent("pet-state-change", {
+            detail: { state: "error", text: "Ca kiểm thử biên số 5 chưa đạt! Xem chi tiết tại tab Test hoặc mở Gợi ý nhé!" },
+          })
+        );
+      }
+    } catch (err) {
+      console.error("Sandbox execution error:", err);
+    } finally {
+      setIsRunningSandbox(false);
+    }
+  };
+
+  const handleUnlockHint = async (level: number) => {
+    if (unlockedHints[level]) return;
+    setLoadingHintLevel(level);
+    try {
+      const hint = await openSocraticHint("session-1", level);
+      setUnlockedHints((prev) => ({ ...prev, [level]: hint }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingHintLevel(null);
+    }
+  };
+
+  const handleCopySha = (sha: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(sha);
+    }
+    setCopiedSha(true);
+    setTimeout(() => setCopiedSha(false), 2000);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && tab === "code") {
+        e.preventDefault();
+        runSandbox();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [tab, codeValue, selectedLanguage, hasFailedBefore]);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -545,16 +721,34 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
     setSubmitted(false);
   };
 
-  const sendMessage = (text = message) => {
+  const sendMessage = async (text = message) => {
     if (!text.trim()) return;
-    setMessages((current) => [...current, { from: "user", text }]);
+    const userMsg = text.trim();
+    setMessages((current) => [...current, { from: "user", text: userMsg }]);
     setMessage("");
-    window.setTimeout(() => {
+    setIsAskingAi(true);
+
+    try {
+      const res = await askSocraticTutor(userMsg, codeValue);
       setMessages((current) => [
         ...current,
-        { from: "mentor", text: "Gợi ý tiếp: hãy viết ví dụ Vehicle -> Car, rồi override phương thức move()." },
+        {
+          from: "mentor",
+          text: res.assistant_message,
+          isGuardrail: res.policy_decision === "refuse_answer",
+        },
       ]);
-    }, 600);
+    } catch {
+      setMessages((current) => [
+        ...current,
+        {
+          from: "mentor",
+          text: "Hãy quan sát kỹ phương thức visit() và kiểm tra điều kiện chuỗi rỗng trước khi append.",
+        },
+      ]);
+    } finally {
+      setIsAskingAi(false);
+    }
   };
 
   return (
