@@ -563,11 +563,195 @@ const granularityOptions = [
   { value: 6, label: "6 Thẻ (Module lớn: Phân rã sâu từng component, ~24-30h)" },
 ];
 
+// ── Animated Number Counter Component ───────────────────────────────────────
+function AnimatedNumber({
+  value,
+  duration = 900,
+  trigger = true,
+  decimals = 0,
+  suffix = "",
+}: {
+  value: number;
+  duration?: number;
+  trigger?: boolean;
+  decimals?: number;
+  suffix?: string;
+}) {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    if (!trigger) {
+      setDisplayValue(0);
+      return;
+    }
+    let startTime: number | null = null;
+    let animId: number;
+
+    const step = (time: number) => {
+      if (!startTime) startTime = time;
+      const progress = Math.min((time - startTime) / duration, 1);
+      // easeOutCubic
+      const ease = 1 - Math.pow(1 - progress, 3);
+      const current = ease * value;
+      setDisplayValue(decimals > 0 ? parseFloat(current.toFixed(decimals)) : Math.round(current));
+      if (progress < 1) {
+        animId = requestAnimationFrame(step);
+      }
+    };
+
+    setDisplayValue(0);
+    animId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animId);
+  }, [value, duration, trigger, decimals]);
+
+  return <>{decimals > 0 ? displayValue.toFixed(decimals) : displayValue}{suffix}</>;
+}
+
+// ── Member Contribution Donut Chart Component (Anti-Freerider) ─────────────
+function ContributionDonutChart({
+  teamMembers,
+  contribution,
+  totalDonePoints,
+  trigger = true,
+}: {
+  teamMembers: TeamMember[];
+  contribution: Record<string, { member: TeamMember; donePts: number; totalPts: number; tasksDone: number; percent: number }>;
+  totalDonePoints: number;
+  trigger?: boolean;
+}) {
+  const r = 44;
+  const circumference = 2 * Math.PI * r; // ~276.46
+
+  const memberColors: Record<string, string> = {
+    "Minh Anh": "#2563eb",   // Blue
+    "Quốc Huy": "#f59e0b",   // Amber
+    "Hoàng Long": "#10b981", // Emerald
+  };
+
+  let cumulativePercent = 0;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-5">
+      {/* SVG Donut */}
+      <div className="relative shrink-0 flex items-center justify-center">
+        <svg width="124" height="124" viewBox="0 0 124 124" className="rotate-[-90deg]">
+          {/* Background Track */}
+          <circle
+            cx="62"
+            cy="62"
+            r={r}
+            fill="none"
+            stroke="#f1f5f9"
+            strokeWidth="12"
+          />
+
+          {/* Slices */}
+          {teamMembers.map((member) => {
+            const stat = contribution[member.name];
+            const pct = stat ? stat.percent : 0;
+            if (pct <= 0) return null;
+
+            const strokeDash = (pct / 100) * circumference;
+            const strokeOffset = -(cumulativePercent / 100) * circumference;
+            cumulativePercent += pct;
+
+            const color = memberColors[member.name] || "#6366f1";
+
+            return (
+              <circle
+                key={member.id}
+                cx="62"
+                cy="62"
+                r={r}
+                fill="none"
+                stroke={color}
+                strokeWidth="12"
+                strokeDasharray={`${trigger ? strokeDash : 0} ${circumference}`}
+                strokeDashoffset={strokeOffset}
+                strokeLinecap="round"
+                style={{
+                  transition: "stroke-dasharray 1.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                }}
+              />
+            );
+          })}
+        </svg>
+
+        {/* Center Text inside Donut */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none pointer-events-none">
+          <span className="text-sm font-black text-slate-900 leading-tight">
+            <AnimatedNumber value={totalDonePoints} trigger={trigger} suffix=" pts" />
+          </span>
+          <span className="text-[10px] text-slate-400 font-medium">Hoàn thành</span>
+        </div>
+      </div>
+
+      {/* Legend & Breakdown */}
+      <div className="flex-1 w-full space-y-2">
+        {teamMembers.map((member) => {
+          const stat = contribution[member.name];
+          const color = memberColors[member.name] || "#6366f1";
+          const pct = stat ? stat.percent : 0;
+          const done = stat ? stat.donePts : 0;
+          const tasks = stat ? stat.tasksDone : 0;
+
+          return (
+            <div key={member.id} className="rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-xs">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                  <span className="font-bold text-slate-800 truncate">{member.name}</span>
+                  <span className="text-[10px] text-slate-400 truncate">({member.role})</span>
+                </div>
+                <span className="font-mono font-bold text-slate-700 text-[11px] shrink-0">
+                  <AnimatedNumber value={done} trigger={trigger} suffix=" pts" /> (
+                  <AnimatedNumber value={pct} trigger={trigger} suffix="%" />)
+                </span>
+              </div>
+
+              {/* Mini progress bar */}
+              <div className="h-1.5 w-full bg-slate-200/70 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000 ease-out"
+                  style={{
+                    backgroundColor: color,
+                    width: trigger ? `${pct}%` : "0%",
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between mt-1 text-[10px]">
+                <span className="text-slate-400">{tasks} tasks đã Done</span>
+                <span className={pct >= 50 ? "text-blue-600 font-semibold" : "text-amber-600 font-medium"}>
+                  {pct >= 50 ? "Lead đóng góp (A+)" : pct > 0 ? "Đang tiến độ" : "Cần phân bổ task"}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function KanbanBoard() {
   const [tasks, setTasks] = useState<KanbanTask[]>(initialTasks);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialMembers);
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
   const [activeTab, setActiveTab] = useState<TabView>("board");
+  const [analyticsAnimTrigger, setAnalyticsAnimTrigger] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === "analytics") {
+      setAnalyticsAnimTrigger(false);
+      const timer = setTimeout(() => {
+        setAnalyticsAnimTrigger(true);
+      }, 50);
+      return () => clearTimeout(timer);
+    } else {
+      setAnalyticsAnimTrigger(false);
+    }
+  }, [activeTab]);
 
   // Dynamic Member Management Modal
   const [memberModalOpen, setMemberModalOpen] = useState(false);
@@ -1162,23 +1346,23 @@ export default function KanbanBoard() {
                 Tiến độ Sprint 1:
               </span>
               <span className="text-xs font-mono font-bold text-slate-800">
-                {sprintStats.donePoints} / {sprintStats.totalPoints} Story Points ({sprintStats.percentDone}%)
+                <AnimatedNumber value={sprintStats.donePoints} trigger={analyticsAnimTrigger || activeTab === "analytics"} /> / {sprintStats.totalPoints} Story Points (<AnimatedNumber value={sprintStats.percentDone} trigger={analyticsAnimTrigger || activeTab === "analytics"} suffix="%" />)
               </span>
             </div>
-            {/* Progress Bar */}
+            {/* Progress Bar with smooth animation */}
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 flex">
               <div
-                style={{ width: `${sprintStats.percentDone}%` }}
-                className="bg-emerald-500 transition-all duration-500"
+                style={{ width: (analyticsAnimTrigger || activeTab === "analytics") ? `${sprintStats.percentDone}%` : "0%" }}
+                className="bg-emerald-500 transition-all duration-1000 ease-out"
                 title={`Đã hoàn thành: ${sprintStats.donePoints} pts`}
               />
               <div
                 style={{
-                  width: `${Math.round(
+                  width: (analyticsAnimTrigger || activeTab === "analytics") ? `${Math.round(
                     (sprintStats.inProgPoints / (sprintStats.totalPoints || 1)) * 100
-                  )}%`,
+                  )}%` : "0%",
                 }}
-                className="bg-amber-400 transition-all duration-500"
+                className="bg-amber-400 transition-all duration-1000 ease-out"
                 title={`Đang thực hiện: ${sprintStats.inProgPoints} pts`}
               />
             </div>
@@ -1682,7 +1866,9 @@ export default function KanbanBoard() {
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
               <span className="text-[11px] font-medium text-slate-400 block mb-1">Tổng Điểm Sprint:</span>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-black text-slate-900">{sprintStats.totalPoints}</span>
+                <span className="text-2xl font-black text-slate-900">
+                  <AnimatedNumber value={sprintStats.totalPoints} trigger={analyticsAnimTrigger} />
+                </span>
                 <span className="text-xs font-bold text-slate-500">Story Points</span>
               </div>
               <p className="text-[10px] text-slate-400 mt-1">Cam kết 9 tasks trong Sprint 1</p>
@@ -1691,11 +1877,18 @@ export default function KanbanBoard() {
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-xs">
               <span className="text-[11px] font-medium text-emerald-700 block mb-1">Đã Hoàn Thành (Done):</span>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-black text-emerald-700">{sprintStats.donePoints}</span>
-                <span className="text-xs font-bold text-emerald-600">pts ({sprintStats.percentDone}%)</span>
+                <span className="text-2xl font-black text-emerald-700">
+                  <AnimatedNumber value={sprintStats.donePoints} trigger={analyticsAnimTrigger} />
+                </span>
+                <span className="text-xs font-bold text-emerald-600">
+                  pts (<AnimatedNumber value={sprintStats.percentDone} trigger={analyticsAnimTrigger} suffix="%" />)
+                </span>
               </div>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200/60">
-                <div style={{ width: `${sprintStats.percentDone}%` }} className="h-full bg-emerald-500" />
+                <div
+                  style={{ width: analyticsAnimTrigger ? `${sprintStats.percentDone}%` : "0%" }}
+                  className="h-full bg-emerald-500 transition-all duration-1000 ease-out"
+                />
               </div>
             </div>
 
@@ -1703,7 +1896,7 @@ export default function KanbanBoard() {
               <span className="text-[11px] font-medium text-rose-700 block mb-1">Điểm Còn Lại (Remaining):</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-rose-600">
-                  {sprintStats.totalPoints - sprintStats.donePoints}
+                  <AnimatedNumber value={sprintStats.totalPoints - sprintStats.donePoints} trigger={analyticsAnimTrigger} />
                 </span>
                 <span className="text-xs font-bold text-rose-600">pts (Đường Đỏ)</span>
               </div>
@@ -1713,7 +1906,9 @@ export default function KanbanBoard() {
             <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 shadow-xs">
               <span className="text-[11px] font-medium text-amber-700 block mb-1">Vận tốc Sprint (Velocity):</span>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-black text-amber-800">36.5</span>
+                <span className="text-2xl font-black text-amber-800">
+                  <AnimatedNumber value={36.5} decimals={1} trigger={analyticsAnimTrigger} />
+                </span>
                 <span className="text-xs font-bold text-amber-700">SP / Sprint</span>
               </div>
               <p className="text-[10px] text-amber-700/80 mt-1">Đạt năng suất chuẩn công nghiệp</p>
@@ -1811,13 +2006,17 @@ export default function KanbanBoard() {
                     strokeDasharray="5 5"
                   />
 
-                  {/* ACTUAL RED LINE AREA FILL */}
+                  {/* ACTUAL RED LINE AREA FILL with smooth fade-in */}
                   <polygon
                     points="45,33 116,33 188,53 260,73 331,113 403,125 403,185 45,185"
                     fill="url(#refinedRedGradient)"
+                    style={{
+                      opacity: analyticsAnimTrigger ? 1 : 0,
+                      transition: "opacity 1.2s ease-in-out",
+                    }}
                   />
 
-                  {/* ACTUAL RED LINE (ĐƯỜNG LINE MÀU ĐỎ SẮC NÉT) */}
+                  {/* ACTUAL RED LINE (ĐƯỜNG LINE MÀU ĐỎ SẮC NÉT VẼ ĐỘNG TỪ 0) */}
                   <polyline
                     fill="none"
                     stroke="#ef4444"
@@ -1825,6 +2024,11 @@ export default function KanbanBoard() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     points="45,33 116,33 188,53 260,73 331,113 403,125"
+                    strokeDasharray="600"
+                    strokeDashoffset={analyticsAnimTrigger ? "0" : "600"}
+                    style={{
+                      transition: "stroke-dashoffset 1.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                    }}
                   />
 
                   {/* Refined Points with Sleek Micro-Pills (38p, 38p, 33p, 28p, 18p, 15p) */}
@@ -1894,55 +2098,38 @@ export default function KanbanBoard() {
               </div>
             </div>
 
-            {/* 2. VELOCITY CHART & EPIC DISTRIBUTION (5 cols) */}
+            {/* 2. MEMBER CONTRIBUTION DONUT CHART & EPIC DISTRIBUTION (5 cols) */}
             <div className="lg:col-span-5 space-y-4">
-              {/* Velocity Chart */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <BarChart3 size={15} className="text-blue-600" />
-                    Biểu đồ Vận tốc Nhóm (Velocity qua 4 Sprints)
-                  </h3>
-                  <span className="text-[10px] font-mono font-bold text-slate-500">Session 07</span>
+              {/* Biểu đồ tròn Donut Chart Đóng góp Thành viên (Anti-Freerider) */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-3.5">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <PieChart size={14} className="text-blue-600" />
+                      Tỉ lệ Đóng góp Thành viên (Anti-Freerider)
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Biểu đồ tròn đo lường mức độ gánh team & hoàn thành Story Points
+                    </p>
+                  </div>
+                  <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                    Donut Chart
+                  </span>
                 </div>
 
-                <div className="space-y-3">
-                  {[
-                    { name: "Sprint 1 (Kiến trúc & SRS)", committed: 38, done: 23, active: true },
-                    { name: "Sprint 2 (LMS & Sandbox)", committed: 35, done: 0, active: false },
-                    { name: "Sprint 3 (Kanban & WBS)", committed: 40, done: 0, active: false },
-                    { name: "Sprint 4 (Defense & Báo cáo)", committed: 32, done: 0, active: false },
-                  ].map((s, i) => (
-                    <div key={i} className="text-xs">
-                      <div className="flex justify-between text-[11px] font-medium mb-1">
-                        <span className={s.active ? "font-bold text-blue-700" : "text-slate-600"}>
-                          {s.name}
-                        </span>
-                        <span className="font-mono text-slate-500">
-                          {s.active ? `${s.done} / ${s.committed} pts` : `${s.committed} pts dự kiến`}
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 flex">
-                        <div
-                          style={{ width: `${Math.round((s.done / s.committed) * 100)}%` }}
-                          className="bg-emerald-500"
-                        />
-                        <div
-                          style={{
-                            width: `${Math.round(((s.committed - s.done) / s.committed) * 100)}%`,
-                          }}
-                          className={s.active ? "bg-rose-400" : "bg-slate-200"}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {/* Donut Chart with animated SVG segments & legend */}
+                <ContributionDonutChart
+                  teamMembers={teamMembers}
+                  contribution={contribution}
+                  totalDonePoints={sprintStats.donePoints}
+                  trigger={analyticsAnimTrigger}
+                />
               </div>
 
               {/* Epic Distribution */}
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
                 <h4 className="text-xs font-bold text-slate-900 mb-2.5 flex items-center gap-1.5">
-                  <PieChart size={14} className="text-purple-600" />
+                  <Layers size={14} className="text-purple-600" />
                   Cơ cấu Phân bổ Story Points theo Epic
                 </h4>
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
@@ -2014,15 +2201,15 @@ export default function KanbanBoard() {
                     <div className="space-y-2 border-t border-slate-200/70 pt-2.5 text-[11px]">
                       <div className="flex justify-between">
                         <span className="text-slate-500">Tỷ lệ đóng góp:</span>
-                        <span className="font-bold text-slate-900">{percent}%</span>
+                        <span className="font-bold text-slate-900"><AnimatedNumber value={percent} trigger={analyticsAnimTrigger} suffix="%" /></span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Story Points hoàn thành:</span>
-                        <span className="font-mono font-bold text-slate-900">{points} pts</span>
+                        <span className="font-mono font-bold text-slate-900"><AnimatedNumber value={points} trigger={analyticsAnimTrigger} suffix=" pts" /></span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Số task đã Done:</span>
-                        <span className="font-bold text-slate-900">{doneCount} tasks</span>
+                        <span className="font-bold text-slate-900"><AnimatedNumber value={doneCount} trigger={analyticsAnimTrigger} suffix=" tasks" /></span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Đánh giá hệ thống:</span>
