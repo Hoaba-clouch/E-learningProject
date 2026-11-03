@@ -17,6 +17,7 @@ import {
   Cpu,
   Database,
   ExternalLink,
+  FileSpreadsheet,
   FileText,
   Filter,
   Flame,
@@ -60,6 +61,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import TaskCsvManagerModal from "../components/TaskCsvManagerModal";
 
 export type ColumnId = "backlog" | "ready" | "in-progress" | "review" | "done";
 export type Priority = "low" | "medium" | "high";
@@ -125,6 +127,11 @@ export interface KanbanTask {
   };
   commentsCount: number;
   attachmentsCount: number;
+  projectDay?: number;
+  sprintNumber?: number;
+  submissionRequirement?: "Không" | "Link" | "File" | "Link hoặc file";
+  submissionUrl?: string;
+  isBonus?: boolean;
 }
 
 export const defaultDoD = (isDone = false): ChecklistItem[] => [
@@ -755,6 +762,12 @@ export default function KanbanBoard() {
 
   // Dynamic Member Management Modal
   const [memberModalOpen, setMemberModalOpen] = useState(false);
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+
+  const handleImportCsvTasks = (newTasks: KanbanTask[]) => {
+    setTasks((prev) => [...prev, ...newTasks]);
+    setActiveTab("board");
+  };
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("Frontend Developer");
 
@@ -1344,6 +1357,16 @@ export default function KanbanBoard() {
               <Sparkles size={15} className="text-purple-600 animate-pulse" />
               <span>AI Phân rã WBS</span>
             </button>
+
+            {/* Teacher CSV Format Button */}
+            <button
+              onClick={() => setCsvModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2 text-xs font-semibold text-emerald-800 shadow-2xs hover:bg-emerald-100/80 transition"
+              title="Nhập / Xuất task chuẩn định dạng 8 cột của Thầy Phước"
+            >
+              <FileSpreadsheet size={15} className="text-emerald-700" />
+              <span>CSV Thầy Phước</span>
+            </button>
           </div>
         </div>
 
@@ -1598,6 +1621,11 @@ export default function KanbanBoard() {
 
                           <div className="flex items-center gap-1">
                             {/* MoSCoW Badge */}
+                            {task.isBonus && (
+                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 border border-emerald-200 uppercase">
+                                Bonus
+                              </span>
+                            )}
                             {task.moscow && (
                               <span
                                 className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
@@ -2820,6 +2848,11 @@ export default function KanbanBoard() {
                 <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono font-bold text-slate-700">
                   {selectedTask.points} Story Points
                 </span>
+                {selectedTask.isBonus && (
+                  <span className="rounded bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-xs font-bold uppercase">
+                    Bonus
+                  </span>
+                )}
               </div>
               <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600">
                 <X size={18} />
@@ -3069,6 +3102,15 @@ export default function KanbanBoard() {
           </div>
         </div>
       )}
+
+      {/* Teacher Standard CSV Manager Modal */}
+      <TaskCsvManagerModal
+        isOpen={csvModalOpen}
+        onClose={() => setCsvModalOpen(false)}
+        tasks={tasks}
+        teamMembers={teamMembers}
+        onImportTasks={handleImportCsvTasks}
+      />
 
       {/* ── ENGINEERING & AGILE SCRUM HANDBOOK MODAL (RIKKEI EDUCATION SYLLABUS) ────────── */}
       {handbookOpen && (
