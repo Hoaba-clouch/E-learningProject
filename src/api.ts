@@ -284,7 +284,7 @@ export async function askSocraticTutor(
         id: `ai-${Date.now()}`,
         policy_decision: "refuse_answer",
         assistant_message:
-          "🛡️ [Socratic Guardrail Từ Chối]: Hệ thống không cung cấp mã nguồn giải sẵn để đảm bảo tư duy phản biện. Gợi ý sư phạm: Hãy nhìn vào Ca kiểm thử số 5 (Edge Case). Khi người dùng truyền vào chuỗi rỗng \"\" hoặc khoảng trắng, hàm của bạn có đang vô tư gọi append() vào hàng đợi không?",
+          "[Socratic Guardrail]: Hệ thống không cung cấp mã nguồn giải sẵn để đảm bảo tư duy phản biện. Gợi ý sư phạm: Hãy nhìn vào Ca kiểm thử số 5 (Edge Case). Khi người dùng truyền vào chuỗi rỗng \"\" hoặc khoảng trắng, hàm của bạn có đang vô tư gọi append() vào hàng đợi không?",
       };
     }
 
@@ -293,7 +293,7 @@ export async function askSocraticTutor(
         id: `ai-${Date.now()}`,
         policy_decision: "question",
         assistant_message:
-          "💡 Trong bài toán Bounded Page Tracker, một trang hợp lệ phải có độ dài > 0 và không chỉ toàn dấu cách trắng. Bạn cần đặt một câu lệnh điều kiện (Guard Clause) ở vị trí nào trong hàm visit() để ngăn chặn dữ liệu rác trước khi đẩy vào deque?",
+          "Trong bài toán Bounded Page Tracker, một trang hợp lệ phải có độ dài > 0 và không chỉ toàn dấu cách trắng. Bạn cần đặt một câu lệnh điều kiện (Guard Clause) ở vị trí nào trong hàm visit() để ngăn chặn dữ liệu rác trước khi đẩy vào deque?",
       };
     }
 
@@ -302,7 +302,7 @@ export async function askSocraticTutor(
         id: `ai-${Date.now()}`,
         policy_decision: "question",
         assistant_message:
-          "📌 Cấu trúc deque(maxlen=3) tự động pop phần tử bên trái (cũ nhất) khi thêm phần tử mới ở bên phải với độ phức tạp O(1). Tuy nhiên, deque không có cơ chế tự lọc giá trị rỗng — trách nhiệm lọc thuộc về logic kiểm soát đầu vào của bạn. Bạn đã thử kiểm tra 'if not page:' chưa?",
+          "Cấu trúc deque(maxlen=3) tự động pop phần tử bên trái (cũ nhất) khi thêm phần tử mới ở bên phải với độ phức tạp O(1). Tuy nhiên, deque không có cơ chế tự lọc giá trị rỗng — trách nhiệm lọc thuộc về logic kiểm soát đầu vào của bạn. Bạn đã thử kiểm tra 'if not page:' chưa?",
       };
     }
 

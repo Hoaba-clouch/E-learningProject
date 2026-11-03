@@ -45,6 +45,9 @@ import {
   ChevronsLeft,
   ChevronsRight,
   AlertCircle,
+  ArrowRight,
+  Keyboard,
+  TestTube2,
   AlertTriangle,
   Award,
   Check,
@@ -513,7 +516,7 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
       window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "coding" } }));
     } else if (tab === "quiz") {
       if (quizDone) {
-        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success", text: "Huynh hoàn thành quiz xuất sắc! 🎉" } }));
+        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success", text: "Huynh hoàn thành quiz xuất sắc!" } }));
       } else if (!timerRunning && quizTimer === 30) {
         window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "idle", text: "Bấm Bắt đầu để thử thách Quiz nhé!" } }));
       } else {
@@ -595,8 +598,8 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
     setIsRunningSandbox(true);
     setConsoleOutput((prev) => [
       ...prev,
-      `[${new Date().toLocaleTimeString()}] 🚀 $ docker-sandbox run --runtime=runc --lang=${selectedLanguage}`,
-      `[${new Date().toLocaleTimeString()}] 🔒 Cô lập bộ nhớ (128MB Limit), kích hoạt Seccomp Profile không mạng...`,
+      `[${new Date().toLocaleTimeString()}] [EXEC] $ docker-sandbox run --runtime=runc --lang=${selectedLanguage}`,
+      `[${new Date().toLocaleTimeString()}] [SEC] Cô lập bộ nhớ (128MB Limit), kích hoạt Seccomp Profile không mạng...`,
       `[${new Date().toLocaleTimeString()}] ⚙️ Thực thi 5 ca kiểm thử biên (Edge Test Suite)...`,
     ]);
 
@@ -613,7 +616,7 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
       setConsoleOutput((prev) => [
         ...prev,
         ...logs,
-        `[${new Date().toLocaleTimeString()}] 🏁 Tổng kết: ${res.passed_count}/${res.total_count} Passed. Container: ${res.container_id}`,
+        `[${new Date().toLocaleTimeString()}] [DONE] Tổng kết: ${res.passed_count}/${res.total_count} Passed. Container: ${res.container_id}`,
       ]);
 
       if (res.passed_count === 5) {
@@ -622,7 +625,7 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
         }
         window.dispatchEvent(
           new CustomEvent("pet-state-change", {
-            detail: { state: "success", text: "Tuyệt đỉnh! Huynh đã vượt qua toàn bộ 5/5 ca kiểm thử biên! 🎉" },
+            detail: { state: "success", text: "Tuyệt đỉnh! Huynh đã vượt qua toàn bộ 5/5 ca kiểm thử biên!" },
           })
         );
       } else {
@@ -1330,7 +1333,7 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
                           selectedOption === currentQuestion.correct ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
                         }`}>
                           {selectedOption === currentQuestion.correct
-                            ? `✅ Chính xác! +${quizStreak >= 2 ? 30 : 15} XP${quizStreak >= 2 ? " (Streak ×2 🔥)" : ""}`
+                            ? `Chính xác! +${quizStreak >= 2 ? 30 : 15} XP${quizStreak >= 2 ? " (Streak ×2)" : ""}`
                             : "❌ Chưa đúng rồi — đừng nản nhé!"}
                         </span>
                       </div>
@@ -1631,7 +1634,7 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
 
                   {/* Editor footer */}
                   <div className="border-t border-slate-800/80 bg-slate-900/90 px-4 py-1.5 text-[10px] text-slate-400 flex items-center justify-between shrink-0">
-                    <span>💡 Phím tắt: <strong className="text-slate-300">Ctrl + Enter</strong> để thực thi sandbox</span>
+                    <span className="flex items-center gap-1.5"><Keyboard size={13} className="text-slate-400" /><span>Phím tắt: <strong className="text-slate-300">Ctrl + Enter</strong> để thực thi sandbox</span></span>
                     <span className="text-emerald-400 font-mono">Isolated Container Ready</span>
                   </div>
                 </div>
@@ -1642,37 +1645,40 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
                   <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 shrink-0">
                     <button
                       onClick={() => setActiveCodePaneTab("tests")}
-                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer ${
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
                         activeCodePaneTab === "tests"
                           ? "border-blue-600 text-blue-600 dark:text-blue-400 font-bold bg-white dark:bg-slate-950"
                           : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                       }`}
                     >
-                      🧪 Test Cases ({submissionResult ? `${submissionResult.passed_count}/${submissionResult.total_count}` : "5"})
+                      <TestTube2 size={13} className="shrink-0" />
+                      <span>Test Cases ({submissionResult ? `${submissionResult.passed_count}/${submissionResult.total_count}` : "5"})</span>
                     </button>
                     <button
                       onClick={() => setActiveCodePaneTab("hints")}
-                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer ${
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
                         activeCodePaneTab === "hints"
                           ? "border-purple-600 text-purple-600 dark:text-purple-400 font-bold bg-white dark:bg-slate-950"
                           : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                       }`}
                     >
-                      💡 Gợi ý AI ({Object.keys(unlockedHints).length}/3)
+                      <Lightbulb size={13} className="shrink-0" />
+                      <span>Gợi ý Socratic ({Object.keys(unlockedHints).length}/3)</span>
                     </button>
                     <button
                       onClick={() => setActiveCodePaneTab("console")}
-                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer ${
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
                         activeCodePaneTab === "console"
                           ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-slate-950"
                           : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                       }`}
                     >
-                      📜 Console
+                      <Terminal size={13} className="shrink-0" />
+                      <span>Console</span>
                     </button>
                   </div>
 
-                  {/* TAB CONTENT: 🧪 TEST CASES */}
+                  {/* TAB CONTENT: TEST CASES */}
                   {activeCodePaneTab === "tests" && (
                     <div className="flex-1 overflow-y-auto p-3 space-y-3">
                       {!submissionResult ? (
@@ -1803,9 +1809,10 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
                                           <div>{tc.failure_reason}</div>
                                           <button
                                             onClick={() => setActiveCodePaneTab("hints")}
-                                            className="mt-1 font-bold text-purple-700 dark:text-purple-300 underline cursor-pointer"
+                                            className="mt-1 font-bold text-purple-700 dark:text-purple-300 hover:underline cursor-pointer flex items-center gap-1"
                                           >
-                                            💡 Xem hướng dẫn Socratic để khắc phục →
+                                            <span>Xem hướng dẫn Socratic để khắc phục</span>
+                                            <ArrowRight size={12} />
                                           </button>
                                         </div>
                                       )}
@@ -1820,7 +1827,7 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
                     </div>
                   )}
 
-                  {/* TAB CONTENT: 💡 SOCRATIC HINTS LADDER */}
+                  {/* TAB CONTENT: SOCRATIC HINTS LADDER */}
                   {activeCodePaneTab === "hints" && (
                     <div className="flex-1 overflow-y-auto p-3 space-y-3">
                       {/* Academic Guardrail Policy Banner */}
@@ -1900,7 +1907,7 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
                     </div>
                   )}
 
-                  {/* TAB CONTENT: 📜 CONSOLE TERMINAL */}
+                  {/* TAB CONTENT: CONSOLE TERMINAL */}
                   {activeCodePaneTab === "console" && (
                     <div className="flex-1 flex flex-col bg-slate-950 text-slate-300 font-mono text-xs overflow-hidden">
                       <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2 shrink-0">
