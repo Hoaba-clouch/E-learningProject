@@ -1429,109 +1429,62 @@ export default function KanbanBoard() {
                         </div>
 
                         {/* Title */}
-                        <h3 className="mb-1 text-xs font-bold leading-snug text-slate-900 group-hover:text-blue-600">
+                        <h3 className="mb-1.5 text-xs font-bold leading-snug text-slate-900 group-hover:text-blue-600">
                           {task.title}
                         </h3>
 
-                        {/* Description */}
-                        <p className="mb-2 line-clamp-2 text-[11px] leading-relaxed text-slate-500">
-                          {task.description}
-                        </p>
-
-                        {/* User Story preview if exists */}
-                        {task.userStory && (
-                          <div className="mb-2 rounded-lg bg-slate-50/90 border border-slate-100 p-1.5 text-[10px] text-slate-600 leading-snug line-clamp-2">
-                            <span className="font-bold text-slate-700">Story:</span> Là <span className="text-blue-600 font-semibold">{task.userStory.role}</span>, tôi muốn {task.userStory.want}...
+                        {/* Only show blocked dependency warning when actually locked */}
+                        {task.dependsOn && parentTask && isLocked && (
+                          <div className="mb-2 flex items-center gap-1 rounded bg-rose-50 border border-rose-200/80 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                            <Lock size={10} className="shrink-0" />
+                            <span className="truncate">Chờ #{parentTask.code} ({parentTask.assignee.name})</span>
                           </div>
                         )}
 
-                        {/* Hard Constraint H2 Dependency Status */}
-                        {task.dependsOn && parentTask && (
-                          <div
-                            className={`mb-2.5 flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-medium transition ${
-                              isLocked
-                                ? "border-rose-200 bg-rose-50/80 text-rose-700"
-                                : "border-emerald-200 bg-emerald-50/80 text-emerald-700"
-                            }`}
-                          >
-                            {isLocked ? <Lock size={12} /> : <Unlock size={12} />}
-                            <span className="truncate">
-                              {isLocked ? "H2 Chờ: #" : "H2 Khả dụng: #"}{parentTask.code} ({parentTask.assignee.name})
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Deliverable Badge (PR, Commit, Test) */}
-                        {task.deliverable && (
-                          <div className="mb-2.5 flex items-center gap-1.5 rounded-lg border border-indigo-100 bg-indigo-50/70 px-2 py-1 text-[10px] font-medium text-indigo-700">
-                            {task.deliverable.type === "pr" ? (
-                              <GitPullRequest size={12} />
-                            ) : task.deliverable.type === "commit" ? (
-                              <GitCommit size={12} />
-                            ) : (
-                              <CheckCircle2 size={12} />
-                            )}
-                            <span className="truncate">{task.deliverable.label}</span>
-                          </div>
-                        )}
-
-                        {/* Checklist progress if exists */}
-                        {totalChecklist > 0 && (
-                          <div className="mb-2 flex items-center gap-2 text-[10px] text-slate-500">
-                            <ListChecks size={12} className={doneChecklist === totalChecklist ? "text-emerald-600" : "text-slate-400"} />
-                            <span>
-                              {doneChecklist}/{totalChecklist} checklist
-                            </span>
-                            <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100">
-                              <div
-                                style={{
-                                  width: `${Math.round((doneChecklist / totalChecklist) * 100)}%`,
-                                }}
-                                className="h-full bg-blue-500"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* DoD Compliance Badge */}
-                        {task.definitionOfDone && task.definitionOfDone.length > 0 && (
-                          <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-600">
-                            <ShieldCheck
-                              size={12}
-                              className={
-                                task.definitionOfDone.filter((d) => d.done).length === task.definitionOfDone.length
-                                  ? "text-emerald-600"
-                                  : "text-slate-400"
-                              }
-                            />
-                            <span className="font-medium">
-                              DoD: {task.definitionOfDone.filter((d) => d.done).length}/{task.definitionOfDone.length} tiêu chuẩn
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Footer: Assignee & Due Date */}
+                        {/* Clean Minimalist Footer */}
                         <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
-                          <div className="flex items-center gap-1.5">
+                          {/* Assignee */}
+                          <div className="flex items-center gap-1.5 min-w-0">
                             <span
-                              className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white shadow-xs ${avatarColor}`}
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black text-white shadow-xs ${avatarColor}`}
                               title={`${task.assignee.name} (${task.assignee.role})`}
                             >
                               {task.assignee.avatar}
                             </span>
-                            <span className="font-medium text-slate-700 text-[11px]">
+                            <span className="truncate font-medium text-slate-600 text-[11px]">
                               {task.assignee.name}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 text-slate-400 text-[10px]">
-                            {task.commentsCount > 0 && (
-                              <span className="flex items-center gap-0.5">
-                                <MessageSquare size={11} />
-                                {task.commentsCount}
+                          {/* Subtle micro badges: Checklist, DoD, Due Date */}
+                          <div className="flex items-center gap-2 text-slate-400 text-[10px] shrink-0">
+                            {totalChecklist > 0 && (
+                              <span
+                                className={`flex items-center gap-0.5 font-medium ${
+                                  doneChecklist === totalChecklist ? "text-emerald-600 font-bold" : "text-slate-400"
+                                }`}
+                                title={`Checklist: ${doneChecklist}/${totalChecklist}`}
+                              >
+                                <ListChecks size={11} />
+                                <span>{doneChecklist}/{totalChecklist}</span>
                               </span>
                             )}
-                            <span className="flex items-center gap-1 text-slate-500">
+
+                            {task.definitionOfDone && task.definitionOfDone.length > 0 && (
+                              <span
+                                className={`flex items-center gap-0.5 font-medium ${
+                                  task.definitionOfDone.filter((d) => d.done).length === task.definitionOfDone.length
+                                    ? "text-emerald-600 font-bold"
+                                    : "text-slate-400"
+                                }`}
+                                title={`DoD: ${task.definitionOfDone.filter((d) => d.done).length}/${task.definitionOfDone.length} tiêu chuẩn`}
+                              >
+                                <ShieldCheck size={11} />
+                                <span>{task.definitionOfDone.filter((d) => d.done).length}/{task.definitionOfDone.length}</span>
+                              </span>
+                            )}
+
+                            <span className="flex items-center gap-1 text-slate-400">
                               <Calendar size={11} />
                               {task.dueDate}
                             </span>
