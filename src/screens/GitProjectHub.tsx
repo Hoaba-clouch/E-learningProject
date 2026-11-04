@@ -40,6 +40,8 @@ import {
   AlertCircle,
   FileCheck,
   CheckCheck,
+  Search,
+  Filter,
 } from "lucide-react";
 
 // ─── Custom Group Container Node (for GitDiagram subsystems) ───────────────
@@ -1236,6 +1238,166 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
       },
     ],
   },
+  {
+    id: "pr-15",
+    prNumber: 15,
+    title: "feat(#TASK-48): Giao Diện Tech Reels Video Bài Giảng Ngắn & Tiến Trình Xem",
+    author: { name: "Quốc Huy", role: "Frontend / Fullstack", avatar: "QH", color: "#16a34a" },
+    sourceBranch: "feature/reels",
+    targetBranch: "develop",
+    status: "open",
+    createdAt: "04/11/2026 14:10",
+    summary: {
+      overview: "Màn hình lướt video ngắn Tech Reels dạng dọc với bộ đếm thời gian xem thực tế và tự động tích lũy điểm XP khi hoàn thành trên 80% thời lượng.",
+      keyPoints: [
+        "Tích hợp HTML5 Video API với cơ chế preload metadata tiết kiệm mạng.",
+        "Gửi heartbeat tracking tiến độ xem về Learning Analytics Engine.",
+        "CodeRabbit phát hiện nguy cơ rò rỉ bộ nhớ khi chuyển đổi video liên tục.",
+      ],
+      riskLevel: "low",
+      estimatedReviewTime: "3 phút",
+      totalAdditions: 210,
+      totalDeletions: 15,
+      filesCount: 2,
+    },
+    defenseQA: [
+      {
+        question: "Tại sao cần cleanup event listener timeupdate trong useEffect của React khi xem video?",
+        expectedAnswer: "Tránh retain reference của DOM node trong closures, ngăn ngừa rò rỉ bộ nhớ (memory leak) khi người dùng lướt qua hàng chục video liên tục.",
+        rubricHint: "Đánh giá hiểu biết về React Lifecycle & Resource Cleanup.",
+      },
+    ],
+    files: [
+      {
+        filename: "src/screens/TechReels.tsx",
+        status: "modified",
+        additions: 55,
+        deletions: 5,
+        lines: [
+          { type: "context", oldLineNumber: 40, newLineNumber: 40, content: "useEffect(() => {" },
+          { type: "context", oldLineNumber: 41, newLineNumber: 41, content: "  const video = videoRef.current;" },
+          { type: "deletion", oldLineNumber: 42, content: "  if (video) video.addEventListener('timeupdate', handleTimeUpdate);" },
+          { type: "addition", newLineNumber: 42, content: "  if (video) video.addEventListener('timeupdate', handleTimeUpdate);" },
+          { type: "context", oldLineNumber: 43, newLineNumber: 43, content: "}, [currentVideoIndex]);" },
+        ],
+        aiComment: {
+          id: "cr-fix-pr15",
+          type: "warning",
+          line: 42,
+          title: "Thiếu Hàm Cleanup Trong useEffect (Nguy cơ Memory Leak)",
+          message: "Lắng nghe sự kiện 'timeupdate' được thêm vào video element nhưng không có hàm return cleanup trong useEffect. Khi sinh viên cuộn video nhanh, hàng chục listeners cũ sẽ tích tụ trong bộ nhớ.",
+          suggestedFix: "return () => {\n    if (video) video.removeEventListener('timeupdate', handleTimeUpdate);\n  };",
+          explanation: "Trả về hàm dọn dẹp để gỡ bỏ listener ngay khi component unmount hoặc dependency thay đổi.",
+        },
+      },
+    ],
+  },
+  {
+    id: "pr-18",
+    prNumber: 18,
+    title: "feat(#TASK-56): Cửa Hàng Đổi Thưởng XP Shop & Kiểm Soát Giao Dịch Điểm",
+    author: { name: "Hoàng Long", role: "Backend / Tester", avatar: "HL", color: "#9333ea" },
+    sourceBranch: "feature/gamification",
+    targetBranch: "develop",
+    status: "open",
+    createdAt: "04/11/2026 15:30",
+    summary: {
+      overview: "API cho phép sinh viên dùng điểm kinh nghiệm (XP) đổi lấy các vật phẩm huy hiệu, khung avatar và mascot đồng hành trong hệ thống.",
+      keyPoints: [
+        "Kiểm tra số dư XP hiện tại của người dùng trước khi duyệt giao dịch.",
+        "Ghi log vào bảng AuditLog phục vụ kiểm định minh bạch điểm thưởng.",
+        "CodeRabbit phát hiện 1 nguy cơ Race Condition (Double-Spending XP).",
+      ],
+      riskLevel: "medium",
+      estimatedReviewTime: "4 phút",
+      totalAdditions: 175,
+      totalDeletions: 20,
+      filesCount: 3,
+    },
+    defenseQA: [
+      {
+        question: "Làm thế nào để ngăn chặn gian lận điểm thưởng khi sinh viên spam click nút đổi quà?",
+        expectedAnswer: "Sử dụng Pessimistic Locking với query with_for_update() hoặc cập nhật có điều kiện atomic: UPDATE users SET xp = xp - cost WHERE xp >= cost.",
+        rubricHint: "Kiểm tra kiến thức Transaction Concurrency & Race Condition Prevention.",
+      },
+    ],
+    files: [
+      {
+        filename: "backend/app/api/v1/endpoints/shop.py",
+        status: "modified",
+        additions: 40,
+        deletions: 6,
+        lines: [
+          { type: "context", oldLineNumber: 62, newLineNumber: 62, content: "def purchase_item(user_id: int, item_id: int, db: Session):" },
+          { type: "deletion", oldLineNumber: 63, content: "    user = db.query(User).filter(User.id == user_id).first()" },
+          { type: "addition", newLineNumber: 63, content: "    user = db.query(User).filter(User.id == user_id).first()" },
+          { type: "context", oldLineNumber: 64, newLineNumber: 64, content: "    if user.xp < item.price: raise HTTPException(400, 'Không đủ điểm')" },
+          { type: "context", oldLineNumber: 65, newLineNumber: 65, content: "    user.xp -= item.price" },
+        ],
+        aiComment: {
+          id: "cr-fix-pr18",
+          type: "security",
+          line: 63,
+          title: "Lỗ Hổng Race Condition: Thiếu Khóa Bi Quan (Double-Spending)",
+          message: "Truy vấn đọc điểm không sử dụng khóa bi quan. Nếu sinh viên gửi 2 request song song trong vài mili-giây, cả 2 request đều thấy đủ điểm và trừ song song dẫn tới âm điểm hoặc mua đồ miễn phí.",
+          suggestedFix: "user = db.query(User).filter(User.id == user_id).with_for_update().first()",
+          explanation: "Khóa dòng người dùng với SELECT FOR UPDATE đảm bảo chỉ 1 giao dịch được thực hiện tại một thời điểm.",
+        },
+      },
+    ],
+  },
+  {
+    id: "pr-21",
+    prNumber: 21,
+    title: "fix(#TASK-62): Khắc Phục Lỗi Cache Lịch Sử Hội Thoại Gia Sư AI Khi Đổi Bài Học",
+    author: { name: "Minh Anh", role: "Team Leader / Architect", avatar: "MA", color: "#2563eb" },
+    sourceBranch: "feature/ai-tutor",
+    targetBranch: "develop",
+    status: "approved",
+    createdAt: "04/11/2026 16:00",
+    summary: {
+      overview: "Sửa lỗi panel gia sư AI giữ nguyên các tin nhắn của bài học trước khi học viên chuyển sang bài thực hành mới trên sơ đồ kỹ năng.",
+      keyPoints: [
+        "Khởi tạo lại trạng thái chat theo `lessonId` hiện hành.",
+        "Bổ sung cache invalidation cho các đoạn mã gợi ý Socratic.",
+      ],
+      riskLevel: "low",
+      estimatedReviewTime: "2 phút",
+      totalAdditions: 35,
+      totalDeletions: 5,
+      filesCount: 1,
+    },
+    defenseQA: [
+      {
+        question: "Cách tối ưu nhất trong React để reset sạch sẽ state của component con khi ID thay đổi là gì?",
+        expectedAnswer: "Sử dụng thuộc tính key={lesson.id} trên component con để React tự động unmount instance cũ và tạo mới một cách tự nhiên.",
+        rubricHint: "Đánh giá sự hiểu biết về Reconciliation và Key Prop của React.",
+      },
+    ],
+    files: [
+      {
+        filename: "src/screens/LearningWorkspace.tsx",
+        status: "modified",
+        additions: 15,
+        deletions: 2,
+        lines: [
+          { type: "context", oldLineNumber: 110, newLineNumber: 110, content: "return (" },
+          { type: "deletion", oldLineNumber: 111, content: "  <SocraticTutorChat lesson={activeLesson} />" },
+          { type: "addition", newLineNumber: 111, content: "  <SocraticTutorChat key={activeLesson.id} lesson={activeLesson} />" },
+          { type: "context", oldLineNumber: 112, newLineNumber: 112, content: ");" },
+        ],
+        aiComment: {
+          id: "cr-fix-pr21",
+          type: "suggestion",
+          line: 111,
+          title: "Sử Dụng key Prop Để Tự Động Re-mount Component",
+          message: "Code đã áp dụng đúng chuẩn React Declarative: thêm key={activeLesson.id} giúp React tự động khởi tạo lại toàn bộ state của khung chat mà không cần viết các hàm useEffect xóa state thủ công.",
+          suggestedFix: "<SocraticTutorChat key={activeLesson.id} lesson={activeLesson} />",
+          explanation: "Tận dụng cơ chế Reconciliation của React để cô lập hoàn toàn state giữa các bài học khác nhau.",
+        },
+      },
+    ],
+  },
 ];
 
 export default function GitProjectHub() {
@@ -1247,10 +1409,31 @@ export default function GitProjectHub() {
   const [selectedPrId, setSelectedPrId] = useState<string>("pr-04");
   const [prSubTab, setPrSubTab] = useState<"walkthrough" | "diff" | "defense">("diff");
   const [appliedFixes, setAppliedFixes] = useState<Record<string, boolean>>({});
+  const [prStatusFilter, setPrStatusFilter] = useState<"all" | "open" | "approved" | "merged">("open");
+  const [prMemberFilter, setPrMemberFilter] = useState<string>("all");
+  const [prSearchQuery, setPrSearchQuery] = useState<string>("");
+
+  const filteredPRs = useMemo(() => {
+    return MOCK_PULL_REQUESTS.filter((pr) => {
+      const matchStatus = prStatusFilter === "all" || pr.status === prStatusFilter;
+      const matchMember = prMemberFilter === "all" || pr.author.name === prMemberFilter;
+      const q = prSearchQuery.toLowerCase().trim();
+      const matchQuery =
+        !q ||
+        pr.title.toLowerCase().includes(q) ||
+        pr.author.name.toLowerCase().includes(q) ||
+        pr.sourceBranch.toLowerCase().includes(q) ||
+        `pr #${pr.prNumber}`.includes(q);
+      return matchStatus && matchMember && matchQuery;
+    });
+  }, [prStatusFilter, prMemberFilter, prSearchQuery]);
 
   const selectedPR = useMemo(() => {
+    const foundInFiltered = filteredPRs.find((pr) => pr.id === selectedPrId);
+    if (foundInFiltered) return foundInFiltered;
+    if (filteredPRs.length > 0) return filteredPRs[0];
     return MOCK_PULL_REQUESTS.find((pr) => pr.id === selectedPrId) || MOCK_PULL_REQUESTS[0];
-  }, [selectedPrId]);
+  }, [selectedPrId, filteredPRs]);
 
   const handleApplyFix = (commentId: string) => {
     setAppliedFixes((prev) => ({ ...prev, [commentId]: true }));
@@ -1531,70 +1714,215 @@ export default function GitProjectHub() {
       {/* MODE 0: CODERABBIT AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) */}
       {viewMode === "coderabbit" && (
         <div className="space-y-5">
-          {/* Top PR Selectors Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {MOCK_PULL_REQUESTS.map((pr) => {
-              const isSelected = pr.id === selectedPR.id;
-              const hasApplied = Object.keys(appliedFixes).some((id) =>
-                pr.files.some((f) => f.aiComment?.id === id)
-              );
-              return (
+          {/* PR Filter & Search Toolbar */}
+          <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-xs space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Status Filter Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
                 <button
-                  key={pr.id}
-                  onClick={() => setSelectedPrId(pr.id)}
-                  className={`text-left p-4 rounded-xl border transition-all relative ${
-                    isSelected
-                      ? "bg-white border-blue-500 shadow-md ring-2 ring-blue-500/20"
-                      : "bg-white/70 border-slate-200 hover:border-slate-300 hover:bg-white"
+                  onClick={() => setPrStatusFilter("open")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
+                    prStatusFilter === "open"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
-                  <div className="flex items-center justify-between text-xs mb-2">
-                    <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                      PR #{pr.prNumber}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                        pr.status === "merged"
-                          ? "bg-purple-50 text-purple-700 border border-purple-200"
-                          : pr.status === "approved"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border border-amber-200"
-                      }`}
-                    >
-                      {pr.status === "merged" ? "Đã Merge" : pr.status === "approved" ? "Đã Duyệt" : "Đang Review"}
-                    </span>
-                  </div>
-
-                  <h3 className="text-xs font-bold text-slate-900 line-clamp-2 leading-relaxed mb-2.5">
-                    {pr.title}
-                  </h3>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: pr.author.color }}
-                      >
-                        {pr.author.avatar}
-                      </span>
-                      <span className="font-medium text-slate-700">{pr.author.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1 font-mono text-[10px]">
-                      <span className="text-emerald-600 font-bold">+{pr.summary.totalAdditions}</span>
-                      <span className="text-rose-500 font-bold">-{pr.summary.totalDeletions}</span>
-                    </div>
-                  </div>
-
-                  {hasApplied && (
-                    <div className="mt-2 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
-                      <CheckCheck size={12} />
-                      Đã áp dụng bản sửa AI
-                    </div>
-                  )}
+                  <span className="w-2 h-2 rounded-full bg-amber-300" />
+                  Cần Review (Chưa Merge)
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
+                    {MOCK_PULL_REQUESTS.filter((p) => p.status === "open").length}
+                  </span>
                 </button>
-              );
-            })}
+
+                <button
+                  onClick={() => setPrStatusFilter("approved")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
+                    prStatusFilter === "approved"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-300" />
+                  Đã Duyệt
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
+                    {MOCK_PULL_REQUESTS.filter((p) => p.status === "approved").length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setPrStatusFilter("merged")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
+                    prStatusFilter === "merged"
+                      ? "bg-purple-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-purple-300" />
+                  Đã Merge
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
+                    {MOCK_PULL_REQUESTS.filter((p) => p.status === "merged").length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setPrStatusFilter("all")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
+                    prStatusFilter === "all"
+                      ? "bg-slate-800 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  }`}
+                >
+                  Tất cả ({MOCK_PULL_REQUESTS.length})
+                </button>
+              </div>
+
+              {/* Search & Author Filters */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative flex-1 sm:w-60">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Tìm theo task, PR, tiêu đề..."
+                    value={prSearchQuery}
+                    onChange={(e) => setPrSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/50"
+                  />
+                  {prSearchQuery && (
+                    <button
+                      onClick={() => setPrSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <Filter size={12} />
+                  </span>
+                  <select
+                    value={prMemberFilter}
+                    onChange={(e) => setPrMemberFilter(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="all">Tất cả thành viên</option>
+                    <option value="Minh Anh">Minh Anh</option>
+                    <option value="Quốc Huy">Quốc Huy</option>
+                    <option value="Hoàng Long">Hoàng Long</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub text info */}
+            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+              <span>
+                Hiển thị <strong>{filteredPRs.length}</strong> / {MOCK_PULL_REQUESTS.length} Pull Requests • Mặc định ưu tiên PR đang mở cần xử lý
+              </span>
+              {(prStatusFilter !== "open" || prMemberFilter !== "all" || prSearchQuery) && (
+                <button
+                  onClick={() => {
+                    setPrStatusFilter("open");
+                    setPrMemberFilter("all");
+                    setPrSearchQuery("");
+                  }}
+                  className="text-blue-600 hover:underline font-semibold"
+                >
+                  Đặt lại bộ lọc
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* PR List / Grid */}
+          {filteredPRs.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-2">
+              <Bot size={28} className="mx-auto text-slate-400" />
+              <div className="text-sm font-bold text-slate-800">Không tìm thấy Pull Request nào</div>
+              <p className="text-xs text-slate-500">
+                Thử thay đổi từ khóa tìm kiếm hoặc chuyển sang tab "Tất cả" để xem các PR đã merge.
+              </p>
+              <button
+                onClick={() => {
+                  setPrStatusFilter("all");
+                  setPrMemberFilter("all");
+                  setPrSearchQuery("");
+                }}
+                className="mt-2 text-xs font-bold text-blue-600 hover:underline"
+              >
+                Xem tất cả Pull Requests
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {filteredPRs.map((pr) => {
+                const isSelected = pr.id === selectedPR.id;
+                const hasApplied = Object.keys(appliedFixes).some((id) =>
+                  pr.files.some((f) => f.aiComment?.id === id)
+                );
+                return (
+                  <button
+                    key={pr.id}
+                    onClick={() => setSelectedPrId(pr.id)}
+                    className={`text-left p-4 rounded-xl border transition-all relative flex flex-col justify-between ${
+                      isSelected
+                        ? "bg-white border-blue-500 shadow-md ring-2 ring-blue-500/20"
+                        : "bg-white/80 border-slate-200 hover:border-slate-300 hover:bg-white shadow-xs"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-2">
+                        <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                          PR #{pr.prNumber}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                            pr.status === "merged"
+                              ? "bg-purple-50 text-purple-700 border border-purple-200"
+                              : pr.status === "approved"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-amber-50 text-amber-700 border border-amber-200"
+                          }`}
+                        >
+                          {pr.status === "merged" ? "Đã Merge" : pr.status === "approved" ? "Đã Duyệt" : "Đang Review"}
+                        </span>
+                      </div>
+
+                      <h3 className="text-xs font-bold text-slate-900 line-clamp-2 leading-relaxed mb-2.5">
+                        {pr.title}
+                      </h3>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: pr.author.color }}
+                          >
+                            {pr.author.avatar}
+                          </span>
+                          <span className="font-medium text-slate-700">{pr.author.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1 font-mono text-[10px]">
+                          <span className="text-emerald-600 font-bold">+{pr.summary.totalAdditions}</span>
+                          <span className="text-rose-500 font-bold">-{pr.summary.totalDeletions}</span>
+                        </div>
+                      </div>
+
+                      {hasApplied && (
+                        <div className="mt-2 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
+                          <CheckCheck size={12} />
+                          Đã áp dụng bản sửa AI
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Active PR Detail Card */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
