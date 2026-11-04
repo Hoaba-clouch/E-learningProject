@@ -56,9 +56,7 @@ import {
 } from "lucide-react";
 import {
   askSocraticTutor,
-  openSocraticHint,
   type SubmissionResult,
-  type HintResponse,
 } from "../api";
 import type { ChatSkin, MentorMascot } from "../App";
 
@@ -493,7 +491,6 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
   ]);
   const [isRunningSandbox, setIsRunningSandbox] = useState<boolean>(false);
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
-  const [unlockedHints, setUnlockedHints] = useState<Record<number, HintResponse>>({});
   const [showSelfCorrectionCert, setShowSelfCorrectionCert] = useState<boolean>(false);
   const [copiedSha, setCopiedSha] = useState<boolean>(false);
   const [isAskingAi, setIsAskingAi] = useState<boolean>(false);
@@ -593,7 +590,6 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
     setSelectedLanguage(lang);
     setCodeValue(starterCodeSnippets[lang]);
     setSubmissionResult(null);
-    setSelectedTestCaseId(5);
   };
 
   const resetStarterCode = () => {
@@ -641,7 +637,7 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [tab, codeValue, selectedLanguage, hasFailedBefore]);
+  }, [tab, codeValue, selectedLanguage]);
 
   const onConnect = useCallback(
     (connection: Connection) =>
