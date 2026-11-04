@@ -33,6 +33,13 @@ import {
   FileText,
   User,
   GitPullRequest,
+  Bot,
+  Wand2,
+  HelpCircle,
+  Code2,
+  AlertCircle,
+  FileCheck,
+  CheckCheck,
 } from "lucide-react";
 
 // ─── Custom Group Container Node (for GitDiagram subsystems) ───────────────
@@ -992,10 +999,262 @@ const GIT_COMMITS: GitCommitItem[] = [
   },
 ];
 
+// ─── CodeRabbit PR & AI Review Models (Nhánh 2.1) ───────────────────────────
+export interface DiffLine {
+  type: "context" | "addition" | "deletion";
+  oldLineNumber?: number;
+  newLineNumber?: number;
+  content: string;
+}
+
+export interface AiComment {
+  id: string;
+  type: "warning" | "security" | "suggestion";
+  line: number;
+  title: string;
+  message: string;
+  suggestedFix: string;
+  explanation: string;
+}
+
+export interface PRFile {
+  filename: string;
+  status: "modified" | "added";
+  additions: number;
+  deletions: number;
+  lines: DiffLine[];
+  aiComment?: AiComment;
+}
+
+export interface PullRequestItem {
+  id: string;
+  prNumber: number;
+  title: string;
+  author: { name: string; role: string; avatar: string; color: string };
+  sourceBranch: string;
+  targetBranch: string;
+  status: "open" | "approved" | "merged";
+  createdAt: string;
+  summary: {
+    overview: string;
+    keyPoints: string[];
+    riskLevel: "low" | "medium" | "high";
+    estimatedReviewTime: string;
+    totalAdditions: number;
+    totalDeletions: number;
+    filesCount: number;
+  };
+  defenseQA: {
+    question: string;
+    expectedAnswer: string;
+    rubricHint: string;
+  }[];
+  files: PRFile[];
+}
+
+export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
+  {
+    id: "pr-04",
+    prNumber: 4,
+    title: "feat(#TASK-14): Thiết kế CSDL 8 bảng 3NF & Ràng buộc Khóa ngoại SQLAlchemy",
+    author: { name: "Hoàng Long", role: "Backend / Tester", avatar: "HL", color: "#9333ea" },
+    sourceBranch: "feature/erd",
+    targetBranch: "develop",
+    status: "open",
+    createdAt: "04/11/2026 10:20",
+    summary: {
+      overview: "PR khởi tạo toàn bộ cấu trúc 8 bảng quan hệ chuẩn 3NF (Users, Tasks, Sprints, Submissions) và thiết lập quan hệ cascade delete giữa các thực thể cốt lõi.",
+      keyPoints: [
+        "Định nghĩa bảng Submissions với liên kết ForeignKey tới Users và Lessons.",
+        "Thiết lập enum trạng thái bài nộp (PENDING, PASSED, FAILED).",
+        "CodeRabbit phát hiện 1 cảnh báo hiệu năng & bảo mật truy vấn CSDL.",
+      ],
+      riskLevel: "medium",
+      estimatedReviewTime: "3 phút",
+      totalAdditions: 245,
+      totalDeletions: 12,
+      filesCount: 3,
+    },
+    defenseQA: [
+      {
+        question: "Tại sao cột user_id trong bảng Submissions bắt buộc phải có index=True?",
+        expectedAnswer: "Vì các truy vấn thống kê lịch sử nộp bài của sinh viên và tính điểm Sprint của Thầy Phước luôn lọc theo user_id. Có index giúp truy vấn đạt O(log N) thay vì full-table scan O(N).",
+        rubricHint: "Kiểm tra kiến thức tối ưu hóa truy vấn CSDL quan hệ.",
+      },
+      {
+        question: "Khi xóa một tài khoản sinh viên thử nghiệm, các bài nộp cũ xử lý ra sao?",
+        expectedAnswer: "Nhờ cấu hình ondelete='CASCADE', SQLAlchemy và SQLite sẽ tự động dọn dẹp các bản ghi con mồ côi, tránh vi phạm ràng buộc toàn vẹn dữ liệu.",
+        rubricHint: "Kiểm tra kiến thức ràng buộc khóa ngoại (Referential Integrity).",
+      },
+    ],
+    files: [
+      {
+        filename: "backend/app/models/submission.py",
+        status: "modified",
+        additions: 45,
+        deletions: 4,
+        lines: [
+          { type: "context", oldLineNumber: 34, newLineNumber: 34, content: '    __tablename__ = "submissions"' },
+          { type: "context", oldLineNumber: 35, newLineNumber: 35, content: "    id = Column(Integer, primary_key=True, index=True)" },
+          { type: "deletion", oldLineNumber: 36, content: '    # Bản cũ: Không index, không ràng buộc ondelete' },
+          { type: "deletion", oldLineNumber: 37, content: '    user_id = Column(Integer, ForeignKey("users.id"))' },
+          { type: "addition", newLineNumber: 36, content: '    # Cảnh báo CodeRabbit: Thiếu Index & ondelete' },
+          { type: "addition", newLineNumber: 37, content: '    user_id = Column(Integer, ForeignKey("users.id"))' },
+          { type: "context", oldLineNumber: 38, newLineNumber: 38, content: "    lesson_id = Column(Integer, ForeignKey('lessons.id'))" },
+          { type: "context", oldLineNumber: 39, newLineNumber: 39, content: "    code = Column(Text, nullable=False)" },
+          { type: "context", oldLineNumber: 40, newLineNumber: 40, content: "    status = Column(String(20), default='PENDING')" },
+        ],
+        aiComment: {
+          id: "cr-fix-pr4",
+          type: "warning",
+          line: 37,
+          title: "Thiếu Index trên Foreign Key & Nguy cơ Treo Truy Vấn Khi Nộp Bài Đông",
+          message: "Trường user_id là khóa ngoại thường xuyên được JOIN và WHERE trong báo cáo tiến độ Sprint của Giảng viên nhưng chưa được bật `index=True`. Ngoài ra thiếu `ondelete='CASCADE'` sẽ tạo bản ghi mồ côi khi sinh viên test bị xóa.",
+          suggestedFix: 'user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)',
+          explanation: "Bổ sung `index=True` giảm độ trễ truy vấn lọc theo sinh viên từ O(N) xuống O(log N) và `ondelete='CASCADE'` đảm bảo tính toàn vẹn 3NF.",
+        },
+      },
+    ],
+  },
+  {
+    id: "pr-07",
+    prNumber: 7,
+    title: "feat(#TASK-22): Tích hợp JWT Access Token, Bcrypt Hashing & Phân Quyền Giảng Viên",
+    author: { name: "Quốc Huy", role: "Frontend / Fullstack", avatar: "QH", color: "#16a34a" },
+    sourceBranch: "feature/auth",
+    targetBranch: "develop",
+    status: "approved",
+    createdAt: "04/11/2026 11:40",
+    summary: {
+      overview: "Triển khai cơ chế xác thực người dùng không trạng thái (Stateless Auth) sử dụng JSON Web Token với thuật toán mã hóa mật khẩu Bcrypt 12 rounds.",
+      keyPoints: [
+        "Hàm create_access_token tạo JWT kèm thời gian hết hạn ACCESS_TOKEN_EXPIRE_MINUTES.",
+        "Middleware phân quyền kiểm tra role ('student' | 'instructor' | 'admin').",
+        "CodeRabbit phát hiện 1 lỗ hổng bảo mật nghiêm trọng (Hardcoded Secret Key).",
+      ],
+      riskLevel: "high",
+      estimatedReviewTime: "5 phút",
+      totalAdditions: 185,
+      totalDeletions: 8,
+      filesCount: 2,
+    },
+    defenseQA: [
+      {
+        question: "Tại sao không nên lưu SECRET_KEY trực tiếp trong mã nguồn đẩy lên GitHub?",
+        expectedAnswer: "Bất kỳ ai đọc được repo công khai đều có thể dùng SECRET_KEY để tự tạo token giả mạo danh tính Giảng viên hoặc Admin nhằm thay đổi điểm số.",
+        rubricHint: "Đánh giá hiểu biết về bảo mật OWASP A02:2021 - Cryptographic Failures.",
+      },
+      {
+        question: "Cơ chế bảo vệ JWT trước việc bị đánh cắp trong mạng trường học là gì?",
+        expectedAnswer: "Luôn truyền qua kênh HTTPS, thiết lập thời gian hết hạn ngắn (60 phút), lưu token an toàn trong HttpOnly Cookie hoặc State bộ nhớ của Client.",
+        rubricHint: "Kiểm tra kiến thức Stateless Session & XSS/CSRF Prevention.",
+      },
+    ],
+    files: [
+      {
+        filename: "backend/app/core/security.py",
+        status: "modified",
+        additions: 60,
+        deletions: 6,
+        lines: [
+          { type: "context", oldLineNumber: 48, newLineNumber: 48, content: "from datetime import datetime, timedelta" },
+          { type: "context", oldLineNumber: 49, newLineNumber: 49, content: "from jose import jwt" },
+          { type: "deletion", oldLineNumber: 50, content: '# Nguy hiểm: Hardcoded secret key' },
+          { type: "deletion", oldLineNumber: 51, content: 'SECRET_KEY = "codemind-super-secret-key-12345"' },
+          { type: "addition", newLineNumber: 50, content: '# Cảnh báo CodeRabbit: Nguy cơ lộ chữ ký JWT' },
+          { type: "addition", newLineNumber: 51, content: 'SECRET_KEY = "codemind-super-secret-key-12345"' },
+          { type: "context", oldLineNumber: 52, newLineNumber: 52, content: 'ALGORITHM = "HS256"' },
+          { type: "context", oldLineNumber: 53, newLineNumber: 53, content: "ACCESS_TOKEN_EXPIRE_MINUTES = 60" },
+        ],
+        aiComment: {
+          id: "cr-fix-pr7",
+          type: "security",
+          line: 51,
+          title: "Lỗ Hổng Bảo Mật: Hardcoded SECRET_KEY Trong Mã Nguồn",
+          message: "SECRET_KEY đang được gán cứng chuỗi text trực tiếp trong file. Khi đẩy lên GitHub công khai, kẻ tấn công có thể giả mạo chữ ký JWT để leo quyền Admin hoặc Instructor mà không cần mật khẩu.",
+          suggestedFix: 'SECRET_KEY = os.getenv("JWT_SECRET_KEY") or secrets.token_hex(32)',
+          explanation: "Đọc khóa bảo mật từ biến môi trường .env và tự động sinh chuỗi cryptographic 256-bit an toàn làm fallback.",
+        },
+      },
+    ],
+  },
+  {
+    id: "pr-12",
+    prNumber: 12,
+    title: "feat(#TASK-35): Bộ Chấm Điểm Mã Nguồn Cách Ly Sandbox Docker & Giới Hạn Tài Nguyên",
+    author: { name: "Minh Anh", role: "Team Leader / Architect", avatar: "MA", color: "#2563eb" },
+    sourceBranch: "feature/sandbox",
+    targetBranch: "develop",
+    status: "merged",
+    createdAt: "04/11/2026 12:15",
+    summary: {
+      overview: "Xây dựng micro-service khởi tạo container Docker cách ly để chạy code sinh viên nộp, áp dụng cgroup giới hạn RAM 128MB, CPU 0.5 core và timeout 3.0s.",
+      keyPoints: [
+        "Container dùng 1 lần (ephemeral) tự hủy ngay sau khi trả kết quả.",
+        "Khóa toàn bộ Network access ra ngoài Internet trong lúc chạy code test.",
+        "CodeRabbit gợi ý 1 giải pháp bọc Context Manager ngăn rò rỉ bộ nhớ host.",
+      ],
+      riskLevel: "low",
+      estimatedReviewTime: "4 phút",
+      totalAdditions: 320,
+      totalDeletions: 45,
+      filesCount: 4,
+    },
+    defenseQA: [
+      {
+        question: "Làm thế nào để ngăn sinh viên viết mã độc fork-bomb làm sập máy chủ chấm bài?",
+        expectedAnswer: "Sử dụng cgroup của Docker giới hạn tối đa 64 tiến trình (pids-limit=64) kết hợp CPU quota và timeout cứng 3.0 giây tiêu diệt tiến trình.",
+        rubricHint: "Đánh giá độ am hiểu về an toàn thực thi mã không tin cậy (Untrusted Code Execution).",
+      },
+    ],
+    files: [
+      {
+        filename: "backend/app/services/code_evaluator.py",
+        status: "modified",
+        additions: 80,
+        deletions: 12,
+        lines: [
+          { type: "context", oldLineNumber: 70, newLineNumber: 70, content: "def execute_in_sandbox(user_code: str, test_cases: list):" },
+          { type: "context", oldLineNumber: 71, newLineNumber: 71, content: "    container = client.containers.create(image='python:3.11-slim', mem_limit='128m')" },
+          { type: "deletion", oldLineNumber: 72, content: "    container.start()" },
+          { type: "deletion", oldLineNumber: 73, content: "    result = run_tests(container, test_cases)" },
+          { type: "deletion", oldLineNumber: 74, content: "    container.remove(force=True)" },
+          { type: "addition", newLineNumber: 72, content: "    container.start()" },
+          { type: "addition", newLineNumber: 73, content: "    result = run_tests(container, test_cases)" },
+          { type: "addition", newLineNumber: 74, content: "    container.remove(force=True)" },
+          { type: "context", oldLineNumber: 75, newLineNumber: 75, content: "    return result" },
+        ],
+        aiComment: {
+          id: "cr-fix-pr12",
+          type: "suggestion",
+          line: 74,
+          title: "Đảm Bảo Thu Hồi Container Bằng Khối try...finally",
+          message: "Lệnh `container.remove(force=True)` nằm ở cuối hàm có thể bị bỏ qua nếu `run_tests` ném ra ngoại lệ (ví dụ: TimeoutError hoặc OOMKilled), dẫn đến rò rỉ hàng trăm container zombie trên server.",
+          suggestedFix: "try:\n        container.start()\n        return run_tests(container, test_cases)\n    finally:\n        container.remove(force=True)",
+          explanation: "Khối finally đảm bảo container luôn được dọn dẹp sạch sẽ trong mọi kịch bản lỗi, giữ cho máy chủ luôn ổn định.",
+        },
+      },
+    ],
+  },
+];
+
 export default function GitProjectHub() {
-  const [viewMode, setViewMode] = useState<"gitdiagram" | "topology" | "analytics" | "gitflow">("gitdiagram");
+  const [viewMode, setViewMode] = useState<"coderabbit" | "topology" | "gitdiagram" | "analytics" | "gitflow">("coderabbit");
   const [selectedNodeId, setSelectedNodeId] = useState<string>("learning-ws");
   const [copiedMermaid, setCopiedMermaid] = useState<boolean>(false);
+
+  // CodeRabbit Interactive State (Nhánh 2.1)
+  const [selectedPrId, setSelectedPrId] = useState<string>("pr-04");
+  const [prSubTab, setPrSubTab] = useState<"walkthrough" | "diff" | "defense">("diff");
+  const [appliedFixes, setAppliedFixes] = useState<Record<string, boolean>>({});
+
+  const selectedPR = useMemo(() => {
+    return MOCK_PULL_REQUESTS.find((pr) => pr.id === selectedPrId) || MOCK_PULL_REQUESTS[0];
+  }, [selectedPrId]);
+
+  const handleApplyFix = (commentId: string) => {
+    setAppliedFixes((prev) => ({ ...prev, [commentId]: true }));
+  };
 
   // Topology Interactive State
   const [selectedCommit, setSelectedCommit] = useState<GitCommitItem>(GIT_COMMITS[8]);
@@ -1202,15 +1461,15 @@ export default function GitProjectHub() {
       <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-1.5 shadow-sm overflow-x-auto">
         <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => setViewMode("gitdiagram")}
+            onClick={() => setViewMode("coderabbit")}
             className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
-              viewMode === "gitdiagram"
+              viewMode === "coderabbit"
                 ? "bg-blue-600 text-white shadow-sm"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <Boxes size={15} />
-            Sơ đồ Kiến trúc Dự án (GitDiagram Canvas)
+            <Bot size={15} />
+            Nhánh 2.1 • AI Review (CodeRabbit PR)
           </button>
           <button
             onClick={() => setViewMode("topology")}
@@ -1221,7 +1480,18 @@ export default function GitProjectHub() {
             }`}
           >
             <Network size={15} />
-            Cây Phân Nhánh (Branch Topology)
+            Nhánh 2.2 • Cây Phân Nhánh (GitKraken)
+          </button>
+          <button
+            onClick={() => setViewMode("gitdiagram")}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              viewMode === "gitdiagram"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            <Boxes size={15} />
+            Nhánh 2.3 • Sơ đồ Kiến trúc (GitDiagram)
           </button>
           <button
             onClick={() => setViewMode("analytics")}
@@ -1232,7 +1502,7 @@ export default function GitProjectHub() {
             }`}
           >
             <BarChart3 size={15} />
-            Thống kê Nhánh & Nhịp độ
+            Thống kê Nhóm
           </button>
           <button
             onClick={() => setViewMode("gitflow")}
@@ -1257,6 +1527,432 @@ export default function GitProjectHub() {
           </button>
         </div>
       </div>
+
+      {/* MODE 0: CODERABBIT AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) */}
+      {viewMode === "coderabbit" && (
+        <div className="space-y-5">
+          {/* Top PR Selectors Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {MOCK_PULL_REQUESTS.map((pr) => {
+              const isSelected = pr.id === selectedPR.id;
+              const hasApplied = Object.keys(appliedFixes).some((id) =>
+                pr.files.some((f) => f.aiComment?.id === id)
+              );
+              return (
+                <button
+                  key={pr.id}
+                  onClick={() => setSelectedPrId(pr.id)}
+                  className={`text-left p-4 rounded-xl border transition-all relative ${
+                    isSelected
+                      ? "bg-white border-blue-500 shadow-md ring-2 ring-blue-500/20"
+                      : "bg-white/70 border-slate-200 hover:border-slate-300 hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      PR #{pr.prNumber}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                        pr.status === "merged"
+                          ? "bg-purple-50 text-purple-700 border border-purple-200"
+                          : pr.status === "approved"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                      }`}
+                    >
+                      {pr.status === "merged" ? "Đã Merge" : pr.status === "approved" ? "Đã Duyệt" : "Đang Review"}
+                    </span>
+                  </div>
+
+                  <h3 className="text-xs font-bold text-slate-900 line-clamp-2 leading-relaxed mb-2.5">
+                    {pr.title}
+                  </h3>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: pr.author.color }}
+                      >
+                        {pr.author.avatar}
+                      </span>
+                      <span className="font-medium text-slate-700">{pr.author.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 font-mono text-[10px]">
+                      <span className="text-emerald-600 font-bold">+{pr.summary.totalAdditions}</span>
+                      <span className="text-rose-500 font-bold">-{pr.summary.totalDeletions}</span>
+                    </div>
+                  </div>
+
+                  {hasApplied && (
+                    <div className="mt-2 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
+                      <CheckCheck size={12} />
+                      Đã áp dụng bản sửa AI
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active PR Detail Card */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* PR Header Banner */}
+            <div className="p-5 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                      <Bot size={14} className="text-orange-400" />
+                      CodeRabbit AI Senior Reviewer
+                    </span>
+                    <span className="text-xs text-slate-400 font-mono">
+                      {selectedPR.sourceBranch} → {selectedPR.targetBranch}
+                    </span>
+                    <span className="text-xs text-slate-400">• {selectedPR.createdAt}</span>
+                  </div>
+                  <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    <GitPullRequest size={20} className="text-blue-400 shrink-0" />
+                    <span>PR #{selectedPR.prNumber}: {selectedPR.title}</span>
+                  </h2>
+                  <p className="text-xs text-slate-300 max-w-4xl leading-relaxed">
+                    Tác giả: <strong className="text-white">{selectedPR.author.name}</strong> ({selectedPR.author.role}) • Đánh giá rủi ro:{" "}
+                    <span
+                      className={`font-bold px-1.5 py-0.5 rounded ${
+                        selectedPR.summary.riskLevel === "high"
+                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                          : selectedPR.summary.riskLevel === "medium"
+                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                          : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                      }`}
+                    >
+                      Mức {selectedPR.summary.riskLevel.toUpperCase()}
+                    </span>
+                    {" • "}Thời gian AI duyệt: <strong className="text-white">{selectedPR.summary.estimatedReviewTime}</strong>
+                  </p>
+                </div>
+
+                {/* Quick Action Badges */}
+                <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
+                  <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 text-center">
+                    <div className="text-[10px] text-slate-400 uppercase font-bold">File Thay Đổi</div>
+                    <div className="text-base font-bold font-mono text-white">{selectedPR.summary.filesCount} files</div>
+                  </div>
+                  <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 text-center">
+                    <div className="text-[10px] text-slate-400 uppercase font-bold">Dòng Code Thêm</div>
+                    <div className="text-base font-bold font-mono text-emerald-400">+{selectedPR.summary.totalAdditions}</div>
+                  </div>
+                  <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 text-center">
+                    <div className="text-[10px] text-slate-400 uppercase font-bold">Dòng Code Xóa</div>
+                    <div className="text-base font-bold font-mono text-rose-400">-{selectedPR.summary.totalDeletions}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-Tabs for PR View */}
+              <div className="flex items-center gap-2 mt-5 pt-3 border-t border-slate-700/60 overflow-x-auto">
+                <button
+                  onClick={() => setPrSubTab("diff")}
+                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    prSubTab === "diff"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-300 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  <Code2 size={14} />
+                  Soi Lỗi Từng Dòng & 1-Click Fix ({selectedPR.files.length} file)
+                </button>
+                <button
+                  onClick={() => setPrSubTab("walkthrough")}
+                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    prSubTab === "walkthrough"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-300 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  <FileText size={14} />
+                  Bản Tóm Tắt (AI Walkthrough)
+                </button>
+                <button
+                  onClick={() => setPrSubTab("defense")}
+                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    prSubTab === "defense"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-300 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  <HelpCircle size={14} />
+                  Bộ Câu Hỏi Vấn Đáp Giảng Viên (Thầy Phước Q&A)
+                </button>
+              </div>
+            </div>
+
+            {/* TAB CONTENT 1: LINE-BY-LINE DIFF & 1-CLICK FIX */}
+            {prSubTab === "diff" && (
+              <div className="p-5 space-y-6">
+                <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-orange-500" />
+                    <span>
+                      CodeRabbit tự động quét qua AST (Abstract Syntax Tree), phát hiện lỗi logic/bảo mật và gắn comment trực tiếp vào đúng vị trí dòng mã.
+                    </span>
+                  </div>
+                  <span className="font-mono text-slate-500">
+                    Trạng thái: 1 phát hiện cần xử lý
+                  </span>
+                </div>
+
+                {selectedPR.files.map((file, fileIdx) => {
+                  const comment = file.aiComment;
+                  const isApplied = comment ? !!appliedFixes[comment.id] : false;
+
+                  return (
+                    <div key={fileIdx} className="rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                      {/* File Header */}
+                      <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-mono text-xs font-bold text-slate-800">
+                          <FileText size={15} className="text-slate-500" />
+                          <span>{file.filename}</span>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                            {file.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-mono">
+                          <span className="text-emerald-600 font-bold">+{file.additions}</span>
+                          <span className="text-rose-600 font-bold">-{file.deletions}</span>
+                        </div>
+                      </div>
+
+                      {/* Code Diff Lines */}
+                      <div className="font-mono text-xs overflow-x-auto bg-[#0d1117] text-slate-200">
+                        {file.lines.map((line, lineIdx) => {
+                          const isDeletion = line.type === "deletion";
+                          const isAddition = line.type === "addition";
+                          const isCommentLine = comment && comment.line === line.newLineNumber && isAddition;
+
+                          // If applied, show the fixed line instead of the bad addition
+                          const displayedContent = isApplied && isCommentLine ? `    ${comment.suggestedFix.split("\n")[0]}` : line.content;
+
+                          return (
+                            <div key={lineIdx}>
+                              <div
+                                className={`flex items-stretch hover:bg-slate-800/50 transition-colors ${
+                                  isDeletion
+                                    ? "bg-rose-950/40 text-rose-300"
+                                    : isAddition
+                                    ? isApplied
+                                      ? "bg-emerald-950/40 text-emerald-300"
+                                      : "bg-emerald-950/20 text-emerald-200"
+                                    : ""
+                                }`}
+                              >
+                                <span className="w-12 py-1 px-2 text-right select-none text-slate-600 bg-slate-900/60 shrink-0 border-r border-slate-800">
+                                  {line.oldLineNumber ?? ""}
+                                </span>
+                                <span className="w-12 py-1 px-2 text-right select-none text-slate-600 bg-slate-900/60 shrink-0 border-r border-slate-800">
+                                  {line.newLineNumber ?? ""}
+                                </span>
+                                <span className="w-6 py-1 text-center select-none shrink-0 font-bold">
+                                  {isDeletion ? "-" : isAddition ? "+" : " "}
+                                </span>
+                                <span className="py-1 px-3 whitespace-pre flex-1 font-mono">
+                                  {displayedContent}
+                                </span>
+                              </div>
+
+                              {/* INLINE CODERABBIT FEEDBACK BOX */}
+                              {comment && line.newLineNumber === comment.line && isAddition && (
+                                <div className="p-4 bg-slate-900 border-y-2 border-orange-500/80 my-1 mx-2 rounded-lg text-slate-800 font-sans shadow-lg">
+                                  <div className="bg-white rounded-lg p-4 border border-orange-200 shadow-sm space-y-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-xs">
+                                          <Bot size={16} />
+                                        </div>
+                                        <div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-900">CodeRabbit AI</span>
+                                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 font-bold border border-orange-200">
+                                              Senior Bot
+                                            </span>
+                                            <span
+                                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                                                comment.type === "security"
+                                                  ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                                  : comment.type === "warning"
+                                                  ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                                  : "bg-blue-100 text-blue-800 border border-blue-300"
+                                              }`}
+                                            >
+                                              {comment.type === "security" ? "Lỗ hổng bảo mật" : comment.type === "warning" ? "Cảnh báo kiến trúc" : "Gợi ý Clean Code"}
+                                            </span>
+                                          </div>
+                                          <h4 className="text-xs font-bold text-slate-900 mt-1">
+                                            {comment.title}
+                                          </h4>
+                                        </div>
+                                      </div>
+
+                                      {isApplied ? (
+                                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 shadow-xs">
+                                          <CheckCheck size={15} />
+                                          Đã áp dụng bản sửa
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={() => handleApplyFix(comment.id)}
+                                          className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 px-3.5 py-1.5 rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
+                                        >
+                                          <Wand2 size={14} />
+                                          Áp dụng bản sửa (1-Click Fix)
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    <p className="text-xs text-slate-700 leading-relaxed">
+                                      {comment.message}
+                                    </p>
+
+                                    {/* 1-Click Suggested Code Block */}
+                                    <div className="space-y-1.5 bg-slate-900 rounded-lg p-3 text-xs font-mono text-slate-200 border border-slate-700">
+                                      <div className="flex items-center justify-between text-[11px] text-slate-400 pb-1.5 border-b border-slate-800">
+                                        <span className="flex items-center gap-1.5 text-orange-400 font-bold">
+                                          <Code2 size={13} />
+                                          Đề xuất thay đổi (Suggested Fix):
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-mono">PEP8 / Clean Code</span>
+                                      </div>
+                                      <div className="text-emerald-400 whitespace-pre pt-1">
+                                        {comment.suggestedFix}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                                      <span className="flex items-center gap-1">
+                                        <ShieldCheck size={13} className="text-emerald-600" />
+                                        {comment.explanation}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400">Dòng {comment.line}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* TAB CONTENT 2: WALKTHROUGH & AUTO-SUMMARY */}
+            {prSubTab === "walkthrough" && (
+              <div className="p-6 space-y-6">
+                <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <FileCheck size={18} className="text-blue-600" />
+                    Tóm Tắt Tổng Quan Thay Đổi (CodeRabbit Walkthrough)
+                  </h3>
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    {selectedPR.summary.overview}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Các Điểm Sửa Đổi Trọng Yếu:
+                  </h3>
+                  <div className="space-y-2">
+                    {selectedPR.summary.keyPoints.map((point, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-2.5 p-3 rounded-lg bg-white border border-slate-200 text-xs text-slate-700"
+                      >
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <span className="leading-relaxed">{point}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Đánh Giá Tác Động Hệ Thống</span>
+                      <ShieldCheck size={16} className="text-emerald-600" />
+                    </div>
+                    <div className="text-sm font-bold text-slate-900">
+                      Không phá vỡ API hiện hữu (Non-breaking)
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      Các bảng CSDL mới độc lập, tương thích 100% với endpoint V1 router.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Khuyến Nghị Trước Khi Merge</span>
+                      <AlertCircle size={16} className="text-amber-600" />
+                    </div>
+                    <div className="text-sm font-bold text-slate-900">
+                      Chạy Alembic Migration & pytest
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      Thực hiện lệnh <code className="bg-slate-100 px-1 rounded">alembic upgrade head</code> trên máy test trước khi gộp vào develop.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT 3: TEACHER DEFENSE Q&A */}
+            {prSubTab === "defense" && (
+              <div className="p-6 space-y-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
+                    <HelpCircle size={16} className="text-blue-700" />
+                    Công Cụ Giảng Viên: Bộ Câu Hỏi Chất Vấn Liêm Chính Kỹ Thuật (Thầy Phước)
+                  </div>
+                  <p className="text-xs text-blue-800 leading-relaxed">
+                    Hệ thống tự động phân tích diff của PR này và sinh ra các câu hỏi chuyên sâu. Giảng viên có thể dùng ngay các câu hỏi này khi bảo vệ Sprint để kiểm tra xem sinh viên tự viết mã hay nhờ người khác/AI gian lận.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {selectedPR.defenseQA.map((qa, idx) => (
+                    <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white space-y-3 shadow-xs">
+                      <div className="flex items-start gap-3">
+                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                          Q{idx + 1}
+                        </span>
+                        <div className="space-y-1.5 flex-1">
+                          <h4 className="text-xs font-bold text-slate-900 leading-relaxed">
+                            {qa.question}
+                          </h4>
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900 space-y-1">
+                            <span className="font-bold block text-emerald-800">
+                              Đáp án chuẩn mong đợi (Expected Answer):
+                            </span>
+                            <p className="leading-relaxed">{qa.expectedAnswer}</p>
+                          </div>
+                          <div className="text-[11px] text-slate-500 italic">
+                            Tiêu chí chấm điểm: {qa.rubricHint}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS */}
       {viewMode === "gitdiagram" && (
