@@ -4,7 +4,7 @@ import LoginScreen from "./screens/LoginScreen";
 import StudentDashboard from "./screens/StudentDashboard";
 import LearningWorkspace from "./screens/LearningWorkspace";
 import TechReels from "./screens/TechReels";
-import GitHubSubmission from "./screens/GitHubSubmission";
+import GitProjectHub from "./screens/GitProjectHub";
 import XPShop from "./screens/XPShop";
 import StudentProfile from "./screens/StudentProfile";
 import AdminDashboard from "./screens/AdminDashboard";
@@ -116,7 +116,7 @@ export default function App() {
       case "workspace": return <LearningWorkspace mentorMascot={mentorMascot} chatSkin={chatSkin} />;
       case "reels": return <TechReels />;
       case "profile": return <StudentProfile avatarStyle={avatarStyle} badgeFrame={badgeFrame} onApplyAvatar={setAvatarStyle} onApplyBadge={setBadgeFrame} />;
-      case "github": return <GitHubSubmission />;
+      case "github": return <GitProjectHub />;
       case "xp-shop": return (
         <XPShop
           activeTheme={backgroundTheme}
