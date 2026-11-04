@@ -196,14 +196,14 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "group-api-platform",
     type: "containerBox",
-    position: { x: 1370, y: 550 },
+    position: { x: 1330, y: 540 },
     zIndex: -1,
     selectable: false,
     draggable: false,
     data: {
       label: "API Platform",
       width: 280,
-      height: 720,
+      height: 560,
       bgColor: "bg-rose-50/40",
       borderColor: "border-rose-300",
       textColor: "text-rose-700",
@@ -212,14 +212,14 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "group-learning-srv",
     type: "containerBox",
-    position: { x: 740, y: 930 },
+    position: { x: 770, y: 1120 },
     zIndex: -1,
     selectable: false,
     draggable: false,
     data: {
       label: "Learning Services",
-      width: 570,
-      height: 290,
+      width: 820,
+      height: 380,
       bgColor: "bg-amber-50/40",
       borderColor: "border-amber-300",
       textColor: "text-amber-700",
@@ -524,7 +524,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "api-startup",
     type: "cardNode",
-    position: { x: 1420, y: 590 },
+    position: { x: 1380, y: 575 },
     data: {
       label: "API startup",
       subLabel: "[main.py]",
@@ -542,7 +542,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "v1-router",
     type: "cardNode",
-    position: { x: 1420, y: 720 },
+    position: { x: 1380, y: 680 },
     data: {
       label: "V1 router",
       subLabel: "[router.py]",
@@ -560,7 +560,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "auth",
     type: "cardNode",
-    position: { x: 1420, y: 850 },
+    position: { x: 1380, y: 785 },
     data: {
       label: "Authentication",
       subLabel: "[auth.py]",
@@ -578,7 +578,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "auth-deps",
     type: "cardNode",
-    position: { x: 1420, y: 980 },
+    position: { x: 1380, y: 890 },
     data: {
       label: "Auth dependencies",
       subLabel: "[deps.py]",
@@ -596,7 +596,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "token-utils",
     type: "cardNode",
-    position: { x: 1420, y: 1110 },
+    position: { x: 1380, y: 995 },
     data: {
       label: "Token utilities",
       subLabel: "[security.py]",
@@ -612,11 +612,11 @@ const INITIAL_ARCH_NODES: Node[] = [
     },
   },
 
-  // 5. Learning Services Subgraph Components (Bottom-Right)
+  // 5. Learning Services Subgraph Components (Spacious 65px horizontal & 75px vertical gaps)
   {
     id: "learning-apis",
     type: "cardNode",
-    position: { x: 765, y: 970 },
+    position: { x: 820, y: 1180 },
     data: {
       label: "Learning APIs",
       subLabel: "[lms.py]",
@@ -634,7 +634,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "submissions",
     type: "cardNode",
-    position: { x: 940, y: 970 },
+    position: { x: 1060, y: 1180 },
     data: {
       label: "Submissions",
       subLabel: "[submissions.py]",
@@ -652,7 +652,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "ai-apis",
     type: "cardNode",
-    position: { x: 1115, y: 970 },
+    position: { x: 1300, y: 1180 },
     data: {
       label: "AI tutor APIs",
       subLabel: "[ai.py]",
@@ -670,7 +670,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "code-evaluator",
     type: "cardNode",
-    position: { x: 850, y: 1100 },
+    position: { x: 940, y: 1340 },
     data: {
       label: "Code evaluator",
       subLabel: "[code_evaluator.py]",
@@ -688,7 +688,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "analytics",
     type: "cardNode",
-    position: { x: 1030, y: 1100 },
+    position: { x: 1180, y: 1340 },
     data: {
       label: "Event analytics",
       subLabel: "[analytics.py]",
@@ -708,7 +708,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "sqlite-db",
     type: "cardNode",
-    position: { x: 520, y: 1310 },
+    position: { x: 500, y: 1560 },
     data: {
       label: "SQLite database",
       subLabel: "[database.py]",
@@ -798,7 +798,6 @@ const INITIAL_ARCH_EDGES: Edge[] = [
   { id: "e-lms-eval", source: "learning-apis", target: "code-evaluator", type: "smoothstep", label: "references", style: { stroke: "#d97706" }, markerEnd: { type: MarkerType.ArrowClosed }, ...edgeLabelOpts },
   { id: "e-sub-eval", source: "submissions", target: "code-evaluator", type: "smoothstep", label: "evaluates code", style: { stroke: "#d97706", strokeWidth: 2 }, markerEnd: { type: MarkerType.ArrowClosed }, ...edgeLabelOpts },
   { id: "e-sub-analytics", source: "submissions", target: "analytics", type: "smoothstep", label: "references", style: { stroke: "#d97706" }, markerEnd: { type: MarkerType.ArrowClosed }, ...edgeLabelOpts },
-  { id: "e-ai-analytics-ref", source: "ai-apis", target: "analytics", type: "smoothstep", label: "references", style: { stroke: "#d97706" }, markerEnd: { type: MarkerType.ArrowClosed }, ...edgeLabelOpts },
   { id: "e-ai-analytics-track", source: "ai-apis", target: "analytics", type: "smoothstep", label: "tracks events", style: { stroke: "#d97706" }, markerEnd: { type: MarkerType.ArrowClosed }, ...edgeLabelOpts },
 
   // Backend APIs connecting to Database
