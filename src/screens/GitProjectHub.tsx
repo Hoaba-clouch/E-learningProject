@@ -41,7 +41,6 @@ import {
   FileCheck,
   CheckCheck,
   Search,
-  Filter,
 } from "lucide-react";
 
 // ─── Custom Group Container Node (for GitDiagram subsystems) ───────────────
@@ -1711,194 +1710,151 @@ export default function GitProjectHub() {
         </div>
       </div>
 
-      {/* MODE 0: CODERABBIT AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) */}
+      {/* MODE 0: CODERABBIT AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) - MASTER-DETAIL WORKSPACE */}
       {viewMode === "coderabbit" && (
-        <div className="space-y-5">
-          {/* PR Filter & Search Toolbar */}
-          <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-xs space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-              {/* Status Filter Tabs */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-                <button
-                  onClick={() => setPrStatusFilter("open")}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
-                    prStatusFilter === "open"
-                      ? "bg-amber-500 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-300" />
-                  Cần Review (Chưa Merge)
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
-                    {MOCK_PULL_REQUESTS.filter((p) => p.status === "open").length}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setPrStatusFilter("approved")}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
-                    prStatusFilter === "approved"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-300" />
-                  Đã Duyệt
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
-                    {MOCK_PULL_REQUESTS.filter((p) => p.status === "approved").length}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setPrStatusFilter("merged")}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
-                    prStatusFilter === "merged"
-                      ? "bg-purple-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-purple-300" />
-                  Đã Merge
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
-                    {MOCK_PULL_REQUESTS.filter((p) => p.status === "merged").length}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setPrStatusFilter("all")}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
-                    prStatusFilter === "all"
-                      ? "bg-slate-800 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  Tất cả ({MOCK_PULL_REQUESTS.length})
-                </button>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* CỘT TRÁI (4 COLS): DANH SÁCH PULL REQUESTS */}
+          <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3.5">
+            {/* Header Danh Sách */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <GitPullRequest size={17} className="text-blue-600" />
+                <h3 className="text-sm font-bold text-slate-900">Danh Sách PRs</h3>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                  {filteredPRs.length}/{MOCK_PULL_REQUESTS.length}
+                </span>
               </div>
 
-              {/* Search & Author Filters */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative flex-1 sm:w-60">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Tìm theo task, PR, tiêu đề..."
-                    value={prSearchQuery}
-                    onChange={(e) => setPrSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/50"
-                  />
-                  {prSearchQuery && (
-                    <button
-                      onClick={() => setPrSearchQuery("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-slate-400 flex items-center gap-1">
-                    <Filter size={12} />
-                  </span>
-                  <select
-                    value={prMemberFilter}
-                    onChange={(e) => setPrMemberFilter(e.target.value)}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="all">Tất cả thành viên</option>
-                    <option value="Minh Anh">Minh Anh</option>
-                    <option value="Quốc Huy">Quốc Huy</option>
-                    <option value="Hoàng Long">Hoàng Long</option>
-                  </select>
-                </div>
-              </div>
+              {/* Lọc Thành Viên */}
+              <select
+                value={prMemberFilter}
+                onChange={(e) => setPrMemberFilter(e.target.value)}
+                className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="all">Tất cả tác giả</option>
+                <option value="Minh Anh">Minh Anh</option>
+                <option value="Quốc Huy">Quốc Huy</option>
+                <option value="Hoàng Long">Hoàng Long</option>
+              </select>
             </div>
 
-            {/* Sub text info */}
-            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-              <span>
-                Hiển thị <strong>{filteredPRs.length}</strong> / {MOCK_PULL_REQUESTS.length} Pull Requests • Mặc định ưu tiên PR đang mở cần xử lý
-              </span>
-              {(prStatusFilter !== "open" || prMemberFilter !== "all" || prSearchQuery) && (
+            {/* Ô Tìm Kiếm */}
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Tìm mã task, PR, từ khóa..."
+                value={prSearchQuery}
+                onChange={(e) => setPrSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/60"
+              />
+              {prSearchQuery && (
                 <button
-                  onClick={() => {
-                    setPrStatusFilter("open");
-                    setPrMemberFilter("all");
-                    setPrSearchQuery("");
-                  }}
-                  className="text-blue-600 hover:underline font-semibold"
+                  onClick={() => setPrSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
                 >
-                  Đặt lại bộ lọc
+                  ×
                 </button>
               )}
             </div>
-          </div>
 
-          {/* PR List / Grid */}
-          {filteredPRs.length === 0 ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-2">
-              <Bot size={28} className="mx-auto text-slate-400" />
-              <div className="text-sm font-bold text-slate-800">Không tìm thấy Pull Request nào</div>
-              <p className="text-xs text-slate-500">
-                Thử thay đổi từ khóa tìm kiếm hoặc chuyển sang tab "Tất cả" để xem các PR đã merge.
-              </p>
+            {/* Tabs Lọc Trạng Thái Nhỏ Gọn */}
+            <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-lg text-[11px] font-semibold text-slate-600">
               <button
-                onClick={() => {
-                  setPrStatusFilter("all");
-                  setPrMemberFilter("all");
-                  setPrSearchQuery("");
-                }}
-                className="mt-2 text-xs font-bold text-blue-600 hover:underline"
+                onClick={() => setPrStatusFilter("open")}
+                className={`flex-1 py-1 rounded-md transition text-center ${
+                  prStatusFilter === "open"
+                    ? "bg-white text-amber-800 font-bold shadow-xs"
+                    : "hover:text-slate-900"
+                }`}
               >
-                Xem tất cả Pull Requests
+                Cần Duyệt ({MOCK_PULL_REQUESTS.filter((p) => p.status === "open").length})
+              </button>
+              <button
+                onClick={() => setPrStatusFilter("approved")}
+                className={`flex-1 py-1 rounded-md transition text-center ${
+                  prStatusFilter === "approved"
+                    ? "bg-white text-emerald-800 font-bold shadow-xs"
+                    : "hover:text-slate-900"
+                }`}
+              >
+                Đã Duyệt ({MOCK_PULL_REQUESTS.filter((p) => p.status === "approved").length})
+              </button>
+              <button
+                onClick={() => setPrStatusFilter("merged")}
+                className={`flex-1 py-1 rounded-md transition text-center ${
+                  prStatusFilter === "merged"
+                    ? "bg-white text-purple-800 font-bold shadow-xs"
+                    : "hover:text-slate-900"
+                }`}
+              >
+                Đã Merge ({MOCK_PULL_REQUESTS.filter((p) => p.status === "merged").length})
+              </button>
+              <button
+                onClick={() => setPrStatusFilter("all")}
+                className={`px-2 py-1 rounded-md transition text-center ${
+                  prStatusFilter === "all"
+                    ? "bg-white text-slate-900 font-bold shadow-xs"
+                    : "hover:text-slate-900"
+                }`}
+              >
+                Tất cả
               </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {filteredPRs.map((pr) => {
-                const isSelected = pr.id === selectedPR.id;
-                const hasApplied = Object.keys(appliedFixes).some((id) =>
-                  pr.files.some((f) => f.aiComment?.id === id)
-                );
-                return (
-                  <button
-                    key={pr.id}
-                    onClick={() => setSelectedPrId(pr.id)}
-                    className={`text-left p-4 rounded-xl border transition-all relative flex flex-col justify-between ${
-                      isSelected
-                        ? "bg-white border-blue-500 shadow-md ring-2 ring-blue-500/20"
-                        : "bg-white/80 border-slate-200 hover:border-slate-300 hover:bg-white shadow-xs"
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          PR #{pr.prNumber}
-                        </span>
+
+            {/* Danh Sách PR Cuộn Độc Lập */}
+            <div className="space-y-2 max-h-[640px] overflow-y-auto pr-1">
+              {filteredPRs.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-slate-200">
+                  Không có PR nào khớp bộ lọc.
+                </div>
+              ) : (
+                filteredPRs.map((pr) => {
+                  const isSelected = pr.id === selectedPR.id;
+                  const hasApplied = Object.keys(appliedFixes).some((id) =>
+                    pr.files.some((f) => f.aiComment?.id === id)
+                  );
+
+                  return (
+                    <button
+                      key={pr.id}
+                      onClick={() => setSelectedPrId(pr.id)}
+                      className={`w-full text-left p-3 rounded-xl border transition-all relative flex flex-col gap-2 ${
+                        isSelected
+                          ? "bg-blue-50/70 border-blue-500 shadow-xs ring-1 ring-blue-500/30 border-l-4 border-l-blue-600"
+                          : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.2 rounded text-[11px]">
+                            #{pr.prNumber}
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-500">
+                            {pr.sourceBranch}
+                          </span>
+                        </div>
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded uppercase tracking-wider ${
                             pr.status === "merged"
-                              ? "bg-purple-50 text-purple-700 border border-purple-200"
+                              ? "bg-purple-100 text-purple-700 border border-purple-200"
                               : pr.status === "approved"
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                              : "bg-amber-50 text-amber-700 border border-amber-200"
+                              ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                              : "bg-amber-100 text-amber-800 border border-amber-200"
                           }`}
                         >
-                          {pr.status === "merged" ? "Đã Merge" : pr.status === "approved" ? "Đã Duyệt" : "Đang Review"}
+                          {pr.status === "merged" ? "Merged" : pr.status === "approved" ? "Approved" : "Reviewing"}
                         </span>
                       </div>
 
-                      <h3 className="text-xs font-bold text-slate-900 line-clamp-2 leading-relaxed mb-2.5">
+                      <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-relaxed">
                         {pr.title}
-                      </h3>
-                    </div>
+                      </h4>
 
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
                         <div className="flex items-center gap-1.5">
                           <span
-                            className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
+                            className="w-4 h-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0"
                             style={{ backgroundColor: pr.author.color }}
                           >
                             {pr.author.avatar}
@@ -1912,80 +1868,93 @@ export default function GitProjectHub() {
                       </div>
 
                       {hasApplied && (
-                        <div className="mt-2 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
+                        <div className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1 self-start">
                           <CheckCheck size={12} />
-                          Đã áp dụng bản sửa AI
+                          Đã sửa theo AI
                         </div>
                       )}
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })
+              )}
             </div>
-          )}
+          </div>
 
-          {/* Active PR Detail Card */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* PR Header Banner */}
-            <div className="p-5 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-orange-500/20 text-orange-300 border border-orange-500/40">
-                      <Bot size={14} className="text-orange-400" />
-                      CodeRabbit AI Senior Reviewer
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">
-                      {selectedPR.sourceBranch} → {selectedPR.targetBranch}
-                    </span>
-                    <span className="text-xs text-slate-400">• {selectedPR.createdAt}</span>
-                  </div>
-                  <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                    <GitPullRequest size={20} className="text-blue-400 shrink-0" />
-                    <span>PR #{selectedPR.prNumber}: {selectedPR.title}</span>
-                  </h2>
-                  <p className="text-xs text-slate-300 max-w-4xl leading-relaxed">
-                    Tác giả: <strong className="text-white">{selectedPR.author.name}</strong> ({selectedPR.author.role}) • Đánh giá rủi ro:{" "}
-                    <span
-                      className={`font-bold px-1.5 py-0.5 rounded ${
-                        selectedPR.summary.riskLevel === "high"
-                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                          : selectedPR.summary.riskLevel === "medium"
-                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                          : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                      }`}
-                    >
-                      Mức {selectedPR.summary.riskLevel.toUpperCase()}
-                    </span>
-                    {" • "}Thời gian AI duyệt: <strong className="text-white">{selectedPR.summary.estimatedReviewTime}</strong>
-                  </p>
+          {/* CỘT PHẢI (8 COLS): WORKSPACE CHI TIẾT REVIEW */}
+          <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            {/* PR Header Tinh Tế & Hiện Đại (Sáng, Nhẹ, Không Bị Chói Đen) */}
+            <div className="p-5 border-b border-slate-200 bg-gradient-to-b from-slate-50/80 to-white space-y-3.5">
+              {/* Dòng 1: Tag & Metadata Badges */}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                    <Bot size={13} className="text-orange-500" />
+                    CodeRabbit Reviewer
+                  </span>
+                  <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    {selectedPR.sourceBranch} → {selectedPR.targetBranch}
+                  </span>
+                  <span className="text-xs text-slate-500">• {selectedPR.createdAt}</span>
                 </div>
 
-                {/* Quick Action Badges */}
-                <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
-                  <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 text-center">
-                    <div className="text-[10px] text-slate-400 uppercase font-bold">File Thay Đổi</div>
-                    <div className="text-base font-bold font-mono text-white">{selectedPR.summary.filesCount} files</div>
-                  </div>
-                  <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 text-center">
-                    <div className="text-[10px] text-slate-400 uppercase font-bold">Dòng Code Thêm</div>
-                    <div className="text-base font-bold font-mono text-emerald-400">+{selectedPR.summary.totalAdditions}</div>
-                  </div>
-                  <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 text-center">
-                    <div className="text-[10px] text-slate-400 uppercase font-bold">Dòng Code Xóa</div>
-                    <div className="text-base font-bold font-mono text-rose-400">-{selectedPR.summary.totalDeletions}</div>
-                  </div>
+                <div className="flex items-center gap-2 text-xs font-mono">
+                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold border border-slate-200">
+                    {selectedPR.summary.filesCount} files
+                  </span>
+                  <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold border border-emerald-200">
+                    +{selectedPR.summary.totalAdditions}
+                  </span>
+                  <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-bold border border-rose-200">
+                    -{selectedPR.summary.totalDeletions}
+                  </span>
                 </div>
               </div>
 
-              {/* Sub-Tabs for PR View */}
-              <div className="flex items-center gap-2 mt-5 pt-3 border-t border-slate-700/60 overflow-x-auto">
+              {/* Dòng 2: Tiêu Đề PR */}
+              <h2 className="text-base font-bold text-slate-900 tracking-tight leading-snug flex items-start gap-2">
+                <GitPullRequest size={18} className="text-blue-600 shrink-0 mt-0.5" />
+                <span>PR #{selectedPR.prNumber}: {selectedPR.title}</span>
+              </h2>
+
+              {/* Dòng 3: Tác Giả & Rủi Ro */}
+              <div className="flex items-center justify-between text-xs text-slate-600 pt-1 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: selectedPR.author.color }}
+                  >
+                    {selectedPR.author.avatar}
+                  </span>
+                  <span>
+                    Tác giả: <strong className="text-slate-900">{selectedPR.author.name}</strong> ({selectedPR.author.role})
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Đánh giá rủi ro:</span>
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded text-[11px] ${
+                      selectedPR.summary.riskLevel === "high"
+                        ? "bg-rose-100 text-rose-800 border border-rose-200"
+                        : selectedPR.summary.riskLevel === "medium"
+                        ? "bg-amber-100 text-amber-800 border border-amber-200"
+                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    }`}
+                  >
+                    Mức {selectedPR.summary.riskLevel.toUpperCase()}
+                  </span>
+                  <span className="text-slate-500">• AI duyệt: <strong>{selectedPR.summary.estimatedReviewTime}</strong></span>
+                </div>
+              </div>
+
+              {/* Dòng 4: Segmented Sub-Tabs Bar */}
+              <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200 overflow-x-auto">
                 <button
                   onClick={() => setPrSubTab("diff")}
                   className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
                     prSubTab === "diff"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-300 hover:text-white hover:bg-slate-800"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
                   <Code2 size={14} />
@@ -1995,8 +1964,8 @@ export default function GitProjectHub() {
                   onClick={() => setPrSubTab("walkthrough")}
                   className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
                     prSubTab === "walkthrough"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-300 hover:text-white hover:bg-slate-800"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
                   <FileText size={14} />
@@ -2006,12 +1975,12 @@ export default function GitProjectHub() {
                   onClick={() => setPrSubTab("defense")}
                   className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
                     prSubTab === "defense"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-300 hover:text-white hover:bg-slate-800"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
                   <HelpCircle size={14} />
-                  Bộ Câu Hỏi Vấn Đáp Giảng Viên (Thầy Phước Q&A)
+                  Bộ Câu Hỏi Vấn Đáp (Thầy Phước Q&A)
                 </button>
               </div>
             </div>
