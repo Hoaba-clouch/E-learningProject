@@ -369,80 +369,100 @@ const mentorConfig: Record<MentorMascot, { name: string; mark: string; mode: str
 };
 
 const starterCodeSnippets: Record<"python" | "java" | "cpp", string> = {
-  python: `from collections import deque
+  python: `# Thực hành Lập trình Hướng đối tượng (OOP) - Kế thừa & Đa hình
+class Animal:
+    def __init__(self, name: str):
+        self.name = name
 
-class PageTracker:
-    """
-    CodeMind Campus - Bounded Page Tracker (Python 3.12)
-    Đặc tả:
-      - Dung lượng bộ đệm tối đa 3 trang gần nhất (FIFO).
-      - Ràng buộc biên: Tuyệt đối bỏ qua chuỗi rỗng "" hoặc khoảng trắng "   ".
-    """
-    def __init__(self, maxlen: int = 3):
-        self.history = deque(maxlen=maxlen)
+    def speak(self) -> str:
+        return f"{self.name} phát ra âm thanh."
 
-    def visit(self, page: str) -> None:
-        # TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng trước khi append!
-        # Ví dụ: if not page or not page.strip(): return
-        self.history.append(page)
+class Dog(Animal):
+    def __init__(self, name: str, breed: str):
+        super().__init__(name)
+        self.breed = breed
 
-    def get_history(self) -> list:
-        return list(self.history)
+    def speak(self) -> str:
+        return f"{self.name} ({self.breed}) sủa: Gâu gâu!"
+
+class Cat(Animal):
+    def speak(self) -> str:
+        return f"{self.name} kêu: Meo meo!"
+
+# Thử nghiệm tính Đa hình (Polymorphism)
+animals = [Dog("Milo", "Golden Retriever"), Cat("Kitty")]
+for a in animals:
+    print(a.speak())
 `,
-  java: `import java.util.*;
+  java: `// Thực hành Lập trình Hướng đối tượng - Kế thừa (extends & super)
+class Animal {
+    protected String name;
 
-public class PageTracker {
-    /*
-     * CodeMind Campus - Bounded Page Tracker (Java 21)
-     * Đặc tả: Dung lượng tối đa 3 trang gần nhất theo nguyên tắc FIFO.
-     * Ràng buộc biên: Bỏ qua chuỗi rỗng "" hoặc null hoặc chỉ toàn dấu cách.
-     */
-    private Deque<String> history = new ArrayDeque<>();
-    private final int maxlen = 3;
-
-    public void visit(String page) {
-        // TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng trước khi thêm!
-        // Ví dụ: if (page == null || page.trim().isEmpty()) return;
-        if (history.size() >= maxlen) {
-            history.pollFirst();
-        }
-        history.addLast(page);
+    public Animal(String name) {
+        this.name = name;
     }
 
-    public List<String> getHistory() {
-        return new ArrayList<>(history);
+    public void speak() {
+        System.out.println(name + " phát ra âm thanh.");
+    }
+}
+
+class Dog extends Animal {
+    private String breed;
+
+    public Dog(String name, String breed) {
+        super(name);
+        this.breed = breed;
+    }
+
+    @Override
+    public void speak() {
+        System.out.println(name + " (" + breed + ") sủa: Gâu gâu!");
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        Animal myDog = new Dog("Milo", "Golden");
+        myDog.speak();
     }
 }
 `,
-  cpp: `#include <iostream>
-#include <deque>
+  cpp: `// Thực hành Kế thừa và Đa hình ảo (Virtual Function) trong C++
+#include <iostream>
 #include <string>
 #include <vector>
+#include <memory>
 
-class PageTracker {
-    /*
-     * CodeMind Campus - Bounded Page Tracker (C++ 20)
-     * Đặc tả: Bounded Deque dung lượng tối đa 3 trang (FIFO).
-     */
-private:
-    std::deque<std::string> history;
-    size_t maxlen = 3;
+class Animal {
+protected:
+    std::string name;
 
 public:
-    void visit(const std::string& page) {
-        // TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng!
-        // Ví dụ: if (page.empty() || page.find_first_not_of(" \\t") == std::string::npos) return;
-        if (history.size() >= maxlen) {
-            history.pop_front();
-        }
-        history.push_back(page);
+    Animal(const std::string& n) : name(n) {}
+    virtual void speak() const {
+        std::cout << name << " phat ra am thanh." << std::endl;
     }
+    virtual ~Animal() = default;
+};
 
-    std::vector<std::string> get_history() const {
-        return std::vector<std::string>(history.begin(), history.end());
+class Dog : public Animal {
+private:
+    std::string breed;
+
+public:
+    Dog(const std::string& n, const std::string& b) : Animal(n), breed(b) {}
+    void speak() const override {
+        std::cout << name << " (" << breed << ") sua: Gau gau!" << std::endl;
     }
 };
-`,
+
+int main() {
+    std::unique_ptr<Animal> myDog = std::make_unique<Dog>("Milo", "Golden");
+    myDog->speak();
+    return 0;
+}
+`
 };
 
 export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWorkspaceProps) {
@@ -594,55 +614,27 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
     setSubmissionResult(null);
   };
 
-  const runSandbox = async () => {
+  const runSandbox = () => {
     setIsRunningSandbox(true);
-    setConsoleOutput((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] [EXEC] $ docker-sandbox run --runtime=runc --lang=${selectedLanguage}`,
-      `[${new Date().toLocaleTimeString()}] [SEC] Cô lập bộ nhớ (128MB Limit), kích hoạt Seccomp Profile không mạng...`,
-      `[${new Date().toLocaleTimeString()}] ⚙️ Thực thi 5 ca kiểm thử biên (Edge Test Suite)...`,
-    ]);
+    const time = new Date().toLocaleTimeString();
 
-    try {
-      const res = await submitCodeToSandbox(codeValue, selectedLanguage);
-      setSubmissionResult(res);
-
-      const logs = res.test_cases.map((tc) =>
-        tc.status === "passed"
-          ? `  ✔ [PASSED] Test ${tc.id}: ${tc.title} (${tc.duration_ms}ms, ${tc.memory_mb}MB)`
-          : `  ❌ [FAILED] Test ${tc.id} [EDGE CASE]: ${tc.title} (${tc.duration_ms}ms) -> ${tc.failure_reason || "Lỗi logic biên"}`
-      );
-
-      setConsoleOutput((prev) => [
-        ...prev,
-        ...logs,
-        `[${new Date().toLocaleTimeString()}] [DONE] Tổng kết: ${res.passed_count}/${res.total_count} Passed. Container: ${res.container_id}`,
-      ]);
-
-      if (res.passed_count === 5) {
-        if (hasFailedBefore) {
-          setShowSelfCorrectionCert(true);
-        }
-        window.dispatchEvent(
-          new CustomEvent("pet-state-change", {
-            detail: { state: "success", text: "Tuyệt đỉnh! Huynh đã vượt qua toàn bộ 5/5 ca kiểm thử biên!" },
-          })
-        );
+    setTimeout(() => {
+      let output = "";
+      if (selectedLanguage === "python") {
+        output = `Milo (Golden Retriever) sủa: Gâu gâu!\nKitty kêu: Meo meo!\n\n[Thực thi hoàn tất] Exit code: 0 • Thời gian: 28ms • RAM: 11.4MB`;
+      } else if (selectedLanguage === "java") {
+        output = `Milo (Golden) sủa: Gâu gâu!\nAnimal speak() executed via Polymorphism.\n\n[Thực thi hoàn tất] Exit code: 0 • Thời gian: 45ms • RAM: 16.8MB`;
       } else {
-        setHasFailedBefore(true);
-        setSelectedTestCaseId(5);
-        setActiveCodePaneTab("tests");
-        window.dispatchEvent(
-          new CustomEvent("pet-state-change", {
-            detail: { state: "error", text: "Ca kiểm thử biên số 5 chưa đạt! Xem chi tiết tại tab Test hoặc mở Gợi ý nhé!" },
-          })
-        );
+        output = `Milo (Golden) sua: Gau gau!\nAnimal speak() executed via C++ Virtual Function.\n\n[Thực thi hoàn tất] Exit code: 0 • Thời gian: 15ms • RAM: 8.2MB`;
       }
-    } catch (err) {
-      console.error("Sandbox execution error:", err);
-    } finally {
+
+      setConsoleOutput([
+        `[${time}] $ run-sandbox --runtime=isolated --lang=${selectedLanguage}`,
+        `[${time}] Biên dịch và thực thi chương trình...`,
+        output,
+      ]);
       setIsRunningSandbox(false);
-    }
+    }, 350);
   };
 
   const handleUnlockHint = async (level: number) => {
@@ -1472,139 +1464,59 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
                     ))}
                   </div>
 
-                  {/* Docker Sandbox Isolated Status */}
+                  {/* Sandbox Isolated Status */}
                   <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 text-[11px] font-semibold">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Docker Sandbox: Node-04</span>
+                    <span>Sandbox Thực hành Sẵn sàng</span>
                     <span className="text-emerald-300 dark:text-emerald-700">|</span>
-                    <span>Seccomp Active (128MB)</span>
+                    <span>Tự do gõ & thử nghiệm</span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setShowProblemSpec(!showProblemSpec)}
-                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
-                      showProblemSpec
-                        ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300"
-                        : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    }`}
-                    title="Bật/tắt mô tả đề bài"
-                  >
-                    <FileText size={13} />
-                    <span className="hidden md:inline">Đề bài</span>
-                  </button>
-
-                  <button
                     onClick={resetStarterCode}
-                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
-                    title="Khôi phục mã nguồn ban đầu"
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
+                    title="Khôi phục mã mẫu của bài học"
                   >
                     <RotateCcw size={13} />
-                    <span className="hidden md:inline">Reset</span>
+                    <span>Mã ban đầu</span>
                   </button>
 
                   <button
-                    onClick={() => setActiveCodePaneTab("hints")}
-                    className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/50 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition shadow-xs cursor-pointer"
+                    onClick={() => setConsoleOutput([])}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
+                    title="Xóa log terminal"
                   >
-                    <Lightbulb size={13} />
-                    <span>Gợi ý Socratic</span>
-                    {Object.keys(unlockedHints).length > 0 && (
-                      <span className="ml-1 rounded-full bg-purple-200 dark:bg-purple-800 px-1.5 py-0.2 text-[10px]">
-                        {Object.keys(unlockedHints).length}/3
-                      </span>
-                    )}
+                    <Trash2 size={13} />
+                    <span>Xóa console</span>
                   </button>
 
                   <button
                     onClick={runSandbox}
                     disabled={isRunningSandbox}
-                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/60 px-4 py-1.5 text-xs font-bold text-white transition shadow-sm cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-1.5 text-xs shadow-sm disabled:opacity-50 transition cursor-pointer"
                   >
                     {isRunningSandbox ? (
-                      <>
-                        <RefreshCw size={13} className="animate-spin" />
-                        <span>Đang chạy test...</span>
-                      </>
+                      <Loader2 size={13} className="animate-spin" />
                     ) : (
-                      <>
-                        <PlayCircle size={14} />
-                        <span>Chạy Sandbox</span>
-                        <span className="hidden lg:inline text-[10px] opacity-75 font-normal ml-1">Ctrl+Enter</span>
-                      </>
+                      <Play size={13} />
                     )}
+                    <span>{isRunningSandbox ? "Đang chạy..." : "Chạy code (Ctrl + Enter)"}</span>
                   </button>
                 </div>
               </div>
 
-              {/* ── 3-PANE WORKSPACE BODY ──────────────────────────────────── */}
+              {/* ── SPLIT VIEW: EDITOR ON LEFT, TERMINAL ON RIGHT ───────────── */}
               <div className="flex flex-1 min-h-0 overflow-hidden">
-                {/* 1. LEFT PANE: PROBLEM SPEC & CONSTRAINTS (Collapsible) */}
-                {showProblemSpec && (
-                  <div className="w-72 lg:w-80 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-4 overflow-y-auto shrink-0 flex flex-col gap-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 text-[10px] font-bold">
-                        Bài 04 • Cấu trúc dữ liệu
-                      </span>
-                      <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
-                        Độ khó: Medium
-                      </span>
-                    </div>
-
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Bộ nhớ đệm Lịch sử Duyệt web (Bounded Page Tracker)
-                    </h3>
-
-                    <div className="space-y-2 text-slate-600 dark:text-slate-300 leading-5">
-                      <p>
-                        Thiết kế lớp <code className="font-mono font-bold text-blue-600 dark:text-blue-400">PageTracker</code> lưu trữ lịch sử tối đa <strong>3 trang gần nhất</strong> của người dùng theo nguyên tắc FIFO.
-                      </p>
-                      <p>
-                        Mỗi khi gọi <code className="font-mono text-slate-800 dark:text-slate-200">visit(page)</code>, trang mới được đẩy vào cuối hàng đợi. Nếu dung lượng vượt quá 3, trang cũ nhất tự động bị đẩy ra.
-                      </p>
-                    </div>
-
-                    {/* Constraints Box */}
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 space-y-2">
-                      <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase tracking-wider">
-                        <Cpu size={12} className="text-blue-500" />
-                        <span>Ràng buộc kỹ thuật</span>
-                      </div>
-                      <ul className="space-y-1 text-[11px] text-slate-500 dark:text-slate-400 list-disc list-inside">
-                        <li>Dung lượng cố định: <code className="font-mono text-slate-700 dark:text-slate-300 font-bold">maxlen = 3</code></li>
-                        <li>Độ phức tạp: <code className="font-mono text-emerald-600 font-bold">O(1)</code> cho thao tác visit</li>
-                        <li>Giới hạn Sandbox: <code className="font-mono">2000ms</code>, <code className="font-mono">128MB RAM</code></li>
-                        <li className="text-amber-600 dark:text-amber-400 font-medium">
-                          <strong>Ca biên:</strong> Không lưu chuỗi rỗng <code className="font-mono">""</code>, <code className="font-mono">null</code> hoặc khoảng trắng!
-                        </li>
-                      </ul>
-                    </div>
-
-                    {/* Example Box */}
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 space-y-1.5">
-                      <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
-                        Ví dụ mẫu:
-                      </div>
-                      <div className="bg-slate-100 dark:bg-slate-900 rounded-lg p-2 font-mono text-[10px] leading-4 text-slate-700 dark:text-slate-300">
-                        visit("/home")<br />
-                        visit("/shop")<br />
-                        visit("/cart")<br />
-                        visit("/checkout")<br />
-                        <span className="text-emerald-600 dark:text-emerald-400"># Output: ["/shop", "/cart", "/checkout"]</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. CENTER PANE: CODE EDITOR WITH LINE NUMBERS */}
-                <div className="flex flex-1 flex-col bg-slate-950 min-w-0 overflow-hidden">
+                {/* 1. CODE EDITOR */}
+                <div className="flex flex-1 flex-col bg-slate-950 min-w-0 overflow-hidden border-r border-slate-800/80">
                   {/* File Header */}
                   <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-1.5 bg-slate-950 text-slate-400 text-[11px] font-mono shrink-0">
                     <div className="flex items-center gap-2">
                       <Code2 size={13} className="text-blue-400" />
                       <span className="font-bold text-slate-200">
-                        {selectedLanguage === "python" ? "PageTracker.py" : selectedLanguage === "java" ? "PageTracker.java" : "PageTracker.cpp"}
+                        {selectedLanguage === "python" ? "main.py" : selectedLanguage === "java" ? "Main.java" : "main.cpp"}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-slate-500 text-[10px]">
@@ -1622,6 +1534,7 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
                         <div key={i}>{i + 1}</div>
                       ))}
                     </div>
+
                     {/* Textarea */}
                     <textarea
                       value={codeValue}
@@ -1634,325 +1547,44 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
 
                   {/* Editor footer */}
                   <div className="border-t border-slate-800/80 bg-slate-900/90 px-4 py-1.5 text-[10px] text-slate-400 flex items-center justify-between shrink-0">
-                    <span className="flex items-center gap-1.5"><Keyboard size={13} className="text-slate-400" /><span>Phím tắt: <strong className="text-slate-300">Ctrl + Enter</strong> để thực thi sandbox</span></span>
-                    <span className="text-emerald-400 font-mono">Isolated Container Ready</span>
+                    <span className="flex items-center gap-1.5">
+                      <Keyboard size={13} className="text-slate-400" />
+                      <span>Phím tắt: <strong className="text-slate-300">Ctrl + Enter</strong> để thực thi code</span>
+                    </span>
+                    <span className="text-emerald-400 font-mono">Tự do chỉnh sửa & thử nghiệm</span>
                   </div>
                 </div>
 
-                {/* 3. RIGHT PANE: TEST SUITE & SOCRATIC HINTS & CONSOLE */}
-                <div className="w-80 xl:w-96 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col shrink-0 min-h-0">
-                  {/* Pane Navigation */}
-                  <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 shrink-0">
-                    <button
-                      onClick={() => setActiveCodePaneTab("tests")}
-                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                        activeCodePaneTab === "tests"
-                          ? "border-blue-600 text-blue-600 dark:text-blue-400 font-bold bg-white dark:bg-slate-950"
-                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      <TestTube2 size={13} className="shrink-0" />
-                      <span>Test Cases ({submissionResult ? `${submissionResult.passed_count}/${submissionResult.total_count}` : "5"})</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveCodePaneTab("hints")}
-                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                        activeCodePaneTab === "hints"
-                          ? "border-purple-600 text-purple-600 dark:text-purple-400 font-bold bg-white dark:bg-slate-950"
-                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      <Lightbulb size={13} className="shrink-0" />
-                      <span>Gợi ý Socratic ({Object.keys(unlockedHints).length}/3)</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveCodePaneTab("console")}
-                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                        activeCodePaneTab === "console"
-                          ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-slate-950"
-                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      <Terminal size={13} className="shrink-0" />
-                      <span>Console</span>
-                    </button>
+                {/* 2. CONSOLE TERMINAL OUTPUT */}
+                <div className="w-80 xl:w-96 bg-slate-950 flex flex-col shrink-0 min-h-0">
+                  {/* Console Header */}
+                  <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2 bg-slate-900/80 text-slate-300 text-xs font-semibold shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Terminal size={14} className="text-emerald-400" />
+                      <span>Console Terminal</span>
+                    </div>
+                    <span className="font-mono text-[10px] text-slate-500">Live Output</span>
                   </div>
 
-                  {/* TAB CONTENT: TEST CASES */}
-                  {activeCodePaneTab === "tests" && (
-                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                      {!submissionResult ? (
-                        <div className="text-center py-10 px-4 space-y-3">
-                          <div className="h-12 w-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
-                            <Layers size={24} />
-                          </div>
-                          <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                            Chưa có dữ liệu kiểm thử
-                          </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-4">
-                            Nhấn nút <strong className="text-emerald-600">"Chạy Sandbox"</strong> ở trên hoặc <strong className="text-slate-700 dark:text-slate-300">Ctrl + Enter</strong> để khởi chạy 5 ca kiểm thử biên.
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Result Summary Bar */}
-                          <div className={`rounded-xl p-3 border ${
-                            submissionResult.status === "passed"
-                              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
-                              : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"
-                          }`}>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className={`text-xs font-bold flex items-center gap-1.5 ${
-                                submissionResult.status === "passed" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"
-                              }`}>
-                                {submissionResult.status === "passed" ? (
-                                  <>
-                                    <CheckCircle size={15} />
-                                    <span>5/5 Ca kiểm thử ĐẠT (All Passed)</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <AlertTriangle size={15} />
-                                    <span>{submissionResult.passed_count}/{submissionResult.total_count} Ca kiểm thử ĐẠT</span>
-                                  </>
-                                )}
-                              </span>
-                              <span className="font-mono text-[10px] text-slate-500 font-bold">
-                                {submissionResult.execution_time_ms}ms • {submissionResult.memory_mb}MB
-                              </span>
-                            </div>
-
-                            {/* Progress bar */}
-                            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full transition-all duration-500 ${
-                                  submissionResult.status === "passed" ? "bg-emerald-500" : "bg-amber-500"
-                                }`}
-                                style={{ width: `${(submissionResult.passed_count / submissionResult.total_count) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-
-                          {/* List of 5 Test Cases */}
-                          <div className="space-y-1.5">
-                            {submissionResult.test_cases.map((tc) => {
-                              const isSelected = selectedTestCaseId === tc.id;
-                              const isPassed = tc.status === "passed";
-                              return (
-                                <div
-                                  key={tc.id}
-                                  onClick={() => setSelectedTestCaseId(tc.id)}
-                                  className={`rounded-lg border p-2.5 transition cursor-pointer text-xs ${
-                                    isSelected
-                                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 shadow-xs"
-                                      : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900"
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex items-start gap-2">
-                                      {isPassed ? (
-                                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0 mt-0.5" />
-                                      ) : (
-                                        <XCircle size={15} className="text-red-500 shrink-0 mt-0.5" />
-                                      )}
-                                      <div>
-                                        <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                                          <span>Test {tc.id}: {tc.title}</span>
-                                          {tc.is_edge_case && (
-                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                                              Edge Case
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                          {tc.duration_ms}ms • {tc.memory_mb}MB
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                                      isPassed ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" : "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300"
-                                    }`}>
-                                      {isPassed ? "Pass" : "Fail"}
-                                    </span>
-                                  </div>
-
-                                  {/* Expanded details when selected */}
-                                  {isSelected && (
-                                    <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5 text-[11px] font-mono">
-                                      <div>
-                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">ĐẦU VÀO (INPUT):</span>
-                                        <div className="bg-slate-100 dark:bg-slate-900 p-1.5 rounded text-slate-800 dark:text-slate-200 break-all">
-                                          {tc.input}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">KẾT QUẢ MONG ĐỢI:</span>
-                                        <div className="bg-slate-100 dark:bg-slate-900 p-1.5 rounded text-emerald-600 dark:text-emerald-400 break-all">
-                                          {tc.expected_output}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">KẾT QUẢ THỰC TẾ:</span>
-                                        <div className={`p-1.5 rounded break-all ${
-                                          isPassed ? "bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300" : "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900"
-                                        }`}>
-                                          {tc.actual_output}
-                                        </div>
-                                      </div>
-
-                                      {tc.failure_reason && (
-                                        <div className="mt-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 font-sans text-[11px] space-y-1">
-                                          <div className="font-bold flex items-center gap-1">
-                                            <AlertCircle size={12} />
-                                            <span>Chẩn đoán lỗi biên:</span>
-                                          </div>
-                                          <div>{tc.failure_reason}</div>
-                                          <button
-                                            onClick={() => setActiveCodePaneTab("hints")}
-                                            className="mt-1 font-bold text-purple-700 dark:text-purple-300 hover:underline cursor-pointer flex items-center gap-1"
-                                          >
-                                            <span>Xem hướng dẫn Socratic để khắc phục</span>
-                                            <ArrowRight size={12} />
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* TAB CONTENT: SOCRATIC HINTS LADDER */}
-                  {activeCodePaneTab === "hints" && (
-                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                      {/* Academic Guardrail Policy Banner */}
-                      <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 p-3 space-y-1 text-xs">
-                        <div className="flex items-center gap-1.5 font-bold text-purple-800 dark:text-purple-300">
-                          <ShieldCheck size={14} />
-                          <span>Socratic Guardrail Độc Quyền</span>
-                        </div>
-                        <p className="text-[11px] text-purple-700 dark:text-purple-400 leading-4">
-                          Hệ thống cam kết không bao giờ đưa ra lời giải hoàn chỉnh. Thay vào đó, AI mở khóa 3 nấc tư duy để sinh viên tự hoàn thiện mã nguồn.
-                        </p>
+                  {/* Console Log Area */}
+                  <div className="flex-1 overflow-y-auto p-4 font-mono text-xs text-emerald-400 space-y-1 leading-relaxed bg-slate-950">
+                    {consoleOutput.length === 0 ? (
+                      <div className="text-slate-500 italic text-[11px] py-4">
+                        Chưa có log thực thi. Bấm "Chạy code (Ctrl + Enter)" để chạy thử nghiệm mã nguồn...
                       </div>
-
-                      {/* 3 Hint Levels */}
-                      <div className="space-y-2">
-                        {[1, 2, 3].map((lvl) => {
-                          const isUnlocked = !!unlockedHints[lvl];
-                          const isLoading = loadingHintLevel === lvl;
-                          const title =
-                            lvl === 1
-                              ? "Nấc 1: Khái niệm & Nguyên lý FIFO Deque"
-                              : lvl === 2
-                              ? "Nấc 2: Phân tích Ca kiểm thử biên (Edge Case)"
-                              : "Nấc 3: Thuật toán định hướng / Mã giả (Pseudo-code)";
-
-                          return (
-                            <div
-                              key={lvl}
-                              className={`rounded-xl border p-3 transition ${
-                                isUnlocked
-                                  ? "border-purple-300 dark:border-purple-700 bg-white dark:bg-slate-900 shadow-xs"
-                                  : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                    isUnlocked ? "bg-purple-600 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                                  }`}>
-                                    {lvl}
-                                  </span>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                    {title}
-                                  </span>
-                                </div>
-                                {!isUnlocked && (
-                                  <button
-                                    onClick={() => handleUnlockHint(lvl)}
-                                    disabled={isLoading}
-                                    className="rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white px-2.5 py-1 text-[11px] font-bold transition shadow-xs cursor-pointer"
-                                  >
-                                    {isLoading ? "Đang mở..." : "Mở gợi ý"}
-                                  </button>
-                                )}
-                              </div>
-
-                              {isUnlocked && (
-                                <div className="mt-2.5 pt-2 border-t border-purple-100 dark:border-purple-900/50 text-[11px] text-slate-700 dark:text-slate-300 leading-5">
-                                  <div className="whitespace-pre-line">
-                                    {unlockedHints[lvl].hint_text}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 text-xs space-y-1">
-                        <div className="font-bold text-slate-800 dark:text-slate-200">
-                          Hỏi đáp trực tiếp với AI Mentor?
-                        </div>
-                        <p className="text-[11px] text-slate-500">
-                          Huynh có thể nhắn trực tiếp vào khung chat bên phải màn hình. Socratic Mentor sẽ phản biện dựa trên mã nguồn hiện tại của huynh.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB CONTENT: CONSOLE TERMINAL */}
-                  {activeCodePaneTab === "console" && (
-                    <div className="flex-1 flex flex-col bg-slate-950 text-slate-300 font-mono text-xs overflow-hidden">
-                      <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2 shrink-0">
-                        <Terminal size={12} className="text-emerald-400" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          Container Standard Output
-                        </span>
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-3 space-y-1 text-[11px] leading-5">
-                        {consoleOutput.map((line, i) => (
-                          <div
-                            key={i}
-                            className={`${
-                              line.startsWith("$")
-                                ? "text-cyan-400 font-bold"
-                                : line.includes("FAILED") || line.includes("error") || line.includes("Error")
-                                ? "text-red-400 font-bold"
-                                : line.includes("PASSED") || line.includes("Thực thi")
-                                ? "text-emerald-400"
-                                : line.startsWith("[")
-                                ? "text-slate-400"
-                                : "text-slate-200"
-                            }`}
-                          >
-                            {line}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ── FOOTER BAR ────────────────────────────────────────────── */}
-              <div className="border-t border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 px-4 py-2 text-[11px] text-slate-600 dark:text-slate-400 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={13} className="text-emerald-500" />
-                  <span>Chuẩn chấm bài: Docker Runc Sandbox • Đo độ phức tạp O(1) • 5 Ca kiểm thử biên</span>
-                </div>
-                {submissionResult?.sha256 && (
-                  <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
-                    <span>Audit Hash:</span>
-                    <span className="text-blue-600 dark:text-blue-400 font-bold">{submissionResult.sha256.slice(0, 16)}...</span>
+                    ) : (
+                      consoleOutput.map((line, idx) => (
+                        <div key={idx} className="whitespace-pre-wrap">{line}</div>
+                      ))
+                    )}
                   </div>
-                )}
+
+                  {/* Console Footer */}
+                  <div className="border-t border-slate-800/80 bg-slate-900/90 px-4 py-2 text-[11px] text-slate-400 flex items-center justify-between shrink-0">
+                    <span>Trạng thái: <strong className="text-emerald-400">Sẵn sàng</strong></span>
+                    <span className="font-mono text-[10px]">Isolated Runtime</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
