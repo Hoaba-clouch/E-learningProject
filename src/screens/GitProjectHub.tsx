@@ -44,9 +44,9 @@ function ContainerBoxNode({ data }: NodeProps) {
   return (
     <div
       style={{ width: c.width, height: c.height }}
-      className={`rounded-2xl border-2 pointer-events-none select-none p-3.5 relative shadow-xs transition-all ${c.bgColor} ${c.borderColor}`}
+      className={`rounded-3xl border-2 pointer-events-none select-none p-4 relative shadow-xs transition-all ${c.bgColor} ${c.borderColor}`}
     >
-      <div className={`absolute top-2.5 right-4 text-xs font-bold font-mono tracking-wider ${c.textColor}`}>
+      <div className={`absolute top-3 right-5 text-sm font-bold font-mono tracking-wider ${c.textColor}`}>
         {c.label}
       </div>
     </div>
@@ -72,7 +72,7 @@ function GitDiagramCardNode({ data }: NodeProps) {
   if (nodeData.isCircle) {
     return (
       <div
-        className={`w-18 h-18 rounded-full border-2 flex flex-col items-center justify-center text-center p-1 shadow-md transition-all cursor-pointer ${
+        className={`w-20 h-20 rounded-full border-2 flex flex-col items-center justify-center text-center p-1 shadow-md transition-all cursor-pointer ${
           nodeData.isSelected
             ? "border-blue-600 bg-blue-600 text-white ring-4 ring-blue-500/30 scale-105"
             : "border-blue-400 bg-blue-50 text-blue-900 hover:border-blue-500"
@@ -87,7 +87,7 @@ function GitDiagramCardNode({ data }: NodeProps) {
   if (nodeData.isCylinder) {
     return (
       <div
-        className={`min-w-[190px] rounded-2xl border-2 px-4 py-3 text-center shadow-md transition-all cursor-pointer ${
+        className={`w-[230px] rounded-2xl border-2 px-4 py-3 text-center shadow-md transition-all cursor-pointer ${
           nodeData.isSelected
             ? "border-blue-700 bg-blue-600 text-white ring-4 ring-blue-500/30 scale-105"
             : "border-blue-500 bg-blue-50/90 text-blue-950 hover:bg-blue-100"
@@ -109,7 +109,7 @@ function GitDiagramCardNode({ data }: NodeProps) {
 
   return (
     <div
-      className={`relative min-w-[155px] max-w-[170px] rounded-xl border-2 p-2.5 shadow-sm transition-all cursor-pointer bg-white ${
+      className={`relative w-[175px] rounded-xl border-2 p-2.5 shadow-sm transition-all cursor-pointer bg-white ${
         nodeData.isSelected
           ? "border-blue-600 ring-4 ring-blue-500/20 shadow-md scale-[1.02]"
           : "border-slate-200 hover:border-slate-300 hover:shadow-md"
@@ -158,20 +158,20 @@ const nodeTypes = {
   containerBox: ContainerBoxNode,
 };
 
-// ─── GitDiagram Nodes: 4 Containers + 22 Components ─────────────────────────
+// ─── GitDiagram Nodes: 4 Containers + 22 Components (Widely Spaced) ───────────
 const INITIAL_ARCH_NODES: Node[] = [
   // 4 Background Containers matching GitDiagram Zones
   {
     id: "group-campus-app",
     type: "containerBox",
-    position: { x: 230, y: 90 },
+    position: { x: 80, y: 70 },
     zIndex: -1,
     selectable: false,
     draggable: false,
     data: {
       label: "Campus App",
-      width: 1190,
-      height: 295,
+      width: 1680,
+      height: 420,
       bgColor: "bg-slate-50/70",
       borderColor: "border-slate-300",
       textColor: "text-slate-600",
@@ -180,14 +180,14 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "group-project-ws",
     type: "containerBox",
-    position: { x: 40, y: 440 },
+    position: { x: 80, y: 550 },
     zIndex: -1,
     selectable: false,
     draggable: false,
     data: {
       label: "Project Workspace",
-      width: 850,
-      height: 230,
+      width: 1210,
+      height: 320,
       bgColor: "bg-emerald-50/40",
       borderColor: "border-emerald-300",
       textColor: "text-emerald-700",
@@ -196,14 +196,14 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "group-api-platform",
     type: "containerBox",
-    position: { x: 930, y: 440 },
+    position: { x: 1370, y: 550 },
     zIndex: -1,
     selectable: false,
     draggable: false,
     data: {
       label: "API Platform",
-      width: 240,
-      height: 420,
+      width: 280,
+      height: 720,
       bgColor: "bg-rose-50/40",
       borderColor: "border-rose-300",
       textColor: "text-rose-700",
@@ -212,14 +212,14 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "group-learning-srv",
     type: "containerBox",
-    position: { x: 900, y: 910 },
+    position: { x: 740, y: 930 },
     zIndex: -1,
     selectable: false,
     draggable: false,
     data: {
       label: "Learning Services",
-      width: 520,
-      height: 220,
+      width: 570,
+      height: 290,
       bgColor: "bg-amber-50/40",
       borderColor: "border-amber-300",
       textColor: "text-amber-700",
@@ -230,7 +230,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "user",
     type: "cardNode",
-    position: { x: 800, y: 15 },
+    position: { x: 880, y: 15 },
     data: {
       label: "Campus user",
       container: "Actor",
@@ -250,7 +250,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "app-shell",
     type: "cardNode",
-    position: { x: 745, y: 115 },
+    position: { x: 835, y: 100 },
     data: {
       label: "App shell",
       subLabel: "[App.tsx]",
@@ -268,7 +268,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "login",
     type: "cardNode",
-    position: { x: 250, y: 205 },
+    position: { x: 110, y: 220 },
     data: {
       label: "Login",
       subLabel: "[LoginScreen.tsx]",
@@ -286,7 +286,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "student-dash",
     type: "cardNode",
-    position: { x: 420, y: 205 },
+    position: { x: 340, y: 220 },
     data: {
       label: "Student dashboard",
       subLabel: "[StudentDashboard.tsx]",
@@ -304,7 +304,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "learning-ws",
     type: "cardNode",
-    position: { x: 590, y: 205 },
+    position: { x: 570, y: 220 },
     data: {
       label: "Learning workspace",
       subLabel: "[LearningWorkspace.tsx]",
@@ -322,7 +322,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "api-client",
     type: "cardNode",
-    position: { x: 590, y: 295 },
+    position: { x: 570, y: 350 },
     data: {
       label: "API client",
       subLabel: "[api.ts]",
@@ -340,7 +340,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "tech-reels",
     type: "cardNode",
-    position: { x: 760, y: 205 },
+    position: { x: 800, y: 220 },
     data: {
       label: "Tech reels",
       subLabel: "[TechReels.tsx]",
@@ -358,7 +358,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "profile",
     type: "cardNode",
-    position: { x: 930, y: 205 },
+    position: { x: 1030, y: 220 },
     data: {
       label: "Student profile",
       subLabel: "[StudentProfile.tsx]",
@@ -376,7 +376,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "xp-shop",
     type: "cardNode",
-    position: { x: 1100, y: 205 },
+    position: { x: 1260, y: 220 },
     data: {
       label: "XP shop",
       subLabel: "[XPShop.tsx]",
@@ -394,7 +394,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "admin-dash",
     type: "cardNode",
-    position: { x: 1270, y: 205 },
+    position: { x: 1490, y: 220 },
     data: {
       label: "Admin dashboard",
       subLabel: "[AdminDashboard.tsx]",
@@ -414,7 +414,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "git-hub",
     type: "cardNode",
-    position: { x: 60, y: 470 },
+    position: { x: 110, y: 590 },
     data: {
       label: "Git project hub",
       subLabel: "[GitProjectHub.tsx]",
@@ -432,7 +432,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "kanban-board",
     type: "cardNode",
-    position: { x: 230, y: 470 },
+    position: { x: 340, y: 590 },
     data: {
       label: "Kanban board",
       subLabel: "[KanbanBoard.tsx]",
@@ -450,7 +450,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "task-csv",
     type: "cardNode",
-    position: { x: 230, y: 565 },
+    position: { x: 340, y: 730 },
     data: {
       label: "Task CSV manager",
       subLabel: "[TaskCsvModal.tsx]",
@@ -468,7 +468,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "instructor-panel",
     type: "cardNode",
-    position: { x: 400, y: 470 },
+    position: { x: 570, y: 590 },
     data: {
       label: "Instructor panel",
       subLabel: "[InstructorPanel.tsx]",
@@ -486,7 +486,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "instructor-apis",
     type: "cardNode",
-    position: { x: 570, y: 470 },
+    position: { x: 800, y: 590 },
     data: {
       label: "Instructor APIs",
       subLabel: "[instructor.py]",
@@ -504,7 +504,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "kanban-apis",
     type: "cardNode",
-    position: { x: 740, y: 470 },
+    position: { x: 1030, y: 590 },
     data: {
       label: "Kanban APIs",
       subLabel: "[kanban.py]",
@@ -520,11 +520,11 @@ const INITIAL_ARCH_NODES: Node[] = [
     },
   },
 
-  // 4. API Platform Subgraph Components (Middle-Right)
+  // 4. API Platform Subgraph Components (Middle-Right Stack)
   {
     id: "api-startup",
     type: "cardNode",
-    position: { x: 965, y: 465 },
+    position: { x: 1420, y: 590 },
     data: {
       label: "API startup",
       subLabel: "[main.py]",
@@ -542,7 +542,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "v1-router",
     type: "cardNode",
-    position: { x: 965, y: 545 },
+    position: { x: 1420, y: 720 },
     data: {
       label: "V1 router",
       subLabel: "[router.py]",
@@ -560,7 +560,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "auth",
     type: "cardNode",
-    position: { x: 965, y: 625 },
+    position: { x: 1420, y: 850 },
     data: {
       label: "Authentication",
       subLabel: "[auth.py]",
@@ -578,7 +578,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "auth-deps",
     type: "cardNode",
-    position: { x: 965, y: 705 },
+    position: { x: 1420, y: 980 },
     data: {
       label: "Auth dependencies",
       subLabel: "[deps.py]",
@@ -596,7 +596,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "token-utils",
     type: "cardNode",
-    position: { x: 965, y: 785 },
+    position: { x: 1420, y: 1110 },
     data: {
       label: "Token utilities",
       subLabel: "[security.py]",
@@ -616,7 +616,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "learning-apis",
     type: "cardNode",
-    position: { x: 920, y: 935 },
+    position: { x: 765, y: 970 },
     data: {
       label: "Learning APIs",
       subLabel: "[lms.py]",
@@ -634,7 +634,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "submissions",
     type: "cardNode",
-    position: { x: 1080, y: 935 },
+    position: { x: 940, y: 970 },
     data: {
       label: "Submissions",
       subLabel: "[submissions.py]",
@@ -652,7 +652,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "ai-apis",
     type: "cardNode",
-    position: { x: 1240, y: 935 },
+    position: { x: 1115, y: 970 },
     data: {
       label: "AI tutor APIs",
       subLabel: "[ai.py]",
@@ -670,7 +670,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "code-evaluator",
     type: "cardNode",
-    position: { x: 1000, y: 1025 },
+    position: { x: 850, y: 1100 },
     data: {
       label: "Code evaluator",
       subLabel: "[code_evaluator.py]",
@@ -688,7 +688,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "analytics",
     type: "cardNode",
-    position: { x: 1160, y: 1025 },
+    position: { x: 1030, y: 1100 },
     data: {
       label: "Event analytics",
       subLabel: "[analytics.py]",
@@ -708,7 +708,7 @@ const INITIAL_ARCH_NODES: Node[] = [
   {
     id: "sqlite-db",
     type: "cardNode",
-    position: { x: 670, y: 1180 },
+    position: { x: 520, y: 1310 },
     data: {
       label: "SQLite database",
       subLabel: "[database.py]",
@@ -1095,7 +1095,7 @@ export default function GitProjectHub() {
             </div>
 
             {/* ReactFlow Canvas Window */}
-            <div className="w-full h-[660px] rounded-xl border border-slate-200 overflow-hidden relative bg-slate-50/50">
+            <div className="w-full h-[740px] rounded-xl border border-slate-200 overflow-hidden relative bg-slate-50/50">
               <ReactFlow
                 nodes={displayNodes}
                 edges={archEdges}
@@ -1104,7 +1104,7 @@ export default function GitProjectHub() {
                 onEdgesChange={onEdgesChange}
                 onNodeClick={onNodeClick}
                 fitView
-                fitViewOptions={{ padding: 0.12 }}
+                fitViewOptions={{ padding: 0.15 }}
                 minZoom={0.2}
                 maxZoom={1.6}
               >
