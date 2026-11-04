@@ -1947,57 +1947,63 @@ export default function GitProjectHub() {
                 </div>
               </div>
 
-              {/* Dòng 4: Segmented Sub-Tabs Bar */}
-              <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200 overflow-x-auto">
-                <button
-                  onClick={() => setPrSubTab("diff")}
-                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                    prSubTab === "diff"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  <Code2 size={14} />
-                  Soi Lỗi Từng Dòng & 1-Click Fix ({selectedPR.files.length} file)
-                </button>
-                <button
-                  onClick={() => setPrSubTab("walkthrough")}
-                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                    prSubTab === "walkthrough"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  <FileText size={14} />
-                  Bản Tóm Tắt (AI Walkthrough)
-                </button>
-                <button
-                  onClick={() => setPrSubTab("defense")}
-                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                    prSubTab === "defense"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  <HelpCircle size={14} />
-                  Bộ Câu Hỏi Vấn Đáp (Thầy Phước Q&A)
-                </button>
+              {/* Dòng 4: Segmented Sub-Tabs Bar (Chia Đều 3 Cột Hoàn Hảo) */}
+              <div className="pt-2 border-t border-slate-200">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100/90 p-1.5 rounded-xl border border-slate-200/60">
+                  <button
+                    onClick={() => setPrSubTab("diff")}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                      prSubTab === "diff"
+                        ? "bg-white text-blue-700 shadow-xs border border-slate-200/80"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                    }`}
+                  >
+                    <Code2 size={14} className={prSubTab === "diff" ? "text-blue-600" : "text-slate-500"} />
+                    <span>Soi Lỗi & 1-Click Fix</span>
+                  </button>
+                  <button
+                    onClick={() => setPrSubTab("walkthrough")}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                      prSubTab === "walkthrough"
+                        ? "bg-white text-blue-700 shadow-xs border border-slate-200/80"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                    }`}
+                  >
+                    <FileText size={14} className={prSubTab === "walkthrough" ? "text-blue-600" : "text-slate-500"} />
+                    <span>Bản Tóm Tắt (Walkthrough)</span>
+                  </button>
+                  <button
+                    onClick={() => setPrSubTab("defense")}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                      prSubTab === "defense"
+                        ? "bg-white text-blue-700 shadow-xs border border-slate-200/80"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                    }`}
+                  >
+                    <HelpCircle size={14} className={prSubTab === "defense" ? "text-blue-600" : "text-slate-500"} />
+                    <span>Vấn Đáp Thầy Phước Q&A</span>
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* TAB CONTENT 1: LINE-BY-LINE DIFF & 1-CLICK FIX */}
             {prSubTab === "diff" && (
-              <div className="p-5 space-y-6">
-                <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-orange-500" />
-                    <span>
-                      CodeRabbit tự động quét qua AST (Abstract Syntax Tree), phát hiện lỗi logic/bảo mật và gắn comment trực tiếp vào đúng vị trí dòng mã.
-                    </span>
+              <div className="p-5 space-y-5">
+                {/* Thanh thông báo AST chuẩn căn chỉnh đều */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-slate-50/90 p-3.5 rounded-xl border border-slate-200/80">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                      <Sparkles size={14} />
+                    </div>
+                    <p className="text-xs text-slate-700 leading-relaxed">
+                      CodeRabbit quét cây cú pháp AST, tự động phát hiện lỗi logic / bảo mật và bình luận trực tiếp vào dòng mã.
+                    </p>
                   </div>
-                  <span className="font-mono text-slate-500">
-                    Trạng thái: 1 phát hiện cần xử lý
-                  </span>
+                  <div className="shrink-0 flex items-center gap-1.5 font-mono text-[11px] text-slate-600 bg-white px-2.5 py-1 rounded-md border border-slate-200 whitespace-nowrap self-start sm:self-center shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span>Trạng thái: 1 phát hiện cần xử lý</span>
+                  </div>
                 </div>
 
                 {selectedPR.files.map((file, fileIdx) => {
