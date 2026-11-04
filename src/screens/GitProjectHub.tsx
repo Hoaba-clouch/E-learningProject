@@ -29,6 +29,10 @@ import {
   UserCheck,
   GitBranch,
   Clock,
+  GitCommit,
+  FileText,
+  User,
+  GitPullRequest,
 } from "lucide-react";
 
 // ─── Custom Group Container Node (for GitDiagram subsystems) ───────────────
@@ -809,10 +813,203 @@ const INITIAL_ARCH_EDGES: Edge[] = [
   { id: "e-analytics-db", source: "analytics", target: "sqlite-db", type: "smoothstep", label: "accesses", style: { stroke: "#2563eb" }, markerEnd: { type: MarkerType.ArrowClosed }, ...edgeLabelOpts },
 ];
 
+// ─── Git Commit Data Model for Interactive Graph ────────────────────────────
+export interface GitCommitItem {
+  id: string;
+  sha: string;
+  author: {
+    name: string;
+    role: string;
+    avatar: string;
+    color: string;
+  };
+  branch: "main" | "develop" | "feature/erd" | "feature/auth" | "feature/evaluator";
+  branchLabel: string;
+  branchColor: string;
+  message: string;
+  date: string;
+  timeAgo: string;
+  stats: {
+    additions: number;
+    deletions: number;
+    files: number;
+  };
+  filesChanged: string[];
+  cx: number;
+  cy: number;
+}
+
+const GIT_COMMITS: GitCommitItem[] = [
+  {
+    id: "c-1",
+    sha: "001a4fc",
+    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    branch: "main",
+    branchLabel: "main",
+    branchColor: "#2563eb",
+    message: "Khởi tạo repo cấu trúc 3-tier, Dockerfile & branching model",
+    date: "28/10/2026 09:15",
+    timeAgo: "7 ngày trước",
+    stats: { additions: 240, deletions: 0, files: 3 },
+    filesChanged: ["backend/app/main.py", "docker-compose.yml", "README.md"],
+    cx: 80,
+    cy: 45,
+  },
+  {
+    id: "c-2",
+    sha: "14b98c2",
+    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    branch: "develop",
+    branchLabel: "develop",
+    branchColor: "#9333ea",
+    message: "Tách nhánh develop từ main, cấu hình CI/CD và môi trường staging",
+    date: "29/10/2026 10:30",
+    timeAgo: "6 ngày trước",
+    stats: { additions: 110, deletions: 5, files: 2 },
+    filesChanged: [".github/workflows/ci.yml", "package.json"],
+    cx: 200,
+    cy: 110,
+  },
+  {
+    id: "c-3",
+    sha: "b579f87",
+    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    branch: "feature/erd",
+    branchLabel: "feature/erd",
+    branchColor: "#16a34a",
+    message: "Thiết kế ERD 8 bảng quan hệ 3NF và SQLAlchemy migration models",
+    date: "31/10/2026 14:20",
+    timeAgo: "4 ngày trước",
+    stats: { additions: 342, deletions: 12, files: 4 },
+    filesChanged: [
+      "backend/app/models/user.py",
+      "backend/app/models/course.py",
+      "backend/app/models/submission.py",
+      "backend/app/core/database.py",
+    ],
+    cx: 320,
+    cy: 175,
+  },
+  {
+    id: "c-4",
+    sha: "c8e41a9",
+    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    branch: "develop",
+    branchLabel: "develop",
+    branchColor: "#9333ea",
+    message: "Merge branch 'feature/erd' vào develop (PR #04 hoàn thành Sprint 1)",
+    date: "01/11/2026 16:45",
+    timeAgo: "3 ngày trước",
+    stats: { additions: 85, deletions: 2, files: 2 },
+    filesChanged: ["backend/app/api/v1/router.py", "backend/app/core/database.py"],
+    cx: 440,
+    cy: 110,
+  },
+  {
+    id: "c-5",
+    sha: "5149fb7",
+    author: { name: "Quốc Huy", role: "Fullstack Developer", avatar: "QH", color: "#16a34a" },
+    branch: "feature/auth",
+    branchLabel: "feature/auth",
+    branchColor: "#d97706",
+    message: "Xây dựng JWT authentication, hash Passlib Bcrypt 12 rounds và endpoint /login",
+    date: "02/11/2026 11:10",
+    timeAgo: "2 ngày trước",
+    stats: { additions: 295, deletions: 8, files: 5 },
+    filesChanged: [
+      "backend/app/api/v1/endpoints/auth.py",
+      "backend/app/core/security.py",
+      "backend/app/api/deps.py",
+      "src/screens/LoginScreen.tsx",
+      "src/api.ts",
+    ],
+    cx: 560,
+    cy: 240,
+  },
+  {
+    id: "c-6",
+    sha: "d4bdc7d",
+    author: { name: "Quốc Huy", role: "Fullstack Developer", avatar: "QH", color: "#16a34a" },
+    branch: "develop",
+    branchLabel: "develop",
+    branchColor: "#9333ea",
+    message: "Merge branch 'feature/auth' vào develop (PR #07 hoàn thành Sprint 2)",
+    date: "02/11/2026 17:30",
+    timeAgo: "2 ngày trước",
+    stats: { additions: 65, deletions: 4, files: 3 },
+    filesChanged: ["src/api.ts", "backend/app/api/deps.py", "src/App.tsx"],
+    cx: 680,
+    cy: 110,
+  },
+  {
+    id: "c-7",
+    sha: "77817ef",
+    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    branch: "main",
+    branchLabel: "main",
+    branchColor: "#2563eb",
+    message: "Release v1.0: nghiệm thu Sprint 2 và triển khai lên Production",
+    date: "03/11/2026 09:00",
+    timeAgo: "1 ngày trước",
+    stats: { additions: 54, deletions: 10, files: 2 },
+    filesChanged: ["dist/index.html", "vercel.json"],
+    cx: 800,
+    cy: 45,
+  },
+  {
+    id: "c-8",
+    sha: "2103bbf",
+    author: { name: "Hoàng Long", role: "Backend / Tester", avatar: "HL", color: "#9333ea" },
+    branch: "feature/evaluator",
+    branchLabel: "feature/evaluator",
+    branchColor: "#0891b2",
+    message: "Xây dựng sandbox Code Evaluator biên dịch C++ g++ và 5 test case ẩn",
+    date: "03/11/2026 15:40",
+    timeAgo: "1 ngày trước",
+    stats: { additions: 215, deletions: 6, files: 3 },
+    filesChanged: [
+      "backend/app/services/code_evaluator.py",
+      "backend/app/api/v1/endpoints/submissions.py",
+      "backend/app/services/analytics.py",
+    ],
+    cx: 920,
+    cy: 175,
+  },
+  {
+    id: "c-9",
+    sha: "7323c97",
+    author: { name: "Hoàng Long", role: "Backend / Tester", avatar: "HL", color: "#9333ea" },
+    branch: "main",
+    branchLabel: "main",
+    branchColor: "#2563eb",
+    message: "Release v1.2: chốt sơ đồ GitDiagram và triển khai toàn diện hệ thống",
+    date: "04/11/2026 13:45",
+    timeAgo: "Vừa xong",
+    stats: { additions: 310, deletions: 15, files: 3 },
+    filesChanged: ["src/screens/GitProjectHub.tsx", "src/App.tsx", "src/components/ErrorBoundary.tsx"],
+    cx: 1040,
+    cy: 45,
+  },
+];
+
 export default function GitProjectHub() {
   const [viewMode, setViewMode] = useState<"gitdiagram" | "topology" | "analytics" | "gitflow">("gitdiagram");
   const [selectedNodeId, setSelectedNodeId] = useState<string>("learning-ws");
   const [copiedMermaid, setCopiedMermaid] = useState<boolean>(false);
+
+  // Topology Interactive State
+  const [selectedCommit, setSelectedCommit] = useState<GitCommitItem>(GIT_COMMITS[8]);
+  const [hoveredCommit, setHoveredCommit] = useState<GitCommitItem | null>(null);
+  const [memberFilter, setMemberFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>("all");
+
+  const filteredCommits = useMemo(() => {
+    return GIT_COMMITS.filter((c) => {
+      const matchMember = memberFilter === "all" || c.author.name === memberFilter;
+      const matchBranch = branchFilter === "all" || (branchFilter === "feature" ? c.branch.startsWith("feature") : c.branch === branchFilter);
+      return matchMember && matchBranch;
+    });
+  }, [memberFilter, branchFilter]);
 
   // ReactFlow state
   const [archNodes, , onNodesChange] = useNodesState(INITIAL_ARCH_NODES);
@@ -1228,131 +1425,382 @@ export default function GitProjectHub() {
         </div>
       )}
 
-      {/* MODE 2: VISUAL GIT BRANCH GRAPH (TOPOLOGY) */}
+      {/* MODE 2: VISUAL GIT BRANCH GRAPH (TOPOLOGY & COMMIT INSPECTOR) */}
       {viewMode === "topology" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6">
+          {/* Header & Filter Controls */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <GitBranch size={18} className="text-blue-600" />
-                Sơ đồ Nhánh Git (GitKraken / Git Graph DAG)
+                Cây Phân Nhánh Git & Giám Sát Commit Trực Quan (GitKraken / Git Graph)
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Cây phân nhánh trực quan theo quy chuẩn Git Flow: main (production), develop (staging), feature/* (tính năng ca sử dụng).
+                Rê chuột (hover) vào từng điểm commit để xem ai commit, commit nội dung gì và số dòng code thay đổi.
               </p>
             </div>
 
-            <div className="flex items-center gap-3 text-xs font-mono">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> main
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-600" /> develop
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" /> feature/*
-              </span>
+            {/* Member & Branch Filter Controls */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
+                <span className="text-[11px] text-slate-500 px-2 flex items-center gap-1">
+                  <User size={12} />
+                  Thành viên:
+                </span>
+                <button
+                  onClick={() => setMemberFilter("all")}
+                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
+                    memberFilter === "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Tất cả (9)
+                </button>
+                <button
+                  onClick={() => setMemberFilter("Minh Anh")}
+                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
+                    memberFilter === "Minh Anh" ? "bg-blue-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Minh Anh (4)
+                </button>
+                <button
+                  onClick={() => setMemberFilter("Quốc Huy")}
+                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
+                    memberFilter === "Quốc Huy" ? "bg-emerald-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Quốc Huy (2)
+                </button>
+                <button
+                  onClick={() => setMemberFilter("Hoàng Long")}
+                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
+                    memberFilter === "Hoàng Long" ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Hoàng Long (3)
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
+                <span className="text-[11px] text-slate-500 px-2 flex items-center gap-1">
+                  <GitPullRequest size={12} />
+                  Nhánh:
+                </span>
+                <button
+                  onClick={() => setBranchFilter("all")}
+                  className={`px-2 py-1 rounded-md transition text-xs ${
+                    branchFilter === "all" ? "bg-white text-slate-900 font-bold shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Tất cả
+                </button>
+                <button
+                  onClick={() => setBranchFilter("main")}
+                  className={`px-2 py-1 rounded-md transition text-xs ${
+                    branchFilter === "main" ? "bg-blue-100 text-blue-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  main
+                </button>
+                <button
+                  onClick={() => setBranchFilter("develop")}
+                  className={`px-2 py-1 rounded-md transition text-xs ${
+                    branchFilter === "develop" ? "bg-purple-100 text-purple-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  develop
+                </button>
+                <button
+                  onClick={() => setBranchFilter("feature")}
+                  className={`px-2 py-1 rounded-md transition text-xs ${
+                    branchFilter === "feature" ? "bg-emerald-100 text-emerald-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  feature/*
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* SVG Visual Metro Graph */}
-          <div className="overflow-x-auto p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <svg className="w-[840px] h-[220px]" viewBox="0 0 840 220">
-              {/* Lane guides */}
-              <line x1="40" y1="40" x2="800" y2="40" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="44" fill="#64748b" fontSize="10" fontFamily="monospace">main</text>
+          {/* Interactive SVG Visual Git Graph with Floating Popover */}
+          <div className="relative overflow-x-auto p-4 bg-slate-50/70 rounded-xl border border-slate-200">
+            <svg className="w-[1100px] h-[300px]" viewBox="0 0 1100 300">
+              {/* Lane guides & Labels */}
+              <line x1="50" y1="45" x2="1080" y2="45" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="15" y="49" fill="#2563eb" fontSize="11" fontFamily="monospace" fontWeight="bold">main</text>
 
-              <line x1="40" y1="100" x2="800" y2="100" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="104" fill="#64748b" fontSize="10" fontFamily="monospace">develop</text>
+              <line x1="50" y1="110" x2="1080" y2="110" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="15" y="114" fill="#9333ea" fontSize="11" fontFamily="monospace" fontWeight="bold">develop</text>
 
-              <line x1="40" y1="160" x2="800" y2="160" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="164" fill="#64748b" fontSize="10" fontFamily="monospace">feature/*</text>
+              <line x1="50" y1="175" x2="1080" y2="175" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="15" y="179" fill="#16a34a" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/erd</text>
 
-              {/* Branch connecting paths */}
-              <path d="M 60 40 L 160 40 L 220 100 L 460 100 L 520 40 L 800 40" fill="none" stroke="#2563eb" strokeWidth="3" />
-              <path d="M 220 100 L 300 160 L 400 160 L 460 100" fill="none" stroke="#16a34a" strokeWidth="3" />
-              <path d="M 220 100 L 640 100 L 700 40" fill="none" stroke="#9333ea" strokeWidth="3" />
+              <line x1="50" y1="240" x2="1080" y2="240" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="15" y="244" fill="#d97706" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/auth</text>
 
-              {/* Commit Nodes on Main */}
-              <circle cx="60" cy="40" r="7" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
-              <text x="45" y="25" fill="#1e293b" fontSize="10" fontWeight="bold">001a4fc</text>
+              {/* Branch connecting lines (Smooth Bézier curves) */}
+              {/* main trunk */}
+              <path d="M 50 45 L 800 45 L 1080 45" fill="none" stroke="#2563eb" strokeWidth="3" />
 
-              <circle cx="160" cy="40" r="7" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
-              <text x="145" y="25" fill="#1e293b" fontSize="10" fontWeight="bold">TASK-08</text>
+              {/* develop branch split from main (001a4fc) & merge back into v1.0 */}
+              <path
+                d="M 80 45 C 130 45, 150 110, 200 110 L 680 110 C 730 110, 750 45, 800 45"
+                fill="none"
+                stroke="#9333ea"
+                strokeWidth="3"
+              />
 
-              <circle cx="520" cy="40" r="7" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
-              <text x="500" y="25" fill="#1e293b" fontSize="10" fontWeight="bold">Merge v1.0</text>
+              {/* develop continuation to v1.2 merge */}
+              <path
+                d="M 680 110 L 960 110 C 1000 110, 1010 45, 1040 45"
+                fill="none"
+                stroke="#9333ea"
+                strokeWidth="3"
+              />
 
-              <circle cx="700" cy="40" r="7" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
-              <text x="680" y="25" fill="#1e293b" fontSize="10" fontWeight="bold">Release v1.2</text>
+              {/* feature/erd branch split from develop & merge back */}
+              <path
+                d="M 200 110 C 250 110, 270 175, 320 175 C 370 175, 390 110, 440 110"
+                fill="none"
+                stroke="#16a34a"
+                strokeWidth="3"
+              />
 
-              {/* Commit Nodes on Develop */}
-              <circle cx="220" cy="100" r="7" fill="#9333ea" stroke="#ffffff" strokeWidth="2" />
-              <text x="205" y="85" fill="#1e293b" fontSize="10" fontWeight="bold">dev-init</text>
+              {/* feature/auth branch split from develop & merge back */}
+              <path
+                d="M 440 110 C 490 110, 510 240, 560 240 C 610 240, 630 110, 680 110"
+                fill="none"
+                stroke="#d97706"
+                strokeWidth="3"
+              />
 
-              <circle cx="460" cy="100" r="7" fill="#9333ea" stroke="#ffffff" strokeWidth="2" />
-              <text x="440" y="85" fill="#1e293b" fontSize="10" fontWeight="bold">Sprint 2 Done</text>
+              {/* feature/evaluator branch split from develop & merge back */}
+              <path
+                d="M 680 110 C 730 110, 750 175, 920 175 C 960 175, 980 110, 960 110"
+                fill="none"
+                stroke="#0891b2"
+                strokeWidth="3"
+              />
 
-              <circle cx="640" cy="100" r="7" fill="#9333ea" stroke="#ffffff" strokeWidth="2" />
-              <text x="620" y="85" fill="#1e293b" fontSize="10" fontWeight="bold">Sprint 3 Done</text>
+              {/* Interactive Commit Dots */}
+              {GIT_COMMITS.map((c) => {
+                const isFiltered = filteredCommits.some((fc) => fc.id === c.id);
+                const isSelected = selectedCommit?.id === c.id;
+                const isHovered = hoveredCommit?.id === c.id;
 
-              {/* Commit Nodes on Feature */}
-              <circle cx="300" cy="160" r="7" fill="#16a34a" stroke="#ffffff" strokeWidth="2" />
-              <text x="280" y="185" fill="#1e293b" fontSize="10" fontWeight="bold">TASK-14 (ERD 8)</text>
+                return (
+                  <g
+                    key={c.id}
+                    className="cursor-pointer transition-all duration-150"
+                    opacity={isFiltered ? 1 : 0.2}
+                    onMouseEnter={() => setHoveredCommit(c)}
+                    onMouseLeave={() => setHoveredCommit(null)}
+                    onClick={() => setSelectedCommit(c)}
+                  >
+                    {/* Pulsing ring on hover or selected */}
+                    {(isSelected || isHovered) && (
+                      <circle
+                        cx={c.cx}
+                        cy={c.cy}
+                        r={15}
+                        fill="none"
+                        stroke={c.branchColor}
+                        strokeWidth={3}
+                        opacity={0.4}
+                        className="animate-pulse"
+                      />
+                    )}
 
-              <circle cx="400" cy="160" r="7" fill="#16a34a" stroke="#ffffff" strokeWidth="2" />
-              <text x="380" y="185" fill="#1e293b" fontSize="10" fontWeight="bold">TASK-22 (Auth)</text>
+                    {/* Outer Circle matching branch color */}
+                    <circle
+                      cx={c.cx}
+                      cy={c.cy}
+                      r={isSelected ? 9.5 : isHovered ? 9 : 7.5}
+                      fill={c.branchColor}
+                      stroke="#ffffff"
+                      strokeWidth={2.5}
+                    />
+
+                    {/* Inner core dot */}
+                    <circle cx={c.cx} cy={c.cy} r={2.5} fill="#ffffff" />
+
+                    {/* Clean Short SHA label above dot */}
+                    <text
+                      x={c.cx}
+                      y={c.cy - 12}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fontFamily="monospace"
+                      fontWeight={isSelected ? "bold" : "600"}
+                      fill={isSelected ? "#0f172a" : "#475569"}
+                    >
+                      {c.sha}
+                    </text>
+                  </g>
+                );
+              })}
             </svg>
+
+            {/* Interactive Floating Hover Popover Tooltip */}
+            {hoveredCommit && (
+              <div
+                className="absolute z-30 pointer-events-none bg-slate-950/95 text-white backdrop-blur-md p-3.5 rounded-xl shadow-2xl border border-slate-700 w-[320px] text-xs space-y-2.5 animate-fade-in"
+                style={{
+                  left: Math.min(Math.max(hoveredCommit.cx - 150, 15), 760),
+                  top: Math.min(hoveredCommit.cy + 20, 170),
+                }}
+              >
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white shrink-0 shadow-xs"
+                      style={{ backgroundColor: hoveredCommit.author.color }}
+                    >
+                      {hoveredCommit.author.avatar}
+                    </span>
+                    <div>
+                      <div className="font-bold text-slate-100 leading-tight">{hoveredCommit.author.name}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{hoveredCommit.author.role}</div>
+                    </div>
+                  </div>
+                  <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded bg-slate-800 text-blue-400 border border-slate-700">
+                    {hoveredCommit.sha}
+                  </span>
+                </div>
+
+                <p className="text-slate-200 text-xs font-medium leading-relaxed">
+                  {hoveredCommit.message}
+                </p>
+
+                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/80 font-mono">
+                  <span
+                    className="px-2 py-0.5 rounded text-white font-semibold text-[9.5px]"
+                    style={{ backgroundColor: hoveredCommit.branchColor }}
+                  >
+                    {hoveredCommit.branch}
+                  </span>
+                  <span className="text-emerald-400 font-bold">
+                    +{hoveredCommit.stats.additions} / -{hoveredCommit.stats.deletions} ({hoveredCommit.stats.files} tệp)
+                  </span>
+                  <span>{hoveredCommit.timeAgo}</span>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Selected Commit Detail Inspector Card */}
+          {selectedCommit && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0"
+                    style={{ backgroundColor: selectedCommit.author.color }}
+                  >
+                    {selectedCommit.author.avatar}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900">{selectedCommit.author.name}</span>
+                      <span className="text-[11px] font-medium text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        {selectedCommit.author.role}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 font-mono">
+                      <span>{selectedCommit.date}</span>
+                      <span>•</span>
+                      <span>{selectedCommit.timeAgo}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-xs font-mono font-bold text-white px-2.5 py-1 rounded-md"
+                    style={{ backgroundColor: selectedCommit.branchColor }}
+                  >
+                    {selectedCommit.branch}
+                  </span>
+                  <span className="font-mono text-xs font-bold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200">
+                    commit {selectedCommit.sha}
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-sm font-semibold text-slate-900 leading-snug">
+                {selectedCommit.message}
+              </div>
+
+              {/* Modified Files Breakdown */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                  <span className="flex items-center gap-1.5">
+                    <FileText size={14} className="text-slate-500" />
+                    Các tệp tin mã nguồn được chỉnh sửa ({selectedCommit.filesChanged.length} files):
+                  </span>
+                  <span className="font-mono text-[11px] text-emerald-600 font-bold">
+                    +{selectedCommit.stats.additions} dòng / -{selectedCommit.stats.deletions} dòng
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
+                  {selectedCommit.filesChanged.map((file, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 text-slate-700">
+                      <GitCommit size={13} className="text-blue-600 shrink-0" />
+                      <span className="truncate">{file}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Commit History Timeline Table */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Clock size={16} className="text-slate-600" />
-              Lịch sử Commit Gắn Liền Với Mã Task Kanban
+              Nhật Ký Commit Theo Dòng Thời Gian (Nhấp chuột để xem vị trí trên cây)
             </h3>
             <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 overflow-hidden text-xs">
-              <div className="p-3 bg-white flex items-center justify-between hover:bg-slate-50 transition">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    #TASK-14
-                  </span>
-                  <span className="font-medium text-slate-900">Thiết kế ERD 8 bảng 3NF & Schema SQLAlchemy</span>
-                  <span className="font-mono text-slate-400">b579f87</span>
-                </div>
-                <div className="flex items-center gap-4 text-slate-500 font-mono">
-                  <span>Minh Anh (Leader)</span>
-                  <span className="text-emerald-600">+340 / -12</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-white flex items-center justify-between hover:bg-slate-50 transition">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    #TASK-22
-                  </span>
-                  <span className="font-medium text-slate-900">Tích hợp JWT Authentication & Security Passlib 12 rounds</span>
-                  <span className="font-mono text-slate-400">5149fb7</span>
-                </div>
-                <div className="flex items-center gap-4 text-slate-500 font-mono">
-                  <span>Quốc Huy</span>
-                  <span className="text-emerald-600">+280 / -5</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-white flex items-center justify-between hover:bg-slate-50 transition">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    #TASK-31
-                  </span>
-                  <span className="font-medium text-slate-900">Xây dựng Code Evaluator Sandbox & 5 Test Cases ẩn</span>
-                  <span className="font-mono text-slate-400">d4bdc7d</span>
-                </div>
-                <div className="flex items-center gap-4 text-slate-500 font-mono">
-                  <span>Hoàng Long</span>
-                  <span className="text-emerald-600">+195 / -8</span>
-                </div>
-              </div>
+              {filteredCommits.map((c) => {
+                const isSelected = selectedCommit?.id === c.id;
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => setSelectedCommit(c)}
+                    className={`p-3 flex items-center justify-between transition cursor-pointer ${
+                      isSelected ? "bg-blue-50/70 border-l-4 border-l-blue-600" : "bg-white hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        {c.sha}
+                      </span>
+                      <span className="font-medium text-slate-900 truncate max-w-[380px]">{c.message}</span>
+                      <span
+                        className="font-mono text-[10px] text-white px-2 py-0.2 rounded font-semibold shrink-0"
+                        style={{ backgroundColor: c.branchColor }}
+                      >
+                        {c.branch}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-slate-500 font-mono shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="w-4 h-4 rounded-full flex items-center justify-center font-bold text-[8.5px] text-white"
+                          style={{ backgroundColor: c.author.color }}
+                        >
+                          {c.author.avatar}
+                        </span>
+                        <span>{c.author.name}</span>
+                      </div>
+                      <span className="text-emerald-600 font-semibold">
+                        +{c.stats.additions} / -{c.stats.deletions}
+                      </span>
+                      <span className="text-slate-400 text-[11px]">{c.timeAgo}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
