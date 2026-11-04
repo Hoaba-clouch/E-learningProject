@@ -44,25 +44,17 @@ import {
   PlayCircle,
   ChevronsLeft,
   ChevronsRight,
-  AlertCircle,
-  ArrowRight,
   Keyboard,
-  TestTube2,
-  AlertTriangle,
   Award,
   Check,
-  CheckCircle,
   Copy,
-  Cpu,
-  Layers,
-  Lightbulb,
   RefreshCw,
   ShieldCheck,
   Terminal,
-  XCircle,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import {
-  submitCodeToSandbox,
   askSocraticTutor,
   openSocraticHint,
   type SubmissionResult,
@@ -501,14 +493,9 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
   ]);
   const [isRunningSandbox, setIsRunningSandbox] = useState<boolean>(false);
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
-  const [selectedTestCaseId, setSelectedTestCaseId] = useState<number>(5);
-  const [activeCodePaneTab, setActiveCodePaneTab] = useState<"tests" | "hints" | "console">("tests");
   const [unlockedHints, setUnlockedHints] = useState<Record<number, HintResponse>>({});
-  const [loadingHintLevel, setLoadingHintLevel] = useState<number | null>(null);
   const [showSelfCorrectionCert, setShowSelfCorrectionCert] = useState<boolean>(false);
-  const [hasFailedBefore, setHasFailedBefore] = useState<boolean>(false);
   const [copiedSha, setCopiedSha] = useState<boolean>(false);
-  const [showProblemSpec, setShowProblemSpec] = useState<boolean>(true);
   const [isAskingAi, setIsAskingAi] = useState<boolean>(false);
   const [message, setMessage] = useState("");
   const [nodes, setNodes, onNodesChange] = useNodesState(initialMindmapNodes);
@@ -635,19 +622,6 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
       ]);
       setIsRunningSandbox(false);
     }, 350);
-  };
-
-  const handleUnlockHint = async (level: number) => {
-    if (unlockedHints[level]) return;
-    setLoadingHintLevel(level);
-    try {
-      const hint = await openSocraticHint("session-1", level);
-      setUnlockedHints((prev) => ({ ...prev, [level]: hint }));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingHintLevel(null);
-    }
   };
 
   const handleCopySha = (sha: string) => {

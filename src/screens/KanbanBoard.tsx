@@ -1605,11 +1605,7 @@ export default function KanbanBoard() {
                             <span className="font-mono text-[10px] font-bold text-slate-600 flex items-center gap-1">
                               #{task.code}
                               {isLocked && parentTask && (
-                                <Lock
-                                  size={11}
-                                  className="text-rose-500 shrink-0"
-                                  title={`Chờ #${parentTask.code} (${parentTask.assignee.name})`}
-                                />
+                                <span title={`Chờ #${parentTask.code} (${parentTask.assignee.name})`} className="inline-flex"><Lock size={11} className="text-rose-500 shrink-0" /></span>
                               )}
                             </span>
                             <span
