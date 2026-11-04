@@ -2278,16 +2278,16 @@ export default function GitProjectHub() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold">
                   Campus App
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold">
                   Project Workspace
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-semibold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-semibold">
                   API Platform
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold">
                   Learning Services
                 </span>
               </div>
@@ -2398,7 +2398,7 @@ export default function GitProjectHub() {
             </div>
 
             {/* Understand Anything Q&A Box */}
-            <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-lg space-y-2 text-xs">
+            <div className="p-3.5 bg-purple-50/70 rounded-lg space-y-2 text-xs">
               <div className="flex items-center gap-1.5 font-bold text-purple-900">
                 <Sparkles size={14} className="text-purple-600" />
                 Vấn đáp Thầy Phước (Understand Anything)
@@ -2869,7 +2869,7 @@ export default function GitProjectHub() {
             </div>
           </div>
 
-          <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-2">
+          <div className="p-4 rounded-xl bg-emerald-50/60 space-y-2">
             <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm">
               <ShieldCheck size={18} className="text-emerald-600" />
               Báo cáo Xác thực Liêm chính & Chống Gian lận AI (AI Anti-Cheating)
