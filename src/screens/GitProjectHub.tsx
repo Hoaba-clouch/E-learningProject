@@ -33,6 +33,7 @@ import {
   FileText,
   User,
   GitPullRequest,
+  GitFork,
   Bot,
   Wand2,
   HelpCircle,
@@ -1404,6 +1405,11 @@ export default function GitProjectHub() {
   const [selectedNodeId, setSelectedNodeId] = useState<string>("learning-ws");
   const [copiedMermaid, setCopiedMermaid] = useState<boolean>(false);
 
+  // GitHub Repo Connection State
+  const [showRepoModal, setShowRepoModal] = useState<boolean>(false);
+  const [repoUrl, setRepoUrl] = useState<string>("https://github.com/Hoaba-clouch/E-learningProject");
+  const [targetBranch, setTargetBranch] = useState<string>("main");
+
   // CodeRabbit Interactive State (Nhánh 2.1)
   const [selectedPrId, setSelectedPrId] = useState<string>("pr-04");
   const [prSubTab, setPrSubTab] = useState<"walkthrough" | "diff" | "defense">("diff");
@@ -1560,23 +1566,21 @@ export default function GitProjectHub() {
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <a
-            href="https://gitdiagram.com/hoaba-clouch/e-learningproject"
+            href={repoUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition shadow-xs"
-          >
-            <ExternalLink size={14} />
-            Mở trên GitDiagram.com
-          </a>
-          <a
-            href="https://github.com/Lum1104/Understand-Anything"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-xs"
           >
             <FolderGit2 size={14} className="text-slate-600" />
-            Repo Understand-Anything
+            Mở Repo GitHub
           </a>
+          <button
+            onClick={() => setShowRepoModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition shadow-xs cursor-pointer"
+          >
+            <GitFork size={14} />
+            Liên Kết & Đồng Bộ Repo
+          </button>
         </div>
       </header>
 
@@ -2949,6 +2953,105 @@ export default function GitProjectHub() {
               <p className="text-xs text-slate-600">
                 Dán URL GitHub vào hệ thống, tự động phân tích commit cadence và sinh bộ câu hỏi vấn đáp cho Giảng viên.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Liên Kết & Đồng Bộ GitHub Repo */}
+      {showRepoModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-5 space-y-4">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <GitFork size={18} className="text-blue-600" />
+                  Liên Kết & Đồng Bộ Repo GitHub
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Quản lý kho mã nguồn và cấu hình nhánh đồng bộ trực tiếp cho dự án CodeMind.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowRepoModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Đường dẫn Kho lưu trữ (GitHub Repository URL):
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                    Đã Kết Nối
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Nhánh nộp bài & đồng bộ chính (Target Branch):
+                </label>
+                <select
+                  value={targetBranch}
+                  onChange={(e) => setTargetBranch(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  <option value="main">main (Production Release - Sprint 4)</option>
+                  <option value="develop">develop (Integration Branch - Sprint 2)</option>
+                  <option value="feature/erd">feature/erd (Sprint 1 Database 8 Tables)</option>
+                  <option value="feature/auth">feature/auth (Sprint 2 JWT Authentication)</option>
+                  <option value="feature/sandbox">feature/sandbox (Sprint 3 Docker Runner)</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-blue-50/70 rounded-lg text-blue-900 space-y-1.5 text-xs">
+                <div className="font-bold flex items-center gap-1.5 text-blue-800">
+                  <ShieldCheck size={14} />
+                  Trạng thái liên kết tự động:
+                </div>
+                <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800">
+                  <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG (GitKraken)</strong>.</li>
+                  <li>Tự động quét Pull Request qua <strong>CodeRabbit AI Senior Reviewer</strong>.</li>
+                  <li>Tự động kiểm định liêm chính AI và nhịp độ đóng góp giữa 3 thành viên nhóm.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <a
+                href={repoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-600 hover:underline font-semibold flex items-center gap-1"
+              >
+                <FolderGit2 size={13} />
+                Xem trên GitHub
+              </a>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowRepoModal(false)}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  onClick={() => setShowRepoModal(false)}
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer"
+                >
+                  Lưu & Đồng Bộ Ngay
+                </button>
+              </div>
             </div>
           </div>
         </div>
