@@ -11,6 +11,7 @@ import AdminDashboard from "./screens/AdminDashboard";
 import InstructorPanel from "./screens/InstructorPanel";
 import DesktopMascotPet from "./components/DesktopMascotPet";
 import KanbanBoard from "./screens/KanbanBoard";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 export type Screen =
   | "login"
@@ -153,7 +154,9 @@ export default function App() {
         onLogout={() => setScreen("login")}
       />
       <main className="flex-1 overflow-y-auto">
-        {renderScreen()}
+        <ErrorBoundary>
+          {renderScreen()}
+        </ErrorBoundary>
       </main>
       {role === "student" && screen !== "workspace" && screen !== "kanban" && (
         <DesktopMascotPet mascot={mentorMascot} activeScreen={screen} />
