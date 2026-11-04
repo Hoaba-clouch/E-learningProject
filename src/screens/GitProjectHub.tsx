@@ -42,6 +42,7 @@ import {
   FileCheck,
   CheckCheck,
   Search,
+  RotateCw,
 } from "lucide-react";
 
 // ─── Custom Group Container Node (for GitDiagram subsystems) ───────────────
@@ -1449,6 +1450,7 @@ export default function GitProjectHub() {
   const [hoveredCommit, setHoveredCommit] = useState<GitCommitItem | null>(null);
   const [memberFilter, setMemberFilter] = useState<string>("all");
   const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [topoAnimKey, setTopoAnimKey] = useState<number>(0);
 
   const filteredCommits = useMemo(() => {
     return GIT_COMMITS.filter((c) => {
@@ -1658,7 +1660,10 @@ export default function GitProjectHub() {
             Nhánh 2.1 • AI Review (CodeRabbit PR)
           </button>
           <button
-            onClick={() => setViewMode("topology")}
+            onClick={() => {
+              setViewMode("topology");
+              setTopoAnimKey((k) => k + 1);
+            }}
             className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               viewMode === "topology"
                 ? "bg-blue-600 text-white shadow-sm"
@@ -2430,7 +2435,7 @@ export default function GitProjectHub() {
 
       {/* MODE 2: VISUAL GIT BRANCH GRAPH (TOPOLOGY & COMMIT INSPECTOR) */}
       {viewMode === "topology" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6">
+        <div key={`topo-${topoAnimKey}`} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6">
           {/* Header & Filter Controls */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
@@ -2443,8 +2448,17 @@ export default function GitProjectHub() {
               </p>
             </div>
 
-            {/* Member & Branch Filter Controls */}
+            {/* Member & Branch Filter Controls + Replay Animation */}
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setTopoAnimKey((k) => k + 1)}
+                title="Kích hoạt lại chuyển động vẽ nhánh Git"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition shadow-2xs cursor-pointer"
+              >
+                <RotateCw size={13} className="text-slate-600" />
+                Phát Lại Chuyển Động
+              </button>
+
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
                 <span className="text-[11px] text-slate-500 px-2 flex items-center gap-1">
                   <User size={12} />
@@ -2528,6 +2542,63 @@ export default function GitProjectHub() {
           {/* Interactive SVG Visual Git Graph with Floating Popover */}
           <div className="relative overflow-x-auto p-4 bg-slate-50/70 rounded-xl border border-slate-200">
             <svg className="w-[1100px] h-[300px]" viewBox="0 0 1100 300">
+              <defs>
+                <filter id="topoGlow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <style>{`
+                @keyframes topoDrawPath {
+                  0% { stroke-dashoffset: 1400; opacity: 0.3; }
+                  20% { opacity: 1; }
+                  100% { stroke-dashoffset: 0; opacity: 1; }
+                }
+                @keyframes topoPopNode {
+                  0% { transform: scale(0); opacity: 0; }
+                  65% { transform: scale(1.28); opacity: 1; }
+                  100% { transform: scale(1); opacity: 1; }
+                }
+                @keyframes topoFadeIn {
+                  0% { opacity: 0; transform: translateY(-4px); }
+                  100% { opacity: 1; transform: translateY(0); }
+                }
+                .topo-path-main {
+                  stroke-dasharray: 1400;
+                  stroke-dashoffset: 1400;
+                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                }
+                .topo-path-develop1 {
+                  stroke-dasharray: 1400;
+                  stroke-dashoffset: 1400;
+                  animation: topoDrawPath 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;
+                }
+                .topo-path-develop2 {
+                  stroke-dasharray: 1400;
+                  stroke-dashoffset: 1400;
+                  animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.75s forwards;
+                }
+                .topo-path-erd {
+                  stroke-dasharray: 1400;
+                  stroke-dashoffset: 1400;
+                  animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
+                }
+                .topo-path-auth {
+                  stroke-dasharray: 1400;
+                  stroke-dashoffset: 1400;
+                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.5s forwards;
+                }
+                .topo-path-evaluator {
+                  stroke-dasharray: 1400;
+                  stroke-dashoffset: 1400;
+                  animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.7s forwards;
+                }
+              `}</style>
+
               {/* Lane guides & Labels */}
               <line x1="50" y1="45" x2="1080" y2="45" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="15" y="49" fill="#2563eb" fontSize="11" fontFamily="monospace" fontWeight="bold">main</text>
@@ -2541,12 +2612,21 @@ export default function GitProjectHub() {
               <line x1="50" y1="240" x2="1080" y2="240" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="15" y="244" fill="#d97706" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/auth</text>
 
-              {/* Branch connecting lines (Smooth Bézier curves) */}
+              {/* Branch connecting lines (Smooth Bézier curves with drawing animations) */}
               {/* main trunk */}
-              <path d="M 50 45 L 800 45 L 1080 45" fill="none" stroke="#2563eb" strokeWidth="3" />
+              <path
+                id="topo-main-path"
+                className="topo-path-main"
+                d="M 50 45 L 800 45 L 1080 45"
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth="3"
+              />
 
               {/* develop branch split from main (001a4fc) & merge back into v1.0 */}
               <path
+                id="topo-dev1-path"
+                className="topo-path-develop1"
                 d="M 80 45 C 130 45, 150 110, 200 110 L 680 110 C 730 110, 750 45, 800 45"
                 fill="none"
                 stroke="#9333ea"
@@ -2555,6 +2635,8 @@ export default function GitProjectHub() {
 
               {/* develop continuation to v1.2 merge */}
               <path
+                id="topo-dev2-path"
+                className="topo-path-develop2"
                 d="M 680 110 L 960 110 C 1000 110, 1010 45, 1040 45"
                 fill="none"
                 stroke="#9333ea"
@@ -2563,6 +2645,8 @@ export default function GitProjectHub() {
 
               {/* feature/erd branch split from develop & merge back */}
               <path
+                id="topo-erd-path"
+                className="topo-path-erd"
                 d="M 200 110 C 250 110, 270 175, 320 175 C 370 175, 390 110, 440 110"
                 fill="none"
                 stroke="#16a34a"
@@ -2571,6 +2655,8 @@ export default function GitProjectHub() {
 
               {/* feature/auth branch split from develop & merge back */}
               <path
+                id="topo-auth-path"
+                className="topo-path-auth"
                 d="M 440 110 C 490 110, 510 240, 560 240 C 610 240, 630 110, 680 110"
                 fill="none"
                 stroke="#d97706"
@@ -2579,14 +2665,50 @@ export default function GitProjectHub() {
 
               {/* feature/evaluator branch split from develop & merge back */}
               <path
+                id="topo-eval-path"
+                className="topo-path-evaluator"
                 d="M 680 110 C 730 110, 750 175, 920 175 C 960 175, 980 110, 960 110"
                 fill="none"
                 stroke="#0891b2"
                 strokeWidth="3"
               />
 
+              {/* Living Data Pulses (Traveling along Git paths) */}
+              <circle r="4" fill="#60a5fa" filter="url(#topoGlow)">
+                <animateMotion
+                  path="M 50 45 L 800 45 L 1080 45"
+                  dur="3.8s"
+                  repeatCount="indefinite"
+                  begin="1s"
+                />
+              </circle>
+              <circle r="3.5" fill="#c084fc" filter="url(#topoGlow)">
+                <animateMotion
+                  path="M 80 45 C 130 45, 150 110, 200 110 L 680 110 C 730 110, 750 45, 800 45"
+                  dur="4.2s"
+                  repeatCount="indefinite"
+                  begin="1.2s"
+                />
+              </circle>
+              <circle r="3.5" fill="#4ade80" filter="url(#topoGlow)">
+                <animateMotion
+                  path="M 200 110 C 250 110, 270 175, 320 175 C 370 175, 390 110, 440 110"
+                  dur="3s"
+                  repeatCount="indefinite"
+                  begin="1.5s"
+                />
+              </circle>
+              <circle r="3.5" fill="#fbbf24" filter="url(#topoGlow)">
+                <animateMotion
+                  path="M 440 110 C 490 110, 510 240, 560 240 C 610 240, 630 110, 680 110"
+                  dur="3.4s"
+                  repeatCount="indefinite"
+                  begin="1.8s"
+                />
+              </circle>
+
               {/* Interactive Commit Dots */}
-              {GIT_COMMITS.map((c) => {
+              {GIT_COMMITS.map((c, idx) => {
                 const isFiltered = filteredCommits.some((fc) => fc.id === c.id);
                 const isSelected = selectedCommit?.id === c.id;
                 const isHovered = hoveredCommit?.id === c.id;
@@ -2596,6 +2718,10 @@ export default function GitProjectHub() {
                     key={c.id}
                     className="cursor-pointer transition-all duration-150"
                     opacity={isFiltered ? 1 : 0.2}
+                    style={{
+                      transformOrigin: `${c.cx}px ${c.cy}px`,
+                      animation: `topoPopNode 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.15 + idx * 0.12}s both`,
+                    }}
                     onMouseEnter={() => setHoveredCommit(c)}
                     onMouseLeave={() => setHoveredCommit(null)}
                     onClick={() => setSelectedCommit(c)}
@@ -2636,6 +2762,9 @@ export default function GitProjectHub() {
                       fontFamily="monospace"
                       fontWeight={isSelected ? "bold" : "600"}
                       fill={isSelected ? "#0f172a" : "#475569"}
+                      style={{
+                        animation: `topoFadeIn 0.35s ease-out ${0.25 + idx * 0.12}s both`,
+                      }}
                     >
                       {c.sha}
                     </text>
