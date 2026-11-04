@@ -1,1121 +1,2179 @@
-import { useState, useMemo, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Background,
+  Controls,
+  Handle,
+  MiniMap,
+  ReactFlow,
+  addEdge,
+  MarkerType,
+  Position,
+  useEdgesState,
+  useNodesState,
+  type Connection,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import {
   CheckCircle2,
-  AlertCircle,
-  Clock,
-  GitPullRequest,
-  GitCommit,
-  FileText,
-  Link2,
+  ChevronRight,
+  Code2,
+  CornerDownLeft,
   ExternalLink,
-  RefreshCw,
+  FileText,
+  GitBranch,
+  Headphones,
+  HelpCircle,
+  Lock,
+  Pause,
+  Play,
   Send,
+  Sparkles,
+  Wand2,
+  Upload,
+  Video,
+  WandSparkles,
+  X,
+  Zap,
+  Bot,
+  RotateCcw,
+  Clock,
+  Star,
+  PlayCircle,
+  ChevronsLeft,
+  ChevronsRight,
+  AlertCircle,
+  ArrowRight,
+  Keyboard,
+  TestTube2,
+  AlertTriangle,
+  Award,
+  Check,
+  CheckCircle,
+  Copy,
+  Cpu,
+  Layers,
+  Lightbulb,
+  RefreshCw,
   ShieldCheck,
   Terminal,
-  Award,
-  Sparkles,
-  BookOpen,
-  Check,
-  X,
-  ArrowRight,
-  Code2,
-  AlertTriangle,
-  Play,
-  FileCheck,
-  CheckSquare,
-  Globe,
-  Share2,
-  Copy,
-  ChevronDown
+  XCircle,
 } from "lucide-react";
-
-// --- TYPES ---
-export type AssignmentType = "github_pr" | "diagram" | "docs" | "codelab";
-export type SubmissionStatus = "not_submitted" | "pending_review" | "needs_revision" | "approved";
-
-export interface Assignment {
-  id: string;
-  courseCode: string;
-  courseName: string;
-  title: string;
-  type: AssignmentType;
-  difficulty: "Dễ" | "Trung bình" | "Khó";
-  points: number;
-  dueDate: string;
-  projectDay: number;
-  instructor: string;
-  description: string;
-  constraints: string[];
-  dodList: string[];
-  rubric: {
-    criteria: string;
-    weight: number;
-    description: string;
-  }[];
-  // Specific for CodeLab assignments
-  codeLabConfig?: {
-    language: "cpp" | "python";
-    initialCode: string;
-    testCases: {
-      id: number;
-      name: string;
-      isEdgeCase: boolean;
-      input: string;
-      expectedOutput: string;
-    }[];
-    socraticHints: {
-      level: number;
-      title: string;
-      content: string;
-      isUnlocked: boolean;
-    }[];
-  };
-}
-
-export interface StudentSubmission {
-  id: string;
-  assignmentId: string;
-  studentName: string;
-  submittedAt: string;
-  submissionType: "link" | "file" | "sandbox";
-  linkUrl: string;
-  linkCategory: "github_pr" | "github_commit" | "docs" | "figma_diagram" | "other";
-  prNumber?: string;
-  repoName?: string;
-  notes: string;
-  dodChecked: boolean[];
-  status: SubmissionStatus;
-  sha256Hash?: string;
-  reviewFeedback?: string;
-  testCasesPassed?: number;
-}
+import {
+  submitCodeToSandbox,
+  askSocraticTutor,
+  openSocraticHint,
+  type SubmissionResult,
+  type HintResponse,
+} from "../api";
+import type { ChatSkin, MentorMascot } from "../App";
 
 interface LearningWorkspaceProps {
-  mentorMascot?: string;
-  chatSkin?: string;
+  mentorMascot: MentorMascot;
+  chatSkin: ChatSkin;
 }
 
-// Mock Assignments across SE Curriculum (Coding, PTTKHT, Scrum)
-const INITIAL_ASSIGNMENTS: Assignment[] = [
-  {
-    id: "assign-1",
-    courseCode: "SE-301",
-    courseName: "Lập trình C++ Nâng cao & Cấu trúc Dữ liệu",
-    title: "Triển khai Hàng đợi 2 đầu Deque tối ưu bộ nhớ O(1)",
-    type: "codelab",
-    difficulty: "Trung bình",
-    points: 5,
-    dueDate: "Ngày 14 (15/11)",
-    projectDay: 13,
-    instructor: "Thầy Nguyễn Phước",
-    description:
-      "Hiện thực cấu trúc dữ liệu Double-ended Queue (Deque) với các thao tác push_front, push_back, pop_front, pop_back đạt độ phức tạp thời gian O(1) và giới hạn bộ nhớ 128MB. Code phải vượt qua 5 edge test cases trong Docker Sandbox độc lập.",
-    constraints: [
-      "Độ phức tạp thời gian: O(1) cho mọi thao tác push/pop",
-      "Giới hạn thời gian thực thi: 1.0 giây (TLE: 2.0s)",
-      "Giới hạn bộ nhớ RAM: Tối đa 128MB (MLE)",
-      "Không được sử dụng thư viện std::deque có sẵn của C++",
-    ],
-    dodList: [
-      "Vượt qua 100% 5 Edge Test Cases trong môi trường Docker Sandbox cô lập",
-      "Không rò rỉ bộ nhớ (Memory Leak), giải phóng con trỏ đầy đủ trong Destructor",
-      "Mã nguồn tuân thủ Clean Code, không có lỗi warning của g++ -Wall -Wextra",
-      "Nhận chứng nhận tự sửa lỗi SHA-256 xác thực liêm chính học thuật",
-    ],
-    rubric: [
-      { criteria: "Độ chính xác thuật toán", weight: 40, description: "Vượt qua 5/5 ca kiểm thử chuẩn và ca biên" },
-      { criteria: "Hiệu năng & Tối ưu RAM", weight: 30, description: "Bộ nhớ dưới 128MB, thời gian dưới 50ms" },
-      { criteria: "Tổ chức Code & OOP", weight: 20, description: "Cấu trúc Class rõ ràng, giải phóng bộ nhớ đúng cách" },
-      { criteria: "Liêm chính học thuật", weight: 10, description: "Tự sửa lỗi, có mã băm SHA-256" },
-    ],
-    codeLabConfig: {
-      language: "cpp",
-      initialCode: `// Trien khai Deque bang Circular Dynamic Array
-#include <iostream>
-#include <stdexcept>
+type Tab = "lecture" | "video" | "quiz" | "mindmap" | "code";
 
-template <typename T>
-class MyDeque {
-private:
-    T* arr;
-    int capacity;
-    int front;
-    int rear;
-    int size;
-
-    void resize(int newCapacity) {
-        T* newArr = new T[newCapacity];
-        for (int i = 0; i < size; i++) {
-            newArr[i] = arr[(front + i) % capacity];
-        }
-        delete[] arr;
-        arr = newArr;
-        front = 0;
-        rear = size;
-        capacity = newCapacity;
-    }
-
-public:
-    MyDeque(int initCapacity = 8) : capacity(initCapacity), front(0), rear(0), size(0) {
-        arr = new T[capacity];
-    }
-
-    ~MyDeque() {
-        delete[] arr;
-    }
-
-    void push_back(const T& val) {
-        if (size == capacity) resize(capacity * 2);
-        arr[rear] = val;
-        rear = (rear + 1) % capacity;
-        size++;
-    }
-
-    void push_front(const T& val) {
-        if (size == capacity) resize(capacity * 2);
-        front = (front - 1 + capacity) % capacity;
-        arr[front] = val;
-        size++;
-    }
-
-    T pop_front() {
-        if (size == 0) throw std::underflow_error("Deque is empty");
-        T val = arr[front];
-        front = (front + 1) % capacity;
-        size--;
-        return val;
-    }
-
-    T pop_back() {
-        if (size == 0) throw std::underflow_error("Deque is empty");
-        rear = (rear - 1 + capacity) % capacity;
-        size--;
-        return arr[rear];
-    }
-
-    int get_size() const { return size; }
-    bool is_empty() const { return size == 0; }
+// ─── Per-lesson metadata for the Progress Stepper ───────────────────────────
+const lessonMeta: Record<string, { xp: number; readMins: number; quizPct: number; codePct: number }> = {
+  "1.1": { xp: 80,  readMins: 5,  quizPct: 100, codePct: 100 },
+  "1.2": { xp: 90,  readMins: 7,  quizPct: 80,  codePct: 50  },
+  "1.3": { xp: 120, readMins: 10, quizPct: 0,   codePct: 0   },
 };
 
-int main() {
-    MyDeque<int> dq;
-    dq.push_back(10);
-    dq.push_front(20);
-    dq.push_back(30);
-    std::cout << dq.pop_front() << " " << dq.pop_back() << " " << dq.pop_front() << std::endl;
-    return 0;
-}`,
-      testCases: [
-        { id: 1, name: "Test 1: Standard Push & Pop", isEdgeCase: false, input: "PushBack(10), PushFront(20), PopFront()", expectedOutput: "20" },
-        { id: 2, name: "Test 2: Edge Empty Deque", isEdgeCase: true, input: "PopFront() khi size=0", expectedOutput: "underflow_error" },
-        { id: 3, name: "Test 3: Wrap-Around Ring Buffer", isEdgeCase: true, input: "PushFront x 1000 qua chi so 0", expectedOutput: "Correct Order" },
-        { id: 4, name: "Test 4: Large Volume N = 10^5", isEdgeCase: true, input: "100,000 operations", expectedOutput: "Pass O(1) under 150ms" },
-        { id: 5, name: "Test 5: Memory Leak & Destructor", isEdgeCase: true, input: "Alloc & Dealloc 10,000 nodes", expectedOutput: "0 bytes leaked" },
-      ],
-      socraticHints: [
-        { level: 1, title: "Định hướng Cấu trúc Vòng (Circular Buffer)", content: "Hãy chú ý đến công thức tính chỉ số khi `push_front`: khi `front = 0`, phép toán `(front - 1 + capacity) % capacity` sẽ đưa con trỏ về cuối mảng mà không gây tràn chỉ số âm.", isUnlocked: true },
-        { level: 2, title: "Phân tích Ca biên Resize Bộ nhớ", content: "Khi mảng bị đầy (`size == capacity`), việc sao chép sang mảng mới phải duỗi thẳng các phần tử từ `front` đến `rear` theo đúng thứ tự FIFO logic trước khi gán lại `front = 0`.", isUnlocked: false },
-        { level: 3, title: "Mã giả Quản lý Con trỏ Hủy bộ nhớ", content: "Trong Destructor, đảm bảo `delete[] arr` luôn được thực thi kể cả khi chương trình ném Exception, tránh hoàn toàn lỗi Memory Leak trong Docker sandbox.", isUnlocked: false },
-      ],
-    },
+// ─── Confetti particle helpers ───────────────────────────────────────────────
+function randomBetween(a: number, b: number) { return a + Math.random() * (b - a); }
+const COLORS = ["#facc15","#f97316","#22d3ee","#a78bfa","#34d399","#f472b6","#60a5fa"];
+function spawnConfetti(container: HTMLElement) {
+  for (let i = 0; i < 55; i++) {
+    const el = document.createElement("span");
+    const size = randomBetween(6, 12);
+    el.style.cssText = `
+      position:absolute; pointer-events:none; z-index:100;
+      width:${size}px; height:${size}px;
+      background:${COLORS[Math.floor(Math.random()*COLORS.length)]};
+      border-radius:${Math.random()>0.5?"50%":"2px"};
+      left:${randomBetween(5,95)}%;
+      top:${randomBetween(10,60)}%;
+      transform: translateY(0); opacity:1;
+      animation: confetti-fall ${randomBetween(0.7,1.4)}s ease-out ${randomBetween(0,0.3)}s forwards;
+    `;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 1800);
+  }
+}
+
+// ─── Quiz data extended with explanations ───────────────────────────────────
+interface QuizOption { id: string; text: string; }
+const quizQuestions: { q: string; options: QuizOption[]; correct: string; explanation: string }[] = [
+  {
+    q: "Kế thừa trong OOP là gì?",
+    options: [
+      { id: "a", text: "Lớp con nhận thuộc tính và hành vi từ lớp cha" },
+      { id: "b", text: "Lớp cha tự động sao chép toàn bộ lớp con" },
+      { id: "c", text: "Hai lớp ngang hàng dùng chung biến toàn cục" },
+      { id: "d", text: "Một lớp chỉ có thể chứa phương thức static" },
+    ],
+    correct: "a",
+    explanation: "Kế thừa (inheritance) cho phép lớp con tái sử dụng code của lớp cha. Đây là nguyên tắc DRY cốt lõi trong OOP giúp tránh viết lại logic trùng lặp.",
   },
   {
-    id: "assign-2",
-    courseCode: "SE-302",
-    courseName: "Phân tích & Thiết kế Hệ thống (PTTKHT)",
-    title: "Thiết kế Sơ đồ Quan hệ Thực thể ERD Chuẩn hóa 3NF",
-    type: "diagram",
-    difficulty: "Khó",
-    points: 7.5,
-    dueDate: "Ngày 3 (28/10)",
-    projectDay: 3,
-    instructor: "Thầy Nguyễn Phước",
-    description:
-      "Vẽ sơ đồ ERD hoàn chỉnh tối thiểu 8 bảng nghiệp vụ cho hệ thống E-Learning CodeMind Campus. Toàn bộ bảng phải đạt chuẩn hóa 3NF (loại bỏ phụ thuộc một phần và phụ thuộc bắc cầu). Bắt buộc 100% cột timestamp sử dụng chuẩn ISO-8601 UTC (H4). Nộp link Draw.io/Figma hoặc link file thiết kế trên GitHub repository.",
-    constraints: [
-      "Chuẩn hóa 3NF: 1NF nguyên tử, 2NF khóa chính toàn phần, 3NF không bắc cầu",
-      "Ràng buộc cứng H4: Toàn bộ timestamp quy chuẩn ISO-8601 UTC kết thúc bằng Z",
-      "Bắt buộc thể hiện rõ Khóa chính (PK), Khóa ngoại (FK) và quan hệ 1-N, N-N",
-      "Nộp link Draw.io, Figma hoặc file ảnh trong repo GitHub",
+    q: "Từ khóa nào dùng để gọi constructor của lớp cha trong Java?",
+    options: [
+      { id: "a", text: "parent()" },
+      { id: "b", text: "super()" },
+      { id: "c", text: "base()" },
+      { id: "d", text: "this()" },
     ],
-    dodList: [
-      "Đầy đủ 8 thực thể: Users, Roles, Courses, Lessons, Submissions, TestCases, KanbanTasks, AuditLogs",
-      "Không có quan hệ N-N trực tiếp (đã phân rã bằng bảng trung gian Enrollment, MemberContribution)",
-      "Quy chuẩn đặt tên bảng snake_case số nhiều, trường id chuẩn UUID/Integer",
-      "Được ít nhất 1 thành viên trong nhóm review xác nhận trước khi nộp",
+    correct: "b",
+    explanation: "super() gọi constructor của lớp cha, phải đặt ở dòng đầu tiên trong constructor của lớp con. Nếu không gọi tường minh, Java tự thêm super() không tham số.",
+  },
+  {
+    q: "Override trong Java có nghĩa là gì?",
+    options: [
+      { id: "a", text: "Định nghĩa method mới hoàn toàn không liên quan lớp cha" },
+      { id: "b", text: "Xóa method của lớp cha" },
+      { id: "c", text: "Viết lại phương thức đã tồn tại ở lớp cha với cùng chữ ký" },
+      { id: "d", text: "Tạo nhiều phương thức trùng tên khác tham số" },
     ],
-    rubric: [
-      { criteria: "Chuẩn hóa CSDL 3NF", weight: 40, description: "Không trùng lặp dữ liệu, không có phụ thuộc bắc cầu" },
-      { criteria: "Tuân thủ Ràng buộc H4 UTC", weight: 30, description: "Tất cả trường created_at, updated_at đều lưu UTC ISO-8601" },
-      { criteria: "Đầy đủ quan hệ PK/FK", weight: 20, description: "Ràng buộc toàn vẹn tham chiếu chính xác" },
-      { criteria: "Trình bày trực quan", weight: 10, description: "Sơ đồ vẽ trên Draw.io/Figma rõ ràng, có chú giải" },
+    correct: "c",
+    explanation: "Override là ghi đè — lớp con định nghĩa lại method đã có ở lớp cha với cùng tên, tham số và kiểu trả về. Dùng annotation @Override để compiler kiểm tra chính xác.",
+  },
+];
+type ReadingMode = "full" | "summary" | "resources";
+type WorkspaceView = "lesson" | "chapterAssignments";
+type AssignmentReviewStatus = "not-submitted" | "submitted" | "pending-review" | "needs-revision" | "approved";
+
+const assignmentStatusConfig: Record<AssignmentReviewStatus, { label: string; desc: string; className: string }> = {
+  "not-submitted": {
+    label: "Chưa nộp",
+    desc: "Học viên chưa gửi bài cho giảng viên.",
+    className: "border-slate-200 bg-slate-50 text-slate-600",
+  },
+  submitted: {
+    label: "Đã nộp",
+    desc: "Hệ thống đã nhận bài và ghi nhận thời gian nộp.",
+    className: "border-blue-200 bg-blue-50 text-blue-700",
+  },
+  "pending-review": {
+    label: "Đang chờ review",
+    desc: "Bài đang nằm trong hàng chờ nhận xét của giảng viên.",
+    className: "border-amber-200 bg-amber-50 text-amber-700",
+  },
+  "needs-revision": {
+    label: "Cần sửa",
+    desc: "Giảng viên đã phản hồi, học viên cần chỉnh và gửi lại.",
+    className: "border-rose-200 bg-rose-50 text-rose-700",
+  },
+  approved: {
+    label: "Đã đạt",
+    desc: "Bài đã được giảng viên duyệt hoàn thành.",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+};
+
+const assignmentReviewSteps: AssignmentReviewStatus[] = ["not-submitted", "submitted", "pending-review", "needs-revision", "approved"];
+
+const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
+  { id: "lecture", icon: <FileText size={15} />, label: "Bài đọc" },
+  { id: "video", icon: <Video size={15} />, label: "Video" },
+  { id: "quiz", icon: <HelpCircle size={15} />, label: "Quiz" },
+  { id: "mindmap", icon: <GitBranch size={15} />, label: "Mindmap" },
+  { id: "code", icon: <Code2 size={15} />, label: "Code lab" },
+];
+
+const lessons = [
+  {
+    id: "1.1",
+    title: "Khái niệm kế thừa",
+    topic: "Inheritance basics",
+    status: "done",
+    full:
+      "Kế thừa cho phép một lớp con tái sử dụng thuộc tính và hành vi của lớp cha. Quan hệ này nên được dùng khi lớp con thật sự là một phiên bản chuyên biệt của lớp cha.",
+    summary: [
+      ["is-a", "Dog là một Animal, vì vậy Dog có thể kế thừa Animal."],
+      ["reuse", "Lớp con tái sử dụng code chung từ lớp cha."],
+      ["specialize", "Lớp con có thể bổ sung hoặc thay đổi hành vi riêng."],
     ],
   },
   {
-    id: "assign-3",
-    courseCode: "SE-302",
-    courseName: "Phân tích & Thiết kế Hệ thống (PTTKHT)",
-    title: "Thiết kế Biểu đồ Lớp Class Diagram (4 Biểu đồ UML Cốt lõi)",
-    type: "github_pr",
-    difficulty: "Khó",
-    points: 8,
-    dueDate: "Ngày 6 (31/10)",
-    projectDay: 6,
-    instructor: "Thầy Nguyễn Phước",
-    description:
-      "Thiết kế Sơ đồ Lớp (Class Diagram - Session 07) thể hiện cấu trúc OOP hoàn chỉnh: các thuộc tính, phương thức, Access Modifiers (+ public, - private, # protected) và các mối quan hệ (Thừa kế Generalization, Kết tập Aggregation, Hợp thành Composition). Sinh viên lưu file sơ đồ vào thư mục `docs/uml/` trong repo và nộp link GitHub Pull Request.",
-    constraints: [
-      "Mô hình hóa ít nhất 10 classes nghiệp vụ đại diện cho 3 tầng Clean Architecture",
-      "Thể hiện rõ quan hệ Interface Implementation và Dependency Injection",
-      "Lưu tài liệu trong repo Git và nộp bằng link Pull Request chính thức",
-    ],
-    dodList: [
-      "Có đầy đủ 4 biểu đồ: Use Case, Activity, Class, Sequence",
-      "Pull Request có commit message chuẩn Conventional Commits (docs(uml): ...)",
-      "Mô tả PR giải thích rõ quyết định thiết kế kiến trúc",
-    ],
-    rubric: [
-      { criteria: "Chuẩn cú pháp UML 2.5", weight: 40, description: "Ký hiệu quan hệ, mũi tên và access modifier chuẩn" },
-      { criteria: "Tính khả thi triển khai", weight: 30, description: "Ánh xạ trực tiếp thành code Python/FastAPI và React" },
-      { criteria: "Quy trình Git PR", weight: 20, description: "Tạo PR đúng nhánh, có review của thành viên nhóm" },
-      { criteria: "Tài liệu giải trình", weight: 10, description: "Có file Markdown thuyết minh trong thư mục docs" },
+    id: "1.2",
+    title: "extends và super",
+    topic: "Java inheritance keywords",
+    status: "done",
+    full:
+      "`extends` khai báo quan hệ kế thừa trong Java. `super` dùng để gọi constructor, thuộc tính hoặc phương thức của lớp cha từ bên trong lớp con.",
+    summary: [
+      ["extends", "Khai báo lớp con kế thừa lớp cha."],
+      ["super()", "Gọi constructor của lớp cha."],
+      ["super.method()", "Gọi lại hành vi đã có ở lớp cha."],
     ],
   },
   {
-    id: "assign-4",
-    courseCode: "SE-303",
-    courseName: "Quản trị Dự án Phần mềm & Agile Scrum",
-    title: "Lập Tài liệu Đặc tả Yêu cầu SRS & User Stories chuẩn INVEST",
-    type: "docs",
-    difficulty: "Trung bình",
-    points: 5,
-    dueDate: "Ngày 2 (27/10)",
-    projectDay: 2,
-    instructor: "Thầy Nguyễn Phước",
-    description:
-      "Soạn thảo tài liệu SRS (Software Requirements Specification) theo cấu trúc chuẩn IEEE-830 và danh sách 15 User Stories phân loại theo phương pháp MoSCoW (Must, Should, Could, Won't). Mỗi User Story phải có Acceptance Criteria dạng Given-When-Then. Nộp link Google Docs hoặc link file Markdown trên GitHub repository.",
-    constraints: [
-      "User Story chuẩn format: Là [Vai trò], tôi muốn [Hành động], để [Lợi ích]",
-      "Tiêu chuẩn INVEST: Independent, Negotiable, Valuable, Estimable, Small, Testable",
-      "Phân định rõ Ràng buộc Cứng H1-H4 trong tài liệu đặc tả",
-    ],
-    dodList: [
-      "Đầy đủ 15 User Stories phủ khắp 3 phân hệ cốt lõi",
-      "Bảng phân loại MoSCoW rõ ràng, có ước lượng Story Points (Fibonacci)",
-      "Tài liệu định dạng sạch sẽ, mục lục tự động, lưu trữ trên Git hoặc Google Docs",
-    ],
-    rubric: [
-      { criteria: "Chất lượng User Stories", weight: 40, description: "Tuân thủ tiêu chuẩn INVEST và tiêu chí Given-When-Then" },
-      { criteria: "Cấu trúc SRS IEEE-830", weight: 30, description: "Đầy đủ phạm vi, tác tử, yêu cầu chức năng và phi chức năng" },
-      { criteria: "Phân loại MoSCoW", weight: 20, description: "Ưu tiên hợp lý cho Sprint 1 và Sprint 2" },
-      { criteria: "Hình thức nộp", weight: 10, description: "Link truy cập công khai, quyền comment cho Giảng viên" },
-    ],
-  },
-  {
-    id: "assign-5",
-    courseCode: "SE-301",
-    courseName: "Lập trình C++ Nâng cao & Cấu trúc Dữ liệu",
-    title: "Backend: Xây dựng Router Đánh giá Docker Sandbox & Token JWT",
-    type: "github_pr",
-    difficulty: "Khó",
-    points: 8,
-    dueDate: "Ngày 10 (04/11)",
-    projectDay: 10,
-    instructor: "Thầy Nguyễn Phước",
-    description:
-      "Hiện thực module backend FastAPI: Router thực thi mã nguồn an toàn trong container Docker cô lập (chống infinite loop và fork bomb với cgroups). Tích hợp xác thực JWT Token với múi giờ UTC ISO-8601 (H4). Nộp link Pull Request trên GitHub repo kèm kết quả chạy Unit Test.",
-    constraints: [
-      "Container không cấp quyền root, vô hiệu hóa kết nối mạng bên ngoài",
-      "Giới hạn cgroups: CPU 0.5 core, RAM 128MB, watchdog timeout 2.0s",
-      "API trả về mã chuẩn ISO-8601 UTC và mã băm SHA-256",
-    ],
-    dodList: [
-      "Độ bao phủ Unit Test (pytest) đạt trên 80%",
-      "Không có lỗi Linting Flake8, Black và MyPy",
-      "Pull Request đã được merge vào nhánh develop sau khi review",
-    ],
-    rubric: [
-      { criteria: "Bảo mật & Cô lập Sandbox", weight: 40, description: "Chặn thành công các ca bypass hệ thống và crash máy chủ" },
-      { criteria: "Chuẩn kiến trúc 3 tầng", weight: 30, description: "Router -> Service -> Data Layer tách bạch" },
-      { criteria: "Chất lượng Unit Tests", weight: 20, description: "Test coverage > 80% với các ca biên đa dạng" },
-      { criteria: "Quy chuẩn Git Flow", weight: 10, description: "PR có commit rõ ràng, giải thích cách giải quyết" },
+    id: "1.3",
+    title: "Đa hình và override",
+    topic: "Polymorphism",
+    status: "active",
+    full:
+      "Đa hình cho phép cùng một lời gọi phương thức tạo ra hành vi khác nhau tùy đối tượng cụ thể. Khi Dog và Cat cùng kế thừa Animal, mỗi lớp con có thể override phương thức speak().",
+    summary: [
+      ["override", "Lớp con viết lại hành vi đã có ở lớp cha."],
+      ["runtime dispatch", "Java chọn phương thức dựa trên đối tượng thật khi chạy."],
+      ["less if/else", "Đa hình giúp giảm kiểm tra thủ công từng loại đối tượng."],
     ],
   },
 ];
 
+// quizOptions removed — now inline in quizQuestions above
+
+type MindmapNodeData = {
+  title: string;
+  subtitle: string;
+  tag: string;
+  tone: "source" | "concept" | "practice" | "review";
+};
+
+function MindmapNode({ data }: NodeProps<Node<MindmapNodeData>>) {
+  return (
+    <div className={`mindmap-flow-node mindmap-flow-node-${data.tone}`}>
+      <Handle type="target" position={Position.Left} className="mindmap-flow-handle" />
+      <div className="mindmap-flow-node-head">
+        <span>{data.tag}</span>
+        <span />
+      </div>
+      <div className="mindmap-flow-node-title">{data.title}</div>
+      <div className="mindmap-flow-node-subtitle">{data.subtitle}</div>
+      <Handle type="source" position={Position.Right} className="mindmap-flow-handle" />
+      <Handle type="source" position={Position.Bottom} className="mindmap-flow-handle" />
+    </div>
+  );
+}
+
+const mindmapNodeTypes = { mindmapNode: MindmapNode };
+
+const initialMindmapNodes: Node[] = [
+  {
+    id: "reading",
+    type: "mindmapNode",
+    position: { x: 40, y: 126 },
+    data: { title: "Bài đọc", subtitle: "Nắm ý chính và ví dụ nền", tag: "INPUT", tone: "source" },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    style: { width: 178 },
+  },
+  {
+    id: "concept",
+    type: "mindmapNode",
+    position: { x: 325, y: 72 },
+    data: { title: "OOP căn bản", subtitle: "class, object, is-a", tag: "CORE", tone: "concept" },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    style: { width: 190 },
+  },
+  {
+    id: "interface",
+    type: "mindmapNode",
+    position: { x: 300, y: 234 },
+    data: { title: "Interface", subtitle: "hợp đồng hành vi", tag: "ABSTRACT", tone: "concept" },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    style: { width: 184 },
+  },
+  {
+    id: "polymorphism",
+    type: "mindmapNode",
+    position: { x: 592, y: 132 },
+    data: { title: "Đa hình", subtitle: "override và runtime dispatch", tag: "FLOW", tone: "concept" },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    style: { width: 198 },
+  },
+  {
+    id: "quiz",
+    type: "mindmapNode",
+    position: { x: 602, y: 304 },
+    data: { title: "Quiz kiểm tra", subtitle: "đạt 70% để mở code lab", tag: "CHECK", tone: "practice" },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    style: { width: 194 },
+  },
+  {
+    id: "code-lab",
+    type: "mindmapNode",
+    position: { x: 875, y: 214 },
+    data: { title: "Code lab", subtitle: "viết Animal -> Dog/Cat", tag: "PRACTICE", tone: "practice" },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    style: { width: 198 },
+  },
+  {
+    id: "ai-review",
+    type: "mindmapNode",
+    position: { x: 1130, y: 126 },
+    data: { title: "AI Review", subtitle: "góp ý sơ đồ sau khi vẽ", tag: "MENTOR", tone: "review" },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    style: { width: 190 },
+  },
+];
+
+const initialMindmapEdges: Edge[] = [
+  { id: "reading-concept", type: "bezier", source: "reading", target: "concept", label: "rút ý", animated: true, interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#38bdf8", strokeWidth: 2.4 } },
+  { id: "reading-interface", type: "bezier", source: "reading", target: "interface", label: "ví dụ", interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#64748b", strokeWidth: 2.2 } },
+  { id: "concept-polymorphism", type: "bezier", source: "concept", target: "polymorphism", label: "mở rộng", animated: true, interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#10b981", strokeWidth: 2.4 } },
+  { id: "interface-polymorphism", type: "bezier", source: "interface", target: "polymorphism", label: "áp dụng", interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#a78bfa", strokeWidth: 2.3 } },
+  { id: "polymorphism-quiz", type: "bezier", source: "polymorphism", target: "quiz", label: "kiểm tra", interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#f59e0b", strokeWidth: 2.2 } },
+  { id: "quiz-code", type: "bezier", source: "quiz", target: "code-lab", label: "luyện tập", animated: true, interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#10b981", strokeWidth: 2.4 } },
+  { id: "code-review", type: "bezier", source: "code-lab", target: "ai-review", label: "review", interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#f472b6", strokeWidth: 2.3 } },
+];
+
+const chapterAssignments = [
+  {
+    id: "CH1-BT01",
+    title: "Animal hierarchy",
+    prompt: "Thiết kế hệ phân cấp Animal, Dog, Cat. Mỗi lớp con override speak() và có ít nhất một thuộc tính riêng.",
+    requirements: ["Có class cha Animal", "Có ít nhất 2 class con", "Override speak()", "Có README giải thích thiết kế"],
+  },
+  {
+    id: "CH1-BT02",
+    title: "Shape polymorphism",
+    prompt: "Tạo interface Shape và các lớp Circle, Rectangle. Viết chương trình tính tổng diện tích từ danh sách Shape.",
+    requirements: ["Dùng interface hoặc abstract class", "Có ít nhất 2 hình", "Không dùng if/else để phân loại hình", "Có test dữ liệu mẫu"],
+  },
+  {
+    id: "CH1-BT03",
+    title: "Mini project Vehicle",
+    prompt: "Xây dựng mô phỏng đội xe gồm Vehicle, Car, Bike và Truck. Tập trung vào kế thừa, override và đa hình.",
+    requirements: ["Có sơ đồ class ngắn trong README", "Có ít nhất 3 loại xe", "Có hàm chạy demo", "Commit lịch sử tự nhiên"],
+  },
+];
+
+const mentorQuickPrompts = [
+  "Giải thích override bằng ví dụ dễ hiểu",
+  "Hỏi em 1 câu Socratic",
+  "Gợi ý node mindmap tiếp theo",
+];
+
+const mentorConfig: Record<MentorMascot, { name: string; mark: string; mode: string; hint: string; emoji: string; color: string }> = {
+  mino: { name: "Mino", mark: "MI", mode: "thân thiện", hint: "Mình đi chậm từng bước nhé.", emoji: "🐸", color: "bg-emerald-500" },
+  nova: { name: "Nova", mark: "NV", mode: "nghiêm túc", hint: "Tập trung vào lỗi cốt lõi trước.", emoji: "⭐", color: "bg-purple-600" },
+  byte: { name: "Byte", mark: "BY", mode: "vui tính", hint: "Bẻ lỗi nhỏ trước, lên XP sau.", emoji: "🐶", color: "bg-orange-500" },
+  sage: { name: "Sage", mark: "SG", mode: "Socratic", hint: "Mentor sẽ hỏi ngược để bạn tự tìm ra lỗi.", emoji: "🦉", color: "bg-indigo-600" },
+  luna: { name: "Mecha-Luna", mark: "LN", mode: "logic / mecha", hint: "Luna đã tối ưu hóa logic này cho huynh.", emoji: "🤖", color: "bg-sky-500" },
+  kuro: { name: "Kuro", mark: "KR", mode: "cute / ninja", hint: "Kuro phát hiện lỗi cú pháp rất nhanh nha!", emoji: "🐈‍⬛", color: "bg-neutral-800" },
+  ignis: { name: "Ignis", mark: "IG", mode: "cool / dragon", hint: "Bùng cháy năng lượng lập trình lên nào huynh!", emoji: "🐉", color: "bg-rose-600" },
+  sylph: { name: "Sylph", mark: "SP", mode: "kawaii / tiên", hint: "Để tiên gió nâng đỡ tư duy OOP của huynh.", emoji: "🧚", color: "bg-teal-500" },
+};
+
+const starterCodeSnippets: Record<"python" | "java" | "cpp", string> = {
+  python: `from collections import deque
+
+class PageTracker:
+    """
+    CodeMind Campus - Bounded Page Tracker (Python 3.12)
+    Đặc tả:
+      - Dung lượng bộ đệm tối đa 3 trang gần nhất (FIFO).
+      - Ràng buộc biên: Tuyệt đối bỏ qua chuỗi rỗng "" hoặc khoảng trắng "   ".
+    """
+    def __init__(self, maxlen: int = 3):
+        self.history = deque(maxlen=maxlen)
+
+    def visit(self, page: str) -> None:
+        # TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng trước khi append!
+        # Ví dụ: if not page or not page.strip(): return
+        self.history.append(page)
+
+    def get_history(self) -> list:
+        return list(self.history)
+`,
+  java: `import java.util.*;
+
+public class PageTracker {
+    /*
+     * CodeMind Campus - Bounded Page Tracker (Java 21)
+     * Đặc tả: Dung lượng tối đa 3 trang gần nhất theo nguyên tắc FIFO.
+     * Ràng buộc biên: Bỏ qua chuỗi rỗng "" hoặc null hoặc chỉ toàn dấu cách.
+     */
+    private Deque<String> history = new ArrayDeque<>();
+    private final int maxlen = 3;
+
+    public void visit(String page) {
+        // TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng trước khi thêm!
+        // Ví dụ: if (page == null || page.trim().isEmpty()) return;
+        if (history.size() >= maxlen) {
+            history.pollFirst();
+        }
+        history.addLast(page);
+    }
+
+    public List<String> getHistory() {
+        return new ArrayList<>(history);
+    }
+}
+`,
+  cpp: `#include <iostream>
+#include <deque>
+#include <string>
+#include <vector>
+
+class PageTracker {
+    /*
+     * CodeMind Campus - Bounded Page Tracker (C++ 20)
+     * Đặc tả: Bounded Deque dung lượng tối đa 3 trang (FIFO).
+     */
+private:
+    std::deque<std::string> history;
+    size_t maxlen = 3;
+
+public:
+    void visit(const std::string& page) {
+        // TODO [Học viên]: Bổ sung Guard Clause chặn chuỗi rỗng!
+        // Ví dụ: if (page.empty() || page.find_first_not_of(" \\t") == std::string::npos) return;
+        if (history.size() >= maxlen) {
+            history.pop_front();
+        }
+        history.push_back(page);
+    }
+
+    std::vector<std::string> get_history() const {
+        return std::vector<std::string>(history.begin(), history.end());
+    }
+};
+`,
+};
+
 export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWorkspaceProps) {
-  // Current active assignment
-  const [selectedAssignId, setSelectedAssignId] = useState<string>("assign-1");
-  const assignment = useMemo(() => {
-    return INITIAL_ASSIGNMENTS.find((a) => a.id === selectedAssignId) || INITIAL_ASSIGNMENTS[0];
-  }, [selectedAssignId]);
+  const [tab, setTab] = useState<Tab>("lecture");
+  const [view, setView] = useState<WorkspaceView>("lesson");
+  const [mentorCollapsed, setMentorCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [readingMode, setReadingMode] = useState<ReadingMode>("full");
+  const [selectedLesson, setSelectedLesson] = useState(2);
+  const [selectedChapterAssignment, setSelectedChapterAssignment] = useState(0);
+  const [assignmentStatuses, setAssignmentStatuses] = useState<Record<string, AssignmentReviewStatus>>({
+    "CH1-BT01": "needs-revision",
+    "CH1-BT02": "pending-review",
+    "CH1-BT03": "not-submitted",
+  });
+  // Quiz state
+  const [quizIndex, setQuizIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [quizStreak, setQuizStreak] = useState(0);
+  const [quizTimer, setQuizTimer] = useState(30);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [quizDone, setQuizDone] = useState(false);
+  const [totalXpEarned, setTotalXpEarned] = useState(0);
+  const quizConfettiRef = useRef<HTMLDivElement>(null);
+  // Audio state
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0.38);
+  const [audioSpeed, setAudioSpeed] = useState("1x");
+  const audioIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Code Lab state - Industrial 3-Pane Runner
+  const [selectedLanguage, setSelectedLanguage] = useState<"python" | "java" | "cpp">("python");
+  const [codeValue, setCodeValue] = useState<string>(starterCodeSnippets.python);
+  const [consoleOutput, setConsoleOutput] = useState<string[]>([
+    "Sẵn sàng thực thi. Nhấn \"Chạy Sandbox\" (Ctrl + Enter) để biên dịch & kiểm thử cô lập.",
+  ]);
+  const [isRunningSandbox, setIsRunningSandbox] = useState<boolean>(false);
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+  const [selectedTestCaseId, setSelectedTestCaseId] = useState<number>(5);
+  const [activeCodePaneTab, setActiveCodePaneTab] = useState<"tests" | "hints" | "console">("tests");
+  const [unlockedHints, setUnlockedHints] = useState<Record<number, HintResponse>>({});
+  const [loadingHintLevel, setLoadingHintLevel] = useState<number | null>(null);
+  const [showSelfCorrectionCert, setShowSelfCorrectionCert] = useState<boolean>(false);
+  const [hasFailedBefore, setHasFailedBefore] = useState<boolean>(false);
+  const [copiedSha, setCopiedSha] = useState<boolean>(false);
+  const [showProblemSpec, setShowProblemSpec] = useState<boolean>(true);
+  const [isAskingAi, setIsAskingAi] = useState<boolean>(false);
+  const [message, setMessage] = useState("");
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialMindmapNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialMindmapEdges);
+  const [messages, setMessages] = useState([
+    { from: "mentor", text: "Bạn đang ở bài Đa hình. Hãy nối khái niệm override với ví dụ Dog.speak() để kiểm tra mình hiểu đúng chưa." },
+    { from: "user", text: "Em hay nhầm giữa extends và override." },
+    { from: "mentor", text: "Tách làm 2 câu: extends trả lời 'là một loại gì?', override trả lời 'hành vi được viết lại ra sao?'." },
+  ]);
 
-  // Mode: "portal" (GitHub PR / Link / Docs) or "codelab" (Interactive Sandbox Runner)
-  const [workspaceMode, setWorkspaceMode] = useState<"portal" | "codelab">(
-    assignment.type === "codelab" ? "codelab" : "portal"
-  );
+  const lesson = lessons[selectedLesson];
+  const mentor = mentorConfig[mentorMascot];
+  const chapterAssignment = chapterAssignments[selectedChapterAssignment];
+  const chapterAssignmentStatus = assignmentStatuses[chapterAssignment.id] ?? "not-submitted";
+  const chapterAssignmentStatusInfo = assignmentStatusConfig[chapterAssignmentStatus];
+  const currentQuestion = quizQuestions[quizIndex];
 
-  // Sync mode when switching assignment
+  // ── Dispatch events to Mascot Pet based on active tab ─────────────────────
   useEffect(() => {
-    if (assignment.type === "codelab") {
-      setWorkspaceMode("codelab");
-    } else {
-      setWorkspaceMode("portal");
+    if (view === "chapterAssignments") {
+      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "idle" } }));
+      return;
     }
-  }, [assignment.id, assignment.type]);
-
-  // --- SUBMISSION STATE (PORTAL MODE) ---
-  const [submissionUrl, setSubmissionUrl] = useState<string>("");
-  const [submissionNotes, setSubmissionNotes] = useState<string>("");
-  const [dodChecks, setDodChecks] = useState<boolean[]>([false, false, false, false]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedData, setSubmittedData] = useState<StudentSubmission | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Auto-detect URL Category
-  const urlCategoryInfo = useMemo(() => {
-    const url = submissionUrl.trim().toLowerCase();
-    if (!url) return null;
-
-    if (url.includes("github.com") && url.includes("/pull/")) {
-      const match = submissionUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/i);
-      return {
-        type: "github_pr" as const,
-        label: match ? `GitHub PR #${match[2]}` : "GitHub Pull Request",
-        repo: match ? match[1] : undefined,
-        prNum: match ? match[2] : undefined,
-        icon: <GitPullRequest size={15} className="text-purple-600" />,
-        badgeBg: "bg-purple-50 text-purple-700 border-purple-200",
-      };
-    }
-    if (url.includes("github.com") && url.includes("/commit/")) {
-      return {
-        type: "github_commit" as const,
-        label: "GitHub Commit",
-        icon: <GitCommit size={15} className="text-blue-600" />,
-        badgeBg: "bg-blue-50 text-blue-700 border-blue-200",
-      };
-    }
-    if (url.includes("figma.com")) {
-      return {
-        type: "figma_diagram" as const,
-        label: "Figma Design & Diagram",
-        icon: <Share2 size={15} className="text-rose-600" />,
-        badgeBg: "bg-rose-50 text-rose-700 border-rose-200",
-      };
-    }
-    if (url.includes("draw.io") || url.includes("diagrams.net")) {
-      return {
-        type: "figma_diagram" as const,
-        label: "Draw.io Architecture Diagram",
-        icon: <Share2 size={15} className="text-amber-600" />,
-        badgeBg: "bg-amber-50 text-amber-700 border-amber-200",
-      };
-    }
-    if (url.includes("docs.google.com") || url.includes("/docs/") || url.endsWith(".md")) {
-      return {
-        type: "docs" as const,
-        label: "Tài liệu Kỹ thuật / Docs",
-        icon: <FileText size={15} className="text-emerald-600" />,
-        badgeBg: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      };
-    }
-
-    return {
-      type: "other" as const,
-      label: "Liên kết Báo cáo Ngoài",
-      icon: <Globe size={15} className="text-slate-600" />,
-      badgeBg: "bg-slate-100 text-slate-700 border-slate-200",
-    };
-  }, [submissionUrl]);
-
-  // Handle Portal Submit
-  const handlePortalSubmit = () => {
-    if (!submissionUrl.trim()) return;
-
-    setIsSubmitting(true);
-    setTimeout(() => {
-      const generatedSha = Array.from({ length: 64 }, () =>
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("");
-
-      const submission: StudentSubmission = {
-        id: `sub-${Date.now()}`,
-        assignmentId: assignment.id,
-        studentName: "Minh Anh (Team Lead & Arch)",
-        submittedAt: new Date().toISOString(),
-        submissionType: "link",
-        linkUrl: submissionUrl.trim(),
-        linkCategory: urlCategoryInfo?.type || "other",
-        prNumber: urlCategoryInfo?.prNum,
-        repoName: urlCategoryInfo?.repo,
-        notes: submissionNotes,
-        dodChecked: dodChecks,
-        status: "pending_review",
-        sha256Hash: generatedSha,
-      };
-
-      setSubmittedData(submission);
-      setIsSubmitting(false);
-      showToast("Đã nộp bài thành công! Bằng chứng nộp đã được đồng bộ sang Bảng Kanban.");
-    }, 600);
-  };
-
-  // --- CODELAB SANDBOX STATE ---
-  const [sourceCode, setSourceCode] = useState<string>(
-    assignment.codeLabConfig?.initialCode || ""
-  );
-  const [selectedLanguage, setSelectedLanguage] = useState<"cpp" | "python">(
-    assignment.codeLabConfig?.language || "cpp"
-  );
-  const [isRunningSandbox, setIsRunningSandbox] = useState(false);
-  const [activeCodeLabTab, setActiveCodeLabTab] = useState<"tests" | "hints" | "console">("tests");
-  const [unlockedHints, setUnlockedHints] = useState<number[]>([1]);
-  const [sandboxResults, setSandboxResults] = useState<{
-    status: "idle" | "passed" | "failed";
-    passedCount: number;
-    totalCount: number;
-    executionTimeMs: number;
-    memoryMb: number;
-    containerId: string;
-    sha256: string;
-    timestamp: string;
-    stdout: string;
-    testCases: {
-      id: number;
-      name: string;
-      isEdgeCase: boolean;
-      status: "passed" | "failed";
-      durationMs: number;
-      input: string;
-      expected: string;
-      actual: string;
-    }[];
-  } | null>(null);
-
-  // Sync code when switching assignment
-  useEffect(() => {
-    if (assignment.codeLabConfig) {
-      setSourceCode(assignment.codeLabConfig.initialCode);
-      setSelectedLanguage(assignment.codeLabConfig.language);
-      setSandboxResults(null);
-    }
-  }, [assignment]);
-
-  // Execute Code in Docker Sandbox (Simulation)
-  const handleRunSandbox = (isFinalSubmission = false) => {
-    setIsRunningSandbox(true);
-    setTimeout(() => {
-      const config = assignment.codeLabConfig;
-      if (!config) {
-        setIsRunningSandbox(false);
-        return;
+    if (tab === "code") {
+      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "coding" } }));
+    } else if (tab === "quiz") {
+      if (quizDone) {
+        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success", text: "Huynh hoàn thành quiz xuất sắc!" } }));
+      } else if (!timerRunning && quizTimer === 30) {
+        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "idle", text: "Bấm Bắt đầu để thử thách Quiz nhé!" } }));
+      } else {
+        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "quiz" } }));
       }
+    } else {
+      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "idle" } }));
+    }
+  }, [tab, view, quizDone, timerRunning, quizTimer]);
 
-      const generatedSha = Array.from({ length: 64 }, () =>
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("");
+  // ── Quiz timer countdown ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!timerRunning) return;
+    if (quizTimer <= 0) {
+      setTimerRunning(false);
+      setSubmitted(true);
+      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "error", text: "Hết giờ mất rồi huynh ơi! ⏰" } }));
+      return;
+    }
+    const id = setInterval(() => setQuizTimer((t) => t - 1), 1000);
+    return () => clearInterval(id);
+  }, [timerRunning, quizTimer]);
 
-      // All 5 test cases pass
-      const testResults = config.testCases.map((tc, idx) => ({
-        id: tc.id,
-        name: tc.name,
-        isEdgeCase: tc.isEdgeCase,
-        status: "passed" as const,
-        durationMs: 8 + idx * 4,
-        input: tc.input,
-        expected: tc.expectedOutput,
-        actual: tc.expectedOutput,
-      }));
+  // ── Audio fake progress ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (audioPlaying) {
+      audioIntervalRef.current = setInterval(() => {
+        setAudioProgress((p) => { if (p >= 1) { setAudioPlaying(false); return 1; } return p + 0.002; });
+      }, 80);
+    } else {
+      if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+    }
+    return () => { if (audioIntervalRef.current) clearInterval(audioIntervalRef.current); };
+  }, [audioPlaying]);
 
-      setSandboxResults({
-        status: "passed",
-        passedCount: 5,
-        totalCount: 5,
-        executionTimeMs: 42,
-        memoryMb: 14.8,
-        containerId: "docker-sbx-a9f2c1",
-        sha256: generatedSha,
-        timestamp: new Date().toISOString(),
-        stdout: `Compiling ${selectedLanguage === "cpp" ? "g++ -O2 solution.cpp -o solution" : "python3 solution.py"}...\nCompilation OK. Running 5 isolated edge test cases...\nTest 1 (Standard): PASS (8ms)\nTest 2 (Empty Deque underflow): PASS (12ms)\nTest 3 (Ring Buffer wrap): PASS (16ms)\nTest 4 (N=10^5 O(1) Stress): PASS (28ms)\nTest 5 (Memory Leak 0 bytes): PASS (36ms)\n\nAll 5/5 Edge Test Cases Passed. Memory consumed: 14.8MB / 128MB.`,
-        testCases: testResults,
-      });
-
-      setIsRunningSandbox(false);
-      setActiveCodeLabTab("tests");
-      showToast(
-        isFinalSubmission
-          ? "Đã nộp bài thẩm định Sandbox thành công! Cấp chứng chỉ SHA-256."
-          : "Đã vượt qua 5/5 Edge Test Cases trong Docker Sandbox!"
-      );
-    }, 750);
+  const startQuiz = () => {
+    setQuizIndex(0); setSelectedOption(null); setSubmitted(false);
+    setQuizDone(false); setTotalXpEarned(0); setQuizStreak(0);
+    setQuizTimer(30); setTimerRunning(true);
   };
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+  const submitQuiz = () => {
+    if (!selectedOption) return;
+    setSubmitted(true);
+    setTimerRunning(false);
+    const correct = selectedOption === currentQuestion.correct;
+    if (correct) {
+      const bonus = quizStreak >= 2 ? 2 : 1;
+      setTotalXpEarned((x) => x + 15 * bonus);
+      setQuizStreak((s) => s + 1);
+      if (quizConfettiRef.current) spawnConfetti(quizConfettiRef.current);
+      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success" } }));
+    } else {
+      setQuizStreak(0);
+      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "error" } }));
+    }
+  };
+
+  const nextQuizQuestion = () => {
+    if (quizIndex + 1 >= quizQuestions.length) { setQuizDone(true); return; }
+    setQuizIndex((i) => i + 1);
+    setSelectedOption(null); setSubmitted(false);
+    setQuizTimer(30); setTimerRunning(true);
+  };
+
+  const handleLanguageChange = (lang: "python" | "java" | "cpp") => {
+    setSelectedLanguage(lang);
+    setCodeValue(starterCodeSnippets[lang]);
+    setSubmissionResult(null);
+    setSelectedTestCaseId(5);
+  };
+
+  const resetStarterCode = () => {
+    setCodeValue(starterCodeSnippets[selectedLanguage]);
+    setSubmissionResult(null);
+  };
+
+  const runSandbox = async () => {
+    setIsRunningSandbox(true);
+    setConsoleOutput((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] [EXEC] $ docker-sandbox run --runtime=runc --lang=${selectedLanguage}`,
+      `[${new Date().toLocaleTimeString()}] [SEC] Cô lập bộ nhớ (128MB Limit), kích hoạt Seccomp Profile không mạng...`,
+      `[${new Date().toLocaleTimeString()}] ⚙️ Thực thi 5 ca kiểm thử biên (Edge Test Suite)...`,
+    ]);
+
+    try {
+      const res = await submitCodeToSandbox(codeValue, selectedLanguage);
+      setSubmissionResult(res);
+
+      const logs = res.test_cases.map((tc) =>
+        tc.status === "passed"
+          ? `  ✔ [PASSED] Test ${tc.id}: ${tc.title} (${tc.duration_ms}ms, ${tc.memory_mb}MB)`
+          : `  ❌ [FAILED] Test ${tc.id} [EDGE CASE]: ${tc.title} (${tc.duration_ms}ms) -> ${tc.failure_reason || "Lỗi logic biên"}`
+      );
+
+      setConsoleOutput((prev) => [
+        ...prev,
+        ...logs,
+        `[${new Date().toLocaleTimeString()}] [DONE] Tổng kết: ${res.passed_count}/${res.total_count} Passed. Container: ${res.container_id}`,
+      ]);
+
+      if (res.passed_count === 5) {
+        if (hasFailedBefore) {
+          setShowSelfCorrectionCert(true);
+        }
+        window.dispatchEvent(
+          new CustomEvent("pet-state-change", {
+            detail: { state: "success", text: "Tuyệt đỉnh! Huynh đã vượt qua toàn bộ 5/5 ca kiểm thử biên!" },
+          })
+        );
+      } else {
+        setHasFailedBefore(true);
+        setSelectedTestCaseId(5);
+        setActiveCodePaneTab("tests");
+        window.dispatchEvent(
+          new CustomEvent("pet-state-change", {
+            detail: { state: "error", text: "Ca kiểm thử biên số 5 chưa đạt! Xem chi tiết tại tab Test hoặc mở Gợi ý nhé!" },
+          })
+        );
+      }
+    } catch (err) {
+      console.error("Sandbox execution error:", err);
+    } finally {
+      setIsRunningSandbox(false);
+    }
+  };
+
+  const handleUnlockHint = async (level: number) => {
+    if (unlockedHints[level]) return;
+    setLoadingHintLevel(level);
+    try {
+      const hint = await openSocraticHint("session-1", level);
+      setUnlockedHints((prev) => ({ ...prev, [level]: hint }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingHintLevel(null);
+    }
+  };
+
+  const handleCopySha = (sha: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(sha);
+    }
+    setCopiedSha(true);
+    setTimeout(() => setCopiedSha(false), 2000);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && tab === "code") {
+        e.preventDefault();
+        runSandbox();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [tab, codeValue, selectedLanguage, hasFailedBefore]);
+
+  const onConnect = useCallback(
+    (connection: Connection) =>
+      setEdges((current) =>
+        addEdge(
+          {
+            ...connection,
+            type: "bezier",
+            label: "liên hệ",
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style: { stroke: "#d88b64", strokeWidth: 2 },
+          },
+          current,
+        ),
+      ),
+    [setEdges],
+  );
+
+  const addMindmapNode = () => {
+    const index = nodes.length + 1;
+    setNodes((current) => [
+      ...current,
+      {
+        id: `custom-${index}`,
+        type: "mindmapNode",
+        position: { x: 160 + index * 42, y: 380 + (index % 3) * 24 },
+        data: {
+          title: `Ý mới ${index}`,
+          subtitle: "kéo để sắp xếp lại mindmap",
+          tag: "NEW",
+          tone: "source",
+        },
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+        style: { width: 176 },
+      },
+    ]);
+  };
+
+  const selectLesson = (index: number) => {
+    setView("lesson");
+    setSelectedLesson(index);
+    setTab("lecture");
+    setReadingMode("full");
+    setSelectedOption(null);
+    setSubmitted(false);
+  };
+
+  const sendMessage = async (text = message) => {
+    if (!text.trim()) return;
+    const userMsg = text.trim();
+    setMessages((current) => [...current, { from: "user", text: userMsg }]);
+    setMessage("");
+    setIsAskingAi(true);
+
+    try {
+      const res = await askSocraticTutor(userMsg, codeValue);
+      setMessages((current) => [
+        ...current,
+        {
+          from: "mentor",
+          text: res.assistant_message,
+          isGuardrail: res.policy_decision === "refuse_answer",
+        },
+      ]);
+    } catch {
+      setMessages((current) => [
+        ...current,
+        {
+          from: "mentor",
+          text: "Hãy quan sát kỹ phương thức visit() và kiểm tra điều kiện chuỗi rỗng trước khi append.",
+        },
+      ]);
+    } finally {
+      setIsAskingAi(false);
+    }
   };
 
   return (
-    <div className="flex h-[calc(100vh-56px)] w-full flex-col bg-slate-50 text-slate-900 overflow-hidden font-sans">
-      {/* ── TOP CONTEXT & ASSIGNMENT SELECTOR BAR ────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between border-b border-slate-200 bg-white px-5 py-2.5 shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white">
-            <BookOpen size={16} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                {assignment.courseCode} • {assignment.courseName}
-              </span>
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                {assignment.difficulty}
-              </span>
-              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
-                {assignment.points} Story Points
-              </span>
-            </div>
-
-            {/* Assignment Switcher Dropdown */}
-            <div className="relative mt-0.5 flex items-center gap-1.5">
-              <select
-                value={selectedAssignId}
-                onChange={(e) => setSelectedAssignId(e.target.value)}
-                className="cursor-pointer font-bold text-sm text-slate-900 hover:text-blue-600 bg-transparent focus:outline-hidden pr-6"
-              >
-                {INITIAL_ASSIGNMENTS.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    #{a.id.replace("assign-", "HW-0")}: {a.title} ({a.type.toUpperCase()})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Workspace Mode Switcher (Portal vs CodeLab) */}
-        <div className="flex items-center gap-3">
-          <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 text-xs font-semibold">
-            <button
-              onClick={() => setWorkspaceMode("portal")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
-                workspaceMode === "portal"
-                  ? "bg-white text-slate-900 shadow-2xs font-bold"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <GitPullRequest size={13} className="text-purple-600" />
-              <span>Cổng Nộp Link GitHub / Docs</span>
-            </button>
-            <button
-              onClick={() => setWorkspaceMode("codelab")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
-                workspaceMode === "codelab"
-                  ? "bg-white text-slate-900 shadow-2xs font-bold"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <Code2 size={13} className="text-blue-600" />
-              <span>Code Lab Sandbox</span>
-            </button>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-1 text-xs text-slate-500 border-l border-slate-200 pl-3">
-            <Clock size={13} />
-            <span>Hạn nộp: <strong className="text-slate-700">{assignment.dueDate}</strong></span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── TOAST NOTIFICATION ────────────────────────────────────────── */}
-      {toastMessage && (
-        <div className="fixed top-16 right-6 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs text-white shadow-lg animate-in fade-in slide-in-from-top-2">
-          <CheckCircle2 size={15} className="text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* ── MAIN 2-PANE WORKSPACE BODY ────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── LEFT PANE: PROBLEM STATEMENT & EVALUATION RUBRIC (35% WIDTH) ── */}
-        <div className="w-full md:w-[38%] lg:w-[34%] flex flex-col border-r border-slate-200 bg-white overflow-y-auto">
-          {/* Header Summary */}
-          <div className="p-5 border-b border-slate-100">
-            <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-              <span>Giảng viên: <strong className="text-slate-800">{assignment.instructor}</strong></span>
-              <span className="font-mono text-[11px] text-blue-600 font-semibold">Ngày dự án: N{assignment.projectDay}</span>
-            </div>
-            <h1 className="text-base font-bold text-slate-900 leading-snug">
-              {assignment.title}
-            </h1>
-            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
-              {assignment.description}
-            </p>
-          </div>
-
-          {/* Section: Constraints & DoD */}
-          <div className="p-5 border-b border-slate-100 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-              <ShieldCheck size={14} className="text-emerald-600" />
-              <span>Ràng buộc Kỹ thuật & Tiêu chuẩn DoD</span>
-            </h3>
-            <ul className="space-y-1.5 text-xs text-slate-600">
-              {assignment.constraints.map((c, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="mt-1 flex h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-                  <span>{c}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Section: Grading Rubric */}
-          <div className="p-5 border-b border-slate-100 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-              <FileCheck size={14} className="text-purple-600" />
-              <span>Tiêu chí Chấm điểm (Evaluation Rubric)</span>
-            </h3>
-            <div className="space-y-2">
-              {assignment.rubric.map((r, i) => (
-                <div key={i} className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs">
-                  <div className="flex items-center justify-between font-semibold text-slate-900 mb-0.5">
-                    <span>{r.criteria}</span>
-                    <span className="text-blue-700 font-mono font-bold">{r.weight}%</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500">{r.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Section: Submission Audit Trail (if submitted) */}
-          {submittedData && (
-            <div className="p-5 bg-emerald-50/40 border-b border-emerald-100 space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
-                <CheckCircle2 size={15} className="text-emerald-600" />
-                <span>Bằng chứng Nộp bài (Audit Trail)</span>
-              </div>
-              <div className="rounded-xl border border-emerald-200 bg-white p-3 text-xs space-y-1.5 shadow-2xs">
-                <div className="flex items-center justify-between text-slate-500 text-[11px]">
-                  <span>Trạng thái:</span>
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                    Đang chờ Giảng viên Duyệt
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-500 text-[11px]">
-                  <span>Thời gian UTC:</span>
-                  <span className="font-mono text-slate-700 font-medium">
-                    {new Date(submittedData.submittedAt).toUTCString()}
-                  </span>
-                </div>
-                {submittedData.sha256Hash && (
-                  <div className="pt-1 border-t border-slate-100 text-[10px]">
-                    <span className="text-slate-400 block mb-0.5">Mã băm SHA-256 liêm chính:</span>
-                    <code className="block truncate font-mono text-slate-700 bg-slate-50 p-1 rounded border border-slate-200">
-                      {submittedData.sha256Hash}
-                    </code>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── RIGHT AREA: DYNAMIC WORKSPACE (65% WIDTH) ──────────────────── */}
-        <div className="flex-1 flex flex-col bg-slate-100/50 overflow-y-auto">
-          {/* ═══════════════════════════════════════════════════════════════════
-              WORKSHOP MODE 1: GITHUB PULL REQUEST & DOCS SUBMISSION PORTAL
-             ═══════════════════════════════════════════════════════════════════ */}
-          {workspaceMode === "portal" && (
-            <div className="p-6 max-w-4xl mx-auto w-full space-y-6">
-              {/* Card 1: Main URL Input Box */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <GitPullRequest size={16} className="text-purple-600" />
-                      <span>Cổng Nộp Link GitHub PR / Commit / Tài liệu Thiết kế</span>
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Hỗ trợ tự động nhận diện GitHub PR, Commit, Figma, Draw.io và Google Docs
-                    </p>
-                  </div>
-                  {urlCategoryInfo && (
-                    <span
-                      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${urlCategoryInfo.badgeBg}`}
-                    >
-                      {urlCategoryInfo.icon}
-                      <span>{urlCategoryInfo.label}</span>
-                    </span>
-                  )}
-                </div>
-
-                {/* URL Input */}
-                <div className="relative">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                    <Link2 size={16} />
-                  </div>
-                  <input
-                    type="url"
-                    value={submissionUrl}
-                    onChange={(e) => setSubmissionUrl(e.target.value)}
-                    placeholder="Dán link GitHub PR (https://github.com/my-team/repo/pull/14), Link Commit, Figma, Draw.io..."
-                    className="w-full rounded-xl border border-slate-300 bg-slate-50/50 py-2.5 pl-10 pr-4 text-xs font-mono text-slate-900 placeholder-slate-400 focus:border-slate-800 focus:bg-white focus:outline-hidden transition"
-                  />
-                </div>
-
-                {/* Quick Examples */}
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                  <span className="font-semibold text-slate-600">Mẫu link chuẩn:</span>
-                  <button
-                    onClick={() =>
-                      setSubmissionUrl("https://github.com/Hoaba-clouch/E-learningProject/pull/14")
-                    }
-                    className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono hover:bg-slate-100 hover:text-slate-800 transition"
-                  >
-                    GitHub PR #14
-                  </button>
-                  <button
-                    onClick={() =>
-                      setSubmissionUrl("https://github.com/Hoaba-clouch/E-learningProject/commit/a8f3b2c")
-                    }
-                    className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono hover:bg-slate-100 hover:text-slate-800 transition"
-                  >
-                    Commit #a8f3b2
-                  </button>
-                  <button
-                    onClick={() =>
-                      setSubmissionUrl("https://app.diagrams.net/#G1a9B7c...ERD_3NF.drawio")
-                    }
-                    className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono hover:bg-slate-100 hover:text-slate-800 transition"
-                  >
-                    Draw.io ERD
-                  </button>
-                </div>
-
-                {/* PR Summary Notes */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Mô tả tóm tắt giải pháp kỹ thuật & Ghi chú nộp bài:
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={submissionNotes}
-                    onChange={(e) => setSubmissionNotes(e.target.value)}
-                    placeholder="Tóm tắt ngắn gọn: Đã chuẩn hóa 8 bảng CSDL 3NF, loại bỏ quan hệ N-N, bổ sung 100% cột timestamp UTC chuẩn ISO-8601 (H4)..."
-                    className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-800 placeholder-slate-400 focus:border-slate-800 focus:bg-white focus:outline-hidden transition"
-                  />
-                </div>
-              </div>
-
-              {/* Card 2: DoD (Definition of Done) Verification */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                  <CheckSquare size={14} className="text-blue-600" />
-                  <span>Xác nhận Tiêu chuẩn DoD trước khi Nộp bài</span>
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Sinh viên phải tự kiểm định các tiêu chí sau để bảo đảm tính chuyên nghiệp và sẵn sàng giải phóng Ràng buộc H2 trên Kanban:
-                </p>
-
-                <div className="space-y-2 pt-1">
-                  {assignment.dodList.map((dod, index) => (
-                    <label
-                      key={index}
-                      className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition border border-transparent hover:border-slate-200"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={dodChecks[index] || false}
-                        onChange={(e) => {
-                          const updated = [...dodChecks];
-                          updated[index] = e.target.checked;
-                          setDodChecks(updated);
-                        }}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-0"
-                      />
-                      <span className="text-xs text-slate-700 leading-snug">{dod}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Card 3: AI Socratic Pre-defense Reviewer */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={16} className="text-indigo-600" />
-                  <h3 className="text-xs font-bold text-slate-900">
-                    Socratic AI Mock-Review: Câu hỏi Hội đồng sẽ chất vấn bài nộp này
-                  </h3>
-                </div>
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-xs text-slate-700 space-y-2">
-                  <p className="font-semibold text-indigo-900">
-                    Khi Hội đồng phản biện (AI Defense Room) thẩm vấn bài này, bạn cần chuẩn bị giải trình:
-                  </p>
-                  <ul className="list-disc pl-4 space-y-1 text-slate-600">
-                    <li>Tại sao bảng CSDL của bạn chọn chuẩn 3NF thay vì BCNF? Có hiện tượng dư thừa dữ liệu nào được chấp nhận không?</li>
-                    <li>Ràng buộc H4 (Timestamp UTC ISO-8601) được xử lý ở tầng Controller hay tầng ORM Database?</li>
-                    <li>Nếu lượng truy vấn tăng gấp 10 lần, bạn sẽ đánh index ở cột nào trước tiên?</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-xs text-slate-500">
-                  Bài nộp sẽ được lưu trữ vào Portfolio và cập nhật tiến độ Sprint
-                </span>
+    <div className={`grid h-full transition-[grid-template-columns] duration-300 ${
+      sidebarCollapsed
+        ? (mentorCollapsed ? "grid-cols-[52px_minmax(0,1fr)_52px]" : "grid-cols-[52px_minmax(0,1fr)_310px]")
+        : (mentorCollapsed ? "grid-cols-[232px_minmax(0,1fr)_52px]" : "grid-cols-[232px_minmax(0,1fr)_310px]")
+    }`}>
+      {/* ── PROGRESS STEPPER SIDEBAR ──────────────────────────────────────── */}
+      {sidebarCollapsed ? (
+        <aside className="border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col items-center py-4 gap-4 w-12 shrink-0">
+          <button
+            onClick={() => setSidebarCollapsed(false)}
+            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 text-slate-500 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            title="Mở rộng tiến trình"
+          >
+            <ChevronsRight size={15} />
+          </button>
+          
+          <div className="flex-1 flex flex-col items-center gap-3 w-full px-1">
+            {lessons.map((item, index) => {
+              const active = selectedLesson === index && view === "lesson" && tab !== "mindmap";
+              return (
                 <button
-                  onClick={handlePortalSubmit}
-                  disabled={!submissionUrl.trim() || isSubmitting}
-                  className="flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  key={item.id}
+                  onClick={() => selectLesson(index)}
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
+                    active
+                      ? "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-600"
+                      : "border-transparent text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                  }`}
+                  title={`Bài ${item.id}: ${item.title}`}
                 >
-                  {isSubmitting ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin" />
-                      <span>Đang xác thực liên kết...</span>
-                    </>
+                  {item.status === "done" ? (
+                    <CheckCircle2 size={16} className="text-emerald-500" />
                   ) : (
-                    <>
-                      <Send size={14} />
-                      <span>Nộp Bài Thẩm Định</span>
-                    </>
+                    <Play size={16} className={active ? "text-blue-600" : "text-slate-400"} />
                   )}
                 </button>
+              );
+            })}
+
+            <button
+              onClick={() => { setView("chapterAssignments"); setSelectedChapterAssignment(0); }}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition"
+              title="Bài tập cuối chương"
+            >
+              <Lock size={15} />
+            </button>
+
+            <button
+              onClick={() => { setView("lesson"); setTab("mindmap"); }}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
+                view === "lesson" && tab === "mindmap"
+                  ? "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300"
+                  : "border-transparent text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+              }`}
+              title="Sơ đồ Mindmap"
+            >
+              <Sparkles size={15} className="text-amber-500" />
+            </button>
+          </div>
+        </aside>
+      ) : (
+        <aside className="border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col">
+          <div className="border-b border-slate-200 dark:border-slate-800 p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Chương 1</div>
+              <button
+                onClick={() => setSidebarCollapsed(true)}
+                className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                title="Thu nhỏ tiến trình"
+              >
+                <ChevronsLeft size={13} />
+              </button>
+            </div>
+            <h1 className="mt-1 text-base font-bold text-slate-900 dark:text-white leading-tight">Kế thừa và đa hình</h1>
+            <div className="mt-3">
+              <div className="flex justify-between text-[10px] font-semibold text-slate-500 mb-1">
+                <span>Tiến độ chương</span>
+                <span className="text-blue-600 dark:text-blue-400 font-bold">46%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div className="h-full w-[46%] rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700" />
               </div>
             </div>
-          )}
+            <div className="mt-2.5 flex items-center gap-3 text-[10px] text-slate-400">
+              <span className="flex items-center gap-1"><Star size={9} className="fill-amber-400 text-amber-400" /> 270 XP tích lũy</span>
+              <span className="flex items-center gap-1"><Clock size={9} /> ~22 phút còn lại</span>
+            </div>
+          </div>
 
-          {/* ═══════════════════════════════════════════════════════════════════
-              WORKSHOP MODE 2: CODE LAB DOCKER SANDBOX RUNNER
-             ═══════════════════════════════════════════════════════════════════ */}
-          {workspaceMode === "codelab" && (
-            <div className="flex flex-col h-full overflow-hidden">
-              {/* Code Editor Header */}
-              <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Code2 size={14} className="text-blue-600" />
-                    <span>Monaco Editor</span>
-                  </span>
-                  <select
-                    value={selectedLanguage}
-                    onChange={(e) => setSelectedLanguage(e.target.value as "cpp" | "python")}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  >
-                    <option value="cpp">C++17 (g++ 13.2)</option>
-                    <option value="python">Python 3.11</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (assignment.codeLabConfig) {
-                        setSourceCode(assignment.codeLabConfig.initialCode);
-                      }
-                    }}
-                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition"
-                  >
-                    <RefreshCw size={12} />
-                    <span>Mã ban đầu</span>
-                  </button>
-                  <button
-                    onClick={() => handleRunSandbox(false)}
-                    disabled={isRunningSandbox}
-                    className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition"
-                  >
-                    <Play size={13} className="text-blue-600" />
-                    <span>Chạy thử (Ctrl+Enter)</span>
-                  </button>
-                  <button
-                    onClick={() => handleRunSandbox(true)}
-                    disabled={isRunningSandbox}
-                    className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 disabled:opacity-50 transition"
-                  >
-                    <Send size={13} />
-                    <span>Nộp thẩm định</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Code Textarea Area */}
-              <div className="flex-1 relative bg-slate-900 overflow-hidden min-h-[220px]">
-                <textarea
-                  value={sourceCode}
-                  onChange={(e) => setSourceCode(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.ctrlKey && e.key === "Enter") {
-                      e.preventDefault();
-                      handleRunSandbox(false);
-                    }
-                  }}
-                  spellCheck={false}
-                  className="h-full w-full resize-none bg-slate-900 p-4 font-mono text-xs text-slate-100 placeholder-slate-500 focus:outline-hidden leading-relaxed"
-                />
-              </div>
-
-              {/* Bottom Test & Socratic Tabs */}
-              <div className="h-64 border-t border-slate-200 bg-white flex flex-col">
-                <div className="flex items-center justify-between border-b border-slate-200 px-4 bg-slate-50">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setActiveCodeLabTab("tests")}
-                      className={`flex items-center gap-1.5 py-2 px-3 text-xs font-semibold border-b-2 transition ${
-                        activeCodeLabTab === "tests"
-                          ? "border-slate-900 text-slate-900"
-                          : "border-transparent text-slate-500 hover:text-slate-800"
-                      }`}
-                    >
-                      <CheckCircle2 size={13} />
-                      <span>Edge Test Cases (5)</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveCodeLabTab("hints")}
-                      className={`flex items-center gap-1.5 py-2 px-3 text-xs font-semibold border-b-2 transition ${
-                        activeCodeLabTab === "hints"
-                          ? "border-slate-900 text-slate-900"
-                          : "border-transparent text-slate-500 hover:text-slate-800"
-                      }`}
-                    >
-                      <Sparkles size={13} />
-                      <span>Gợi ý Socratic AI (3 Nấc)</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveCodeLabTab("console")}
-                      className={`flex items-center gap-1.5 py-2 px-3 text-xs font-semibold border-b-2 transition ${
-                        activeCodeLabTab === "console"
-                          ? "border-slate-900 text-slate-900"
-                          : "border-transparent text-slate-500 hover:text-slate-800"
-                      }`}
-                    >
-                      <Terminal size={13} />
-                      <span>Console Sandbox Log</span>
-                    </button>
+          <div className="flex-1 overflow-y-auto space-y-1 p-2.5">
+            {lessons.map((item, index) => {
+              const active = selectedLesson === index && view === "lesson" && tab !== "mindmap";
+              const meta = lessonMeta[item.id];
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => selectLesson(index)}
+                  className={`lesson-outline-item w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                    active
+                      ? "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50"
+                      : "border-transparent hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {item.status === "done"
+                      ? <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                      : <Play size={14} className={`shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`} />}
+                    <span className={`text-xs font-semibold leading-tight ${active ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-300"}`}>
+                      {item.id} · {item.title}
+                    </span>
                   </div>
+                  {/* Mini sub-progress bars */}
+                  <div className="mt-2 space-y-1.5">
+                    {[
+                      { label: "Đọc", pct: item.status === "done" ? 100 : meta.readMins > 5 ? 60 : 100, color: "bg-blue-400" },
+                      { label: "Quiz", pct: meta.quizPct, color: "bg-amber-400" },
+                      { label: "Code", pct: meta.codePct, color: "bg-emerald-400" },
+                    ].map(({ label, pct, color }) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <span className="w-7 text-[9px] font-bold text-slate-400">{label}</span>
+                        <div className="flex-1 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-400 w-6 text-right">{pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                      <Star size={8} className="fill-current" />+{meta.xp} XP
+                    </span>
+                    <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
+                      <Clock size={8} />{meta.readMins} phút
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
 
-                  {sandboxResults && (
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="font-mono text-emerald-700 font-bold">
-                        {sandboxResults.passedCount}/{sandboxResults.totalCount} Test Cases Pass
-                      </span>
-                      <span className="text-slate-500 font-mono text-[11px]">
-                        RAM: {sandboxResults.memoryMb}MB • {sandboxResults.executionTimeMs}ms
-                      </span>
+            <button
+              onClick={() => { setView("chapterAssignments"); setSelectedChapterAssignment(0); }}
+              className="lesson-outline-item w-full flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 hover:border-blue-200 hover:text-blue-700 transition"
+            >
+              <Lock size={13} className="text-slate-400 shrink-0" />
+              <span>Bài tập cuối chương</span>
+            </button>
+
+            <button
+              onClick={() => { setView("lesson"); setTab("mindmap"); }}
+              className={`lesson-outline-item w-full flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition ${
+                view === "lesson" && tab === "mindmap"
+                  ? "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300"
+                  : "border-transparent text-slate-600 dark:text-slate-400 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+              }`}
+            >
+              <Sparkles size={13} className="text-amber-500 shrink-0" />
+              <span>Mindmap Tổng hợp</span>
+            </button>
+          </div>
+        </aside>
+      )}
+
+      <main className="flex min-w-0 flex-col">
+        <div className="border-b border-slate-200 bg-white px-4 pt-3">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                {view === "lesson" ? `Bài ${lesson.id}` : "Cuối chương 1"}
+              </div>
+              <h2 className="text-lg font-semibold text-slate-950">
+                {view === "lesson" ? lesson.title : "Bài tập cuối chương"}
+              </h2>
+            </div>
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+              {view === "lesson" ? "Quiz yêu cầu ≥ 70%" : "Nộp trực tiếp tại đây"}
+            </span>
+          </div>
+          {view === "lesson" && <div className="flex gap-1">
+            {tabs.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setTab(item.id)}
+                className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition ${
+                  tab === item.id ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            ))}
+          </div>}
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          {view === "chapterAssignments" && (
+            <div className="grid max-w-5xl grid-cols-[280px_minmax(0,1fr)] gap-4">
+              <div className="surface rounded-xl p-4">
+                <h3 className="text-base font-semibold text-slate-950">Danh sách đề</h3>
+                <div className="mt-4 space-y-2">
+                  {chapterAssignments.map((assignment, index) => {
+                    const status = assignmentStatuses[assignment.id] ?? "not-submitted";
+                    const statusInfo = assignmentStatusConfig[status];
+                    return (
+                    <button
+                      key={assignment.id}
+                      onClick={() => setSelectedChapterAssignment(index)}
+                      className={`w-full rounded-lg border p-3 text-left ${
+                        selectedChapterAssignment === index ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-mono text-xs text-blue-700">{assignment.id}</div>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusInfo.className}`}>
+                          {statusInfo.label}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{assignment.title}</div>
+                    </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="surface rounded-xl p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-semibold text-blue-700">{chapterAssignment.id}</div>
+                    <h3 className="mt-1 text-lg font-semibold text-slate-950">{chapterAssignment.title}</h3>
+                  </div>
+                  <span className={`rounded-full border px-3 py-1 text-xs font-bold ${chapterAssignmentStatusInfo.className}`}>
+                    {chapterAssignmentStatusInfo.label}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{chapterAssignment.prompt}</p>
+
+                <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Trạng thái review</div>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{chapterAssignmentStatusInfo.desc}</p>
+                    </div>
+                    <div className="text-right text-xs text-slate-400">
+                      {chapterAssignmentStatus === "not-submitted" ? "Chưa có lịch sử" : "Cập nhật gần nhất: hôm nay"}
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-5 gap-2">
+                    {assignmentReviewSteps.map((status, index) => {
+                      const activeIndex = assignmentReviewSteps.indexOf(chapterAssignmentStatus);
+                      const active = status === chapterAssignmentStatus;
+                      const passed = index < activeIndex && chapterAssignmentStatus !== "needs-revision";
+                      const info = assignmentStatusConfig[status];
+                      return (
+                        <div
+                          key={status}
+                          className={`rounded-lg border p-2 text-center text-[11px] font-bold transition ${
+                            active ? info.className : passed ? "border-emerald-100 bg-emerald-50 text-emerald-600" : "border-slate-200 bg-slate-50 text-slate-400"
+                          }`}
+                        >
+                          {info.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {chapterAssignmentStatus === "needs-revision" && (
+                    <div className="mt-4 rounded-lg border border-rose-100 bg-rose-50 p-3 text-sm leading-6 text-rose-700">
+                      Giảng viên góp ý: bổ sung ví dụ chạy demo và mô tả rõ hơn phần override trong README trước khi gửi lại.
+                    </div>
+                  )}
+                  {chapterAssignmentStatus === "approved" && (
+                    <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm leading-6 text-emerald-700">
+                      Bài đã đạt yêu cầu. XP chương sẽ được cộng vào tiến độ tổng.
                     </div>
                   )}
                 </div>
 
-                {/* Tab 1: Test Cases */}
-                {activeCodeLabTab === "tests" && (
-                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {assignment.codeLabConfig?.testCases.map((tc, idx) => {
-                      const res = sandboxResults?.testCases[idx];
-                      const isPassed = res?.status === "passed";
-                      return (
-                        <div
-                          key={tc.id}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 p-2.5 text-xs"
+                <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-semibold text-slate-900">Yêu cầu nộp</div>
+                  <div className="mt-3 grid gap-2">
+                    {chapterAssignment.requirements.map((item) => (
+                      <div key={item} className="flex items-center gap-2 text-sm text-slate-700">
+                        <CheckCircle2 size={15} className="text-emerald-600" />
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3">
+                  <input
+                    placeholder="Dán link GitHub, ảnh mindmap hoặc link canvas..."
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400"
+                  />
+                  <textarea
+                    rows={5}
+                    placeholder="Ghi chú ngắn cho giảng viên..."
+                    className="resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400"
+                  />
+                  <button
+                    onClick={() =>
+                      setAssignmentStatuses((current) => ({
+                        ...current,
+                        [chapterAssignment.id]: "pending-review",
+                      }))
+                    }
+                    className="flex w-fit items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    <Upload size={15} />
+                    {chapterAssignmentStatus === "needs-revision" ? "Gửi lại bài" : chapterAssignmentStatus === "pending-review" ? "Cập nhật bài nộp" : "Nộp bài tập"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {view === "lesson" && tab === "lecture" && (
+            <article className="surface max-w-5xl rounded-xl p-6">
+              <div className="mb-5 flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                {[
+                  ["full", "Bài đọc đầy đủ"],
+                  ["summary", "Ý chính"],
+                  ["resources", "Đọc thêm"],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setReadingMode(id as ReadingMode)}
+                    className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${readingMode === id ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {readingMode === "full" && (
+                <div>
+                  <div className="mb-5 rounded-lg bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+                    Mục tiêu: nắm được {lesson.topic.toLowerCase()} và áp dụng vào ví dụ Java ngắn.
+                  </div>
+                  {/* ── ENHANCED AUDIO PLAYER ─────────────────────────────── */}
+                  <div className="audio-reader mb-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                    {/* Top row: play button + title + speed selector */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setAudioPlaying((v) => !v)}
+                          className="theme-primary-bg flex h-11 w-11 items-center justify-center rounded-full text-white shadow-lg hover:opacity-90 transition shrink-0"
                         >
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                                isPassed
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-slate-200 text-slate-600"
-                              }`}
-                            >
-                              {tc.id}
-                            </span>
-                            <div>
-                              <p className="font-semibold text-slate-900">{tc.name}</p>
-                              <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                                Input: {tc.input}
-                              </p>
+                          {audioPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+                        </button>
+                        <div>
+                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                            <Headphones size={14} className="theme-primary-text" />
+                            Giọng đọc bài học
+                          </div>
+                          <div className="mt-0.5 text-xs text-slate-500">Auditory mode · giọng Nam ấm</div>
+                        </div>
+                      </div>
+                      {/* Speed buttons */}
+                      <div className="flex items-center gap-1">
+                        {["0.75x", "1x", "1.25x", "1.5x"].map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setAudioSpeed(s)}
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold transition border ${
+                              audioSpeed === s
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 hover:border-blue-300"
+                            }`}
+                          >{s}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Waveform + timeline */}
+                    <div className="mt-3 space-y-2">
+                      {/* Waveform animation */}
+                      <div className={`audio-wave ${audioPlaying ? "audio-wave-playing" : ""}`} aria-hidden="true">
+                        {Array.from({ length: 40 }).map((_, i) => (
+                          <span key={i} style={{ height: `${10 + ((i * 13 + 7) % 30)}px` }} />
+                        ))}
+                      </div>
+                      {/* Scrubber */}
+                      <input
+                        type="range" min={0} max={100}
+                        value={Math.round(audioProgress * 100)}
+                        onChange={(e) => { setAudioProgress(Number(e.target.value) / 100); }}
+                        className="w-full h-1.5 accent-blue-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                        <span>{Math.floor(audioProgress * 252 / 60)}:{String(Math.floor(audioProgress * 252) % 60).padStart(2,"0")}</span>
+                        <span>4:12</span>
+                      </div>
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Bài đọc đầy đủ</h3>
+                  <p className="mt-4 text-base leading-8 text-slate-700 dark:text-slate-300">{lesson.full}</p>
+                  <pre className="mt-6 overflow-hidden rounded-xl bg-slate-950 p-6 text-base leading-8 text-slate-100 border border-slate-800">
+{`Animal pet = new Dog();
+pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
+                  </pre>
+                </div>
+              )}
+
+              {readingMode === "summary" && (
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Ý chính cần nắm</h3>
+                  <div className="mt-5 grid gap-4">
+                    {lesson.summary.map(([term, desc]) => (
+                      <div key={term} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-4">
+                        <div className="font-mono text-base font-bold text-blue-750 dark:text-blue-400">{term}</div>
+                        <div className="mt-2 text-base leading-7 text-slate-700 dark:text-slate-300">{desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {readingMode === "resources" && (
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Tài liệu đọc thêm</h3>
+                  <div className="mt-5 space-y-4">
+                    {[
+                      ["Oracle Java Tutorial", "Tài liệu nền tảng về OOP trong Java."],
+                      ["Effective Java", "Gợi ý thiết kế để tận dụng kế thừa và đa hình tốt hơn."],
+                      ["Refactoring Guru", "Ví dụ thực tế biến if/else thành đa hình."],
+                    ].map(([title, desc]) => (
+                      <div key={title} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <ExternalLink size={16} className="text-slate-400" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-slate-900">{title}</div>
+                          <div className="text-xs text-slate-500">{desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </article>
+          )}
+
+          {view === "lesson" && tab === "video" && (
+            <div className="surface max-w-5xl rounded-xl p-6">
+              <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-950">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(37,99,235,.45),transparent_35%),radial-gradient(circle_at_72%_60%,rgba(15,118,110,.35),transparent_32%)]" />
+                <div className="absolute inset-x-8 bottom-8">
+                  <div className="mb-4 text-sm font-medium text-blue-200">AI generated lesson video</div>
+                  <div className="text-2xl font-semibold text-white">{lesson.topic}</div>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20">
+                    <div className="h-full w-[38%] rounded-full bg-white" />
+                  </div>
+                </div>
+                <button className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-950 shadow-lg">
+                  <Play size={26} fill="currentColor" />
+                </button>
+              </div>
+              <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+                <span>Thời lượng 4:32 phút</span>
+                <span>Được tạo từ tài liệu chương 1</span>
+              </div>
+            </div>
+          )}
+
+          {/* ── GAMIFIED QUIZ ─────────────────────────────────────────── */}
+          {view === "lesson" && tab === "quiz" && (
+            <div className="surface max-w-4xl rounded-xl p-6 relative overflow-hidden" ref={quizConfettiRef}>
+              {/* confetti keyframe injected once */}
+              <style>{`@keyframes confetti-fall{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(140px) rotate(360deg);opacity:0}}`}</style>
+
+              {quizDone ? (
+                /* ── Results screen ── */
+                <div className="flex flex-col items-center py-8 gap-4 text-center">
+                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
+                    <Star size={32} className="fill-white text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Quiz hoàn thành!</h3>
+                  <p className="text-sm text-slate-500">Bạn đã trả lời xong {quizQuestions.length} câu hỏi.</p>
+                  <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-8 py-4">
+                    <div className="text-3xl font-black text-amber-600">+{totalXpEarned} XP</div>
+                    <div className="text-xs text-amber-600 mt-1">Đã tích lũy trong phiên này</div>
+                  </div>
+                  <button
+                    onClick={startQuiz}
+                    className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 transition"
+                  >
+                    <RotateCcw size={15} /> Làm lại Quiz
+                  </button>
+                </div>
+              ) : !timerRunning && quizTimer === 30 ? (
+                /* ── Start screen ── */
+                <div className="flex flex-col items-center py-8 gap-4 text-center">
+                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                    <Zap size={30} className="text-white fill-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Quiz Bài {lesson.id}</h3>
+                  <p className="text-sm text-slate-500 max-w-xs">{quizQuestions.length} câu · 30 giây mỗi câu · Streak combo nhân đôi XP!</p>
+                  <button
+                    onClick={startQuiz}
+                    className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white hover:bg-blue-700 transition shadow-lg"
+                  >
+                    <PlayCircle size={18} /> Bắt đầu Quiz
+                  </button>
+                </div>
+              ) : (
+                /* ── Active question ── */
+                <div>
+                  {/* Header: progress + timer + streak */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-blue-600 dark:text-blue-400">Câu {quizIndex + 1}/{quizQuestions.length}</span>
+                      <div className="flex gap-1">
+                        {quizQuestions.map((_, i) => (
+                          <span key={i} className={`h-1.5 w-6 rounded-full transition ${
+                            i < quizIndex ? "bg-emerald-400" : i === quizIndex ? "bg-blue-500" : "bg-slate-200 dark:bg-slate-700"
+                          }`} />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {quizStreak >= 2 && (
+                        <span className="flex items-center gap-1 rounded-full bg-orange-100 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 px-2 py-0.5 text-[10px] font-black text-orange-600 dark:text-orange-400 animate-pulse">
+                          <Zap size={9} className="fill-current" /> STREAK ×{quizStreak}
+                        </span>
+                      )}
+                      {/* Countdown ring */}
+                      <div className={`relative flex h-9 w-9 items-center justify-center rounded-full border-2 ${
+                        quizTimer <= 10 ? "border-red-400 text-red-500" : "border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400"
+                      }`}>
+                        <span className="text-[11px] font-black">{quizTimer}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-relaxed">{currentQuestion.q}</h3>
+
+                  <div className="mt-4 space-y-2.5">
+                    {currentQuestion.options.map((option) => {
+                      const isSelected = selectedOption === option.id;
+                      const isCorrect = option.id === currentQuestion.correct;
+                      let cls = "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-300";
+                      if (isSelected && !submitted) cls = "border-blue-500 bg-blue-50 dark:bg-blue-950/40";
+                      if (submitted && isCorrect) cls = "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40";
+                      if (submitted && isSelected && !isCorrect) cls = "border-red-400 bg-red-50 dark:bg-red-950/40";
+                      return (
+                        <button
+                          key={option.id}
+                          disabled={submitted}
+                          onClick={() => setSelectedOption(option.id)}
+                          className={`flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition ${cls}`}
+                        >
+                          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold ${
+                            submitted && isCorrect ? "bg-emerald-500 text-white" :
+                            submitted && isSelected && !isCorrect ? "bg-red-400 text-white" :
+                            isSelected ? "bg-blue-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                          }`}>{option.id.toUpperCase()}</span>
+                          <span className={`flex-1 text-sm ${
+                            submitted && isCorrect ? "font-semibold text-emerald-800 dark:text-emerald-300" :
+                            submitted && isSelected && !isCorrect ? "text-red-700 dark:text-red-400" :
+                            "text-slate-700 dark:text-slate-300"
+                          }`}>{option.text}</span>
+                          {submitted && isCorrect && <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />}
+                          {submitted && isSelected && !isCorrect && <X size={16} className="text-red-400 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* AI Explanation after submit */}
+                  {submitted && (
+                    <div className={`mt-4 rounded-xl border p-4 text-sm leading-6 ${
+                      selectedOption === currentQuestion.correct
+                        ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30"
+                        : "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30"
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Bot size={14} className={selectedOption === currentQuestion.correct ? "text-emerald-600" : "text-red-500"} />
+                        <span className={`text-xs font-bold ${
+                          selectedOption === currentQuestion.correct ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                        }`}>
+                          {selectedOption === currentQuestion.correct
+                            ? `Chính xác! +${quizStreak >= 2 ? 30 : 15} XP${quizStreak >= 2 ? " (Streak ×2)" : ""}`
+                            : "❌ Chưa đúng rồi — đừng nản nhé!"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-5">{currentQuestion.explanation}</p>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex justify-between items-center">
+                    {!submitted ? (
+                      <button
+                        onClick={submitQuiz}
+                        disabled={!selectedOption}
+                        className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-700 dark:disabled:text-slate-500 transition hover:bg-blue-700"
+                      >
+                        Xác nhận <ChevronRight size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={nextQuizQuestion}
+                        className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition"
+                      >
+                        {quizIndex + 1 >= quizQuestions.length ? "Xem kết quả" : "Câu tiếp theo"} <ChevronRight size={16} />
+                      </button>
+                    )}
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <Star size={11} className="fill-current" /> {totalXpEarned} XP
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {view === "lesson" && tab === "mindmap" && (
+            <div className="surface rounded-xl p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-950">Mindmap Canvas</h3>
+                  <p className="mt-1 text-sm text-slate-500">Học viên tự vẽ sơ đồ tư duy cho bài {lesson.id}. Vẽ xong bấm AI Review để nhận góp ý.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={addMindmapNode}
+                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-200 hover:text-blue-700"
+                  >
+                    <GitBranch size={15} />
+                    Thêm node
+                  </button>
+                  <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                    <WandSparkles size={15} />
+                    AI Review
+                  </button>
+                </div>
+              </div>
+
+              <div className="mindmap-flow-shell relative h-[560px] overflow-hidden rounded-xl border border-slate-800 shadow-2xl">
+                <div className="absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between border-b border-white/10 bg-black/35 px-5 backdrop-blur">
+                  <div className="flex items-center gap-3">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                    <span className="ml-2 font-mono text-sm font-semibold text-slate-300">mindmap / oop-flow</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase text-slate-500">
+                    {["concepts", "runtime", "review"].map((item) => (
+                      <span key={item} className="rounded-full border border-white/10 px-2 py-1">{item}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edges}
+                  nodeTypes={mindmapNodeTypes}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={onConnect}
+                  fitView
+                  minZoom={0.55}
+                  maxZoom={1.45}
+                  defaultEdgeOptions={{
+                    type: "bezier",
+                    markerEnd: { type: MarkerType.ArrowClosed },
+                    style: { strokeWidth: 2.2, stroke: "#64748b" },
+                  }}
+                  proOptions={{ hideAttribution: true }}
+                >
+                  <Background gap={30} color="rgba(148,163,184,.13)" />
+                  <MiniMap pannable zoomable />
+                  <Controls />
+                </ReactFlow>
+
+                <div className="absolute bottom-6 left-8 z-10 w-72 rounded-lg border border-red-300/35 bg-black/55 p-3 font-mono text-[11px] leading-5 text-red-100 shadow-xl">
+                  <div className="text-red-300">AI notes</div>
+                  <div>extends = quan hệ is-a</div>
+                  <div>override = thay đổi hành vi</div>
+                  <div>runtime dispatch phụ thuộc object thật</div>
+                </div>
+
+                <div className="absolute bottom-6 right-8 z-10 w-72 rounded-lg border border-white/10 bg-black/55 p-4 shadow-xl">
+                  <div className="text-sm font-semibold text-slate-100">AI Review</div>
+                  <p className="mt-2 text-xs leading-5 text-slate-400">
+                    Sơ đồ đã có đủ lớp cha, lớp con và luồng runtime. Nên bổ sung ví dụ super() để thấy rõ thứ tự khởi tạo.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── SPLIT-VIEW CODE LAB ────────────────────────────────────────── */}
+          {view === "lesson" && tab === "code" && (
+            <div className="surface overflow-hidden rounded-2xl flex flex-col border border-slate-200 dark:border-slate-800 shadow-sm" style={{ minHeight: "720px", height: "calc(100vh - 210px)" }}>
+              {/* ── TOP TOOLBAR ────────────────────────────────────────────── */}
+              <div className="flex flex-wrap items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 px-4 py-2.5 shrink-0 gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    <span className="h-3 w-3 rounded-full bg-red-400" />
+                    <span className="h-3 w-3 rounded-full bg-amber-400" />
+                    <span className="h-3 w-3 rounded-full bg-emerald-400" />
+                  </div>
+
+                  {/* Language Selector */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs font-semibold">
+                    {(["python", "java", "cpp"] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => handleLanguageChange(lang)}
+                        className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                          selectedLanguage === lang
+                            ? "bg-blue-600 text-white shadow-xs font-bold"
+                            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                        }`}
+                      >
+                        {lang === "python" ? "Python 3.12" : lang === "java" ? "Java 21" : "C++ 20"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Docker Sandbox Isolated Status */}
+                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 text-[11px] font-semibold">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Docker Sandbox: Node-04</span>
+                    <span className="text-emerald-300 dark:text-emerald-700">|</span>
+                    <span>Seccomp Active (128MB)</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowProblemSpec(!showProblemSpec)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                      showProblemSpec
+                        ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300"
+                        : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    }`}
+                    title="Bật/tắt mô tả đề bài"
+                  >
+                    <FileText size={13} />
+                    <span className="hidden md:inline">Đề bài</span>
+                  </button>
+
+                  <button
+                    onClick={resetStarterCode}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                    title="Khôi phục mã nguồn ban đầu"
+                  >
+                    <RotateCcw size={13} />
+                    <span className="hidden md:inline">Reset</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveCodePaneTab("hints")}
+                    className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/50 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition shadow-xs cursor-pointer"
+                  >
+                    <Lightbulb size={13} />
+                    <span>Gợi ý Socratic</span>
+                    {Object.keys(unlockedHints).length > 0 && (
+                      <span className="ml-1 rounded-full bg-purple-200 dark:bg-purple-800 px-1.5 py-0.2 text-[10px]">
+                        {Object.keys(unlockedHints).length}/3
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={runSandbox}
+                    disabled={isRunningSandbox}
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/60 px-4 py-1.5 text-xs font-bold text-white transition shadow-sm cursor-pointer"
+                  >
+                    {isRunningSandbox ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" />
+                        <span>Đang chạy test...</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle size={14} />
+                        <span>Chạy Sandbox</span>
+                        <span className="hidden lg:inline text-[10px] opacity-75 font-normal ml-1">Ctrl+Enter</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* ── 3-PANE WORKSPACE BODY ──────────────────────────────────── */}
+              <div className="flex flex-1 min-h-0 overflow-hidden">
+                {/* 1. LEFT PANE: PROBLEM SPEC & CONSTRAINTS (Collapsible) */}
+                {showProblemSpec && (
+                  <div className="w-72 lg:w-80 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-4 overflow-y-auto shrink-0 flex flex-col gap-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 text-[10px] font-bold">
+                        Bài 04 • Cấu trúc dữ liệu
+                      </span>
+                      <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                        Độ khó: Medium
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Bộ nhớ đệm Lịch sử Duyệt web (Bounded Page Tracker)
+                    </h3>
+
+                    <div className="space-y-2 text-slate-600 dark:text-slate-300 leading-5">
+                      <p>
+                        Thiết kế lớp <code className="font-mono font-bold text-blue-600 dark:text-blue-400">PageTracker</code> lưu trữ lịch sử tối đa <strong>3 trang gần nhất</strong> của người dùng theo nguyên tắc FIFO.
+                      </p>
+                      <p>
+                        Mỗi khi gọi <code className="font-mono text-slate-800 dark:text-slate-200">visit(page)</code>, trang mới được đẩy vào cuối hàng đợi. Nếu dung lượng vượt quá 3, trang cũ nhất tự động bị đẩy ra.
+                      </p>
+                    </div>
+
+                    {/* Constraints Box */}
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase tracking-wider">
+                        <Cpu size={12} className="text-blue-500" />
+                        <span>Ràng buộc kỹ thuật</span>
+                      </div>
+                      <ul className="space-y-1 text-[11px] text-slate-500 dark:text-slate-400 list-disc list-inside">
+                        <li>Dung lượng cố định: <code className="font-mono text-slate-700 dark:text-slate-300 font-bold">maxlen = 3</code></li>
+                        <li>Độ phức tạp: <code className="font-mono text-emerald-600 font-bold">O(1)</code> cho thao tác visit</li>
+                        <li>Giới hạn Sandbox: <code className="font-mono">2000ms</code>, <code className="font-mono">128MB RAM</code></li>
+                        <li className="text-amber-600 dark:text-amber-400 font-medium">
+                          <strong>Ca biên:</strong> Không lưu chuỗi rỗng <code className="font-mono">""</code>, <code className="font-mono">null</code> hoặc khoảng trắng!
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* Example Box */}
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 space-y-1.5">
+                      <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                        Ví dụ mẫu:
+                      </div>
+                      <div className="bg-slate-100 dark:bg-slate-900 rounded-lg p-2 font-mono text-[10px] leading-4 text-slate-700 dark:text-slate-300">
+                        visit("/home")<br />
+                        visit("/shop")<br />
+                        visit("/cart")<br />
+                        visit("/checkout")<br />
+                        <span className="text-emerald-600 dark:text-emerald-400"># Output: ["/shop", "/cart", "/checkout"]</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. CENTER PANE: CODE EDITOR WITH LINE NUMBERS */}
+                <div className="flex flex-1 flex-col bg-slate-950 min-w-0 overflow-hidden">
+                  {/* File Header */}
+                  <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-1.5 bg-slate-950 text-slate-400 text-[11px] font-mono shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Code2 size={13} className="text-blue-400" />
+                      <span className="font-bold text-slate-200">
+                        {selectedLanguage === "python" ? "PageTracker.py" : selectedLanguage === "java" ? "PageTracker.java" : "PageTracker.cpp"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-slate-500 text-[10px]">
+                      <span>UTF-8</span>
+                      <span>4 Spaces</span>
+                      <span>{codeValue.split("\n").length} dòng</span>
+                    </div>
+                  </div>
+
+                  {/* Editor body */}
+                  <div className="flex flex-1 min-h-0 overflow-auto">
+                    {/* Line numbers */}
+                    <div className="select-none text-right px-3 pt-3 pb-3 font-mono text-xs leading-6 text-slate-600 border-r border-slate-800/80 shrink-0">
+                      {codeValue.split("\n").map((_, i) => (
+                        <div key={i}>{i + 1}</div>
+                      ))}
+                    </div>
+                    {/* Textarea */}
+                    <textarea
+                      value={codeValue}
+                      onChange={(e) => setCodeValue(e.target.value)}
+                      spellCheck={false}
+                      className="flex-1 resize-none bg-transparent p-3 font-mono text-xs leading-6 text-slate-100 outline-none min-w-0"
+                      style={{ tabSize: 4 }}
+                    />
+                  </div>
+
+                  {/* Editor footer */}
+                  <div className="border-t border-slate-800/80 bg-slate-900/90 px-4 py-1.5 text-[10px] text-slate-400 flex items-center justify-between shrink-0">
+                    <span className="flex items-center gap-1.5"><Keyboard size={13} className="text-slate-400" /><span>Phím tắt: <strong className="text-slate-300">Ctrl + Enter</strong> để thực thi sandbox</span></span>
+                    <span className="text-emerald-400 font-mono">Isolated Container Ready</span>
+                  </div>
+                </div>
+
+                {/* 3. RIGHT PANE: TEST SUITE & SOCRATIC HINTS & CONSOLE */}
+                <div className="w-80 xl:w-96 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col shrink-0 min-h-0">
+                  {/* Pane Navigation */}
+                  <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 shrink-0">
+                    <button
+                      onClick={() => setActiveCodePaneTab("tests")}
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        activeCodePaneTab === "tests"
+                          ? "border-blue-600 text-blue-600 dark:text-blue-400 font-bold bg-white dark:bg-slate-950"
+                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <TestTube2 size={13} className="shrink-0" />
+                      <span>Test Cases ({submissionResult ? `${submissionResult.passed_count}/${submissionResult.total_count}` : "5"})</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveCodePaneTab("hints")}
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        activeCodePaneTab === "hints"
+                          ? "border-purple-600 text-purple-600 dark:text-purple-400 font-bold bg-white dark:bg-slate-950"
+                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <Lightbulb size={13} className="shrink-0" />
+                      <span>Gợi ý Socratic ({Object.keys(unlockedHints).length}/3)</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveCodePaneTab("console")}
+                      className={`flex-1 py-2 text-xs font-semibold border-b-2 text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        activeCodePaneTab === "console"
+                          ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-slate-950"
+                          : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <Terminal size={13} className="shrink-0" />
+                      <span>Console</span>
+                    </button>
+                  </div>
+
+                  {/* TAB CONTENT: TEST CASES */}
+                  {activeCodePaneTab === "tests" && (
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                      {!submissionResult ? (
+                        <div className="text-center py-10 px-4 space-y-3">
+                          <div className="h-12 w-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
+                            <Layers size={24} />
+                          </div>
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                            Chưa có dữ liệu kiểm thử
+                          </h4>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-4">
+                            Nhấn nút <strong className="text-emerald-600">"Chạy Sandbox"</strong> ở trên hoặc <strong className="text-slate-700 dark:text-slate-300">Ctrl + Enter</strong> để khởi chạy 5 ca kiểm thử biên.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Result Summary Bar */}
+                          <div className={`rounded-xl p-3 border ${
+                            submissionResult.status === "passed"
+                              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                              : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"
+                          }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className={`text-xs font-bold flex items-center gap-1.5 ${
+                                submissionResult.status === "passed" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"
+                              }`}>
+                                {submissionResult.status === "passed" ? (
+                                  <>
+                                    <CheckCircle size={15} />
+                                    <span>5/5 Ca kiểm thử ĐẠT (All Passed)</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertTriangle size={15} />
+                                    <span>{submissionResult.passed_count}/{submissionResult.total_count} Ca kiểm thử ĐẠT</span>
+                                  </>
+                                )}
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-500 font-bold">
+                                {submissionResult.execution_time_ms}ms • {submissionResult.memory_mb}MB
+                              </span>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all duration-500 ${
+                                  submissionResult.status === "passed" ? "bg-emerald-500" : "bg-amber-500"
+                                }`}
+                                style={{ width: `${(submissionResult.passed_count / submissionResult.total_count) * 100}%` }}
+                              />
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            {tc.isEdgeCase && (
-                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">
-                                Edge Case
-                              </span>
-                            )}
-                            <span
-                              className={`font-mono text-[11px] font-bold ${
-                                isPassed ? "text-emerald-700" : "text-slate-400"
+                          {/* List of 5 Test Cases */}
+                          <div className="space-y-1.5">
+                            {submissionResult.test_cases.map((tc) => {
+                              const isSelected = selectedTestCaseId === tc.id;
+                              const isPassed = tc.status === "passed";
+                              return (
+                                <div
+                                  key={tc.id}
+                                  onClick={() => setSelectedTestCaseId(tc.id)}
+                                  className={`rounded-lg border p-2.5 transition cursor-pointer text-xs ${
+                                    isSelected
+                                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 shadow-xs"
+                                      : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900"
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-2">
+                                      {isPassed ? (
+                                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0 mt-0.5" />
+                                      ) : (
+                                        <XCircle size={15} className="text-red-500 shrink-0 mt-0.5" />
+                                      )}
+                                      <div>
+                                        <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                                          <span>Test {tc.id}: {tc.title}</span>
+                                          {tc.is_edge_case && (
+                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                              Edge Case
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                          {tc.duration_ms}ms • {tc.memory_mb}MB
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                      isPassed ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" : "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300"
+                                    }`}>
+                                      {isPassed ? "Pass" : "Fail"}
+                                    </span>
+                                  </div>
+
+                                  {/* Expanded details when selected */}
+                                  {isSelected && (
+                                    <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5 text-[11px] font-mono">
+                                      <div>
+                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">ĐẦU VÀO (INPUT):</span>
+                                        <div className="bg-slate-100 dark:bg-slate-900 p-1.5 rounded text-slate-800 dark:text-slate-200 break-all">
+                                          {tc.input}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">KẾT QUẢ MONG ĐỢI:</span>
+                                        <div className="bg-slate-100 dark:bg-slate-900 p-1.5 rounded text-emerald-600 dark:text-emerald-400 break-all">
+                                          {tc.expected_output}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-400 block text-[10px] font-sans font-bold">KẾT QUẢ THỰC TẾ:</span>
+                                        <div className={`p-1.5 rounded break-all ${
+                                          isPassed ? "bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300" : "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900"
+                                        }`}>
+                                          {tc.actual_output}
+                                        </div>
+                                      </div>
+
+                                      {tc.failure_reason && (
+                                        <div className="mt-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 font-sans text-[11px] space-y-1">
+                                          <div className="font-bold flex items-center gap-1">
+                                            <AlertCircle size={12} />
+                                            <span>Chẩn đoán lỗi biên:</span>
+                                          </div>
+                                          <div>{tc.failure_reason}</div>
+                                          <button
+                                            onClick={() => setActiveCodePaneTab("hints")}
+                                            className="mt-1 font-bold text-purple-700 dark:text-purple-300 hover:underline cursor-pointer flex items-center gap-1"
+                                          >
+                                            <span>Xem hướng dẫn Socratic để khắc phục</span>
+                                            <ArrowRight size={12} />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB CONTENT: SOCRATIC HINTS LADDER */}
+                  {activeCodePaneTab === "hints" && (
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                      {/* Academic Guardrail Policy Banner */}
+                      <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 p-3 space-y-1 text-xs">
+                        <div className="flex items-center gap-1.5 font-bold text-purple-800 dark:text-purple-300">
+                          <ShieldCheck size={14} />
+                          <span>Socratic Guardrail Độc Quyền</span>
+                        </div>
+                        <p className="text-[11px] text-purple-700 dark:text-purple-400 leading-4">
+                          Hệ thống cam kết không bao giờ đưa ra lời giải hoàn chỉnh. Thay vào đó, AI mở khóa 3 nấc tư duy để sinh viên tự hoàn thiện mã nguồn.
+                        </p>
+                      </div>
+
+                      {/* 3 Hint Levels */}
+                      <div className="space-y-2">
+                        {[1, 2, 3].map((lvl) => {
+                          const isUnlocked = !!unlockedHints[lvl];
+                          const isLoading = loadingHintLevel === lvl;
+                          const title =
+                            lvl === 1
+                              ? "Nấc 1: Khái niệm & Nguyên lý FIFO Deque"
+                              : lvl === 2
+                              ? "Nấc 2: Phân tích Ca kiểm thử biên (Edge Case)"
+                              : "Nấc 3: Thuật toán định hướng / Mã giả (Pseudo-code)";
+
+                          return (
+                            <div
+                              key={lvl}
+                              className={`rounded-xl border p-3 transition ${
+                                isUnlocked
+                                  ? "border-purple-300 dark:border-purple-700 bg-white dark:bg-slate-900 shadow-xs"
+                                  : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40"
                               }`}
                             >
-                              {isPassed ? "PASSED (12ms)" : "Ready"}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                    isUnlocked ? "bg-purple-600 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                                  }`}>
+                                    {lvl}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                    {title}
+                                  </span>
+                                </div>
+                                {!isUnlocked && (
+                                  <button
+                                    onClick={() => handleUnlockHint(lvl)}
+                                    disabled={isLoading}
+                                    className="rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white px-2.5 py-1 text-[11px] font-bold transition shadow-xs cursor-pointer"
+                                  >
+                                    {isLoading ? "Đang mở..." : "Mở gợi ý"}
+                                  </button>
+                                )}
+                              </div>
 
-                {/* Tab 2: Socratic Hints */}
-                {activeCodeLabTab === "hints" && (
-                  <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-                    {assignment.codeLabConfig?.socraticHints.map((hint) => {
-                      const isUnlocked = unlockedHints.includes(hint.level);
-                      return (
-                        <div
-                          key={hint.level}
-                          className="rounded-xl border border-slate-200 bg-white p-3 text-xs space-y-1 shadow-2xs"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">
-                                {hint.level}
-                              </span>
-                              <span>{hint.title}</span>
-                            </span>
-                            {!isUnlocked ? (
-                              <button
-                                onClick={() => setUnlockedHints((prev) => [...prev, hint.level])}
-                                className="rounded-lg border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100"
-                              >
-                                Mở khóa Nấc {hint.level}
-                              </button>
-                            ) : (
-                              <span className="text-[10px] font-semibold text-emerald-700">Đã mở</span>
-                            )}
-                          </div>
-                          {isUnlocked ? (
-                            <p className="text-slate-600 leading-relaxed text-[11px] pt-1 border-t border-slate-100">
-                              {hint.content}
-                            </p>
-                          ) : (
-                            <p className="text-slate-400 italic text-[11px] pt-1">
-                              Gợi ý đã được khóa. Hãy thử tự tư duy trước khi mở.
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                              {isUnlocked && (
+                                <div className="mt-2.5 pt-2 border-t border-purple-100 dark:border-purple-900/50 text-[11px] text-slate-700 dark:text-slate-300 leading-5">
+                                  <div className="whitespace-pre-line">
+                                    {unlockedHints[lvl].hint_text}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
 
-                {/* Tab 3: Console Terminal */}
-                {activeCodeLabTab === "console" && (
-                  <div className="flex-1 overflow-y-auto bg-slate-950 p-4 font-mono text-xs text-emerald-400 leading-relaxed">
-                    {sandboxResults ? (
-                      <pre className="whitespace-pre-wrap">{sandboxResults.stdout}</pre>
-                    ) : (
-                      <span className="text-slate-500">
-                        Chưa chạy sandbox. Nhấn "Chạy thử (Ctrl+Enter)" để biên dịch mã nguồn và xem log thực thi...
-                      </span>
-                    )}
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 text-xs space-y-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-200">
+                          Hỏi đáp trực tiếp với AI Mentor?
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Huynh có thể nhắn trực tiếp vào khung chat bên phải màn hình. Socratic Mentor sẽ phản biện dựa trên mã nguồn hiện tại của huynh.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB CONTENT: CONSOLE TERMINAL */}
+                  {activeCodePaneTab === "console" && (
+                    <div className="flex-1 flex flex-col bg-slate-950 text-slate-300 font-mono text-xs overflow-hidden">
+                      <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2 shrink-0">
+                        <Terminal size={12} className="text-emerald-400" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          Container Standard Output
+                        </span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-3 space-y-1 text-[11px] leading-5">
+                        {consoleOutput.map((line, i) => (
+                          <div
+                            key={i}
+                            className={`${
+                              line.startsWith("$")
+                                ? "text-cyan-400 font-bold"
+                                : line.includes("FAILED") || line.includes("error") || line.includes("Error")
+                                ? "text-red-400 font-bold"
+                                : line.includes("PASSED") || line.includes("Thực thi")
+                                ? "text-emerald-400"
+                                : line.startsWith("[")
+                                ? "text-slate-400"
+                                : "text-slate-200"
+                            }`}
+                          >
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── FOOTER BAR ────────────────────────────────────────────── */}
+              <div className="border-t border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 px-4 py-2 text-[11px] text-slate-600 dark:text-slate-400 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={13} className="text-emerald-500" />
+                  <span>Chuẩn chấm bài: Docker Runc Sandbox • Đo độ phức tạp O(1) • 5 Ca kiểm thử biên</span>
+                </div>
+                {submissionResult?.sha256 && (
+                  <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
+                    <span>Audit Hash:</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-bold">{submissionResult.sha256.slice(0, 16)}...</span>
                   </div>
                 )}
               </div>
             </div>
           )}
+
+          {/* ── MODAL: PROOF OF SELF-CORRECTION (SHA-256 AUDIT CERTIFICATE) ── */}
+          {showSelfCorrectionCert && submissionResult && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+              <div className="surface w-full max-w-lg rounded-2xl border border-amber-300 dark:border-amber-700 shadow-2xl p-6 space-y-4 relative">
+                <button
+                  onClick={() => setShowSelfCorrectionCert(false)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+
+                <div className="text-center space-y-2">
+                  <div className="h-14 w-14 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-700 flex items-center justify-center mx-auto shadow-sm">
+                    <Award size={32} />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Chứng thực Tư duy Độc lập
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    (Proof of Independent Self-Correction & Academic Integrity)
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-3.5 space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+                  <p className="leading-5">
+                    Hệ thống xác nhận học viên đã <strong className="text-slate-900 dark:text-white">chủ động nhận diện lỗi kiểm thử biên (Edge Case)</strong>, tham khảo gợi ý sư phạm và tự hoàn thiện mã nguồn đạt chuẩn công nghiệp <strong>5/5 Test Cases</strong> mà không sao chép code giải sẵn.
+                  </p>
+
+                  {/* SHA-256 Box */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Mã băm liêm chính học thuật (SHA-256):
+                    </span>
+                    <div className="flex items-center justify-between gap-2 bg-slate-950 text-emerald-400 p-2 rounded-lg font-mono text-[11px] break-all border border-slate-800">
+                      <span>{submissionResult.sha256}</span>
+                      <button
+                        onClick={() => handleCopySha(submissionResult.sha256)}
+                        className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer shrink-0"
+                        title="Sao chép SHA-256"
+                      >
+                        {copiedSha ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Audit Timeline */}
+                  <div className="space-y-1 pt-1 border-t border-slate-200 dark:border-slate-800 text-[11px]">
+                    <div className="flex items-center gap-2 text-red-500 font-medium">
+                      <span>1. Thất bại:</span>
+                      <span>Ca kiểm thử số 5 (Bị nhiễm chuỗi rỗng "")</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
+                      <span>2. Tham vấn:</span>
+                      <span>Tiếp thu nguyên lý Guard Clause từ Socratic AI</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span>3. Thành công:</span>
+                      <span>Tự bổ sung điều kiện lọc, đạt 5/5 ca kiểm thử biên!</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                    <Sparkles size={14} />
+                    <span>+100 XP Tự sửa bài</span>
+                  </div>
+                  <button
+                    onClick={() => setShowSelfCorrectionCert(false)}
+                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white transition shadow-sm cursor-pointer"
+                  >
+                    Xác nhận & Tiếp tục học
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      </main>
+
+      {mentorCollapsed ? (
+        <aside className={`ai-mentor-panel chat-skin-${chatSkin} mentor-${mentorMascot} flex min-h-0 flex-col items-center border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 gap-4 shrink-0`} style={{ width: "52px" }}>
+          <button
+            onClick={() => setMentorCollapsed(false)}
+            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 text-slate-500 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            title="Mở rộng khung Mentor"
+          >
+            <ChevronsLeft size={15} />
+          </button>
+          <button
+            onClick={() => setMentorCollapsed(false)}
+            className={`ai-mentor-avatar ${mentor.color} flex h-10 w-10 items-center justify-center rounded-xl text-white text-2xl hover:scale-105 transition shadow-lg animate-bounce`}
+            title="Mở rộng chat"
+          >
+            {mentor.emoji}
+          </button>
+        </aside>
+      ) : (
+        <aside className={`ai-mentor-panel chat-skin-${chatSkin} mentor-${mentorMascot} flex min-h-0 flex-col border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-300`}>
+          <div className="border-b border-slate-200 dark:border-slate-800 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className={`ai-mentor-avatar ${mentor.color} flex h-10 w-10 items-center justify-center rounded-xl text-white text-2xl`}>
+                  {mentor.emoji}
+                </span>
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
+                    {mentor.name}
+                    <span className="rounded-full bg-emerald-50 dark:bg-emerald-955/30 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">online</span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{mentor.mode} · VAK aware</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                  <Wand2 size={15} />
+                </button>
+                <button
+                  onClick={() => setMentorCollapsed(true)}
+                  className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                  title="Thu nhỏ khung Mentor"
+                >
+                  <ChevronsRight size={15} />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955/20 p-3">
+              <div className="text-[11px] font-bold uppercase text-slate-400 dark:text-slate-500">Đang theo dõi</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-200">{lesson.title}</div>
+              <div className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                Sai nhiều ở `super()` và override
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+            {messages.map((item, index) => {
+              const isMentorMessage = item.from === "mentor";
+              const isGuardrail = Boolean((item as any).isGuardrail);
+              return (
+                <div key={index} className={`flex gap-2 ${isMentorMessage ? "items-start" : "items-start justify-end"}`}>
+                  {isMentorMessage && (
+                    <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${mentor.color} text-white text-sm`}>
+                      {mentor.emoji}
+                    </span>
+                  )}
+                  <div className={`ai-bubble max-w-[245px] rounded-2xl px-3.5 py-3 text-xs leading-5 ${
+                    isMentorMessage
+                      ? isGuardrail
+                        ? "bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                      : "theme-primary-bg text-white"
+                  }`}>
+                    {isGuardrail && (
+                      <div className="mb-1.5 flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                        <ShieldCheck size={12} />
+                        <span>Socratic Guardrail Active</span>
+                      </div>
+                    )}
+                    {item.text}
+                  </div>
+                </div>
+              );
+            })}
+            {isAskingAi && (
+              <div className="flex gap-2 items-start">
+                <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${mentor.color} text-white text-sm`}>
+                  {mentor.emoji}
+                </span>
+                <div className="ai-bubble rounded-2xl px-3.5 py-2 text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <RefreshCw size={12} className="animate-spin text-purple-500" />
+                  <span>Socratic Tutor đang phản biện...</span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 p-3 text-xs text-slate-500 dark:text-slate-400">
+              <Sparkles size={14} className="theme-primary-text" />
+              {mentor.hint}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 dark:border-slate-800 p-4">
+            <div className="mb-3 flex flex-wrap gap-2">
+              {mentorQuickPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => {
+                    sendMessage(prompt);
+                  }}
+                  className="rounded-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:border-blue-200 dark:hover:border-blue-400 hover:text-blue-700 dark:hover:text-blue-400"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+            <div className="ai-input flex gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-2 shadow-sm">
+              <input
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && sendMessage()}
+                placeholder="Hỏi mentor..."
+                className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none text-slate-800 dark:text-white"
+              />
+              <span className="hidden items-center gap-1 px-1 text-[11px] text-slate-400 xl:flex">
+                <CornerDownLeft size={12} />
+                Enter
+              </span>
+              <button onClick={() => sendMessage()} className="theme-primary-bg flex h-9 w-9 items-center justify-center rounded-xl text-white">
+                <Send size={16} />
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
     </div>
   );
 }
