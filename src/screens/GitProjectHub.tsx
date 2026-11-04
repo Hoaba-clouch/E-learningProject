@@ -1544,7 +1544,7 @@ export default function GitProjectHub() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200 font-mono">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 font-mono">
               <Network size={13} />
               Phân hệ 2 • Sơ đồ Kiến trúc Chuẩn GitDiagram & Understand Anything
             </span>
@@ -1563,7 +1563,7 @@ export default function GitProjectHub() {
             href="https://gitdiagram.com/hoaba-clouch/e-learningproject"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition shadow-xs"
           >
             <ExternalLink size={14} />
             Mở trên GitDiagram.com
@@ -1589,7 +1589,7 @@ export default function GitProjectHub() {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900 font-mono">94.8</span>
-            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
               Hạng A+ (Chuẩn)
             </span>
           </div>
@@ -1603,7 +1603,7 @@ export default function GitProjectHub() {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-emerald-700 font-mono">100%</span>
-            <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+            <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
               Bình thường
             </span>
           </div>
@@ -1617,7 +1617,7 @@ export default function GitProjectHub() {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-purple-700 font-mono">36 : 34 : 30</span>
-            <span className="text-xs font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+            <span className="text-xs font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
               Cân bằng
             </span>
           </div>
@@ -1631,7 +1631,7 @@ export default function GitProjectHub() {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-amber-700 font-mono">22</span>
-            <span className="text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+            <span className="text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
               5 Phân tầng
             </span>
           </div>
@@ -1835,12 +1835,12 @@ export default function GitProjectHub() {
                           </span>
                         </div>
                         <span
-                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded uppercase tracking-wider ${
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                             pr.status === "merged"
-                              ? "bg-purple-100 text-purple-700 border border-purple-200"
+                              ? "bg-purple-100 text-purple-700"
                               : pr.status === "approved"
-                              ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                              : "bg-amber-100 text-amber-800 border border-amber-200"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-800"
                           }`}
                         >
                           {pr.status === "merged" ? "Merged" : pr.status === "approved" ? "Approved" : "Reviewing"}
@@ -1887,24 +1887,24 @@ export default function GitProjectHub() {
               {/* Dòng 1: Tag & Metadata Badges */}
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-200">
-                    <Bot size={13} className="text-orange-500" />
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono font-bold bg-orange-100/70 text-orange-800">
+                    <Bot size={13} className="text-orange-600" />
                     CodeRabbit Reviewer
                   </span>
-                  <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
                     {selectedPR.sourceBranch} → {selectedPR.targetBranch}
                   </span>
                   <span className="text-xs text-slate-500">• {selectedPR.createdAt}</span>
                 </div>
 
                 <div className="flex items-center gap-2 text-xs font-mono">
-                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold border border-slate-200">
+                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold">
                     {selectedPR.summary.filesCount} files
                   </span>
-                  <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold border border-emerald-200">
+                  <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">
                     +{selectedPR.summary.totalAdditions}
                   </span>
-                  <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-bold border border-rose-200">
+                  <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-bold">
                     -{selectedPR.summary.totalDeletions}
                   </span>
                 </div>
@@ -1935,10 +1935,10 @@ export default function GitProjectHub() {
                   <span
                     className={`font-bold px-2 py-0.5 rounded text-[11px] ${
                       selectedPR.summary.riskLevel === "high"
-                        ? "bg-rose-100 text-rose-800 border border-rose-200"
+                        ? "bg-rose-100 text-rose-800"
                         : selectedPR.summary.riskLevel === "medium"
-                        ? "bg-amber-100 text-amber-800 border border-amber-200"
-                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-emerald-100 text-emerald-800"
                     }`}
                   >
                     Mức {selectedPR.summary.riskLevel.toUpperCase()}
@@ -2067,7 +2067,7 @@ export default function GitProjectHub() {
                               {/* INLINE CODERABBIT FEEDBACK BOX */}
                               {comment && line.newLineNumber === comment.line && isAddition && (
                                 <div className="p-4 bg-slate-900 border-y-2 border-orange-500/80 my-1 mx-2 rounded-lg text-slate-800 font-sans shadow-lg">
-                                  <div className="bg-white rounded-lg p-4 border border-orange-200 shadow-sm space-y-3">
+                                  <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm space-y-3">
                                     <div className="flex items-start justify-between gap-3">
                                       <div className="flex items-center gap-2">
                                         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-xs">
@@ -2076,16 +2076,16 @@ export default function GitProjectHub() {
                                         <div>
                                           <div className="flex items-center gap-2">
                                             <span className="text-xs font-bold text-slate-900">CodeRabbit AI</span>
-                                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 font-bold border border-orange-200">
+                                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 font-bold">
                                               Senior Bot
                                             </span>
                                             <span
                                               className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                                                 comment.type === "security"
-                                                  ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                                  ? "bg-rose-100 text-rose-800"
                                                   : comment.type === "warning"
-                                                  ? "bg-amber-100 text-amber-800 border border-amber-300"
-                                                  : "bg-blue-100 text-blue-800 border border-blue-300"
+                                                  ? "bg-amber-100 text-amber-800"
+                                                  : "bg-blue-100 text-blue-800"
                                               }`}
                                             >
                                               {comment.type === "security" ? "Lỗ hổng bảo mật" : comment.type === "warning" ? "Cảnh báo kiến trúc" : "Gợi ý Clean Code"}
@@ -2098,7 +2098,7 @@ export default function GitProjectHub() {
                                       </div>
 
                                       {isApplied ? (
-                                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 shadow-xs">
+                                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg shadow-xs">
                                           <CheckCheck size={15} />
                                           Đã áp dụng bản sửa
                                         </span>
@@ -2216,7 +2216,7 @@ export default function GitProjectHub() {
             {/* TAB CONTENT 3: TEACHER DEFENSE Q&A */}
             {prSubTab === "defense" && (
               <div className="p-6 space-y-6">
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+                <div className="bg-blue-50/80 rounded-xl p-4 space-y-2">
                   <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
                     <HelpCircle size={16} className="text-blue-700" />
                     Công Cụ Giảng Viên: Bộ Câu Hỏi Chất Vấn Liêm Chính Kỹ Thuật (Thầy Phước)
@@ -2237,7 +2237,7 @@ export default function GitProjectHub() {
                           <h4 className="text-xs font-bold text-slate-900 leading-relaxed">
                             {qa.question}
                           </h4>
-                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900 space-y-1">
+                          <div className="bg-emerald-50/90 rounded-lg p-3 text-xs text-emerald-900 space-y-1">
                             <span className="font-bold block text-emerald-800">
                               Đáp án chuẩn mong đợi (Expected Answer):
                             </span>
