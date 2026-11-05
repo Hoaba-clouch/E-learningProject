@@ -528,9 +528,12 @@ export default function TaskCsvManagerModal({
                         onChange={(e) => setTargetColumn(e.target.value as ColumnId)}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs text-slate-800 focus:outline-hidden"
                       >
-                        <option value="backlog">Backlog (Chờ lập kế hoạch)</option>
-                        <option value="ready">Ready (Sẵn sàng triển khai)</option>
-                        <option value="in-progress">In Progress (Đang làm)</option>
+                        <option value="backlog">Backlog (Chờ thực hiện)</option>
+                        <option value="ready">Cần làm (Sẵn sàng)</option>
+                        <option value="in-progress">Đang làm (In Progress)</option>
+                        <option value="done">Hoàn thành (Done)</option>
+                        <option value="verified">Đã nghiệm thu (Thầy duyệt)</option>
+                        <option value="fail">Fail (Chưa đạt)</option>
                       </select>
                     </div>
                     <div>

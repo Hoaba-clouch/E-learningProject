@@ -853,11 +853,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-1",
     sha: "001a4fc",
-    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "main",
     branchLabel: "main",
     branchColor: "#2563eb",
-    message: "Khởi tạo repo cấu trúc 3-tier, Dockerfile & branching model",
+    message: "TE9CA72: Khởi tạo repo cấu trúc 3-tier, Dockerfile & branching model",
     date: "28/10/2026 09:15",
     timeAgo: "7 ngày trước",
     stats: { additions: 240, deletions: 0, files: 3 },
@@ -868,11 +868,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-2",
     sha: "14b98c2",
-    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "develop",
     branchLabel: "develop",
     branchColor: "#9333ea",
-    message: "Tách nhánh develop từ main, cấu hình CI/CD và môi trường staging",
+    message: "TE9CA72: Tách nhánh develop từ main, cấu hình CI/CD và môi trường staging",
     date: "29/10/2026 10:30",
     timeAgo: "6 ngày trước",
     stats: { additions: 110, deletions: 5, files: 2 },
@@ -883,11 +883,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-3",
     sha: "b579f87",
-    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "feature/erd",
     branchLabel: "feature/erd",
     branchColor: "#16a34a",
-    message: "Thiết kế ERD 8 bảng quan hệ 3NF và SQLAlchemy migration models",
+    message: "TE14F82: Thiết kế ERD 8 bảng quan hệ 3NF và SQLAlchemy migration models",
     date: "31/10/2026 14:20",
     timeAgo: "4 ngày trước",
     stats: { additions: 342, deletions: 12, files: 4 },
@@ -903,11 +903,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-4",
     sha: "c8e41a9",
-    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "develop",
     branchLabel: "develop",
     branchColor: "#9333ea",
-    message: "Merge branch 'feature/erd' vào develop (PR #04 hoàn thành Sprint 1)",
+    message: "TE14F82: Merge branch 'feature/erd' vào develop (PR #04 hoàn thành Sprint 1)",
     date: "01/11/2026 16:45",
     timeAgo: "3 ngày trước",
     stats: { additions: 85, deletions: 2, files: 2 },
@@ -918,11 +918,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-5",
     sha: "5149fb7",
-    author: { name: "Quốc Huy", role: "Fullstack Developer", avatar: "QH", color: "#16a34a" },
+    author: { name: "Vũ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
     branch: "feature/auth",
     branchLabel: "feature/auth",
     branchColor: "#d97706",
-    message: "Xây dựng JWT authentication, hash Passlib Bcrypt 12 rounds và endpoint /login",
+    message: "TE22C19: Xây dựng JWT authentication, hash Passlib Bcrypt 12 rounds và endpoint /login",
     date: "02/11/2026 11:10",
     timeAgo: "2 ngày trước",
     stats: { additions: 295, deletions: 8, files: 5 },
@@ -939,11 +939,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-6",
     sha: "d4bdc7d",
-    author: { name: "Quốc Huy", role: "Fullstack Developer", avatar: "QH", color: "#16a34a" },
+    author: { name: "Vũ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
     branch: "develop",
     branchLabel: "develop",
     branchColor: "#9333ea",
-    message: "Merge branch 'feature/auth' vào develop (PR #07 hoàn thành Sprint 2)",
+    message: "TE22C19: Merge branch 'feature/auth' vào develop (PR #07 hoàn thành Sprint 2)",
     date: "02/11/2026 17:30",
     timeAgo: "2 ngày trước",
     stats: { additions: 65, deletions: 4, files: 3 },
@@ -954,11 +954,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-7",
     sha: "77817ef",
-    author: { name: "Minh Anh", role: "Leader / Architect", avatar: "MA", color: "#2563eb" },
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "main",
     branchLabel: "main",
     branchColor: "#2563eb",
-    message: "Release v1.0: nghiệm thu Sprint 2 và triển khai lên Production",
+    message: "TE9CA72: Release v1.0: nghiệm thu Sprint 2 và triển khai lên Production",
     date: "03/11/2026 09:00",
     timeAgo: "1 ngày trước",
     stats: { additions: 54, deletions: 10, files: 2 },
@@ -969,11 +969,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-8",
     sha: "2103bbf",
-    author: { name: "Hoàng Long", role: "Backend / Tester", avatar: "HL", color: "#9333ea" },
+    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
     branch: "feature/evaluator",
     branchLabel: "feature/evaluator",
     branchColor: "#0891b2",
-    message: "Xây dựng sandbox Code Evaluator biên dịch C++ g++ và 5 test case ẩn",
+    message: "TE35D77: Xây dựng sandbox Code Evaluator biên dịch C++ g++ và 5 test case ẩn",
     date: "03/11/2026 15:40",
     timeAgo: "1 ngày trước",
     stats: { additions: 215, deletions: 6, files: 3 },
@@ -988,11 +988,11 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-9",
     sha: "7323c97",
-    author: { name: "Hoàng Long", role: "Backend / Tester", avatar: "HL", color: "#9333ea" },
+    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
     branch: "main",
     branchLabel: "main",
     branchColor: "#2563eb",
-    message: "Release v1.2: chốt sơ đồ GitDiagram và triển khai toàn diện hệ thống",
+    message: "TE61A04: Release v1.2: chốt sơ đồ GitDiagram và triển khai toàn diện hệ thống",
     date: "04/11/2026 13:45",
     timeAgo: "Vừa xong",
     stats: { additions: 310, deletions: 15, files: 3 },
@@ -1059,8 +1059,8 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
   {
     id: "pr-04",
     prNumber: 4,
-    title: "feat(#TASK-14): Thiết kế CSDL 8 bảng 3NF & Ràng buộc Khóa ngoại SQLAlchemy",
-    author: { name: "Hoàng Long", role: "Backend / Tester", avatar: "HL", color: "#9333ea" },
+    title: "feat(#TE14F82): Thiết kế CSDL 8 bảng 3NF & Ràng buộc Khóa ngoại SQLAlchemy",
+    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "ĐN", color: "#9333ea" },
     sourceBranch: "feature/erd",
     targetBranch: "develop",
     status: "open",
@@ -1122,8 +1122,8 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
   {
     id: "pr-07",
     prNumber: 7,
-    title: "feat(#TASK-22): Tích hợp JWT Access Token, Bcrypt Hashing & Phân Quyền Giảng Viên",
-    author: { name: "Quốc Huy", role: "Frontend / Fullstack", avatar: "QH", color: "#16a34a" },
+    title: "feat(#TE22C19): Tích hợp JWT Access Token, Bcrypt Hashing & Phân Quyền Giảng Viên",
+    author: { name: "Vũ Nhật Huy", role: "Frontend / Fullstack", avatar: "VH", color: "#16a34a" },
     sourceBranch: "feature/auth",
     targetBranch: "develop",
     status: "approved",
@@ -1184,8 +1184,8 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
   {
     id: "pr-12",
     prNumber: 12,
-    title: "feat(#TASK-35): Bộ Chấm Điểm Mã Nguồn Cách Ly Sandbox Docker & Giới Hạn Tài Nguyên",
-    author: { name: "Minh Anh", role: "Team Leader / Architect", avatar: "MA", color: "#2563eb" },
+    title: "feat(#TE9CA72): Bộ Chấm Điểm Mã Nguồn Cách Ly Sandbox Docker & Giới Hạn Tài Nguyên",
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "BH", color: "#2563eb" },
     sourceBranch: "feature/sandbox",
     targetBranch: "develop",
     status: "merged",
@@ -1242,8 +1242,8 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
   {
     id: "pr-15",
     prNumber: 15,
-    title: "feat(#TASK-48): Giao Diện Tech Reels Video Bài Giảng Ngắn & Tiến Trình Xem",
-    author: { name: "Quốc Huy", role: "Frontend / Fullstack", avatar: "QH", color: "#16a34a" },
+    title: "feat(#TE48B10): Giao Diện Tech Reels Video Bài Giảng Ngắn & Tiến Trình Xem",
+    author: { name: "Vũ Nhật Huy", role: "Frontend / Fullstack", avatar: "VH", color: "#16a34a" },
     sourceBranch: "feature/reels",
     targetBranch: "develop",
     status: "open",
@@ -1296,8 +1296,8 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
   {
     id: "pr-18",
     prNumber: 18,
-    title: "feat(#TASK-56): Cửa Hàng Đổi Thưởng XP Shop & Kiểm Soát Giao Dịch Điểm",
-    author: { name: "Hoàng Long", role: "Backend / Tester", avatar: "HL", color: "#9333ea" },
+    title: "feat(#TE56E05): Cửa Hàng Đổi Thưởng XP Shop & Kiểm Soát Giao Dịch Điểm",
+    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "ĐN", color: "#9333ea" },
     sourceBranch: "feature/gamification",
     targetBranch: "develop",
     status: "open",
@@ -1350,8 +1350,8 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
   {
     id: "pr-21",
     prNumber: 21,
-    title: "fix(#TASK-62): Khắc Phục Lỗi Cache Lịch Sử Hội Thoại Gia Sư AI Khi Đổi Bài Học",
-    author: { name: "Minh Anh", role: "Team Leader / Architect", avatar: "MA", color: "#2563eb" },
+    title: "fix(#TE62F11): Khắc Phục Lỗi Cache Lịch Sử Hội Thoại Gia Sư AI Khi Đổi Bài Học",
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "BH", color: "#2563eb" },
     sourceBranch: "feature/ai-tutor",
     targetBranch: "develop",
     status: "approved",
@@ -1627,7 +1627,7 @@ export default function GitProjectHub() {
               Cân bằng
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">Minh Anh (36%), Quốc Huy (34%), Hoàng Long (30%).</p>
+          <p className="mt-1 text-[11px] text-slate-500">Nguyễn Bá Hòa (36%), Vũ Nhật Huy (34%), Phan Đình Nghị (30%).</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
@@ -1741,9 +1741,9 @@ export default function GitProjectHub() {
                 className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="all">Tất cả tác giả</option>
-                <option value="Minh Anh">Minh Anh</option>
-                <option value="Quốc Huy">Quốc Huy</option>
-                <option value="Hoàng Long">Hoàng Long</option>
+                <option value="Nguyễn Bá Hòa">Nguyễn Bá Hòa</option>
+                <option value="Vũ Nhật Huy">Vũ Nhật Huy</option>
+                <option value="Phan Đình Nghị">Phan Đình Nghị</option>
               </select>
             </div>
 
@@ -2473,28 +2473,28 @@ export default function GitProjectHub() {
                   Tất cả (9)
                 </button>
                 <button
-                  onClick={() => setMemberFilter("Minh Anh")}
+                  onClick={() => setMemberFilter("Nguyễn Bá Hòa")}
                   className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
-                    memberFilter === "Minh Anh" ? "bg-blue-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                    memberFilter === "Nguyễn Bá Hòa" ? "bg-blue-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Minh Anh (4)
+                  Nguyễn Bá Hòa (4)
                 </button>
                 <button
-                  onClick={() => setMemberFilter("Quốc Huy")}
+                  onClick={() => setMemberFilter("Vũ Nhật Huy")}
                   className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
-                    memberFilter === "Quốc Huy" ? "bg-emerald-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                    memberFilter === "Vũ Nhật Huy" ? "bg-emerald-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Quốc Huy (2)
+                  Vũ Nhật Huy (2)
                 </button>
                 <button
-                  onClick={() => setMemberFilter("Hoàng Long")}
+                  onClick={() => setMemberFilter("Phan Đình Nghị")}
                   className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
-                    memberFilter === "Hoàng Long" ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                    memberFilter === "Phan Đình Nghị" ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Hoàng Long (3)
+                  Phan Đình Nghị (3)
                 </button>
               </div>
 
@@ -2954,7 +2954,7 @@ export default function GitProjectHub() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">Minh Anh (Leader)</span>
+                <span className="text-xs font-bold text-slate-900">Nguyễn Bá Hòa (Leader)</span>
                 <span className="text-xs font-bold font-mono text-blue-700 bg-blue-100 px-2 py-0.5 rounded">36%</span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
@@ -2969,7 +2969,7 @@ export default function GitProjectHub() {
 
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">Quốc Huy (Fullstack)</span>
+                <span className="text-xs font-bold text-slate-900">Vũ Nhật Huy (Frontend/AI)</span>
                 <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">34%</span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
@@ -2984,7 +2984,7 @@ export default function GitProjectHub() {
 
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">Hoàng Long (Backend/Tester)</span>
+                <span className="text-xs font-bold text-slate-900">Phan Đình Nghị (Backend/DB)</span>
                 <span className="text-xs font-bold font-mono text-purple-700 bg-purple-100 px-2 py-0.5 rounded">30%</span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">

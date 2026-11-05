@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Columns3,
+  Copy,
   FileSpreadsheet,
   FileText,
   Filter,
@@ -37,7 +38,7 @@ import {
 } from "lucide-react";
 import TaskCsvManagerModal from "../components/TaskCsvManagerModal";
 
-export type ColumnId = "backlog" | "ready" | "in-progress" | "review" | "done";
+export type ColumnId = "backlog" | "ready" | "in-progress" | "done" | "verified" | "fail";
 export type Priority = "low" | "medium" | "high";
 export type MoscowPriority = "must" | "should" | "could" | "wont";
 export type TabView = "board" | "analytics" | "dependencies";
@@ -57,6 +58,13 @@ export interface TeamMember {
   avatar: string;
   role: string;
   color: string;
+}
+
+export interface TaskAuditLog {
+  user: string;
+  fromColumn: string;
+  toColumn: string;
+  timestamp: string;
 }
 
 export interface ChecklistItem {
@@ -106,6 +114,7 @@ export interface KanbanTask {
   submissionRequirement?: "Không" | "Link" | "File" | "Link hoặc file";
   submissionUrl?: string;
   isBonus?: boolean;
+  auditLogs?: TaskAuditLog[];
 }
 
 export const defaultDoD = (isDone = false): ChecklistItem[] => [
@@ -116,167 +125,169 @@ export const defaultDoD = (isDone = false): ChecklistItem[] => [
 ];
 
 const initialMembers: TeamMember[] = [
-  { id: "m1", name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch", color: "bg-blue-600" },
-  { id: "m2", name: "Quốc Huy", avatar: "QH", role: "Backend Dev", color: "bg-amber-500" },
-  { id: "m3", name: "Hoàng Long", avatar: "HL", role: "QA & AI Ops", color: "bg-teal-600" },
+  { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-blue-600" },
+  { id: "m2", name: "Vũ Nhật Huy", avatar: "H", role: "Frontend & AI Dev", color: "bg-emerald-600" },
+  { id: "m3", name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database", color: "bg-purple-600" },
 ];
 
 const initialTasks: KanbanTask[] = [
   {
     id: "task-1",
-    code: "BE-01",
-    title: "Thiết kế CSDL ERD & Timezone UTC chuẩn ISO-8601 (H4)",
-    description: "Xây dựng 8 bảng core, quy chuẩn toàn bộ timestamp về UTC (H4) theo yêu cầu Thầy Phước.",
+    code: "TE9CA72",
+    title: "Khảo sát thực trạng đào tạo lập trình & Đặc tả SRS 12 Ca sử dụng",
+    description: "Khảo sát các hạn chế của LMS truyền thống. Đặc tả chi tiết 12 Use Cases cho 4 phân hệ cốt lõi: Code Lab, AI Socratic, AI Defense Room, Git Project Hub kèm chuẩn phi chức năng Latency < 500ms, ISO-8601 UTC.",
     column: "done",
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
+    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
     estimateHours: 4,
-    dueDate: "28/10",
-    epic: "Architecture",
+    dueDate: "05/11/2026",
+    epic: "SRS & Specs",
     epicColor: "bg-blue-50 text-blue-700 border-blue-200",
+    submissionRequirement: "Link",
+    submissionUrl: "https://github.com/nguyen0605/E-learning-Project",
+    auditLogs: [
+      { user: "Nguyễn Bá Hòa", fromColumn: "Backlog", toColumn: "Cần làm", timestamp: "05/11/2026 09:12" },
+      { user: "Nguyễn Bá Hòa", fromColumn: "Cần làm", toColumn: "Đang làm", timestamp: "05/11/2026 09:12" },
+      { user: "Nguyễn Bá Hòa", fromColumn: "Đang làm", toColumn: "Hoàn thành", timestamp: "05/11/2026 09:13" },
+    ],
     userStory: {
-      role: "Kiến trúc sư hệ thống",
-      want: "thiết kế ERD chuẩn hóa 3NF và quy định múi giờ UTC ISO-8601",
-      benefit: "dữ liệu không bị phân mảnh hay sai lệch timestamp giữa client và server (H4)",
+      role: "Trưởng nhóm & Sinh viên",
+      want: "đặc tả chi tiết 12 ca sử dụng và các ràng buộc phi chức năng",
+      benefit: "định hình rõ phạm vi 4 phân hệ của đề tài CodeMind Campus",
     },
-    acceptanceCriteria: "Given cơ sở dữ liệu khởi tạo\nWhen các bảng lưu trữ thông tin thời gian\nThen timestamp được quy đổi về UTC theo ISO-8601 và schema đạt chuẩn 3NF",
+    acceptanceCriteria: "Given yêu cầu khởi động đề tài Nhóm 4\nWhen lập tài liệu đặc tả SRS\nThen hoàn thành 12 Use Cases và nộp link GitHub minh chứng hợp lệ",
     definitionOfDone: defaultDoD(true),
     checklist: [
-      { id: "c1", text: "Vẽ sơ đồ ERD 8 thực thể chính", done: true },
-      { id: "c2", text: "Tạo migration SQLite & Index", done: true },
-      { id: "c3", text: "Viết helper UTC now_utc()", done: true },
+      { id: "c1", text: "Khảo sát các hạn chế của LMS truyền thống", done: true },
+      { id: "c2", text: "Đặc tả 12 Use Cases và kiến trúc 3 tầng", done: true },
+      { id: "c3", text: "Nộp link repo GitHub minh chứng lên hệ thống", done: true },
     ],
-    deliverable: { type: "commit", label: "commit #a8f3b2" },
+    deliverable: { type: "commit", label: "commit #TE9CA72" },
     commentsCount: 4,
     attachmentsCount: 2,
   },
   {
     id: "task-2",
-    code: "DOC-01",
-    title: "Lập Tài liệu SRS Master Blueprint v3.1 & Xuất Word",
-    description: "Đặc tả các ràng buộc cứng H1-H4, kịch bản Socratic và cơ chế chống Free-rider cho báo cáo Thầy.",
-    column: "done",
+    code: "TE14F82",
+    title: "Thiết kế CSDL quan hệ chuẩn hóa 3NF & ERD 8 bảng",
+    description: "Xác định khóa chính PK, khóa ngoại FK, loại bỏ toàn bộ phụ thuộc bắc cầu, bắt buộc timestamp UTC (H4) theo yêu cầu Thầy Phước.",
+    column: "ready",
     priority: "high",
     moscow: "must",
-    points: 8,
-    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
+    points: 5,
+    assignee: { name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database" },
     estimateHours: 6,
-    dueDate: "29/10",
-    epic: "Documentation",
+    dueDate: "06/11/2026",
+    epic: "Database",
     epicColor: "bg-purple-50 text-purple-700 border-purple-200",
+    submissionRequirement: "File",
     userStory: {
-      role: "Hội đồng & Giảng viên",
-      want: "tài liệu SRS Master Blueprint chuẩn IEEE 830",
-      benefit: "nắm bắt toàn diện các ràng buộc cứng H1-H4 và lộ trình đồ án thực tế",
+      role: "Database Engineer",
+      want: "sơ đồ ERD 8 bảng thực thể chuẩn 3NF",
+      benefit: "dữ liệu không bị dị thường khi thêm, xóa, sửa và chuẩn hóa khóa ngoại",
     },
-    acceptanceCriteria: "Given yêu cầu nghiệm thu môn học\nWhen xuất tài liệu đặc tả hệ thống\nThen văn bản có đủ 10 chương chuẩn PTTKHT, Agile Scrum và danh mục Product Backlog",
-    definitionOfDone: defaultDoD(true),
+    acceptanceCriteria: "Given yêu cầu nghiệp vụ lưu trữ khóa học\nWhen thiết kế CSDL\nThen schema đạt chuẩn 3NF và timestamp dùng UTC",
+    definitionOfDone: defaultDoD(false),
     checklist: [
-      { id: "c1", text: "Khảo sát và gạch bỏ các tính năng ảo (VARK)", done: true },
-      { id: "c2", text: "Viết đặc tả Hard Constraints H1-H4", done: true },
-      { id: "c3", text: "Format chuẩn Word nộp Thầy", done: true },
+      { id: "c1", text: "Vẽ sơ đồ ERD 8 thực thể chính", done: true },
+      { id: "c2", text: "Thiết kế khóa ngoại ON DELETE CASCADE", done: true },
+      { id: "c3", text: "Xuất file ERD chất lượng cao", done: false },
     ],
-    deliverable: { type: "commit", label: "docs/Tai_Lieu_Khoi_Dong.docx" },
+    deliverable: { type: "commit", label: "docs/ERD_8_Tables.png" },
     commentsCount: 2,
     attachmentsCount: 1,
   },
   {
     id: "task-3",
-    code: "BE-02",
-    title: "Tái cấu trúc Backend Layered Architecture (Clean Code)",
-    description: "Tách nhỏ 650 dòng monolithic thành core, schemas, services, api v1 cô lập lỗi.",
-    column: "done",
+    code: "TE22C19",
+    title: "Xây dựng Module Authentication JWT & Phân quyền RBAC",
+    description: "Đăng ký, đăng nhập, băm mật khẩu bcrypt, cấp Access Token và Refresh Token cho 3 vai trò: Student, Instructor, Admin.",
+    column: "in-progress",
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
+    assignee: { name: "Vũ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
     estimateHours: 4,
-    dueDate: "02/11",
-    epic: "Backend Refactor",
+    dueDate: "07/11/2026",
+    epic: "Security & Auth",
     epicColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    submissionRequirement: "Link",
     userStory: {
       role: "Backend Developer",
-      want: "tách biệt hệ thống theo kiến trúc 3 tầng (3-tier Architecture)",
-      benefit: "cô lập lỗi, dễ bảo trì và phân định rõ ràng giữa Router, Service và Data Layer",
+      want: "cơ chế xác thực JWT và bảo mật mật khẩu bcrypt",
+      benefit: "bảo vệ API và phân định ranh giới quyền giữa sinh viên và giảng viên",
     },
-    acceptanceCriteria: "Given backend monolithic 650 dòng\nWhen tái cấu trúc sang Layered Clean Architecture\nThen schemas, services, core tách riêng và smoke test 100% pass",
-    definitionOfDone: defaultDoD(true),
+    acceptanceCriteria: "Given người dùng đăng nhập\nWhen thông tin hợp lệ\nThen cấp JWT token chuẩn và lưu mã băm bcrypt",
+    definitionOfDone: defaultDoD(false),
     checklist: [
-      { id: "c1", text: "Tách app/core/database.py", done: true },
-      { id: "c2", text: "Tách app/services/ai_tutor.py", done: true },
-      { id: "c3", text: "Chạy test smoke 100% pass", done: true },
+      { id: "c1", text: "Băm password với bcrypt 12 rounds", done: true },
+      { id: "c2", text: "Dependency get_current_user", done: true },
+      { id: "c3", text: "Viết unit test pytest cho auth router", done: false },
     ],
-    deliverable: { type: "pr", label: "PR #14: Layered Arch" },
+    deliverable: { type: "pr", label: "PR #07: JWT & RBAC" },
     commentsCount: 6,
     attachmentsCount: 3,
   },
   {
     id: "task-4",
-    code: "SAND-01",
-    title: "Bộ Sandbox Test Runner độc lập (5 Test Cases)",
-    description: "Đánh giá an toàn mã nguồn deque: maxlen, boundary cases, xử lý chuỗi rỗng.",
-    column: "in-progress",
+    code: "TE35D77",
+    title: "Nghiên cứu & Xây dựng Docker Image Sandbox cô lập (H2)",
+    description: "Tạo Dockerfile Alpine Linux siêu nhẹ, chạy non-root user, cgroups RAM 128MB, 0.5 CPU và Watchdog 2.0s chống vô tận.",
+    column: "backlog",
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Quốc Huy", avatar: "QH", role: "Backend Dev" },
-    estimateHours: 4,
-    dueDate: "05/11",
-    epic: "Code Grader",
+    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    estimateHours: 5,
+    dueDate: "08/11/2026",
+    epic: "Code Sandbox",
     epicColor: "bg-amber-50 text-amber-700 border-amber-200",
-    dependsOn: "task-3",
+    dependsOn: "task-1",
+    submissionRequirement: "Link hoặc file",
+    isBonus: true,
     userStory: {
       role: "Sinh viên lập trình",
-      want: "chạy 5 test cases trên môi trường Docker Sandbox cô lập",
-      benefit: "biết chính xác kết quả pass/fail trong < 2000ms mà không làm sập server",
+      want: "thực thi code C++ và Python trong môi trường container cô lập",
+      benefit: "đánh giá kết quả chính xác trong < 2.0s mà không gây rủi ro cho server",
     },
-    acceptanceCriteria: "Given sinh viên nộp bài hàm deque\nWhen nhấn Chạy kiểm thử\nThen sandbox thực thi 5 test cases và trả về kết quả từng test trong thời gian < 2s",
-    definitionOfDone: [
-      { id: "dod-1", text: "Code vượt qua 100% test cases trong Docker sandbox độc lập", done: true },
-      { id: "dod-2", text: "Tuân thủ Kiến trúc 3 tầng (Router -> Service -> Data Layer)", done: true },
-      { id: "dod-3", text: "Không có lỗi Type/Lint, timestamp chuẩn ISO-8601 UTC (H4)", done: false },
-      { id: "dod-4", text: "Được ít nhất 1 thành viên review và giải phóng Ràng buộc H2", done: false },
-    ],
+    acceptanceCriteria: "Given mã nguồn nộp lên từ trình duyệt\nWhen đưa vào Docker Sandbox\nThen container thực thi an toàn với RAM <= 128MB và trả về kết quả đúng",
+    definitionOfDone: defaultDoD(false),
     checklist: [
       { id: "c1", text: "Thiết lập môi trường isolated sandbox", done: true },
-      { id: "c2", text: "Viết bộ 5 test cases chuẩn công nghiệp", done: true },
-      { id: "c3", text: "Bắt timeout 2000ms chống lặp vô tận", done: false },
+      { id: "c2", text: "Cấu hình --read-only rootfs và tmpfs 16MB", done: true },
+      { id: "c3", text: "Bắt timeout 2000ms TLE", done: false },
     ],
     commentsCount: 3,
     attachmentsCount: 1,
   },
   {
     id: "task-5",
-    code: "AI-01",
+    code: "TE41E89",
     title: "Socratic AI Tutor Hint Ladder (Thang gợi ý 3 nấc)",
-    description: "Tuyệt đối không đưa đáp án; hướng dẫn mở dần Hint 1 -> Hint 2 -> Hint 3.",
-    column: "review",
+    description: "Tuyệt đối không đưa đáp án; hướng dẫn mở dần Hint 1 -> Hint 2 -> Hint 3 và ký số băm SHA-256 khi tự sửa lỗi thành công.",
+    column: "ready",
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Quốc Huy", avatar: "QH", role: "Backend Dev" },
+    assignee: { name: "Vũ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
     estimateHours: 4.5,
-    dueDate: "06/11",
-    epic: "AI Pedagogy",
+    dueDate: "09/11/2026",
+    epic: "AI Socratic",
     epicColor: "bg-rose-50 text-rose-700 border-rose-200",
     dependsOn: "task-4",
+    submissionRequirement: "Link",
     userStory: {
       role: "Sinh viên gặp lỗi thuật toán",
       want: "nhận gợi ý Socratic theo thang 3 nấc sư phạm",
       benefit: "tự hiểu nguyên lý để sửa code thay vì bị AI mớm đáp án hoàn chỉnh",
     },
     acceptanceCriteria: "Given sinh viên chưa vượt qua test case\nWhen yêu cầu trợ giúp từ AI Tutor\nThen hệ thống mở khóa tuần tự Hint 1 -> Hint 2 -> Hint 3 và khóa không lộ giải",
-    definitionOfDone: [
-      { id: "dod-1", text: "Code vượt qua 100% test cases trong Docker sandbox độc lập", done: true },
-      { id: "dod-2", text: "Tuân thủ Kiến trúc 3 tầng (Router -> Service -> Data Layer)", done: true },
-      { id: "dod-3", text: "Không có lỗi Type/Lint, timestamp chuẩn ISO-8601 UTC (H4)", done: true },
-      { id: "dod-4", text: "Được ít nhất 1 thành viên review và giải phóng Ràng buộc H2", done: false },
-    ],
+    definitionOfDone: defaultDoD(false),
     checklist: [
-      { id: "c1", text: "Cấu hình Guardrails từ chối đưa code hoàn chỉnh", done: true },
-      { id: "c2", text: "Ràng buộc mở tuần tự (Sequence lock)", done: true },
+      { id: "c1", text: "Cấu hình System Prompt Người Thầy Khắc Kỷ", done: true },
+      { id: "c2", text: "Ràng buộc mở khóa tuần tự (Sequence lock)", done: true },
       { id: "c3", text: "Tạo SHA-256 evidence bằng chứng tự sửa", done: true },
     ],
     deliverable: { type: "test", label: "Smoke test: 14/14 Passed" },
@@ -285,19 +296,21 @@ const initialTasks: KanbanTask[] = [
   },
   {
     id: "task-6",
-    code: "DEF-01",
-    title: "AI Defense Simulator: Giả lập Hội đồng phản biện",
-    description: "AI đóng vai giảng viên phản biện khó tính, xoáy sâu vào các điểm yếu của đồ án.",
-    column: "ready",
+    code: "TE49A12",
+    title: "Mô hình Giả lập Hội đồng Phản biện AI (AI Defense Room)",
+    description: "Mô phỏng phòng bảo vệ tốt nghiệp thời gian thực với 3 Persona Giảng viên AI: Thầy Kiến trúc, Cô Giải thuật, Thư ký chấm điểm.",
+    column: "backlog",
     priority: "medium",
     moscow: "should",
     points: 8,
-    assignee: { name: "Hoàng Long", avatar: "HL", role: "QA & AI Ops" },
-    estimateHours: 5,
-    dueDate: "09/11",
+    assignee: { name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database" },
+    estimateHours: 6,
+    dueDate: "10/11/2026",
     epic: "Defense Room",
     epicColor: "bg-teal-50 text-teal-700 border-teal-200",
     dependsOn: "task-5",
+    submissionRequirement: "Link hoặc file",
+    isBonus: true,
     userStory: {
       role: "Sinh viên bảo vệ đồ án",
       want: "luyện tập chất vấn với Hội đồng phản biện AI",
@@ -314,81 +327,20 @@ const initialTasks: KanbanTask[] = [
   },
   {
     id: "task-7",
-    code: "QA-01",
-    title: "Bộ kiểm thử 50 ca tự động (Automated Smoke Test)",
-    description: "Đảm bảo mã nguồn nộp lên không làm treo máy chủ hoặc bypass sandbox.",
+    code: "TE54B33",
+    title: "Thuật toán Đo lường Đóng góp Thực tế Anti-Freerider",
+    description: "Công thức minh bạch: Tỷ trọng Story Points hoàn thành (50%) + Tỷ trọng Commit/PR hợp lệ (30%) + Tiêu chuẩn DoD (20%).",
     column: "backlog",
     priority: "medium",
     moscow: "should",
-    points: 3,
-    assignee: { name: "Hoàng Long", avatar: "HL", role: "QA & AI Ops" },
-    estimateHours: 3.5,
-    dueDate: "11/11",
-    epic: "Testing",
-    epicColor: "bg-slate-50 text-slate-700 border-slate-200",
-    dependsOn: "task-4",
-    userStory: {
-      role: "QA Engineer",
-      want: "50 ca kiểm thử tự động cho router và services",
-      benefit: "hệ thống không phát sinh lỗi hồi quy (regression) khi thêm tính năng mới",
-    },
-    acceptanceCriteria: "Given pull request mới tạo\nWhen kích hoạt chạy bộ test smoke\nThen 50 test cases hoàn thành với tỷ lệ 100% pass và thời gian dưới 10s",
-    definitionOfDone: defaultDoD(false),
-    checklist: [
-      { id: "c1", text: "Viết test case biên bộ nhớ", done: false },
-      { id: "c2", text: "Viết test case injection chuỗi rỗng", done: false },
-    ],
-    commentsCount: 0,
-    attachmentsCount: 1,
-  },
-  {
-    id: "task-8",
-    code: "FE-01",
-    title: "Radar Skill Chart & Daily Heatmap Streak",
-    description: "Trực quan hóa năng lực lập trình viên: CleanCode, Debugging, Teamwork.",
-    column: "in-progress",
-    priority: "medium",
-    moscow: "could",
-    points: 3,
-    assignee: { name: "Minh Anh", avatar: "MA", role: "Team Lead & Arch" },
-    estimateHours: 3,
-    dueDate: "07/11",
-    epic: "Gamification",
-    epicColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    userStory: {
-      role: "Sinh viên",
-      want: "theo dõi biểu đồ Radar 5 trục kỹ năng và chuỗi ngày code Streak",
-      benefit: "duy trì động lực rèn luyện mỗi ngày và nhìn thấy sự tiến bộ rõ rệt",
-    },
-    acceptanceCriteria: "Given sinh viên nộp bài thành công\nWhen vào trang Dashboard cá nhân\nThen radar chart cập nhật điểm số và ô vuông streak sáng màu xanh",
-    definitionOfDone: [
-      { id: "dod-1", text: "Code vượt qua 100% test cases trong Docker sandbox độc lập", done: true },
-      { id: "dod-2", text: "Tuân thủ Kiến trúc 3 tầng (Router -> Service -> Data Layer)", done: false },
-      { id: "dod-3", text: "Không có lỗi Type/Lint, timestamp chuẩn ISO-8601 UTC (H4)", done: false },
-      { id: "dod-4", text: "Được ít nhất 1 thành viên review và giải phóng Ràng buộc H2", done: false },
-    ],
-    checklist: [
-      { id: "c1", text: "Vẽ SVG ngũ giác Radar Chart", done: true },
-      { id: "c2", text: "Tạo ô vuông xanh GitHub Contribution", done: false },
-    ],
-    commentsCount: 2,
-    attachmentsCount: 1,
-  },
-  {
-    id: "task-9",
-    code: "ANTI-01",
-    title: "Thuật toán Anti-Freerider đo lường đóng góp nhóm",
-    description: "Tính % đóng góp dựa trên số task Done, commit Git và test evidence thật.",
-    column: "backlog",
-    priority: "low",
-    moscow: "must",
     points: 5,
-    assignee: { name: "Quốc Huy", avatar: "QH", role: "Backend Dev" },
+    assignee: { name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database" },
     estimateHours: 4,
-    dueDate: "14/11",
+    dueDate: "10/11/2026",
     epic: "Team Analytics",
     epicColor: "bg-cyan-50 text-cyan-700 border-cyan-200",
     dependsOn: "task-3",
+    submissionRequirement: "File",
     userStory: {
       role: "Giảng viên chấm điểm đồ án",
       want: "thuật toán tự động phân tích tỷ lệ đóng góp thực tế của từng thành viên",
@@ -402,6 +354,98 @@ const initialTasks: KanbanTask[] = [
     ],
     commentsCount: 0,
     attachmentsCount: 0,
+  },
+  {
+    id: "task-8",
+    code: "TE61C04",
+    title: "Tích hợp CodeRabbit AI Senior Reviewer (Nhánh 2.1)",
+    description: "Xây dựng giao diện Master-Detail Split Workspace: Walkthrough PR, Soi lỗi từng dòng, 1-Click Fix và Bộ câu hỏi Thầy Phước Q&A.",
+    column: "in-progress",
+    priority: "high",
+    moscow: "must",
+    points: 5,
+    assignee: { name: "Vũ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
+    estimateHours: 4,
+    dueDate: "11/11/2026",
+    epic: "Git Hub",
+    epicColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    submissionRequirement: "Link",
+    isBonus: true,
+    userStory: {
+      role: "Sinh viên & Reviewer",
+      want: "bot AI tự động soi lỗi logic, bảo mật và gợi ý code chuẩn trước khi merge",
+      benefit: "giảm tải công sức code review thủ công và chuẩn bị tốt cho buổi vấn đáp",
+    },
+    acceptanceCriteria: "Given PR được mở trên GitHub\nWhen CodeRabbit quét qua AST\nThen hiển thị gợi ý 1-Click Fix và câu hỏi phản biện của Giảng viên",
+    definitionOfDone: defaultDoD(true),
+    checklist: [
+      { id: "c1", text: "Giao diện Master-Detail 2 cột PR list và Review detail", done: true },
+      { id: "c2", text: "Diff viewer hiển thị context/addition/deletion", done: true },
+      { id: "c3", text: "Nút Áp dụng bản vá 1-Click Fix", done: true },
+    ],
+    commentsCount: 2,
+    attachmentsCount: 1,
+  },
+  {
+    id: "task-9",
+    code: "TE62D15",
+    title: "Cây Phân Nhánh GitKraken với Chuyển động Động (Nhánh 2.2)",
+    description: "Mô phỏng đồ thị phân nhánh SVG: Hiệu ứng vẽ nét mượt mà khi đổi tab, commit pop-in nảy mầm, các hạt xung ánh sáng dữ liệu.",
+    column: "backlog",
+    priority: "medium",
+    moscow: "should",
+    points: 5,
+    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    estimateHours: 4,
+    dueDate: "11/11/2026",
+    epic: "Git Hub",
+    epicColor: "bg-blue-50 text-blue-700 border-blue-200",
+    submissionRequirement: "Link",
+    isBonus: true,
+    userStory: {
+      role: "Sinh viên & Giảng viên",
+      want: "xem cây phân nhánh Git trực quan với animation chuyển động sống động",
+      benefit: "hiểu rõ quy trình rẽ nhánh Git Flow và giám sát commit minh bạch",
+    },
+    acceptanceCriteria: "Given người dùng chuyển sang tab Cây Phân Nhánh\nWhen tab được chọn\nThen các đường nhánh tự vẽ, commit pop-in và có nút Phát lại chuyển động",
+    definitionOfDone: defaultDoD(true),
+    checklist: [
+      { id: "c1", text: "Vẽ đường cong Bézier SVG các nhánh main, develop, feature", done: true },
+      { id: "c2", text: "Hiệu ứng stroke-dashoffset và animateMotion", done: true },
+      { id: "c3", text: "Popover tooltip hiển thị tác giả, SHA và số dòng code", done: true },
+    ],
+    commentsCount: 3,
+    attachmentsCount: 0,
+  },
+  {
+    id: "task-10",
+    code: "TE63E20",
+    title: "Bản đồ Kiến trúc GitDiagram tương tác (Nhánh 2.3)",
+    description: "Sơ đồ ReactFlow 5 phân tầng hệ thống và modal liên kết trực tiếp với GitHub Repository của nhóm.",
+    column: "verified",
+    priority: "high",
+    moscow: "must",
+    points: 5,
+    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    estimateHours: 5,
+    dueDate: "11/11/2026",
+    epic: "Architecture",
+    epicColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    submissionRequirement: "Link",
+    isBonus: true,
+    userStory: {
+      role: "Kiến trúc sư hệ thống",
+      want: "bản đồ kiến trúc 5 phân tầng có thể zoom, pan và kết nối repo GitHub",
+      benefit: "giúp Thầy Phước thẩm định kiến trúc tổng thể của CodeMind Campus",
+    },
+    acceptanceCriteria: "Given người xem mở phân hệ Kiến trúc\nWhen tương tác trên canvas\nThen các node sáng lên và mở được link GitHub repo của nhóm",
+    definitionOfDone: defaultDoD(true),
+    checklist: [
+      { id: "c1", text: "Cấu hình ReactFlow 22 nodes và 5 container subsystems", done: true },
+      { id: "c2", text: "Modal liên kết repo GitHub nhóm 4", done: true },
+    ],
+    commentsCount: 1,
+    attachmentsCount: 1,
   },
 ];
 
@@ -518,11 +562,12 @@ const columnsConfig: Array<{
   borderTop: string;
   maxWip?: number;
 }> = [
-  { id: "backlog", title: "Backlog", dotColor: "bg-slate-400", badgeBg: "bg-slate-200/80", badgeText: "text-slate-700", borderTop: "border-t-slate-400" },
-  { id: "ready", title: "Ready", dotColor: "bg-blue-500", badgeBg: "bg-blue-100", badgeText: "text-blue-700", borderTop: "border-t-blue-500" },
-  { id: "in-progress", title: "In Progress", dotColor: "bg-amber-500", badgeBg: "bg-amber-100", badgeText: "text-amber-800", borderTop: "border-t-amber-500", maxWip: 3 },
-  { id: "review", title: "Review / PR", dotColor: "bg-purple-500", badgeBg: "bg-purple-100", badgeText: "text-purple-700", borderTop: "border-t-purple-500" },
-  { id: "done", title: "Done", dotColor: "bg-emerald-500", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700", borderTop: "border-t-emerald-500" },
+  { id: "backlog", title: "Backlog", dotColor: "bg-slate-400", badgeBg: "bg-slate-100", badgeText: "text-slate-700", borderTop: "border-t-slate-400" },
+  { id: "ready", title: "Cần làm", dotColor: "bg-blue-600", badgeBg: "bg-blue-100", badgeText: "text-blue-700", borderTop: "border-t-blue-500" },
+  { id: "in-progress", title: "Đang làm", dotColor: "bg-amber-500", badgeBg: "bg-amber-100", badgeText: "text-amber-800", borderTop: "border-t-amber-500", maxWip: 4 },
+  { id: "done", title: "Hoàn thành", dotColor: "bg-purple-600", badgeBg: "bg-purple-100", badgeText: "text-purple-700", borderTop: "border-t-purple-500" },
+  { id: "verified", title: "Đã nghiệm thu", dotColor: "bg-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-800", borderTop: "border-t-emerald-500" },
+  { id: "fail", title: "Fail", dotColor: "bg-rose-600", badgeBg: "bg-rose-100", badgeText: "text-rose-700", borderTop: "border-t-rose-500" },
 ];
 
 const techStackOptions = [
@@ -604,9 +649,9 @@ function ContributionDonutChart({
   const circumference = 2 * Math.PI * r; // ~276.46
 
   const memberColors: Record<string, string> = {
-    "Minh Anh": "#2563eb",   // Blue
-    "Quốc Huy": "#f59e0b",   // Amber
-    "Hoàng Long": "#10b981", // Emerald
+    "Nguyễn Bá Hòa": "#2563eb",   // Blue
+    "Vũ Nhật Huy": "#10b981",    // Emerald
+    "Phan Đình Nghị": "#9333ea", // Purple
   };
 
   let cumulativePercent = 0;
@@ -794,6 +839,7 @@ export default function KanbanBoard() {
   // Drag and Drop state
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColumnId | null>(null);
+  const [copiedTaskCode, setCopiedTaskCode] = useState(false);
 
   // H2 Violation Modal
   const [h2Violation, setH2Violation] = useState<{
@@ -828,8 +874,8 @@ export default function KanbanBoard() {
   // Total Story points and completed points
   const sprintStats = useMemo(() => {
     const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
-    const donePoints = tasks.filter((t) => t.column === "done").reduce((sum, t) => sum + t.points, 0);
-    const inProgPoints = tasks.filter((t) => t.column === "in-progress" || t.column === "review").reduce((sum, t) => sum + t.points, 0);
+    const donePoints = tasks.filter((t) => t.column === "done" || t.column === "verified").reduce((sum, t) => sum + t.points, 0);
+    const inProgPoints = tasks.filter((t) => t.column === "in-progress").reduce((sum, t) => sum + t.points, 0);
     const percentDone = Math.round((donePoints / (totalPoints || 1)) * 100);
     return { totalPoints, donePoints, inProgPoints, percentDone };
   }, [tasks]);
@@ -929,7 +975,7 @@ export default function KanbanBoard() {
       setInlineAddingCol(null);
       return;
     }
-    const defaultAssignee = teamMembers[0] || { name: "Minh Anh", avatar: "MA", role: "Team Lead" };
+    const defaultAssignee = teamMembers[0] || { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" };
     const newTask: KanbanTask = {
       id: `task-${Date.now()}`,
       code: `TSK-${Math.floor(Math.random() * 800 + 100)}`,
@@ -1223,7 +1269,7 @@ export default function KanbanBoard() {
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
-      if (viewMode === "my" && t.assignee.name !== (teamMembers[0]?.name || "Minh Anh")) return false;
+      if (viewMode === "my" && t.assignee.name !== (teamMembers[0]?.name || "Nguyễn Bá Hòa")) return false;
       if (filterAssignee !== "all" && t.assignee.name !== filterAssignee) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
       if (searchQuery.trim()) {
@@ -1578,6 +1624,17 @@ export default function KanbanBoard() {
                             />
                             <span className="font-mono text-[10px] font-bold text-slate-600 flex items-center gap-1">
                               #{task.code}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(task.code);
+                                }}
+                                title="Sao chép mã task"
+                                className="opacity-0 group-hover:opacity-100 hover:text-blue-600 transition cursor-pointer p-0.5"
+                              >
+                                <Copy size={10} />
+                              </button>
                               {isLocked && parentTask && (
                                 <span title={`Chờ #${parentTask.code} (${parentTask.assignee.name})`} className="inline-flex"><Lock size={11} className="text-rose-500 shrink-0" /></span>
                               )}
@@ -1590,6 +1647,12 @@ export default function KanbanBoard() {
                           </div>
 
                           <div className="flex items-center gap-1">
+                            {/* Submission Requirement Badge (Cần link / Cần file) */}
+                            {task.submissionRequirement && task.submissionRequirement !== "Không" && (
+                              <span className="rounded bg-amber-50 border border-amber-200 text-amber-700 px-1.5 py-0.2 text-[9px] font-bold">
+                                Cần {task.submissionRequirement.toLowerCase()}
+                              </span>
+                            )}
                             {/* MoSCoW Badge */}
                             {task.isBonus && (
                               <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 border border-emerald-200 uppercase">
@@ -2883,6 +2946,71 @@ export default function KanbanBoard() {
                       <span className="text-slate-400 block mb-0.5">Hạn chót (Deadline):</span>
                       <span className="font-semibold text-slate-800">{selectedTask.dueDate}</span>
                     </div>
+                  </div>
+
+                  {/* GitHub Integration Box (Chuẩn Thầy Phước) */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <Link2 size={13} className="text-blue-600" />
+                        GitHub Integration
+                      </span>
+                      {selectedTask.submissionRequirement && (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          Yêu cầu nộp: {selectedTask.submissionRequirement}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">Mã task:</span>
+                      <span className="font-mono text-xs font-bold bg-white text-blue-700 px-2 py-0.5 rounded border border-slate-200">
+                        {selectedTask.code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedTask.code);
+                          setCopiedTaskCode(true);
+                          setTimeout(() => setCopiedTaskCode(false), 2000);
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
+                      >
+                        {copiedTaskCode ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                        {copiedTaskCode ? "Đã sao chép" : "Sao chép"}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Ghi mã vào commit message (vd <code className="text-slate-800 font-bold">{selectedTask.code}: thêm form đăng nhập</code>), tên nhánh (vd <code className="text-slate-800 font-bold">feature/{selectedTask.code.toLowerCase()}-ten-ngan</code>) hoặc tiêu đề PR để commit và PR tự gắn vào task.
+                    </p>
+
+                    {/* Minh Chứng */}
+                    {selectedTask.submissionUrl && (
+                      <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-medium">Minh chứng:</span>
+                        <a
+                          href={selectedTask.submissionUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-blue-600 hover:underline flex items-center gap-1 truncate max-w-[320px]"
+                        >
+                          <Link2 size={12} className="shrink-0" />
+                          {selectedTask.submissionUrl}
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Lịch Sử Chuyển Trạng Thái (Audit History) */}
+                    {selectedTask.auditLogs && selectedTask.auditLogs.length > 0 && (
+                      <div className="pt-2 border-t border-slate-200/60 space-y-1">
+                        <span className="text-[11px] font-bold text-slate-700 block">Lịch sử di chuyển:</span>
+                        {selectedTask.auditLogs.map((log, idx) => (
+                          <div key={idx} className="text-[10px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200/60 flex items-center justify-between">
+                            <span>{log.user} • {log.fromColumn} → {log.toColumn}</span>
+                            <span className="text-slate-400">{log.timestamp}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Checklist */}
