@@ -918,7 +918,7 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-5",
     sha: "5149fb7",
-    author: { name: "Vũ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
+    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
     branch: "feature/auth",
     branchLabel: "feature/auth",
     branchColor: "#d97706",
@@ -939,7 +939,7 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-6",
     sha: "d4bdc7d",
-    author: { name: "Vũ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
+    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
     branch: "develop",
     branchLabel: "develop",
     branchColor: "#9333ea",
@@ -1123,7 +1123,7 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
     id: "pr-07",
     prNumber: 7,
     title: "feat(#TE22C19): Tích hợp JWT Access Token, Bcrypt Hashing & Phân Quyền Giảng Viên",
-    author: { name: "Vũ Nhật Huy", role: "Frontend / Fullstack", avatar: "VH", color: "#16a34a" },
+    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "VH", color: "#16a34a" },
     sourceBranch: "feature/auth",
     targetBranch: "develop",
     status: "approved",
@@ -1243,7 +1243,7 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
     id: "pr-15",
     prNumber: 15,
     title: "feat(#TE48B10): Giao Diện Tech Reels Video Bài Giảng Ngắn & Tiến Trình Xem",
-    author: { name: "Vũ Nhật Huy", role: "Frontend / Fullstack", avatar: "VH", color: "#16a34a" },
+    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "VH", color: "#16a34a" },
     sourceBranch: "feature/reels",
     targetBranch: "develop",
     status: "open",
@@ -1627,7 +1627,7 @@ export default function GitProjectHub() {
               Cân bằng
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">Nguyễn Bá Hòa (36%), Vũ Nhật Huy (34%), Phan Đình Nghị (30%).</p>
+          <p className="mt-1 text-[11px] text-slate-500">Nguyễn Bá Hòa (36%), Võ Nhật Huy (34%), Phan Đình Nghị (30%).</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
@@ -1742,7 +1742,7 @@ export default function GitProjectHub() {
               >
                 <option value="all">Tất cả tác giả</option>
                 <option value="Nguyễn Bá Hòa">Nguyễn Bá Hòa</option>
-                <option value="Vũ Nhật Huy">Vũ Nhật Huy</option>
+                <option value="Võ Nhật Huy">Võ Nhật Huy</option>
                 <option value="Phan Đình Nghị">Phan Đình Nghị</option>
               </select>
             </div>
@@ -2481,12 +2481,12 @@ export default function GitProjectHub() {
                   Nguyễn Bá Hòa (4)
                 </button>
                 <button
-                  onClick={() => setMemberFilter("Vũ Nhật Huy")}
+                  onClick={() => setMemberFilter("Võ Nhật Huy")}
                   className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
-                    memberFilter === "Vũ Nhật Huy" ? "bg-emerald-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                    memberFilter === "Võ Nhật Huy" ? "bg-emerald-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Vũ Nhật Huy (2)
+                  Võ Nhật Huy (2)
                 </button>
                 <button
                   onClick={() => setMemberFilter("Phan Đình Nghị")}
@@ -2969,7 +2969,7 @@ export default function GitProjectHub() {
 
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">Vũ Nhật Huy (Frontend/AI)</span>
+                <span className="text-xs font-bold text-slate-900">Võ Nhật Huy (Frontend/AI)</span>
                 <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">34%</span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">

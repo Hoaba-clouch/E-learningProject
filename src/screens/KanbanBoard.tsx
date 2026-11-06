@@ -126,7 +126,7 @@ export const defaultDoD = (isDone = false): ChecklistItem[] => [
 
 const initialMembers: TeamMember[] = [
   { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-blue-600" },
-  { id: "m2", name: "Vũ Nhật Huy", avatar: "H", role: "Frontend & AI Dev", color: "bg-emerald-600" },
+  { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev", color: "bg-emerald-600" },
   { id: "m3", name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database", color: "bg-purple-600" },
 ];
 
@@ -208,7 +208,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Vũ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
+    assignee: { name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
     estimateHours: 4,
     dueDate: "07/11/2026",
     epic: "Security & Auth",
@@ -271,7 +271,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Vũ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
+    assignee: { name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
     estimateHours: 4.5,
     dueDate: "09/11/2026",
     epic: "AI Socratic",
@@ -364,7 +364,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Vũ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
+    assignee: { name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
     estimateHours: 4,
     dueDate: "11/11/2026",
     epic: "Git Hub",
@@ -650,7 +650,7 @@ function ContributionDonutChart({
 
   const memberColors: Record<string, string> = {
     "Nguyễn Bá Hòa": "#2563eb",   // Blue
-    "Vũ Nhật Huy": "#10b981",    // Emerald
+    "Võ Nhật Huy": "#10b981",    // Emerald
     "Phan Đình Nghị": "#9333ea", // Purple
   };
 
