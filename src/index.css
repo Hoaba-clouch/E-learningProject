@@ -1772,6 +1772,43 @@ button:disabled {
   animation: scale-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+/* Smooth Dropdown / Slide-Down Cascade Animation for Tabs & Workspaces */
+@keyframes tab-slide-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.99);
+  }
+  60% {
+    opacity: 0.95;
+    transform: translateY(2px) scale(1.002);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tab-cascade-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-tab-slide-down {
+  animation: tab-slide-down 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-tab-cascade {
+  animation: tab-cascade-drop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
 /* Premium Floating Chatbot Widget */
 .chatbot-badge {
   position: fixed;

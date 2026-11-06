@@ -1731,7 +1731,7 @@ export default function GitProjectHub() {
 
       {/* MODE 0: CODERABBIT 2.0 AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) - TRỌN BỘ 4 TÍNH NĂNG */}
       {viewMode === "coderabbit" && (
-        <div className="space-y-4">
+        <div key="mode-coderabbit" className="space-y-4 animate-tab-slide-down">
           {/* ── CODERABBIT 2.0 PILLARS NAVIGATION BAR (Khớp 4 Trụ Cột) ───────── */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900 text-white rounded-2xl p-3 border border-slate-800 shadow-md">
             <div className="flex items-center gap-2 flex-wrap">
@@ -1805,7 +1805,7 @@ export default function GitProjectHub() {
           {/* PILLAR 01: REVIEW EVERY PR AUTOMATICALLY (Khớp Ảnh 1 & Master-Detail)  */}
           {/* ══════════════════════════════════════════════════════════════════════ */}
           {crPillar === "review" && (
-            <div className="space-y-4">
+            <div key="pillar-review" className="space-y-4 animate-tab-slide-down">
               {/* Highlight Banner: Exact Image 1 Committable Review Card */}
               <div className="bg-[#0f141c] text-white rounded-2xl border border-slate-700/80 p-5 space-y-4 shadow-xl">
                 <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3">
@@ -2010,7 +2010,7 @@ export default function GitProjectHub() {
                 </div>
 
                 {/* CỘT PHẢI (8 COLS): WORKSPACE CHI TIẾT REVIEW */}
-                <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div key={`pr-detail-${selectedPR.id}`} className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col animate-tab-slide-down">
                   <div className="p-5 border-b border-slate-200 bg-gradient-to-b from-slate-50/80 to-white space-y-3.5">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2">
@@ -2069,7 +2069,7 @@ export default function GitProjectHub() {
 
                   {/* Diff Content */}
                   {prSubTab === "diff" && (
-                    <div className="p-5 space-y-4">
+                    <div key="subtab-diff" className="p-5 space-y-4 animate-tab-slide-down">
                       {selectedPR.files.map((file, fileIdx) => {
                         const comment = file.aiComment;
                         const isApplied = comment ? !!appliedFixes[comment.id] : false;
@@ -2112,7 +2112,7 @@ export default function GitProjectHub() {
                   )}
 
                   {prSubTab === "walkthrough" && (
-                    <div className="p-6 space-y-4 text-xs text-slate-700 leading-relaxed">
+                    <div key="subtab-walkthrough" className="p-6 space-y-4 text-xs text-slate-700 leading-relaxed animate-tab-slide-down">
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
                         <h4 className="font-bold text-sm text-slate-900">Mục đích PR #{selectedPR.prNumber}</h4>
                         <p>{selectedPR.summary.overview}</p>
@@ -2129,7 +2129,7 @@ export default function GitProjectHub() {
                   )}
 
                   {prSubTab === "defense" && (
-                    <div className="p-6 space-y-4">
+                    <div key="subtab-defense" className="p-6 space-y-4 animate-tab-slide-down">
                       {selectedPR.defenseQA.map((qa, idx) => (
                         <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 text-xs">
                           <h4 className="font-bold text-slate-900">Q{idx+1}: {qa.question}</h4>
@@ -2147,7 +2147,7 @@ export default function GitProjectHub() {
           {/* PILLAR 02: PRIORITIZE ACROSS ALL PRS (Khớp Chuẩn 100% Ảnh 2)           */}
           {/* ══════════════════════════════════════════════════════════════════════ */}
           {crPillar === "prioritize" && (
-            <div className="space-y-4">
+            <div key="pillar-prioritize" className="space-y-4 animate-tab-slide-down">
               <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
@@ -2363,7 +2363,7 @@ export default function GitProjectHub() {
           {/* PILLAR 03: UNDERSTAND EACH PR'S IMPACT (Khớp Chuẩn 100% Ảnh 3)         */}
           {/* ══════════════════════════════════════════════════════════════════════ */}
           {crPillar === "impact" && (
-            <div className="space-y-4">
+            <div key="pillar-impact" className="space-y-4 animate-tab-slide-down">
               <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
@@ -2521,7 +2521,7 @@ export default function GitProjectHub() {
                 </div>
 
                 {/* CỘT PHẢI (8 COLS): FILE DIFF VIEWER (Chuẩn 100% Ảnh 3) */}
-                <div className="lg:col-span-8 bg-[#0f141c] text-white rounded-2xl border border-slate-800 overflow-hidden shadow-md space-y-4 p-5">
+                <div key={`impact-panel-${selectedLayerIndex}-${selectedImpactTab}`} className="lg:col-span-8 bg-[#0f141c] text-white rounded-2xl border border-slate-800 overflow-hidden shadow-md space-y-4 p-5 animate-tab-slide-down">
                   <div className="border-b border-slate-800 pb-3">
                     <h4 className="text-sm font-bold text-white">
                       Add the invitation API and emails
@@ -2603,7 +2603,7 @@ export default function GitProjectHub() {
           {/* PILLAR 04: SECURE YOUR CODEBASE CONTINUALLY (Khớp Chuẩn 100% Ảnh 4)    */}
           {/* ══════════════════════════════════════════════════════════════════════ */}
           {crPillar === "security" && (
-            <div className="space-y-4">
+            <div key="pillar-security" className="space-y-4 animate-tab-slide-down">
               {/* Real-Time Health Header Card */}
               <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2785,7 +2785,7 @@ export default function GitProjectHub() {
 
       {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS */}
       {viewMode === "gitdiagram" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div key="mode-gitdiagram" className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start animate-tab-slide-down">
           {/* ReactFlow Interactive Graph Canvas (8 Cols) */}
           <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 flex flex-col">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -2952,7 +2952,7 @@ export default function GitProjectHub() {
 
       {/* MODE 2: VISUAL GIT BRANCH GRAPH (TOPOLOGY & COMMIT INSPECTOR) */}
       {viewMode === "topology" && (
-        <div key={`topo-${topoAnimKey}`} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6">
+        <div key={`topo-${topoAnimKey}`} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6 animate-tab-slide-down">
           {/* Header & Filter Controls */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
@@ -3339,7 +3339,7 @@ export default function GitProjectHub() {
 
           {/* Selected Commit Detail Inspector Card */}
           {selectedCommit && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <div key={`commit-card-${selectedCommit.id}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 animate-tab-slide-down">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
                 <div className="flex items-center gap-3">
                   <span
@@ -3457,7 +3457,7 @@ export default function GitProjectHub() {
 
       {/* MODE 3: MEMBER CONTRIBUTION ANALYTICS */}
       {viewMode === "analytics" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6">
+        <div key="mode-analytics" className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6 animate-tab-slide-down">
           <div className="border-b border-slate-100 pb-4">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <BarChart3 size={18} className="text-blue-600" />
@@ -3529,7 +3529,7 @@ export default function GitProjectHub() {
 
       {/* MODE 4: GIT FLOW & REPO SUBMISSION STANDARDS */}
       {viewMode === "gitflow" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6">
+        <div key="mode-gitflow" className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6 animate-tab-slide-down">
           <div className="border-b border-slate-100 pb-4">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Layers size={18} className="text-blue-600" />
