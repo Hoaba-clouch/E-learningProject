@@ -153,7 +153,7 @@ export default function App() {
         onNavigate={setScreen}
         onLogout={() => setScreen("login")}
       />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 min-w-0 overflow-y-auto">
         <ErrorBoundary>
           {renderScreen()}
         </ErrorBoundary>

@@ -1538,7 +1538,7 @@ export default function KanbanBoard() {
 
       {/* ── TAB 1: KANBAN BOARD WITH REAL DRAG AND DROP ──────────────────── */}
       {activeTab === "board" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5 items-start overflow-x-auto pb-10">
+        <div className="flex gap-4 items-start overflow-x-auto pb-8 min-w-full">
           {columnsConfig.map((col) => {
             const colTasks = filteredTasks.filter((t) => t.column === col.id);
             const isDraggingOver = dragOverCol === col.id;
@@ -1550,7 +1550,7 @@ export default function KanbanBoard() {
                 onDragOver={(e) => handleDragOver(e, col.id)}
                 onDragLeave={(e) => handleDragLeave(e, col.id)}
                 onDrop={(e) => handleDrop(e, col.id)}
-                className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/70 p-2.5 shadow-xs transition-all max-h-[calc(100vh-210px)] ${
+                className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/70 p-2.5 shadow-xs transition-all w-[310px] min-w-[300px] shrink-0 max-h-[calc(100vh-210px)] ${
                   col.borderTop
                 } border-t-4 ${
                   isDraggingOver
@@ -1617,12 +1617,12 @@ export default function KanbanBoard() {
                       >
                         {/* Drag Handle & Epic Tag */}
                         <div className="mb-2 flex items-center justify-between gap-1 text-[11px]">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0 max-w-[62%]">
                             <GripVertical
                               size={13}
-                              className="text-slate-300 group-hover:text-slate-500"
+                              className="text-slate-300 group-hover:text-slate-500 shrink-0"
                             />
-                            <span className="font-mono text-[10px] font-bold text-slate-600 flex items-center gap-1">
+                            <span className="font-mono text-[10px] font-bold text-slate-700 flex items-center gap-1 shrink-0">
                               #{task.code}
                               <button
                                 type="button"
@@ -1636,43 +1636,30 @@ export default function KanbanBoard() {
                                 <Copy size={10} />
                               </button>
                               {isLocked && parentTask && (
-                                <span title={`Chờ #${parentTask.code} (${parentTask.assignee.name})`} className="inline-flex"><Lock size={11} className="text-rose-500 shrink-0" /></span>
+                                <span title={`Ràng buộc H2: Chờ #${parentTask.code} (${parentTask.assignee.name}) hoàn thành`} className="inline-flex text-rose-500 shrink-0">
+                                  <Lock size={11} />
+                                </span>
                               )}
                             </span>
                             <span
-                              className={`rounded-md border px-1.5 py-0.2 text-[10px] font-semibold ${task.epicColor}`}
+                              className={`rounded-md border px-1.5 py-0.5 text-[9px] font-semibold truncate ${task.epicColor}`}
+                              title={task.epic}
                             >
                               {task.epic}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 shrink-0">
                             {/* Submission Requirement Badge (Cần link / Cần file) */}
                             {task.submissionRequirement && task.submissionRequirement !== "Không" && (
-                              <span className="rounded bg-amber-50 border border-amber-200 text-amber-700 px-1.5 py-0.2 text-[9px] font-bold">
+                              <span className="rounded bg-amber-50 border border-amber-200 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold">
                                 Cần {task.submissionRequirement.toLowerCase()}
                               </span>
                             )}
-                            {/* MoSCoW Badge */}
+                            {/* MoSCoW / Bonus Badge */}
                             {task.isBonus && (
                               <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 border border-emerald-200 uppercase">
                                 Bonus
-                              </span>
-                            )}
-                            {task.moscow && (
-                              <span
-                                className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                  task.moscow === "must"
-                                    ? "bg-rose-50 text-rose-600"
-                                    : task.moscow === "should"
-                                    ? "bg-amber-50 text-amber-700"
-                                    : task.moscow === "could"
-                                    ? "bg-sky-50 text-sky-600"
-                                    : "bg-slate-100 text-slate-500"
-                                }`}
-                                title={`Phân loại MoSCoW: ${task.moscow.toUpperCase()} HAVE`}
-                              >
-                                {task.moscow.toUpperCase()}
                               </span>
                             )}
                             {/* Story Points */}
@@ -1695,38 +1682,27 @@ export default function KanbanBoard() {
                         </div>
 
                         {/* Title */}
-                        <h3 className="mb-1.5 text-xs font-bold leading-snug text-slate-900 group-hover:text-blue-600">
+                        <h3 className="mb-2 text-xs font-bold leading-snug text-slate-900 group-hover:text-blue-600">
                           {task.title}
                         </h3>
 
-
-
                         {/* Clean Minimalist Footer */}
                         <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
-                          {/* Assignee */}
-                          <div className="flex items-center gap-1.5 min-w-0">
+                          {/* Assignee - Full space without truncation overlap */}
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
                             <span
                               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black text-white shadow-xs ${avatarColor}`}
                               title={`${task.assignee.name} (${task.assignee.role})`}
                             >
                               {task.assignee.avatar}
                             </span>
-                            <span className="truncate font-medium text-slate-600 text-[11px]">
+                            <span className="truncate font-medium text-slate-700 text-[11px]" title={task.assignee.name}>
                               {task.assignee.name}
                             </span>
                           </div>
 
                           {/* Subtle micro badges: Checklist, DoD, Due Date */}
                           <div className="flex items-center gap-2 text-slate-400 text-[10px] shrink-0">
-                            {task.dependsOn && parentTask && isLocked && (
-                              <span
-                                className="flex items-center gap-0.5 text-[10px] text-rose-500 font-medium"
-                                title={`Chờ #${parentTask.code} (${parentTask.assignee.name})`}
-                              >
-                                <Lock size={10} />
-                                <span>#{parentTask.code}</span>
-                              </span>
-                            )}
                             {totalChecklist > 0 && (
                               <span
                                 className={`flex items-center gap-0.5 font-medium ${
@@ -1749,13 +1725,16 @@ export default function KanbanBoard() {
                                 title={`DoD: ${task.definitionOfDone.filter((d) => d.done).length}/${task.definitionOfDone.length} tiêu chuẩn`}
                               >
                                 <ShieldCheck size={11} />
-                                <span>{task.definitionOfDone.filter((d) => d.done).length}/{task.definitionOfDone.length}</span>
+                                <span>{task.definitionOfDone.filter((d) => d.done).length}/${task.definitionOfDone.length}</span>
                               </span>
                             )}
 
-                            <span className="flex items-center gap-1 text-slate-400">
+                            <span
+                              className="flex items-center gap-1 text-slate-400"
+                              title={`Hạn hoàn thành: ${task.dueDate}`}
+                            >
                               <Calendar size={11} />
-                              {task.dueDate}
+                              <span>{task.dueDate.length > 5 ? task.dueDate.slice(0, 5) : task.dueDate}</span>
                             </span>
                           </div>
                         </div>
