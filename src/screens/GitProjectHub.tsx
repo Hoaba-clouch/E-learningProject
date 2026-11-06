@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -1402,6 +1402,50 @@ export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
   },
 ];
 
+// ─── Animated Number Counter Component (Smooth GSAP / Easing Style) ─────────
+function AnimatedNumber({
+  value,
+  duration = 850,
+  trigger = true,
+  decimals = 0,
+  suffix = "",
+}: {
+  value: number;
+  duration?: number;
+  trigger?: boolean;
+  decimals?: number;
+  suffix?: string;
+}) {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    if (!trigger) {
+      setDisplayValue(0);
+      return;
+    }
+    let startTime: number | null = null;
+    let animId: number;
+
+    const step = (time: number) => {
+      if (!startTime) startTime = time;
+      const progress = Math.min((time - startTime) / duration, 1);
+      // Easing: easeOutExpo for crisp high-end motion
+      const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      const current = ease * value;
+      setDisplayValue(decimals > 0 ? parseFloat(current.toFixed(decimals)) : Math.round(current));
+      if (progress < 1) {
+        animId = requestAnimationFrame(step);
+      }
+    };
+
+    setDisplayValue(0);
+    animId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animId);
+  }, [value, duration, trigger, decimals]);
+
+  return <>{decimals > 0 ? displayValue.toFixed(decimals) : displayValue.toLocaleString()}{suffix}</>;
+}
+
 export default function GitProjectHub() {
   const [viewMode, setViewMode] = useState<"coderabbit" | "topology" | "gitdiagram" | "analytics" | "gitflow">("coderabbit");
   const [selectedNodeId, setSelectedNodeId] = useState<string>("learning-ws");
@@ -1422,6 +1466,18 @@ export default function GitProjectHub() {
 
   // CodeRabbit 2.0 - 4 Pillars States (Review, Prioritize, Impact, Security)
   const [crPillar, setCrPillar] = useState<"review" | "prioritize" | "impact" | "security">("review");
+  const [statAnimKey, setStatAnimKey] = useState<number>(0);
+
+  const handleSetViewMode = (mode: "coderabbit" | "topology" | "gitdiagram" | "analytics" | "gitflow") => {
+    setViewMode(mode);
+    setStatAnimKey((k) => k + 1);
+    if (mode === "topology") setTopoAnimKey((k) => k + 1);
+  };
+
+  const handleSetCrPillar = (pillar: "review" | "prioritize" | "impact" | "security") => {
+    setCrPillar(pillar);
+    setStatAnimKey((k) => k + 1);
+  };
   const [selectedImpactTab, setSelectedImpactTab] = useState<"overview" | "security" | "architecture" | "verify">("architecture");
   const [impactViewMode, setImpactViewMode] = useState<"layers" | "files">("layers");
   const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(1);
@@ -1596,15 +1652,17 @@ export default function GitProjectHub() {
         </div>
       </header>
 
-      {/* 4 Metric Summary Cards */}
+      {/* 4 Metric Summary Cards with Staggered Cascade & Animated Numbers */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+        <div key={`m1-${statAnimKey}`} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm animate-cascade-1 hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>Điểm Văn hóa Git</span>
             <ShieldCheck size={16} className="text-blue-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono">94.8</span>
+            <span className="text-2xl font-bold text-slate-900 font-mono">
+              <AnimatedNumber value={94.8} decimals={1} key={`score-${statAnimKey}`} />
+            </span>
             <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
               Hạng A+ (Chuẩn)
             </span>
@@ -1612,13 +1670,15 @@ export default function GitProjectHub() {
           <p className="mt-1 text-[11px] text-slate-500">100% commit có mã Task và format feat/fix.</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+        <div key={`m2-${statAnimKey}`} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm animate-cascade-2 hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>Kiểm định Liêm chính AI</span>
             <CheckCircle2 size={16} className="text-emerald-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-700 font-mono">100%</span>
+            <span className="text-2xl font-bold text-emerald-700 font-mono">
+              <AnimatedNumber value={100} suffix="%" key={`integ-${statAnimKey}`} />
+            </span>
             <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
               Bình thường
             </span>
@@ -1626,13 +1686,15 @@ export default function GitProjectHub() {
           <p className="mt-1 text-[11px] text-slate-500">Không phát hiện hành vi dump code AI gian lận.</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+        <div key={`m3-${statAnimKey}`} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm animate-cascade-3 hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>Phân bổ Nhóm 3 người</span>
             <UserCheck size={16} className="text-purple-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-purple-700 font-mono">36 : 34 : 30</span>
+            <span className="text-2xl font-bold text-purple-700 font-mono">
+              <AnimatedNumber value={36} key={`h-${statAnimKey}`} /> : <AnimatedNumber value={34} key={`v-${statAnimKey}`} /> : <AnimatedNumber value={30} key={`n-${statAnimKey}`} />
+            </span>
             <span className="text-xs font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
               Cân bằng
             </span>
@@ -1640,13 +1702,15 @@ export default function GitProjectHub() {
           <p className="mt-1 text-[11px] text-slate-500">Nguyễn Bá Hòa (36%), Võ Nhật Huy (34%), Phan Đình Nghị (30%).</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+        <div key={`m4-${statAnimKey}`} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm animate-cascade-4 hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>Cấu trúc GitDiagram</span>
             <Boxes size={16} className="text-amber-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-700 font-mono">22</span>
+            <span className="text-2xl font-bold text-amber-700 font-mono">
+              <AnimatedNumber value={22} key={`diag-${statAnimKey}`} />
+            </span>
             <span className="text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
               5 Phân tầng
             </span>
@@ -1659,7 +1723,7 @@ export default function GitProjectHub() {
       <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-1.5 shadow-sm overflow-x-auto">
         <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => setViewMode("coderabbit")}
+            onClick={() => handleSetViewMode("coderabbit")}
             className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               viewMode === "coderabbit"
                 ? "bg-blue-600 text-white shadow-sm"
@@ -1670,10 +1734,7 @@ export default function GitProjectHub() {
             Nhánh 2.1 • AI Review (CodeRabbit PR)
           </button>
           <button
-            onClick={() => {
-              setViewMode("topology");
-              setTopoAnimKey((k) => k + 1);
-            }}
+            onClick={() => handleSetViewMode("topology")}
             className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               viewMode === "topology"
                 ? "bg-blue-600 text-white shadow-sm"
@@ -1684,7 +1745,7 @@ export default function GitProjectHub() {
             Nhánh 2.2 • Cây Phân Nhánh (GitKraken)
           </button>
           <button
-            onClick={() => setViewMode("gitdiagram")}
+            onClick={() => handleSetViewMode("gitdiagram")}
             className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               viewMode === "gitdiagram"
                 ? "bg-blue-600 text-white shadow-sm"
@@ -1695,7 +1756,7 @@ export default function GitProjectHub() {
             Nhánh 2.3 • Sơ đồ Kiến trúc (GitDiagram)
           </button>
           <button
-            onClick={() => setViewMode("analytics")}
+            onClick={() => handleSetViewMode("analytics")}
             className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               viewMode === "analytics"
                 ? "bg-blue-600 text-white shadow-sm"
@@ -1706,7 +1767,7 @@ export default function GitProjectHub() {
             Thống kê Nhóm
           </button>
           <button
-            onClick={() => setViewMode("gitflow")}
+            onClick={() => handleSetViewMode("gitflow")}
             className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               viewMode === "gitflow"
                 ? "bg-blue-600 text-white shadow-sm"
@@ -1746,7 +1807,7 @@ export default function GitProjectHub() {
               {/* 4 Pillar Segmented Buttons */}
               <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold gap-1 flex-wrap">
                 <button
-                  onClick={() => setCrPillar("review")}
+                  onClick={() => handleSetCrPillar("review")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
                     crPillar === "review"
                       ? "bg-[#ff5722] text-white font-bold shadow-xs"
@@ -1758,7 +1819,7 @@ export default function GitProjectHub() {
                 </button>
 
                 <button
-                  onClick={() => setCrPillar("prioritize")}
+                  onClick={() => handleSetCrPillar("prioritize")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
                     crPillar === "prioritize"
                       ? "bg-[#ff5722] text-white font-bold shadow-xs"
@@ -1770,7 +1831,7 @@ export default function GitProjectHub() {
                 </button>
 
                 <button
-                  onClick={() => setCrPillar("impact")}
+                  onClick={() => handleSetCrPillar("impact")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
                     crPillar === "impact"
                       ? "bg-[#ff5722] text-white font-bold shadow-xs"
@@ -1782,7 +1843,7 @@ export default function GitProjectHub() {
                 </button>
 
                 <button
-                  onClick={() => setCrPillar("security")}
+                  onClick={() => handleSetCrPillar("security")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
                     crPillar === "security"
                       ? "bg-[#ff5722] text-white font-bold shadow-xs"
@@ -1821,7 +1882,7 @@ export default function GitProjectHub() {
                   </div>
 
                   <button
-                    onClick={() => setCrPillar("impact")}
+                    onClick={() => handleSetCrPillar("impact")}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ff5722]/15 hover:bg-[#ff5722]/25 text-[#ff5722] text-xs font-bold transition border border-[#ff5722]/30 cursor-pointer"
                   >
                     <span>Review Change Stack</span>
@@ -1968,13 +2029,14 @@ export default function GitProjectHub() {
                   </div>
 
                   <div className="space-y-2 max-h-[580px] overflow-y-auto pr-1">
-                    {filteredPRs.map((pr) => {
+                    {filteredPRs.map((pr, prIdx) => {
                       const isSelected = pr.id === selectedPR.id;
                       return (
                         <button
                           key={pr.id}
                           onClick={() => setSelectedPrId(pr.id)}
-                          className={`w-full text-left p-3 rounded-xl border transition-all relative flex flex-col gap-2 ${
+                          style={{ animationDelay: `${Math.min(prIdx, 8) * 45}ms` }}
+                          className={`w-full text-left p-3 rounded-xl border transition-all relative flex flex-col gap-2 animate-cascade-item ${
                             isSelected
                               ? "bg-blue-50/70 border-blue-500 shadow-xs ring-1 ring-blue-500/30 border-l-4 border-l-blue-600"
                               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70"
@@ -2023,9 +2085,15 @@ export default function GitProjectHub() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs font-mono">
-                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold">{selectedPR.summary.filesCount} files</span>
-                        <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">+{selectedPR.summary.totalAdditions}</span>
-                        <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-bold">-{selectedPR.summary.totalDeletions}</span>
+                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold">
+                          <AnimatedNumber value={selectedPR.summary.filesCount} key={`pfc-${selectedPR.id}`} /> files
+                        </span>
+                        <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">
+                          +<AnimatedNumber value={selectedPR.summary.totalAdditions} key={`pta-${selectedPR.id}`} />
+                        </span>
+                        <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-bold">
+                          -<AnimatedNumber value={selectedPR.summary.totalDeletions} key={`ptd-${selectedPR.id}`} />
+                        </span>
                       </div>
                     </div>
 
@@ -2174,7 +2242,7 @@ export default function GitProjectHub() {
                       <h4 className="text-sm font-bold text-slate-900">Now</h4>
                       <p className="text-[11px] text-slate-500">Within each person's daily capacity</p>
                     </div>
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white">14</span>
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white"><AnimatedNumber value={14} key={`now-cnt-${statAnimKey}`} /></span>
                   </div>
 
                   {/* Card 1: P0 */}
@@ -2286,7 +2354,7 @@ export default function GitProjectHub() {
                       <h4 className="text-sm font-bold text-slate-900">Next</h4>
                       <p className="text-[11px] text-slate-500">All remaining reviews</p>
                     </div>
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">66</span>
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700"><AnimatedNumber value={66} key={`next-cnt-${statAnimKey}`} /></span>
                   </div>
 
                   {/* Card 1: P1 Next */}
@@ -2747,33 +2815,35 @@ export default function GitProjectHub() {
                         <circle cx="50" cy="50" r="38" fill="transparent" stroke="#ef4444" strokeWidth="12" strokeDasharray="4.8 238.76" strokeDashoffset="-233.9" />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-xl font-bold font-mono text-white">1,999</span>
+                        <span className="text-xl font-bold font-mono text-white">
+                          <AnimatedNumber value={1999} key={`findings-${statAnimKey}`} />
+                        </span>
                         <span className="text-[10px] text-slate-400 uppercase font-mono">findings</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Legend matching Image 4 */}
+                  {/* Legend matching Image 4 with Animated Numbers */}
                   <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-2 border-t border-slate-800">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-rose-500" />
                       <span className="text-slate-400">Critical</span>
-                      <span className="text-white font-bold ml-auto">2%</span>
+                      <span className="text-white font-bold ml-auto"><AnimatedNumber value={2} suffix="%" key={`c-${statAnimKey}`} /></span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-amber-400" />
                       <span className="text-slate-400">High</span>
-                      <span className="text-white font-bold ml-auto">12%</span>
+                      <span className="text-white font-bold ml-auto"><AnimatedNumber value={12} suffix="%" key={`h-${statAnimKey}`} /></span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-slate-500" />
                       <span className="text-slate-400">Unscanned</span>
-                      <span className="text-white font-bold ml-auto">40%</span>
+                      <span className="text-white font-bold ml-auto"><AnimatedNumber value={40} suffix="%" key={`u-${statAnimKey}`} /></span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500" />
                       <span className="text-slate-400">Healthy</span>
-                      <span className="text-white font-bold ml-auto">46%</span>
+                      <span className="text-white font-bold ml-auto"><AnimatedNumber value={46} suffix="%" key={`hl-${statAnimKey}`} /></span>
                     </div>
                   </div>
                 </div>

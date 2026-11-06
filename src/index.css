@@ -1809,6 +1809,33 @@ button:disabled {
   will-change: transform, opacity;
 }
 
+/* Staggered Item Dropdown Waterfall Classes */
+@keyframes item-cascade-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.97);
+  }
+  60% {
+    opacity: 0.95;
+    transform: translateY(2px) scale(1.002);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-cascade-item {
+  animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-cascade-1 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both; }
+.animate-cascade-2 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.09s both; }
+.animate-cascade-3 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.14s both; }
+.animate-cascade-4 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.19s both; }
+.animate-cascade-5 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both; }
+.animate-cascade-6 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.29s both; }
+
 /* Premium Floating Chatbot Widget */
 .chatbot-badge {
   position: fixed;
