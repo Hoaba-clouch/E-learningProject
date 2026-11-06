@@ -35,14 +35,15 @@ import {
   GitPullRequest,
   GitFork,
   Bot,
-  Wand2,
   HelpCircle,
   Code2,
-  AlertCircle,
-  FileCheck,
   CheckCheck,
   Search,
   RotateCw,
+  AlertTriangle,
+  ArrowRight,
+  Eye,
+  Activity,
 } from "lucide-react";
 
 // ─── Custom Group Container Node (for GitDiagram subsystems) ───────────────
@@ -1419,6 +1420,15 @@ export default function GitProjectHub() {
   const [prMemberFilter, setPrMemberFilter] = useState<string>("all");
   const [prSearchQuery, setPrSearchQuery] = useState<string>("");
 
+  // CodeRabbit 2.0 - 4 Pillars States (Review, Prioritize, Impact, Security)
+  const [crPillar, setCrPillar] = useState<"review" | "prioritize" | "impact" | "security">("review");
+  const [selectedImpactTab, setSelectedImpactTab] = useState<"overview" | "security" | "architecture" | "verify">("architecture");
+  const [impactViewMode, setImpactViewMode] = useState<"layers" | "files">("layers");
+  const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(1);
+  const [fixedVulns, setFixedVulns] = useState<Record<string, boolean>>({});
+  const [selectedVulnDot, setSelectedVulnDot] = useState<number>(42);
+  const [committableSuggestionApplied, setCommittableSuggestionApplied] = useState<boolean>(false);
+
   const filteredPRs = useMemo(() => {
     return MOCK_PULL_REQUESTS.filter((pr) => {
       const matchStatus = prStatusFilter === "all" || pr.status === prStatusFilter;
@@ -1719,550 +1729,1057 @@ export default function GitProjectHub() {
         </div>
       </div>
 
-      {/* MODE 0: CODERABBIT AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) - MASTER-DETAIL WORKSPACE */}
+      {/* MODE 0: CODERABBIT 2.0 AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) - TRỌN BỘ 4 TÍNH NĂNG */}
       {viewMode === "coderabbit" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* CỘT TRÁI (4 COLS): DANH SÁCH PULL REQUESTS */}
-          <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3.5">
-            {/* Header Danh Sách */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <div className="flex items-center gap-2">
-                <GitPullRequest size={17} className="text-blue-600" />
-                <h3 className="text-sm font-bold text-slate-900">Danh Sách PRs</h3>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
-                  {filteredPRs.length}/{MOCK_PULL_REQUESTS.length}
-                </span>
+        <div className="space-y-4">
+          {/* ── CODERABBIT 2.0 PILLARS NAVIGATION BAR (Khớp 4 Trụ Cột) ───────── */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900 text-white rounded-2xl p-3 border border-slate-800 shadow-md">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 bg-[#ff5722]/15 border border-[#ff5722]/30 px-3 py-1.5 rounded-xl">
+                <span className="text-base">🐰</span>
+                <div>
+                  <span className="font-bold text-xs text-white tracking-wide">CodeRabbit 2.0</span>
+                  <span className="hidden sm:inline-block text-[10px] text-[#ff8a65] font-mono ml-2">PR Intelligence</span>
+                </div>
               </div>
 
-              {/* Lọc Thành Viên */}
-              <select
-                value={prMemberFilter}
-                onChange={(e) => setPrMemberFilter(e.target.value)}
-                className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="all">Tất cả tác giả</option>
-                <option value="Nguyễn Bá Hòa">Nguyễn Bá Hòa</option>
-                <option value="Võ Nhật Huy">Võ Nhật Huy</option>
-                <option value="Phan Đình Nghị">Phan Đình Nghị</option>
-              </select>
-            </div>
-
-            {/* Ô Tìm Kiếm */}
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Tìm mã task, PR, từ khóa..."
-                value={prSearchQuery}
-                onChange={(e) => setPrSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/60"
-              />
-              {prSearchQuery && (
+              {/* 4 Pillar Segmented Buttons */}
+              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold gap-1 flex-wrap">
                 <button
-                  onClick={() => setPrSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                  onClick={() => setCrPillar("review")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    crPillar === "review"
+                      ? "bg-[#ff5722] text-white font-bold shadow-xs"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                  }`}
                 >
-                  ×
+                  <span className="font-mono text-[10px] opacity-80">01</span>
+                  <span>Review Tự Động</span>
                 </button>
-              )}
+
+                <button
+                  onClick={() => setCrPillar("prioritize")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    crPillar === "prioritize"
+                      ? "bg-[#ff5722] text-white font-bold shadow-xs"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                  }`}
+                >
+                  <span className="font-mono text-[10px] opacity-80">02</span>
+                  <span>Prioritize (Now/Next)</span>
+                </button>
+
+                <button
+                  onClick={() => setCrPillar("impact")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    crPillar === "impact"
+                      ? "bg-[#ff5722] text-white font-bold shadow-xs"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                  }`}
+                >
+                  <span className="font-mono text-[10px] opacity-80">03</span>
+                  <span>Tác Động (Layers & Blast)</span>
+                </button>
+
+                <button
+                  onClick={() => setCrPillar("security")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    crPillar === "security"
+                      ? "bg-[#ff5722] text-white font-bold shadow-xs"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                  }`}
+                >
+                  <span className="font-mono text-[10px] opacity-80">04</span>
+                  <span>An Ninh (Health & Matrix)</span>
+                </button>
+              </div>
             </div>
 
-            {/* Tabs Lọc Trạng Thái Nhỏ Gọn */}
-            <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-lg text-[11px] font-semibold text-slate-600">
-              <button
-                onClick={() => setPrStatusFilter("open")}
-                className={`flex-1 py-1 rounded-md transition text-center ${
-                  prStatusFilter === "open"
-                    ? "bg-white text-amber-800 font-bold shadow-xs"
-                    : "hover:text-slate-900"
-                }`}
-              >
-                Cần Duyệt ({MOCK_PULL_REQUESTS.filter((p) => p.status === "open").length})
-              </button>
-              <button
-                onClick={() => setPrStatusFilter("approved")}
-                className={`flex-1 py-1 rounded-md transition text-center ${
-                  prStatusFilter === "approved"
-                    ? "bg-white text-emerald-800 font-bold shadow-xs"
-                    : "hover:text-slate-900"
-                }`}
-              >
-                Đã Duyệt ({MOCK_PULL_REQUESTS.filter((p) => p.status === "approved").length})
-              </button>
-              <button
-                onClick={() => setPrStatusFilter("merged")}
-                className={`flex-1 py-1 rounded-md transition text-center ${
-                  prStatusFilter === "merged"
-                    ? "bg-white text-purple-800 font-bold shadow-xs"
-                    : "hover:text-slate-900"
-                }`}
-              >
-                Đã Merge ({MOCK_PULL_REQUESTS.filter((p) => p.status === "merged").length})
-              </button>
-              <button
-                onClick={() => setPrStatusFilter("all")}
-                className={`px-2 py-1 rounded-md transition text-center ${
-                  prStatusFilter === "all"
-                    ? "bg-white text-slate-900 font-bold shadow-xs"
-                    : "hover:text-slate-900"
-                }`}
-              >
-                Tất cả
-              </button>
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[11px] text-slate-300">Scanning PRs in real-time</span>
             </div>
+          </div>
 
-            {/* Danh Sách PR Cuộn Độc Lập */}
-            <div className="space-y-2 max-h-[640px] overflow-y-auto pr-1">
-              {filteredPRs.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-slate-200">
-                  Không có PR nào khớp bộ lọc.
+          {/* ══════════════════════════════════════════════════════════════════════ */}
+          {/* PILLAR 01: REVIEW EVERY PR AUTOMATICALLY (Khớp Ảnh 1 & Master-Detail)  */}
+          {/* ══════════════════════════════════════════════════════════════════════ */}
+          {crPillar === "review" && (
+            <div className="space-y-4">
+              {/* Highlight Banner: Exact Image 1 Committable Review Card */}
+              <div className="bg-[#0f141c] text-white rounded-2xl border border-slate-700/80 p-5 space-y-4 shadow-xl">
+                <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#ff5722] text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                      🐰
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-100">coderabbitai</span>
+                      <span className="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[10px] font-mono">bot</span>
+                      <span className="text-slate-400 text-[11px]">commented 2 minutes ago</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setCrPillar("impact")}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ff5722]/15 hover:bg-[#ff5722]/25 text-[#ff5722] text-xs font-bold transition border border-[#ff5722]/30 cursor-pointer"
+                  >
+                    <span>Review Change Stack</span>
+                    <ArrowRight size={13} />
+                  </button>
                 </div>
-              ) : (
-                filteredPRs.map((pr) => {
-                  const isSelected = pr.id === selectedPR.id;
-                  const hasApplied = Object.keys(appliedFixes).some((id) =>
-                    pr.files.some((f) => f.aiComment?.id === id)
-                  );
 
-                  return (
+                {/* Warning Alert & Detailed Explanation */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1 text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      <AlertTriangle size={13} />
+                      Potential issue
+                    </span>
+                    <span className="text-slate-600">|</span>
+                    <span className="inline-flex items-center gap-1 text-rose-400 font-bold">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping inline-block" />
+                      Major
+                    </span>
+                  </div>
+
+                  <h3 className="text-sm font-bold text-white tracking-tight">
+                    Reject expired refresh tokens before issuing a session.
+                  </h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Check the token expiry before creating a new authenticated session to prevent session replay attacks.
+                  </p>
+                </div>
+
+                {/* Code Diff Box with Committable Suggestion (Chuẩn 100% Ảnh 1) */}
+                <div className="rounded-xl overflow-hidden border border-slate-800 font-mono text-xs bg-[#0b0f14]">
+                  <div className="bg-slate-900/90 px-3 py-1.5 text-[11px] text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                    <span>@@ -42,2 +42,3 @@ export async function createSession</span>
+                    <span className="text-[10px] text-slate-500 font-sans">src/server/auth/session.ts</span>
+                  </div>
+                  <div className="p-3 space-y-1">
+                    <div className="bg-rose-950/40 text-rose-300 px-2 py-1 rounded flex items-center gap-2">
+                      <span className="select-none text-rose-500 font-bold">-</span>
+                      <span>return issueSession(payload.userId);</span>
+                    </div>
+                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded flex items-center gap-2">
+                      <span className="select-none text-emerald-500 font-bold">+</span>
+                      <span>if (payload.expiresAt &lt;= Date.now()) return null;</span>
+                    </div>
+                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded flex items-center gap-2">
+                      <span className="select-none text-emerald-500 font-bold">+</span>
+                      <span>return issueSession(payload.userId);</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Committable Action Button */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  <button
+                    onClick={() => setCommittableSuggestionApplied(true)}
+                    disabled={committableSuggestionApplied}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer ${
+                      committableSuggestionApplied
+                        ? "bg-emerald-600 text-white"
+                        : "bg-[#ff5722] hover:bg-[#f4511e] text-white"
+                    }`}
+                  >
+                    {committableSuggestionApplied ? (
+                      <>
+                        <CheckCheck size={15} />
+                        <span>✓ Đã tự động commit bản sửa vào PR #{selectedPR.prNumber}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>▶</span>
+                        <span>Committable suggestion (1-Click Commit vào Repo)</span>
+                      </>
+                    )}
+                  </button>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    {committableSuggestionApplied
+                      ? "Commit sha: 881a4fc • Áp dụng trực tiếp vào GitHub repo"
+                      : "Tự động sinh commit message chuẩn Conventional Commits"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Master-Detail PR Viewer */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* CỘT TRÁI (4 COLS): DANH SÁCH PULL REQUESTS */}
+                <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <GitPullRequest size={17} className="text-blue-600" />
+                      <h3 className="text-sm font-bold text-slate-900">Danh Sách PRs</h3>
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                        {filteredPRs.length}/{MOCK_PULL_REQUESTS.length}
+                      </span>
+                    </div>
+
+                    <select
+                      value={prMemberFilter}
+                      onChange={(e) => setPrMemberFilter(e.target.value)}
+                      className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="all">Tất cả tác giả</option>
+                      <option value="Nguyễn Bá Hòa">Nguyễn Bá Hòa</option>
+                      <option value="Võ Nhật Huy">Võ Nhật Huy</option>
+                      <option value="Phan Đình Nghị">Phan Đình Nghị</option>
+                    </select>
+                  </div>
+
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm mã task, PR, từ khóa..."
+                      value={prSearchQuery}
+                      onChange={(e) => setPrSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/60"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-lg text-[11px] font-semibold text-slate-600">
                     <button
-                      key={pr.id}
-                      onClick={() => setSelectedPrId(pr.id)}
-                      className={`w-full text-left p-3 rounded-xl border transition-all relative flex flex-col gap-2 ${
-                        isSelected
-                          ? "bg-blue-50/70 border-blue-500 shadow-xs ring-1 ring-blue-500/30 border-l-4 border-l-blue-600"
-                          : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70"
+                      onClick={() => setPrStatusFilter("open")}
+                      className={`flex-1 py-1 rounded-md transition text-center ${
+                        prStatusFilter === "open" ? "bg-white text-amber-800 font-bold shadow-xs" : "hover:text-slate-900"
                       }`}
                     >
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.2 rounded text-[11px]">
-                            #{pr.prNumber}
-                          </span>
-                          <span className="font-mono text-[10px] text-slate-500">
-                            {pr.sourceBranch}
-                          </span>
-                        </div>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                            pr.status === "merged"
-                              ? "bg-purple-100 text-purple-700"
-                              : pr.status === "approved"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-amber-100 text-amber-800"
+                      Cần Duyệt ({MOCK_PULL_REQUESTS.filter((p) => p.status === "open").length})
+                    </button>
+                    <button
+                      onClick={() => setPrStatusFilter("approved")}
+                      className={`flex-1 py-1 rounded-md transition text-center ${
+                        prStatusFilter === "approved" ? "bg-white text-emerald-800 font-bold shadow-xs" : "hover:text-slate-900"
+                      }`}
+                    >
+                      Đã Duyệt ({MOCK_PULL_REQUESTS.filter((p) => p.status === "approved").length})
+                    </button>
+                    <button
+                      onClick={() => setPrStatusFilter("merged")}
+                      className={`flex-1 py-1 rounded-md transition text-center ${
+                        prStatusFilter === "merged" ? "bg-white text-purple-800 font-bold shadow-xs" : "hover:text-slate-900"
+                      }`}
+                    >
+                      Đã Merge ({MOCK_PULL_REQUESTS.filter((p) => p.status === "merged").length})
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[580px] overflow-y-auto pr-1">
+                    {filteredPRs.map((pr) => {
+                      const isSelected = pr.id === selectedPR.id;
+                      return (
+                        <button
+                          key={pr.id}
+                          onClick={() => setSelectedPrId(pr.id)}
+                          className={`w-full text-left p-3 rounded-xl border transition-all relative flex flex-col gap-2 ${
+                            isSelected
+                              ? "bg-blue-50/70 border-blue-500 shadow-xs ring-1 ring-blue-500/30 border-l-4 border-l-blue-600"
+                              : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70"
                           }`}
                         >
-                          {pr.status === "merged" ? "Merged" : pr.status === "approved" ? "Approved" : "Reviewing"}
-                        </span>
-                      </div>
-
-                      <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-relaxed">
-                        {pr.title}
-                      </h4>
-
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className="w-4 h-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: pr.author.color }}
-                          >
-                            {pr.author.avatar}
-                          </span>
-                          <span className="font-medium text-slate-700">{pr.author.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1 font-mono text-[10px]">
-                          <span className="text-emerald-600 font-bold">+{pr.summary.totalAdditions}</span>
-                          <span className="text-rose-500 font-bold">-{pr.summary.totalDeletions}</span>
-                        </div>
-                      </div>
-
-                      {hasApplied && (
-                        <div className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1 self-start">
-                          <CheckCheck size={12} />
-                          Đã sửa theo AI
-                        </div>
-                      )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* CỘT PHẢI (8 COLS): WORKSPACE CHI TIẾT REVIEW */}
-          <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            {/* PR Header Tinh Tế & Hiện Đại (Sáng, Nhẹ, Không Bị Chói Đen) */}
-            <div className="p-5 border-b border-slate-200 bg-gradient-to-b from-slate-50/80 to-white space-y-3.5">
-              {/* Dòng 1: Tag & Metadata Badges */}
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono font-bold bg-orange-100/70 text-orange-800">
-                    <Bot size={13} className="text-orange-600" />
-                    CodeRabbit Reviewer
-                  </span>
-                  <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                    {selectedPR.sourceBranch} → {selectedPR.targetBranch}
-                  </span>
-                  <span className="text-xs text-slate-500">• {selectedPR.createdAt}</span>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs font-mono">
-                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold">
-                    {selectedPR.summary.filesCount} files
-                  </span>
-                  <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">
-                    +{selectedPR.summary.totalAdditions}
-                  </span>
-                  <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-bold">
-                    -{selectedPR.summary.totalDeletions}
-                  </span>
-                </div>
-              </div>
-
-              {/* Dòng 2: Tiêu Đề PR */}
-              <h2 className="text-base font-bold text-slate-900 tracking-tight leading-snug flex items-start gap-2">
-                <GitPullRequest size={18} className="text-blue-600 shrink-0 mt-0.5" />
-                <span>PR #{selectedPR.prNumber}: {selectedPR.title}</span>
-              </h2>
-
-              {/* Dòng 3: Tác Giả & Rủi Ro */}
-              <div className="flex items-center justify-between text-xs text-slate-600 pt-1 flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: selectedPR.author.color }}
-                  >
-                    {selectedPR.author.avatar}
-                  </span>
-                  <span>
-                    Tác giả: <strong className="text-slate-900">{selectedPR.author.name}</strong> ({selectedPR.author.role})
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500">Đánh giá rủi ro:</span>
-                  <span
-                    className={`font-bold px-2 py-0.5 rounded text-[11px] ${
-                      selectedPR.summary.riskLevel === "high"
-                        ? "bg-rose-100 text-rose-800"
-                        : selectedPR.summary.riskLevel === "medium"
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-emerald-100 text-emerald-800"
-                    }`}
-                  >
-                    Mức {selectedPR.summary.riskLevel.toUpperCase()}
-                  </span>
-                  <span className="text-slate-500">• AI duyệt: <strong>{selectedPR.summary.estimatedReviewTime}</strong></span>
-                </div>
-              </div>
-
-              {/* Dòng 4: Segmented Sub-Tabs Bar (Chia Đều 3 Cột Hoàn Hảo) */}
-              <div className="pt-2 border-t border-slate-200">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100/90 p-1.5 rounded-xl border border-slate-200/60">
-                  <button
-                    onClick={() => setPrSubTab("diff")}
-                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
-                      prSubTab === "diff"
-                        ? "bg-white text-blue-700 shadow-xs border border-slate-200/80"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-                    }`}
-                  >
-                    <Code2 size={14} className={prSubTab === "diff" ? "text-blue-600" : "text-slate-500"} />
-                    <span>Soi Lỗi & 1-Click Fix</span>
-                  </button>
-                  <button
-                    onClick={() => setPrSubTab("walkthrough")}
-                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
-                      prSubTab === "walkthrough"
-                        ? "bg-white text-blue-700 shadow-xs border border-slate-200/80"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-                    }`}
-                  >
-                    <FileText size={14} className={prSubTab === "walkthrough" ? "text-blue-600" : "text-slate-500"} />
-                    <span>Bản Tóm Tắt (Walkthrough)</span>
-                  </button>
-                  <button
-                    onClick={() => setPrSubTab("defense")}
-                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
-                      prSubTab === "defense"
-                        ? "bg-white text-blue-700 shadow-xs border border-slate-200/80"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-                    }`}
-                  >
-                    <HelpCircle size={14} className={prSubTab === "defense" ? "text-blue-600" : "text-slate-500"} />
-                    <span>Vấn Đáp Thầy Phước Q&A</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* TAB CONTENT 1: LINE-BY-LINE DIFF & 1-CLICK FIX */}
-            {prSubTab === "diff" && (
-              <div className="p-5 space-y-5">
-                {/* Thanh thông báo AST chuẩn căn chỉnh đều */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-slate-50/90 p-3.5 rounded-xl border border-slate-200/80">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                      <Sparkles size={14} />
-                    </div>
-                    <p className="text-xs text-slate-700 leading-relaxed">
-                      CodeRabbit quét cây cú pháp AST, tự động phát hiện lỗi logic / bảo mật và bình luận trực tiếp vào dòng mã.
-                    </p>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1.5 font-mono text-[11px] text-slate-600 bg-white px-2.5 py-1 rounded-md border border-slate-200 whitespace-nowrap self-start sm:self-center shadow-2xs">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                    <span>Trạng thái: 1 phát hiện cần xử lý</span>
-                  </div>
-                </div>
-
-                {selectedPR.files.map((file, fileIdx) => {
-                  const comment = file.aiComment;
-                  const isApplied = comment ? !!appliedFixes[comment.id] : false;
-
-                  return (
-                    <div key={fileIdx} className="rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-                      {/* File Header */}
-                      <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
-                        <div className="flex items-center gap-2 font-mono text-xs font-bold text-slate-800">
-                          <FileText size={15} className="text-slate-500" />
-                          <span>{file.filename}</span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                            {file.status}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-mono">
-                          <span className="text-emerald-600 font-bold">+{file.additions}</span>
-                          <span className="text-rose-600 font-bold">-{file.deletions}</span>
-                        </div>
-                      </div>
-
-                      {/* Code Diff Lines */}
-                      <div className="font-mono text-xs overflow-x-auto bg-[#0d1117] text-slate-200">
-                        {file.lines.map((line, lineIdx) => {
-                          const isDeletion = line.type === "deletion";
-                          const isAddition = line.type === "addition";
-                          const isCommentLine = comment && comment.line === line.newLineNumber && isAddition;
-
-                          // If applied, show the fixed line instead of the bad addition
-                          const displayedContent = isApplied && isCommentLine ? `    ${comment.suggestedFix.split("\n")[0]}` : line.content;
-
-                          return (
-                            <div key={lineIdx}>
-                              <div
-                                className={`flex items-stretch hover:bg-slate-800/50 transition-colors ${
-                                  isDeletion
-                                    ? "bg-rose-950/40 text-rose-300"
-                                    : isAddition
-                                    ? isApplied
-                                      ? "bg-emerald-950/40 text-emerald-300"
-                                      : "bg-emerald-950/20 text-emerald-200"
-                                    : ""
-                                }`}
-                              >
-                                <span className="w-12 py-1 px-2 text-right select-none text-slate-600 bg-slate-900/60 shrink-0 border-r border-slate-800">
-                                  {line.oldLineNumber ?? ""}
-                                </span>
-                                <span className="w-12 py-1 px-2 text-right select-none text-slate-600 bg-slate-900/60 shrink-0 border-r border-slate-800">
-                                  {line.newLineNumber ?? ""}
-                                </span>
-                                <span className="w-6 py-1 text-center select-none shrink-0 font-bold">
-                                  {isDeletion ? "-" : isAddition ? "+" : " "}
-                                </span>
-                                <span className="py-1 px-3 whitespace-pre flex-1 font-mono">
-                                  {displayedContent}
-                                </span>
-                              </div>
-
-                              {/* INLINE CODERABBIT FEEDBACK BOX */}
-                              {comment && line.newLineNumber === comment.line && isAddition && (
-                                <div className="p-4 bg-slate-900 border-y-2 border-orange-500/80 my-1 mx-2 rounded-lg text-slate-800 font-sans shadow-lg">
-                                  <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm space-y-3">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-xs">
-                                          <Bot size={16} />
-                                        </div>
-                                        <div>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-xs font-bold text-slate-900">CodeRabbit AI</span>
-                                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 font-bold">
-                                              Senior Bot
-                                            </span>
-                                            <span
-                                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                                                comment.type === "security"
-                                                  ? "bg-rose-100 text-rose-800"
-                                                  : comment.type === "warning"
-                                                  ? "bg-amber-100 text-amber-800"
-                                                  : "bg-blue-100 text-blue-800"
-                                              }`}
-                                            >
-                                              {comment.type === "security" ? "Lỗ hổng bảo mật" : comment.type === "warning" ? "Cảnh báo kiến trúc" : "Gợi ý Clean Code"}
-                                            </span>
-                                          </div>
-                                          <h4 className="text-xs font-bold text-slate-900 mt-1">
-                                            {comment.title}
-                                          </h4>
-                                        </div>
-                                      </div>
-
-                                      {isApplied ? (
-                                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg shadow-xs">
-                                          <CheckCheck size={15} />
-                                          Đã áp dụng bản sửa
-                                        </span>
-                                      ) : (
-                                        <button
-                                          onClick={() => handleApplyFix(comment.id)}
-                                          className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 px-3.5 py-1.5 rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
-                                        >
-                                          <Wand2 size={14} />
-                                          Áp dụng bản sửa (1-Click Fix)
-                                        </button>
-                                      )}
-                                    </div>
-
-                                    <p className="text-xs text-slate-700 leading-relaxed">
-                                      {comment.message}
-                                    </p>
-
-                                    {/* 1-Click Suggested Code Block */}
-                                    <div className="space-y-1.5 bg-slate-900 rounded-lg p-3 text-xs font-mono text-slate-200 border border-slate-700">
-                                      <div className="flex items-center justify-between text-[11px] text-slate-400 pb-1.5 border-b border-slate-800">
-                                        <span className="flex items-center gap-1.5 text-orange-400 font-bold">
-                                          <Code2 size={13} />
-                                          Đề xuất thay đổi (Suggested Fix):
-                                        </span>
-                                        <span className="text-[10px] text-slate-400 font-mono">PEP8 / Clean Code</span>
-                                      </div>
-                                      <div className="text-emerald-400 whitespace-pre pt-1">
-                                        {comment.suggestedFix}
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                                      <span className="flex items-center gap-1">
-                                        <ShieldCheck size={13} className="text-emerald-600" />
-                                        {comment.explanation}
-                                      </span>
-                                      <span className="text-[10px] text-slate-400">Dòng {comment.line}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* TAB CONTENT 2: WALKTHROUGH & AUTO-SUMMARY */}
-            {prSubTab === "walkthrough" && (
-              <div className="p-6 space-y-6">
-                <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <FileCheck size={18} className="text-blue-600" />
-                    Tóm Tắt Tổng Quan Thay Đổi (CodeRabbit Walkthrough)
-                  </h3>
-                  <p className="text-xs text-slate-700 leading-relaxed">
-                    {selectedPR.summary.overview}
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Các Điểm Sửa Đổi Trọng Yếu:
-                  </h3>
-                  <div className="space-y-2">
-                    {selectedPR.summary.keyPoints.map((point, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-2.5 p-3 rounded-lg bg-white border border-slate-200 text-xs text-slate-700"
-                      >
-                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
-                          {idx + 1}
-                        </span>
-                        <span className="leading-relaxed">{point}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>Đánh Giá Tác Động Hệ Thống</span>
-                      <ShieldCheck size={16} className="text-emerald-600" />
-                    </div>
-                    <div className="text-sm font-bold text-slate-900">
-                      Không phá vỡ API hiện hữu (Non-breaking)
-                    </div>
-                    <p className="text-xs text-slate-600">
-                      Các bảng CSDL mới độc lập, tương thích 100% với endpoint V1 router.
-                    </p>
-                  </div>
-
-                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>Khuyến Nghị Trước Khi Merge</span>
-                      <AlertCircle size={16} className="text-amber-600" />
-                    </div>
-                    <div className="text-sm font-bold text-slate-900">
-                      Chạy Alembic Migration & pytest
-                    </div>
-                    <p className="text-xs text-slate-600">
-                      Thực hiện lệnh <code className="bg-slate-100 px-1 rounded">alembic upgrade head</code> trên máy test trước khi gộp vào develop.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB CONTENT 3: TEACHER DEFENSE Q&A */}
-            {prSubTab === "defense" && (
-              <div className="p-6 space-y-6">
-                <div className="bg-blue-50/80 rounded-xl p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
-                    <HelpCircle size={16} className="text-blue-700" />
-                    Công Cụ Giảng Viên: Bộ Câu Hỏi Chất Vấn Liêm Chính Kỹ Thuật (Thầy Phước)
-                  </div>
-                  <p className="text-xs text-blue-800 leading-relaxed">
-                    Hệ thống tự động phân tích diff của PR này và sinh ra các câu hỏi chuyên sâu. Giảng viên có thể dùng ngay các câu hỏi này khi bảo vệ Sprint để kiểm tra xem sinh viên tự viết mã hay nhờ người khác/AI gian lận.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  {selectedPR.defenseQA.map((qa, idx) => (
-                    <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white space-y-3 shadow-xs">
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                          Q{idx + 1}
-                        </span>
-                        <div className="space-y-1.5 flex-1">
-                          <h4 className="text-xs font-bold text-slate-900 leading-relaxed">
-                            {qa.question}
-                          </h4>
-                          <div className="bg-emerald-50/90 rounded-lg p-3 text-xs text-emerald-900 space-y-1">
-                            <span className="font-bold block text-emerald-800">
-                              Đáp án chuẩn mong đợi (Expected Answer):
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-mono font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.2 rounded text-[11px]">
+                              #{pr.prNumber} • {pr.sourceBranch}
                             </span>
-                            <p className="leading-relaxed">{qa.expectedAnswer}</p>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                                pr.status === "merged"
+                                  ? "bg-purple-100 text-purple-700"
+                                  : pr.status === "approved"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {pr.status}
+                            </span>
                           </div>
-                          <div className="text-[11px] text-slate-500 italic">
-                            Tiêu chí chấm điểm: {qa.rubricHint}
+                          <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-relaxed">
+                            {pr.title}
+                          </h4>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                            <span className="font-medium text-slate-700">{pr.author.name}</span>
+                            <span className="font-mono text-[10px] text-emerald-600 font-bold">+{pr.summary.totalAdditions} -{pr.summary.totalDeletions}</span>
                           </div>
-                        </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* CỘT PHẢI (8 COLS): WORKSPACE CHI TIẾT REVIEW */}
+                <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                  <div className="p-5 border-b border-slate-200 bg-gradient-to-b from-slate-50/80 to-white space-y-3.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono font-bold bg-orange-100/70 text-orange-800">
+                          <Bot size={13} className="text-orange-600" />
+                          CodeRabbit Reviewer
+                        </span>
+                        <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                          {selectedPR.sourceBranch} → {selectedPR.targetBranch}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs font-mono">
+                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold">{selectedPR.summary.filesCount} files</span>
+                        <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">+{selectedPR.summary.totalAdditions}</span>
+                        <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-bold">-{selectedPR.summary.totalDeletions}</span>
                       </div>
                     </div>
-                  ))}
+
+                    <h2 className="text-base font-bold text-slate-900 tracking-tight leading-snug flex items-start gap-2">
+                      <GitPullRequest size={18} className="text-blue-600 shrink-0 mt-0.5" />
+                      <span>PR #{selectedPR.prNumber}: {selectedPR.title}</span>
+                    </h2>
+
+                    <div className="pt-2 border-t border-slate-200">
+                      <div className="grid grid-cols-3 gap-2 bg-slate-100/90 p-1.5 rounded-xl border border-slate-200/60">
+                        <button
+                          onClick={() => setPrSubTab("diff")}
+                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                            prSubTab === "diff" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <Code2 size={14} />
+                          <span>Soi Lỗi & 1-Click Fix</span>
+                        </button>
+                        <button
+                          onClick={() => setPrSubTab("walkthrough")}
+                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                            prSubTab === "walkthrough" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <FileText size={14} />
+                          <span>Tóm Tắt Walkthrough</span>
+                        </button>
+                        <button
+                          onClick={() => setPrSubTab("defense")}
+                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                            prSubTab === "defense" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <HelpCircle size={14} />
+                          <span>Vấn Đáp Thầy Phước</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Diff Content */}
+                  {prSubTab === "diff" && (
+                    <div className="p-5 space-y-4">
+                      {selectedPR.files.map((file, fileIdx) => {
+                        const comment = file.aiComment;
+                        const isApplied = comment ? !!appliedFixes[comment.id] : false;
+                        return (
+                          <div key={fileIdx} className="rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                            <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between text-xs font-mono font-bold text-slate-800">
+                              <span>{file.filename}</span>
+                              <span className="text-emerald-600">+{file.additions} -{file.deletions}</span>
+                            </div>
+                            <div className="font-mono text-xs overflow-x-auto bg-[#0d1117] text-slate-200 p-2 space-y-0.5">
+                              {file.lines.map((line, lineIdx) => (
+                                <div key={lineIdx} className={`flex items-stretch px-2 py-0.5 ${line.type === "addition" ? "bg-emerald-950/30 text-emerald-300" : line.type === "deletion" ? "bg-rose-950/40 text-rose-300" : ""}`}>
+                                  <span className="w-8 select-none opacity-40 text-right mr-3">{line.newLineNumber || line.oldLineNumber}</span>
+                                  <span className="w-4 select-none font-bold">{line.type === "addition" ? "+" : line.type === "deletion" ? "-" : " "}</span>
+                                  <span className="whitespace-pre">{line.content}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {comment && (
+                              <div className="p-3.5 bg-orange-50/90 border-t border-orange-200 flex items-start justify-between gap-3 text-xs">
+                                <div className="space-y-1 flex-1">
+                                  <div className="flex items-center gap-1.5 font-bold text-orange-900">
+                                    <Sparkles size={14} className="text-orange-600" />
+                                    <span>CodeRabbit: {comment.title}</span>
+                                  </div>
+                                  <p className="text-orange-800 leading-relaxed">{comment.message}</p>
+                                </div>
+                                <button
+                                  onClick={() => handleApplyFix(comment.id)}
+                                  className="shrink-0 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold transition text-xs shadow-xs"
+                                >
+                                  {isApplied ? "✓ Đã áp dụng" : "1-Click Fix"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {prSubTab === "walkthrough" && (
+                    <div className="p-6 space-y-4 text-xs text-slate-700 leading-relaxed">
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                        <h4 className="font-bold text-sm text-slate-900">Mục đích PR #{selectedPR.prNumber}</h4>
+                        <p>{selectedPR.summary.overview}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="font-bold text-slate-900">Các thay đổi chính:</h4>
+                        <ul className="list-disc list-inside space-y-1 text-slate-600">
+                          {selectedPR.summary.keyPoints.map((c: string, i: number) => (
+                            <li key={i}>{c}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+
+                  {prSubTab === "defense" && (
+                    <div className="p-6 space-y-4">
+                      {selectedPR.defenseQA.map((qa, idx) => (
+                        <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 text-xs">
+                          <h4 className="font-bold text-slate-900">Q{idx+1}: {qa.question}</h4>
+                          <p className="text-emerald-800 bg-emerald-50 p-2.5 rounded-lg"><strong>Đáp án kỳ vọng:</strong> {qa.expectedAnswer}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════ */}
+          {/* PILLAR 02: PRIORITIZE ACROSS ALL PRS (Khớp Chuẩn 100% Ảnh 2)           */}
+          {/* ══════════════════════════════════════════════════════════════════════ */}
+          {crPillar === "prioritize" && (
+            <div className="space-y-4">
+              <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span className="font-mono text-[#ff5722]">02</span>
+                    <span>Prioritize across all PRs</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    AI tự động ước lượng khối lượng review trong ngày (Daily Capacity), gắn nhãn P0/P1/P2 kèm lý do kiến trúc.
+                  </p>
+                </div>
+                <div className="hidden sm:flex items-center gap-2 text-xs">
+                  <span className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">P0: Cực kỳ cấp thiết</span>
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">P1: Tiêu chuẩn</span>
+                  <span className="px-2.5 py-1 rounded-lg bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-bold">P2: Tạm hoãn</span>
+                </div>
+              </div>
+
+              {/* 2-Column Triage Board (Now vs Next) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                {/* CỘT 1: NOW (Trong giới hạn công suất ngày) */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">Now</h4>
+                      <p className="text-[11px] text-slate-500">Within each person's daily capacity</p>
+                    </div>
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white">14</span>
+                  </div>
+
+                  {/* Card 1: P0 */}
+                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        P0
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">lop #21102</span>
+                    </div>
+
+                    <h5 className="text-xs font-bold text-slate-100">
+                      Skip bot-authored comment review tasks
+                    </h5>
+
+                    {/* AI Reasoning Box (Pink Border) */}
+                    <div className="p-2.5 rounded-lg border border-rose-400/40 bg-rose-500/10 text-rose-200 text-[11px] leading-relaxed">
+                      Review this early because it can resolve assumptions that may affect nearby PRs and reduce rework.
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Low security risk</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Maintenance</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Deep review</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-blue-600 text-[9px] font-bold text-white flex items-center justify-center">E</span>
+                        <span>@ezrapike[bot]</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500">2h ago</span>
+                    </div>
+                  </div>
+
+                  {/* Card 2: P0 (Team's Auth PR) */}
+                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        P0 (Cốt lõi Nhóm 4)
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">CodeMind #07</span>
+                    </div>
+
+                    <h5 className="text-xs font-bold text-slate-100">
+                      feat(#TE22C19): Tích hợp JWT Access Token, Bcrypt Hashing & Phân Quyền
+                    </h5>
+
+                    {/* AI Reasoning Box */}
+                    <div className="p-2.5 rounded-lg border border-rose-400/40 bg-rose-500/10 text-rose-200 text-[11px] leading-relaxed">
+                      Phải review gấp vì module Auth là tiền đề cứng H2 cho các phân hệ Code Lab, AI Socratic và Phòng phản biện.
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">High security impact</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Auth & RBAC</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Deep review</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-[9px] font-bold text-white flex items-center justify-center">VH</span>
+                        <span>Võ Nhật Huy</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-400">Ready to Merge</span>
+                    </div>
+                  </div>
+
+                  {/* Card 3: P1 */}
+                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        P1
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">rex #21194</span>
+                    </div>
+
+                    <h5 className="text-xs font-bold text-slate-100">
+                      feat(agents): extend per-run prompt_cache_key to cbe/context
+                    </h5>
+
+                    <div className="p-2.5 rounded-lg border border-amber-400/40 bg-amber-500/10 text-amber-200 text-[11px] leading-relaxed">
+                      Review this early because it can resolve assumptions that may affect nearby PRs and reduce rework.
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Low security risk</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Feature</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Deep review</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-purple-600 text-[9px] font-bold text-white flex items-center justify-center">A</span>
+                        <span>@arlopike</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500">4h ago</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CỘT 2: NEXT (All remaining reviews) */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">Next</h4>
+                      <p className="text-[11px] text-slate-500">All remaining reviews</p>
+                    </div>
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">66</span>
+                  </div>
+
+                  {/* Card 1: P1 Next */}
+                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        P1
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">havana #21189</span>
+                    </div>
+
+                    <h5 className="text-xs font-bold text-slate-100">
+                      fix(dashboard): scope PR details authors by org
+                    </h5>
+
+                    <div className="p-2.5 rounded-lg border border-amber-400/40 bg-amber-500/10 text-amber-200 text-[11px] leading-relaxed">
+                      Keep this visible for async review because it is useful work without an immediate interruption signal.
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Low security risk</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Bug fix</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Standard review</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-indigo-600 text-[9px] font-bold text-white flex items-center justify-center">E</span>
+                        <span>@ezrapike[bot]</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500">Yesterday</span>
+                    </div>
+                  </div>
+
+                  {/* Card 2: P2 Next (Draft / Conflict) */}
+                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                        P2
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">silver #21153</span>
+                    </div>
+
+                    <h5 className="text-xs font-bold text-slate-100">
+                      [codex] Lean path instruction metrics insert
+                    </h5>
+
+                    <div className="p-2.5 rounded-lg border border-yellow-400/40 bg-yellow-500/10 text-yellow-200 text-[11px] leading-relaxed">
+                      Hold this behind refresh work because draft, conflict, or drift signals would make reviewer attention premature.
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Needs author action</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Low security risk</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-yellow-400">Draft</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-rose-600 text-[9px] font-bold text-white flex items-center justify-center">M</span>
+                        <span>@miravale</span>
+                      </div>
+                      <span className="text-[10px] text-yellow-400 font-bold">Chờ Tác Giả</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════ */}
+          {/* PILLAR 03: UNDERSTAND EACH PR'S IMPACT (Khớp Chuẩn 100% Ảnh 3)         */}
+          {/* ══════════════════════════════════════════════════════════════════════ */}
+          {crPillar === "impact" && (
+            <div className="space-y-4">
+              <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <span className="font-mono text-[#ff5722]">03</span>
+                      <span>Understand each PR's impact</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Bóc tách PR theo tầng nghiệp vụ (Stacks & Layers) và đo bán kính ảnh hưởng an ninh thay vì xem file phẳng lộn xộn.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      Open
+                    </span>
+                    <span className="text-slate-300 font-bold">Add teammate invitations with roles</span>
+                    <span className="text-slate-500">| acme/web-app #482 · 9 files · Stacks</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Split Inspector: Layers Sidebar + File Diff Viewer */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* CỘT TRÁI (4 COLS): LAYERS & BLAST RADIUS NAVIGATOR */}
+                <div className="lg:col-span-4 bg-[#0f141c] text-white rounded-2xl border border-slate-800 p-4 space-y-4 shadow-md">
+                  {/* Mode Switch: Layers vs Files */}
+                  <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+                    <button
+                      onClick={() => setImpactViewMode("layers")}
+                      className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        impactViewMode === "layers" ? "bg-slate-800 text-white font-bold shadow-xs" : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Layers size={14} />
+                      <span>Layers</span>
+                    </button>
+                    <button
+                      onClick={() => setImpactViewMode("files")}
+                      className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        impactViewMode === "files" ? "bg-slate-800 text-white font-bold shadow-xs" : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <FileText size={14} />
+                      <span>Files</span>
+                    </button>
+                  </div>
+
+                  {/* Sub-Inspectors Navigation */}
+                  <div className="space-y-1 text-xs">
+                    <button
+                      onClick={() => setSelectedImpactTab("overview")}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
+                        selectedImpactTab === "overview" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Eye size={14} />
+                        <span>Overview</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-mono">Open</span>
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedImpactTab("security")}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
+                        selectedImpactTab === "security" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Activity size={14} className="text-amber-400" />
+                        <span>Security blast radius</span>
+                      </span>
+                      <span className="text-[10px] text-amber-400 font-mono">3 services</span>
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedImpactTab("architecture")}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
+                        selectedImpactTab === "architecture" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Boxes size={14} className="text-blue-400" />
+                        <span>Architecture impact</span>
+                      </span>
+                      <span className="text-[10px] text-blue-400 font-mono">3-Tier OK</span>
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedImpactTab("verify")}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
+                        selectedImpactTab === "verify" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <ShieldCheck size={14} className="text-emerald-400" />
+                        <span>CodeRabbit Verify</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-mono">Passed</span>
+                    </button>
+                  </div>
+
+                  {/* Stacks Layered Steps */}
+                  <div className="pt-2 border-t border-slate-800 space-y-2">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Các tầng nghiệp vụ (Stacks):
+                    </span>
+
+                    <button
+                      onClick={() => setSelectedLayerIndex(0)}
+                      className={`w-full text-left p-3 rounded-xl border transition ${
+                        selectedLayerIndex === 0
+                          ? "bg-slate-800 border-[#ff5722] text-white"
+                          : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-bold text-xs text-white">
+                        <span className="w-5 h-5 rounded-full bg-slate-700 text-white text-[10px] flex items-center justify-center font-mono">1</span>
+                        <span>Add the invitation data model</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 ml-7 block mt-0.5">2 files touched</span>
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedLayerIndex(1)}
+                      className={`w-full text-left p-3 rounded-xl border transition ${
+                        selectedLayerIndex === 1
+                          ? "bg-slate-800 border-[#ff5722] text-white"
+                          : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-bold text-xs text-white">
+                        <span className="w-5 h-5 rounded-full bg-[#ff5722] text-white text-[10px] flex items-center justify-center font-mono">2</span>
+                        <span>Add the invitation API and emails</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 ml-7 block mt-0.5">3 files touched</span>
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedLayerIndex(2)}
+                      className={`w-full text-left p-3 rounded-xl border transition ${
+                        selectedLayerIndex === 2
+                          ? "bg-slate-800 border-[#ff5722] text-white"
+                          : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-bold text-xs text-white">
+                        <span className="w-5 h-5 rounded-full bg-slate-700 text-white text-[10px] flex items-center justify-center font-mono">3</span>
+                        <span>Add UI invitation modal & guards</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 ml-7 block mt-0.5">4 files touched</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* CỘT PHẢI (8 COLS): FILE DIFF VIEWER (Chuẩn 100% Ảnh 3) */}
+                <div className="lg:col-span-8 bg-[#0f141c] text-white rounded-2xl border border-slate-800 overflow-hidden shadow-md space-y-4 p-5">
+                  <div className="border-b border-slate-800 pb-3">
+                    <h4 className="text-sm font-bold text-white">
+                      Add the invitation API and emails
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Endpoints to create, list invitations; token generation; the invitation email; and the admin-only permissions.
+                    </p>
+                  </div>
+
+                  {/* File Path Header */}
+                  <div className="flex items-center justify-between text-xs bg-slate-900 p-2.5 rounded-xl border border-slate-800 font-mono">
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-bold">TS</span>
+                      <span>src/server/auth/permissions.ts</span>
+                    </div>
+                    <span className="text-emerald-400 font-bold">+12 -3</span>
+                  </div>
+
+                  {/* Code Diff Display (Exact lines from image 3) */}
+                  <div className="rounded-xl overflow-hidden border border-slate-800 font-mono text-xs bg-[#0b0f14] p-3 space-y-1">
+                    <div className="text-slate-500 text-[11px] py-0.5">20 unmodified lines</div>
+                    <div className="text-slate-400 px-2 py-0.5">
+                      <span className="text-slate-600 mr-4">21</span>
+                      <span className="text-purple-400">return</span> member.role === <span className="text-emerald-300">"ADMIN"</span>
+                    </div>
+                    <div className="text-slate-400 px-2 py-0.5">
+                      <span className="text-slate-600 mr-4">22</span>
+                      <span>{"}"}</span>
+                    </div>
+                    <div className="text-slate-400 px-2 py-0.5">
+                      <span className="text-slate-600 mr-4">23</span>
+                    </div>
+                    <div className="bg-rose-950/40 text-rose-300 px-2 py-0.5 rounded">
+                      <span className="text-rose-500 mr-4 font-bold">- 24</span>
+                      <span className="text-purple-400">export function</span> <span className="text-blue-300">canRemoveMember</span>(member) {"{"}
+                    </div>
+                    <div className="bg-rose-950/40 text-rose-300 px-2 py-0.5 rounded">
+                      <span className="text-rose-500 mr-4 font-bold">- 25</span>
+                      <span className="text-purple-400">  return</span> member.role === <span className="text-emerald-300">"ADMIN"</span>
+                    </div>
+                    <div className="bg-rose-950/40 text-rose-300 px-2 py-0.5 rounded">
+                      <span className="text-rose-500 mr-4 font-bold">- 26</span>
+                      <span>{"}"}</span>
+                    </div>
+                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded">
+                      <span className="text-emerald-500 mr-4 font-bold">+ 24</span>
+                      <span className="text-purple-400">export function</span> <span className="text-blue-300">canRemoveMember</span>(member, target) {"{"}
+                    </div>
+                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded">
+                      <span className="text-emerald-500 mr-4 font-bold">+ 25</span>
+                      <span className="text-purple-400">  if</span> (target.isOwner) <span className="text-purple-400">return</span> <span className="text-amber-300">false</span>;
+                    </div>
+                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded">
+                      <span className="text-emerald-500 mr-4 font-bold">+ 26</span>
+                      <span className="text-purple-400">  return</span> member.role === <span className="text-emerald-300">"ADMIN"</span>;
+                    </div>
+                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded">
+                      <span className="text-emerald-500 mr-4 font-bold">+ 27</span>
+                      <span>{"}"}</span>
+                    </div>
+                  </div>
+
+                  {/* Impact Insight Card */}
+                  <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
+                    <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Activity size={13} />
+                      Security Blast Radius Insight:
+                    </span>
+                    <p className="text-slate-300 leading-relaxed">
+                      Thay đổi trong hàm <code className="text-emerald-400 font-mono">canRemoveMember</code> ngăn chặn hành vi Admin xóa Owner của Workspace. Không làm ảnh hưởng tới các router ngoài auth. Bán kính ảnh hưởng bảo mật an toàn (Low Risk).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════ */}
+          {/* PILLAR 04: SECURE YOUR CODEBASE CONTINUALLY (Khớp Chuẩn 100% Ảnh 4)    */}
+          {/* ══════════════════════════════════════════════════════════════════════ */}
+          {crPillar === "security" && (
+            <div className="space-y-4">
+              {/* Real-Time Health Header Card */}
+              <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase font-mono">
+                      REAL-TIME CODEBASE HEALTH
+                    </span>
+                    <h3 className="text-xl font-bold text-white mt-1">
+                      Mostly healthy
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
+                    <span className="flex items-center gap-1.5 text-emerald-400">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Scanning every PR
+                    </span>
+                    <span>Last scan now</span>
+                    <span className="text-slate-300 font-bold">0 critical</span>
+                  </div>
+                </div>
+
+                {/* Tri-color Health Bar (Green 46% | Amber 12% | Gray 40%) */}
+                <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden flex">
+                  <div className="bg-emerald-500 h-full w-[46%]" title="Healthy: 46%" />
+                  <div className="bg-amber-400 h-full w-[12%]" title="High: 12%" />
+                  <div className="bg-rose-500 h-full w-[2%]" title="Critical: 2%" />
+                  <div className="bg-slate-700 h-full w-[40%]" title="Unscanned: 40%" />
+                </div>
+              </div>
+
+              {/* Main Grid: Interactive Dot Heatmap + Severity Donut Chart */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* CỘT TRÁI (8 COLS): MA TRẬN ĐIỂM SÁNG (HEATMAP DOT MATRIX) */}
+                <div className="lg:col-span-8 bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md space-y-4 relative">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-white">
+                        Codebase Vulnerability Heatmap (Ma Trận Điểm Sáng)
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Mỗi điểm sáng đại diện cho 1 gói thư viện / module. Nhấp vào điểm vàng để xem chi tiết lỗ hổng CVE.
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono text-slate-400">224 modules</span>
+                  </div>
+
+                  {/* 8 Rows x 28 Cols Dot Matrix */}
+                  <div className="bg-[#0b0f14] p-4 rounded-xl border border-slate-800/80 overflow-x-auto">
+                    <div className="grid grid-cols-28 gap-2 min-w-[500px]">
+                      {Array.from({ length: 196 }).map((_, idx) => {
+                        const isAxiosDot = idx === 42;
+                        const isPyjwtDot = idx === 88;
+                        const isCriticalDot = idx === 150;
+                        const isFixed = isAxiosDot ? !!fixedVulns["axios"] : isPyjwtDot ? !!fixedVulns["pyjwt"] : false;
+
+                        let colorClass = "bg-emerald-500/80 hover:bg-emerald-400";
+                        if (isAxiosDot || isPyjwtDot) {
+                          colorClass = isFixed ? "bg-emerald-500/80" : "bg-amber-400 ring-2 ring-amber-400/50 animate-pulse";
+                        } else if (isCriticalDot) {
+                          colorClass = "bg-rose-500 ring-2 ring-rose-500/50";
+                        } else if (idx % 7 === 0) {
+                          colorClass = "bg-slate-700/60";
+                        }
+
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => setSelectedVulnDot(idx)}
+                            className={`w-2.5 h-2.5 rounded-full transition-all cursor-pointer ${colorClass} ${
+                              selectedVulnDot === idx ? "scale-150 ring-2 ring-white" : ""
+                            }`}
+                            title={`Module #${idx+1}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Interactive Vulnerability Tooltip Card (Chuẩn 100% Ảnh 4) */}
+                  <div className="bg-[#141b24] p-4 rounded-xl border border-amber-500/30 space-y-3 shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
+                        <span className="text-xs font-bold text-white">Dependency vulnerability</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                          High
+                        </span>
+                      </div>
+                      <span className="text-xs font-mono text-slate-400">Detected on PR #482</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-mono text-sm font-bold text-white">
+                          axios • GHSA-4w2v-q235-vp99
+                        </span>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Cross-Site Request Forgery (CSRF) header leakage during redirects.
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => setFixedVulns((prev) => ({ ...prev, axios: true }))}
+                        disabled={fixedVulns["axios"]}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs ${
+                          fixedVulns["axios"]
+                            ? "bg-emerald-600 text-white"
+                            : "bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/40"
+                        }`}
+                      >
+                        {fixedVulns["axios"] ? "✓ Fix ready (axios@1.7.9)" : "Fix ready (1-Click Patch)"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CỘT PHẢI (4 COLS): SEVERITY DISTRIBUTION DONUT (Chuẩn 100% Ảnh 4) */}
+                <div className="lg:col-span-4 bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md space-y-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      Severity distribution
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      AI Deep Scan and Dependencies
+                    </p>
+                  </div>
+
+                  {/* Donut Chart SVG */}
+                  <div className="flex flex-col items-center justify-center py-4">
+                    <div className="relative w-44 h-44 flex items-center justify-center">
+                      <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                        {/* Circle circumference = 2 * PI * 38 = ~238.76 */}
+                        {/* Unscanned: 40% (stroke-dasharray="95.5 238.76") */}
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#334155" strokeWidth="12" strokeDasharray="95.5 238.76" strokeDashoffset="0" />
+                        {/* Healthy: 46% (stroke-dasharray="109.8 238.76") */}
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#10b981" strokeWidth="12" strokeDasharray="109.8 238.76" strokeDashoffset="-95.5" />
+                        {/* High: 12% (stroke-dasharray="28.6 238.76") */}
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#fbbf24" strokeWidth="12" strokeDasharray="28.6 238.76" strokeDashoffset="-205.3" />
+                        {/* Critical: 2% (stroke-dasharray="4.8 238.76") */}
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#ef4444" strokeWidth="12" strokeDasharray="4.8 238.76" strokeDashoffset="-233.9" />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span className="text-xl font-bold font-mono text-white">1,999</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-mono">findings</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Legend matching Image 4 */}
+                  <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-2 border-t border-slate-800">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      <span className="text-slate-400">Critical</span>
+                      <span className="text-white font-bold ml-auto">2%</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      <span className="text-slate-400">High</span>
+                      <span className="text-white font-bold ml-auto">12%</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-slate-500" />
+                      <span className="text-slate-400">Unscanned</span>
+                      <span className="text-white font-bold ml-auto">40%</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="text-slate-400">Healthy</span>
+                      <span className="text-white font-bold ml-auto">46%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
