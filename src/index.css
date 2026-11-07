@@ -1806,14 +1806,31 @@ button:disabled {
 }
 
 /* Staggered Item Dropdown Waterfall Classes (Pure Smooth Settlement, Zero Layout Jitter) */
+/* Staggered Item Dropdown Waterfall Classes (Từ từ dài xuống, không làm mờ, nghiêng nhẹ tự nhiên) */
 @keyframes item-cascade-down {
   0% {
-    opacity: 0;
-    transform: translateY(-8px);
+    opacity: 0.85;
+    transform-origin: top center;
+    transform: translateY(-24px) scaleY(0.4) rotate(-2deg);
+    max-height: 40px;
+    filter: none;
+  }
+  60% {
+    opacity: 1;
+    transform-origin: top center;
+    transform: translateY(3px) scaleY(1.04) rotate(0.8deg);
+    max-height: 280px;
+  }
+  85% {
+    transform-origin: top center;
+    transform: translateY(-1px) scaleY(0.99) rotate(-0.3deg);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform-origin: top center;
+    transform: translateY(0) scaleY(1) rotate(0deg);
+    max-height: 500px;
+    filter: none;
   }
 }
 

@@ -783,6 +783,89 @@ export default function KanbanBoard() {
   } | null>(null);
   const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // ── True Trello Drag & Drop Engine (Pointer-based, 100% Solid White Ghost, Tilted 3.5deg, Zero Native Glitch) ──
+  const [pointerDrag, setPointerDrag] = useState<{
+    task: KanbanTask;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    isDragging: boolean;
+    currentX: number;
+    currentY: number;
+    hoverColId: ColumnId | null;
+  } | null>(null);
+
+  const handleCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, task: KanbanTask) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button") || target.closest("a") || target.closest("input")) return;
+
+    const card = e.currentTarget;
+    const rect = card.getBoundingClientRect();
+    setPointerDrag({
+      task,
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      width: rect.width,
+      isDragging: false,
+      currentX: e.clientX,
+      currentY: e.clientY,
+      hoverColId: task.column,
+    });
+  };
+
+  useEffect(() => {
+    if (!pointerDrag) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const dx = e.clientX - pointerDrag.startX;
+      const dy = e.clientY - pointerDrag.startY;
+      const dist = Math.hypot(dx, dy);
+
+      let hoverCol: ColumnId | null = pointerDrag.hoverColId;
+      const elements = document.elementsFromPoint(e.clientX, e.clientY);
+      for (const el of elements) {
+        const colAttr = el.getAttribute("data-column-id");
+        if (colAttr) {
+          hoverCol = colAttr as ColumnId;
+          break;
+        }
+      }
+
+      setPointerDrag((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          isDragging: prev.isDragging || dist > 5,
+          currentX: e.clientX,
+          currentY: e.clientY,
+          hoverColId: hoverCol,
+        };
+      });
+    };
+
+    const handlePointerUp = () => {
+      if (pointerDrag.isDragging && pointerDrag.hoverColId && pointerDrag.hoverColId !== pointerDrag.task.column) {
+        moveTask(pointerDrag.task.id, pointerDrag.hoverColId);
+      } else if (!pointerDrag.isDragging) {
+        setSelectedTask(pointerDrag.task);
+      }
+      setPointerDrag(null);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [pointerDrag]);
+
   const triggerUndoToast = (task: KanbanTask, fromCol: ColumnId, toCol: ColumnId) => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     const fromTitle = columnsConfig.find((c) => c.id === fromCol)?.title || fromCol;
@@ -1633,9 +1716,11 @@ export default function KanbanBoard() {
             const isDraggingOver = dragOverCol === col.id;
             const colPoints = colTasks.reduce((s, t) => s + t.points, 0);
 
+            const isColHovered = (pointerDrag?.isDragging && pointerDrag.hoverColId === col.id) || isDraggingOver;
             return (
               <div
                 key={col.id}
+                data-column-id={col.id}
                 onDragOver={(e) => handleDragOver(e, col.id)}
                 onDragLeave={(e) => handleDragLeave(e, col.id)}
                 onDrop={(e) => handleDrop(e, col.id)}
@@ -1645,9 +1730,7 @@ export default function KanbanBoard() {
                 className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/70 p-2.5 shadow-xs transition-all w-[310px] min-w-[300px] shrink-0 max-h-[calc(100vh-210px)] ${
                   col.borderTop
                 } border-t-4 ${
-                  isDraggingOver
-                    ? "kanban-col-droptarget"
-                    : ""
+                  isColHovered ? "kanban-col-droptarget" : ""
                 }`}
               >
                 {/* Column Header */}
@@ -1670,15 +1753,10 @@ export default function KanbanBoard() {
                 </div>
 
                 {/* Tasks Container */}
-                <div onDragOver={(e) => handleDragOver(e, col.id)} onDrop={(e) => handleDrop(e, col.id)} className="flex flex-col gap-2 overflow-y-auto pr-0.5 min-h-[80px]">
-                  {colTasks.length === 0 && isDraggingOver && (
-                    <div className="flex items-center justify-center rounded-xl border border-slate-300/80 bg-slate-200/60 py-6 text-center">
-                      <p className="text-xs font-semibold text-slate-500">Thả thẻ vào {col.title}</p>
-                    </div>
-                  )}
-                  {isDraggingOver && draggingTaskId && !colTasks.some((t) => t.id === draggingTaskId) && colTasks.length > 0 && (
-                    <div className="rounded-xl border border-slate-300/80 bg-slate-200/70 p-3 min-h-[64px] flex items-center justify-center text-slate-500 text-xs font-medium animate-in fade-in">
-                      <span>Thả thẻ vào cột {col.title}</span>
+                <div data-column-id={col.id} onDragOver={(e) => handleDragOver(e, col.id)} onDrop={(e) => handleDrop(e, col.id)} className="flex flex-col gap-2 overflow-y-auto pr-0.5 min-h-[80px]">
+                  {pointerDrag?.isDragging && pointerDrag.hoverColId === col.id && pointerDrag.task.column !== col.id && (
+                    <div className="rounded-xl border border-slate-300/70 bg-slate-200/70 min-h-[90px] transition-all flex items-center justify-center text-slate-400 text-xs font-medium">
+                      <span>Thả thẻ vào {col.title}</span>
                     </div>
                   )}
 
@@ -1695,22 +1773,37 @@ export default function KanbanBoard() {
                     const memberMeta = teamMembers.find((m) => m.name === task.assignee.name);
                     const avatarColor = memberMeta?.color || "bg-blue-600";
 
+                    const isPointerDraggingThis = pointerDrag?.isDragging && pointerDrag.task.id === task.id;
+
+                    if (isPointerDraggingThis) {
+                      return (
+                        <div
+                          key={task.id}
+                          style={{ minHeight: "105px" }}
+                          className="rounded-xl border border-slate-300/80 bg-slate-200/75 p-3.5 opacity-60 shadow-none pointer-events-none select-none transition-all flex flex-col justify-between"
+                        >
+                          <div className="flex items-center gap-2 mb-2 opacity-40">
+                            <span className="font-mono text-[10px] font-bold text-slate-500">#{task.code}</span>
+                            <span className="text-[9px] bg-slate-300 px-1.5 py-0.5 rounded text-slate-600 truncate max-w-[120px]">{task.epic}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-400 line-clamp-2">{task.title}</p>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 opacity-40 pt-2 border-t border-slate-300/40">
+                            <span>{task.assignee.name}</span>
+                            <span>{task.points}p</span>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div
                         key={task.id}
-                        draggable={true}
-                        onDragStart={(e) => handleDragStart(e, task.id)}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={(e) => handleDragOver(e, col.id)}
-                        onDrop={(e) => handleDrop(e, col.id)}
-                        onClick={() => setSelectedTask(task)}
+                        onPointerDown={(e) => handleCardPointerDown(e, task)}
                         style={{
-                          animation: isDragging ? "none" : `item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) ${0.08 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.06}s both`,
+                          animation: `item-cascade-down 0.48s cubic-bezier(0.16, 1, 0.3, 1) ${0.06 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.05}s both`,
                         }}
-                        className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl p-3.5 transition-all ${
-                          isDragging
-                            ? "kanban-trello-slot bg-slate-200/80 border border-slate-300/80 shadow-none pointer-events-none select-none"
-                            : isLocked
+                        className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl p-3.5 transition-all select-none ${
+                          isLocked
                             ? "border border-slate-200 bg-slate-50/80"
                             : "border border-slate-200 bg-white hover:border-blue-300 hover:-translate-y-0.5 hover:shadow-md shadow-xs"
                         }`}
@@ -3567,6 +3660,65 @@ export default function KanbanBoard() {
                 Đã hiểu quy chuẩn
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+            {/* ── REAL TRELLO TILTED DRAG CARD PREVIEW (100% Solid White, Tilted 3.5deg, Zero Native Ghost) ── */}
+      {pointerDrag?.isDragging && pointerDrag.task && (
+        <div
+          style={{
+            position: "fixed",
+            left: pointerDrag.currentX - pointerDrag.offsetX,
+            top: pointerDrag.currentY - pointerDrag.offsetY,
+            width: pointerDrag.width,
+            transform: "rotate(3.5deg) scale(1.025)",
+            transformOrigin: "center center",
+            boxShadow: "0 22px 35px -5px rgba(15, 23, 42, 0.28), 0 8px 16px rgba(15, 23, 42, 0.12)",
+            backgroundColor: "#ffffff",
+            borderRadius: "12px",
+            border: "1px solid #cbd5e1",
+            zIndex: 99999,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col p-3.5 select-none"
+        >
+          <div className="mb-2 flex items-center justify-between gap-1 text-[11px]">
+            <div className="flex items-center gap-1.5 min-w-0 max-w-[62%]">
+              <GripVertical size={13} className="text-slate-400 shrink-0" />
+              <span className="font-mono text-[10px] font-bold text-slate-700 shrink-0">
+                #{pointerDrag.task.code}
+              </span>
+              <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-semibold truncate ${pointerDrag.task.epicColor}`}>
+                {pointerDrag.task.epic}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-600">
+                {pointerDrag.task.points}p
+              </span>
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                pointerDrag.task.priority === "high" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"
+              }`}>
+                {pointerDrag.task.priority === "high" ? "P0" : "P1"}
+              </span>
+            </div>
+          </div>
+          <h3 className="mb-2 text-xs font-bold leading-snug text-slate-900 line-clamp-2">
+            {pointerDrag.task.title}
+          </h3>
+          <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black text-white bg-blue-600">
+                {pointerDrag.task.assignee.avatar}
+              </span>
+              <span className="truncate font-medium text-slate-700 text-[11px]">
+                {pointerDrag.task.assignee.name}
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-mono font-medium">
+              {pointerDrag.task.dueDate}
+            </span>
           </div>
         </div>
       )}
