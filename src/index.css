@@ -1829,12 +1829,28 @@ button:disabled {
   animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.animate-cascade-1 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both; }
-.animate-cascade-2 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.09s both; }
-.animate-cascade-3 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.14s both; }
-.animate-cascade-4 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.19s both; }
-.animate-cascade-5 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both; }
-.animate-cascade-6 { animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.29s both; }
+.animate-cascade-1 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.03s both; }
+.animate-cascade-2 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both; }
+.animate-cascade-3 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.13s both; }
+.animate-cascade-4 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both; }
+.animate-cascade-5 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.23s both; }
+.animate-cascade-6 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both; }
+.animate-cascade-7 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.34s both; }
+.animate-cascade-8 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.40s both; }
+.animate-cascade-9 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.46s both; }
+.animate-cascade-10 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.52s both; }
+.animate-cascade-11 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.58s both; }
+.animate-cascade-12 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.64s both; }
+
+@keyframes barGrow {
+  0% { transform: scaleX(0); opacity: 0; }
+  100% { transform: scaleX(1); opacity: 1; }
+}
+
+.animate-bar-grow {
+  transform-origin: left center;
+  animation: barGrow 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
 
 /* Premium Floating Chatbot Widget */
 .chatbot-badge {

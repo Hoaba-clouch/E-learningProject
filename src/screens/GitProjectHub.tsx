@@ -1979,7 +1979,7 @@ export default function GitProjectHub() {
 
       {/* MODE 0: CODERABBIT 2.0 AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) - TRỌN BỘ 4 TÍNH NĂNG */}
       {viewMode === "coderabbit" && (
-        <div key="mode-coderabbit" className="space-y-4 animate-tab-slide-down">
+        <div key={`mode-coderabbit-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
           {/* ── CODERABBIT 2.0 PILLARS NAVIGATION BAR (Khớp 4 Trụ Cột) ───────── */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900 text-white rounded-2xl p-3 border border-slate-800 shadow-md">
             <div className="flex items-center gap-2 flex-wrap">
@@ -2051,17 +2051,17 @@ export default function GitProjectHub() {
 
           {/* ══════════════════════════════════════════════════════════════════════ */}
           {/* PILLAR 01: REVIEW EVERY PR AUTOMATICALLY (Khớp Ảnh 1 & Master-Detail)  */}
-          {/* ══════════════════════════════════════════════════════════════════════ */}
           {crPillar === "review" && (
-            <div key="pillar-review" className="space-y-4 animate-tab-slide-down">
-              {/* Highlight Banner: Exact Image 1 Committable Review Card */}
+            <div key={`pillar-review-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
+              {/* Highlight Banner: Exact Image 1 Committable Review Card with Staggered Cascading Elements */}
               <div className="bg-[#0f141c] text-white rounded-2xl border border-slate-700/80 p-5 space-y-4 shadow-xl">
-                <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3">
+                {/* 1. Header Row (Bot Avatar & Review Change Stack button) */}
+                <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3 animate-cascade-1">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-[#ff5722] text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                    <div className="w-7 h-7 rounded-lg bg-[#ff5722] text-white flex items-center justify-center font-bold text-sm shadow-sm animate-cascade-2">
                       🐰
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 animate-cascade-2">
                       <span className="font-bold text-slate-100">coderabbitai</span>
                       <span className="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[10px] font-mono">bot</span>
                       <span className="text-slate-400 text-[11px]">commented 2 minutes ago</span>
@@ -2070,16 +2070,16 @@ export default function GitProjectHub() {
 
                   <button
                     onClick={() => handleSetCrPillar("impact")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ff5722]/15 hover:bg-[#ff5722]/25 text-[#ff5722] text-xs font-bold transition border border-[#ff5722]/30 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ff5722]/15 hover:bg-[#ff5722]/25 text-[#ff5722] text-xs font-bold transition border border-[#ff5722]/30 cursor-pointer animate-cascade-2"
                   >
                     <span>Review Change Stack</span>
                     <ArrowRight size={13} />
                   </button>
                 </div>
 
-                {/* Warning Alert & Detailed Explanation */}
+                {/* 2. Warning Alert & Detailed Explanation */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-xs animate-cascade-3">
                     <span className="inline-flex items-center gap-1 text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                       <AlertTriangle size={13} />
                       Potential issue
@@ -2091,38 +2091,38 @@ export default function GitProjectHub() {
                     </span>
                   </div>
 
-                  <h3 className="text-sm font-bold text-white tracking-tight">
+                  <h3 className="text-sm font-bold text-white tracking-tight animate-cascade-4">
                     Reject expired refresh tokens before issuing a session.
                   </h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">
+                  <p className="text-xs text-slate-300 leading-relaxed animate-cascade-5">
                     Check the token expiry before creating a new authenticated session to prevent session replay attacks.
                   </p>
                 </div>
 
-                {/* Code Diff Box with Committable Suggestion (Chuẩn 100% Ảnh 1) */}
-                <div className="rounded-xl overflow-hidden border border-slate-800 font-mono text-xs bg-[#0b0f14]">
+                {/* 3. Code Diff Box with Granular Cascading Lines (Chuẩn 100% Ảnh 1) */}
+                <div className="rounded-xl overflow-hidden border border-slate-800 font-mono text-xs bg-[#0b0f14] animate-cascade-6">
                   <div className="bg-slate-900/90 px-3 py-1.5 text-[11px] text-slate-400 border-b border-slate-800 flex items-center justify-between">
                     <span>@@ -42,2 +42,3 @@ export async function createSession</span>
                     <span className="text-[10px] text-slate-500 font-sans">src/server/auth/session.ts</span>
                   </div>
                   <div className="p-3 space-y-1">
-                    <div className="bg-rose-950/40 text-rose-300 px-2 py-1 rounded flex items-center gap-2">
+                    <div className="bg-rose-950/40 text-rose-300 px-2 py-1 rounded flex items-center gap-2 animate-cascade-7">
                       <span className="select-none text-rose-500 font-bold">-</span>
                       <span>return issueSession(payload.userId);</span>
                     </div>
-                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded flex items-center gap-2">
+                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded flex items-center gap-2 animate-cascade-8">
                       <span className="select-none text-emerald-500 font-bold">+</span>
                       <span>if (payload.expiresAt &lt;= Date.now()) return null;</span>
                     </div>
-                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded flex items-center gap-2">
+                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded flex items-center gap-2 animate-cascade-9">
                       <span className="select-none text-emerald-500 font-bold">+</span>
                       <span>return issueSession(payload.userId);</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Committable Action Button */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                {/* 4. Committable Action Button & Subtext */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 animate-cascade-10">
                   <button
                     onClick={() => setCommittableSuggestionApplied(true)}
                     disabled={committableSuggestionApplied}
@@ -2144,7 +2144,7 @@ export default function GitProjectHub() {
                       </>
                     )}
                   </button>
-                  <span className="text-[11px] text-slate-400 font-mono">
+                  <span className="text-[11px] text-slate-400 font-mono animate-cascade-11">
                     {committableSuggestionApplied
                       ? "Commit sha: 881a4fc • Áp dụng trực tiếp vào GitHub repo"
                       : "Tự động sinh commit message chuẩn Conventional Commits"}
@@ -2402,7 +2402,7 @@ export default function GitProjectHub() {
           {/* PILLAR 02: PRIORITIZE ACROSS ALL PRS (Khớp Chuẩn 100% Ảnh 2)           */}
           {/* ══════════════════════════════════════════════════════════════════════ */}
           {crPillar === "prioritize" && (
-            <div key="pillar-prioritize" className="space-y-4 animate-tab-slide-down">
+            <div key={`pillar-prioritize-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
               <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
@@ -2618,7 +2618,7 @@ export default function GitProjectHub() {
           {/* PILLAR 03: UNDERSTAND EACH PR'S IMPACT (Khớp Chuẩn 100% Ảnh 3)         */}
           {/* ══════════════════════════════════════════════════════════════════════ */}
           {crPillar === "impact" && (
-            <div key="pillar-impact" className="space-y-4 animate-tab-slide-down">
+            <div key={`pillar-impact-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
               <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
@@ -2858,7 +2858,7 @@ export default function GitProjectHub() {
           {/* PILLAR 04: SECURE YOUR CODEBASE CONTINUALLY (Khớp Chuẩn 100% Ảnh 4)    */}
           {/* ══════════════════════════════════════════════════════════════════════ */}
           {crPillar === "security" && (
-            <div key="pillar-security" className="space-y-4 animate-tab-slide-down">
+            <div key={`pillar-security-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
               {/* Real-Time Health Header Card */}
               <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -3777,73 +3777,85 @@ export default function GitProjectHub() {
         </div>
       )}
 
-      {/* MODE 3: MEMBER CONTRIBUTION ANALYTICS */}
+      {/* MODE 3: MEMBER CONTRIBUTION ANALYTICS (Khớp Chuẩn 100% Ảnh 2 với Hiệu Ứng Thác Nước & Nhảy Số) */}
       {viewMode === "analytics" && (
-        <div key="mode-analytics" className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6 animate-tab-slide-down">
+        <div key={`mode-analytics-${statAnimKey}`} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6 animate-tab-slide-down">
+          {/* Header Title & Subtitle */}
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 animate-cascade-1">
               <BarChart3 size={18} className="text-blue-600" />
               Thống kê Đóng góp Nhóm & Tính Liêm chính Mã Nguồn
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 animate-cascade-2">
               Phân bổ số lượng commit, số dòng code đóng góp và kiểm định tính nguyên bản của 3 thành viên theo chuẩn Thầy Nguyễn Phước.
             </p>
           </div>
 
+          {/* 3 Member Contribution Cards (Xuất hiện lần lượt từng card từ trái qua phải) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            {/* Card 1: Nguyễn Bá Hòa (Leader) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 animate-cascade-3 shadow-xs hover:shadow-md transition-all hover:bg-white">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900">Nguyễn Bá Hòa (Leader)</span>
-                <span className="text-xs font-bold font-mono text-blue-700 bg-blue-100 px-2 py-0.5 rounded">36%</span>
+                <span className="text-xs font-bold font-mono text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                  <AnimatedNumber value={36} suffix="%" key={`hoa-pct-${statAnimKey}`} />
+                </span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-blue-600 h-full rounded-full" style={{ width: "36%" }} />
+                <div className="bg-blue-600 h-full rounded-full animate-bar-grow" style={{ width: "36%" }} />
               </div>
               <div className="text-[11px] text-slate-500 space-y-1 font-mono">
-                <div>Commits: 28 commits</div>
-                <div>Thêm dòng: +3,420 dòng</div>
+                <div>Commits: <span className="font-bold text-slate-700"><AnimatedNumber value={28} key={`hoa-c-${statAnimKey}`} /></span> commits</div>
+                <div>Thêm dòng: <span className="font-bold text-emerald-600">+<AnimatedNumber value={3420} key={`hoa-l-${statAnimKey}`} /></span> dòng</div>
                 <div>Nhiệm vụ: Cấu trúc ERD, Router FastAPI, Quản lý Sprint</div>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            {/* Card 2: Võ Nhật Huy (Frontend/AI) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 animate-cascade-4 shadow-xs hover:shadow-md transition-all hover:bg-white">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900">Võ Nhật Huy (Frontend/AI)</span>
-                <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">34%</span>
+                <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                  <AnimatedNumber value={34} suffix="%" key={`huy-pct-${statAnimKey}`} />
+                </span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-emerald-600 h-full rounded-full" style={{ width: "34%" }} />
+                <div className="bg-emerald-600 h-full rounded-full animate-bar-grow" style={{ width: "34%" }} />
               </div>
               <div className="text-[11px] text-slate-500 space-y-1 font-mono">
-                <div>Commits: 26 commits</div>
-                <div>Thêm dòng: +3,180 dòng</div>
+                <div>Commits: <span className="font-bold text-slate-700"><AnimatedNumber value={26} key={`huy-c-${statAnimKey}`} /></span> commits</div>
+                <div>Thêm dòng: <span className="font-bold text-emerald-600">+<AnimatedNumber value={3180} key={`huy-l-${statAnimKey}`} /></span> dòng</div>
                 <div>Nhiệm vụ: Giao diện ReactFlow, Authentication, UI Theme</div>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            {/* Card 3: Phan Đình Nghị (Backend/DB) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 animate-cascade-5 shadow-xs hover:shadow-md transition-all hover:bg-white">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900">Phan Đình Nghị (Backend/DB)</span>
-                <span className="text-xs font-bold font-mono text-purple-700 bg-purple-100 px-2 py-0.5 rounded">30%</span>
+                <span className="text-xs font-bold font-mono text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                  <AnimatedNumber value={30} suffix="%" key={`nghi-pct-${statAnimKey}`} />
+                </span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-purple-600 h-full rounded-full" style={{ width: "30%" }} />
+                <div className="bg-purple-600 h-full rounded-full animate-bar-grow" style={{ width: "30%" }} />
               </div>
               <div className="text-[11px] text-slate-500 space-y-1 font-mono">
-                <div>Commits: 23 commits</div>
-                <div>Thêm dòng: +2,850 dòng</div>
+                <div>Commits: <span className="font-bold text-slate-700"><AnimatedNumber value={23} key={`nghi-c-${statAnimKey}`} /></span> commits</div>
+                <div>Thêm dòng: <span className="font-bold text-emerald-600">+<AnimatedNumber value={2850} key={`nghi-l-${statAnimKey}`} /></span> dòng</div>
                 <div>Nhiệm vụ: Code Evaluator Sandbox, Unit Tests, Analytics</div>
               </div>
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-emerald-50/60 space-y-2">
-            <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm">
+          {/* AI Anti-Cheating Banner (Xuất hiện sau cùng với các số liệu nhảy thống kê) */}
+          <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 space-y-2 animate-cascade-6 shadow-xs">
+            <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm animate-cascade-7">
               <ShieldCheck size={18} className="text-emerald-600" />
               Báo cáo Xác thực Liêm chính & Chống Gian lận AI (AI Anti-Cheating)
             </div>
-            <p className="text-xs text-emerald-950 leading-relaxed">
-              Toàn bộ 77 commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: 4.8h), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt 100%.
+            <p className="text-xs text-emerald-950 leading-relaxed animate-cascade-8">
+              Toàn bộ <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={77} key={`c77-${statAnimKey}`} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={4.8} decimals={1} suffix="h" key={`cv-${statAnimKey}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={100} suffix="%" key={`cr-${statAnimKey}`} /></span>.
             </p>
           </div>
         </div>
