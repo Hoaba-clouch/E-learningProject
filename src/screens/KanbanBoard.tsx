@@ -984,10 +984,41 @@ export default function KanbanBoard() {
     triggerUndoToast(task, previousCol, targetCol);
   };
 
-  // Drag Handlers
+  // Drag Handlers (Chuẩn Trello: Custom Drag Ghost nghiêng 3.5 độ, viền trắng đổ bóng 3D sắc nét)
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData("text/plain", taskId);
     e.dataTransfer.effectAllowed = "move";
+
+    const cardEl = e.currentTarget as HTMLElement;
+    if (cardEl && e.dataTransfer.setDragImage) {
+      const rect = cardEl.getBoundingClientRect();
+      const ghost = cardEl.cloneNode(true) as HTMLElement;
+      ghost.id = "trello-drag-ghost";
+      ghost.style.position = "fixed";
+      ghost.style.top = "-9999px";
+      ghost.style.left = "-9999px";
+      ghost.style.width = `${rect.width}px`;
+      ghost.style.transform = "rotate(3.5deg)";
+      ghost.style.boxShadow = "0 18px 32px -4px rgba(15, 23, 42, 0.28), 0 6px 12px rgba(15, 23, 42, 0.12)";
+      ghost.style.borderRadius = "12px";
+      ghost.style.backgroundColor = "#ffffff";
+      ghost.style.border = "1px solid #cbd5e1";
+      ghost.style.opacity = "1";
+      ghost.style.zIndex = "99999";
+      ghost.style.pointerEvents = "none";
+      document.body.appendChild(ghost);
+
+      const offsetX = Math.min(Math.max(e.clientX - rect.left, 20), rect.width - 20);
+      const offsetY = Math.min(Math.max(e.clientY - rect.top, 15), rect.height - 15);
+      e.dataTransfer.setDragImage(ghost, offsetX, offsetY);
+
+      setTimeout(() => {
+        if (ghost.parentNode) {
+          ghost.parentNode.removeChild(ghost);
+        }
+      }, 0);
+    }
+
     setDraggingTaskId(taskId);
   };
 
@@ -1641,8 +1672,13 @@ export default function KanbanBoard() {
                 {/* Tasks Container */}
                 <div onDragOver={(e) => handleDragOver(e, col.id)} onDrop={(e) => handleDrop(e, col.id)} className="flex flex-col gap-2 overflow-y-auto pr-0.5 min-h-[80px]">
                   {colTasks.length === 0 && isDraggingOver && (
-                    <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-blue-400 bg-blue-50/60 py-6 text-center">
-                      <p className="text-xs font-semibold text-blue-600">Thả thẻ vào đây</p>
+                    <div className="flex items-center justify-center rounded-xl border border-slate-300/80 bg-slate-200/60 py-6 text-center">
+                      <p className="text-xs font-semibold text-slate-500">Thả thẻ vào {col.title}</p>
+                    </div>
+                  )}
+                  {isDraggingOver && draggingTaskId && !colTasks.some((t) => t.id === draggingTaskId) && colTasks.length > 0 && (
+                    <div className="rounded-xl border border-slate-300/80 bg-slate-200/70 p-3 min-h-[64px] flex items-center justify-center text-slate-500 text-xs font-medium animate-in fade-in">
+                      <span>Thả thẻ vào cột {col.title}</span>
                     </div>
                   )}
 
@@ -1671,12 +1707,12 @@ export default function KanbanBoard() {
                         style={{
                           animation: isDragging ? "none" : `item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) ${0.08 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.06}s both`,
                         }}
-                        className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl border bg-white p-3.5 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                        className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl p-3.5 transition-all ${
                           isDragging
-                            ? "opacity-25 border-2 border-dashed border-blue-400 bg-blue-50/50 shadow-none scale-100 pointer-events-none"
+                            ? "kanban-trello-slot bg-slate-200/80 border border-slate-300/80 shadow-none pointer-events-none select-none"
                             : isLocked
-                            ? "border-slate-200 bg-slate-50/80"
-                            : "border-slate-200 hover:border-blue-300"
+                            ? "border border-slate-200 bg-slate-50/80"
+                            : "border border-slate-200 bg-white hover:border-blue-300 hover:-translate-y-0.5 hover:shadow-md shadow-xs"
                         }`}
                       >
                         {/* Drag Handle & Epic Tag */}

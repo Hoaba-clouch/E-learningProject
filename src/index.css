@@ -2015,21 +2015,21 @@ button:disabled {
 }
 
 /* 3. Dragging Card Tilt & Elevation (solvik.mp4 t=8s) */
-.kanban-card-dragging {
-  opacity: 0.25 !important;
-  border: 2px dashed #3b82f6 !important;
-  background-color: #eff6ff !important;
+/* 3. Trello-style Dragging Card Placeholder */
+.kanban-trello-slot {
+  background-color: #e2e8f0 !important;
+  border: 1px solid #cbd5e1 !important;
   box-shadow: none !important;
-  transform: none !important;
-  cursor: grabbing !important;
+  opacity: 0.65 !important;
+  pointer-events: none !important;
+  user-select: none !important;
 }
 
-/* 4. Column Drop Target Glow & Dash Pulse */
+/* 4. Trello-style Column Drop Target (No harsh dashed blue outline) */
 .kanban-col-droptarget {
-  background-color: rgba(239, 246, 255, 0.6) !important;
-  outline: 2px dashed #3b82f6 !important;
-  outline-offset: -2px;
-  box-shadow: inset 0 0 16px rgba(59, 130, 246, 0.08);
+  background-color: #f1f5f9 !important;
+  box-shadow: inset 0 0 0 2px #cbd5e1 !important;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* 5. Ambient Radar Pulse for AI Anti-Cheating & Scanning */
