@@ -44,7 +44,92 @@ import {
   ArrowRight,
   Eye,
   Activity,
+  Database,
+  Zap,
 } from "lucide-react";
+
+// ─── Staggered Animation Timing Delays (Simulating organic branch tree growth) ──
+const NODE_ANIM_DELAYS: Record<string, number> = {
+  "user": 0.04,
+  "app-shell": 0.16,
+  "login": 0.28,
+  "student-dash": 0.30,
+  "learning-ws": 0.32,
+  "tech-reels": 0.34,
+  "profile": 0.36,
+  "xp-shop": 0.38,
+  "admin-dash": 0.40,
+  "git-hub": 0.42,
+  "kanban-board": 0.44,
+  "instructor-panel": 0.46,
+  "task-csv": 0.54,
+  "api-client": 0.58,
+  "instructor-apis": 0.62,
+  "kanban-apis": 0.64,
+  "api-startup": 0.68,
+  "v1-router": 0.72,
+  "auth": 0.76,
+  "auth-deps": 0.80,
+  "token-utils": 0.84,
+  "learning-apis": 0.78,
+  "submissions": 0.82,
+  "ai-apis": 0.84,
+  "code-evaluator": 0.90,
+  "analytics": 0.94,
+  "sqlite-db": 1.05,
+};
+
+export interface ArchFlowItem {
+  id: string;
+  label: string;
+  color: string;
+  summary: string;
+  nodeIds: string[];
+  edgeIds: string[];
+}
+
+const ARCH_FLOWS: ArchFlowItem[] = [
+  {
+    id: "all",
+    label: "Toàn bộ Kiến trúc (22 Components)",
+    color: "#2563eb",
+    summary: "Hiển thị tổng thể 4 Subsystem Containers, 22 Components và các luồng liên kết dữ liệu trực quan theo chuẩn gitdiagram.com.",
+    nodeIds: [],
+    edgeIds: [],
+  },
+  {
+    id: "flow-auth",
+    label: "Luồng 1: Auth & JWT RBAC",
+    color: "#e11d48",
+    summary: "Luồng người dùng đăng nhập -> cấp Access Token 15p -> Dependency RBAC -> Bcrypt / Jose mã hóa bảo mật.",
+    nodeIds: ["user", "app-shell", "login", "api-client", "api-startup", "v1-router", "auth", "auth-deps", "token-utils", "sqlite-db"],
+    edgeIds: ["e-user-app", "e-app-login", "e-client-api", "e-api-router", "e-router-auth", "e-auth-deps", "e-deps-utils"],
+  },
+  {
+    id: "flow-eval",
+    label: "Luồng 2: Nộp bài & Docker Sandbox",
+    color: "#059669",
+    summary: "Luồng học viên nộp mã nguồn -> FastAPI nhận bài -> Sandbox cô lập biên dịch g++ C++ -> Chấm điểm 5 test case -> Ghi DB.",
+    nodeIds: ["user", "app-shell", "learning-ws", "api-client", "api-startup", "v1-router", "submissions", "code-evaluator", "sqlite-db"],
+    edgeIds: ["e-user-app", "e-app-ws", "e-ws-client", "e-client-api", "e-api-router", "e-router-sub", "e-sub-eval", "e-sub-db"],
+  },
+  {
+    id: "flow-socratic",
+    label: "Luồng 3: AI Socratic Tutor & Analytics",
+    color: "#d97706",
+    summary: "Luồng học viên hỏi trợ giảng -> AI phân tích thói quen gõ phím -> Trả lời gợi mở 3 bước không giải hộ -> Ghi nhận log Liêm chính.",
+    nodeIds: ["user", "app-shell", "learning-ws", "api-client", "api-startup", "v1-router", "ai-apis", "analytics", "sqlite-db"],
+    edgeIds: ["e-user-app", "e-app-ws", "e-ws-client", "e-client-api", "e-api-router", "e-router-ai", "e-ai-analytics-track", "e-ai-db", "e-analytics-db"],
+  },
+  {
+    id: "flow-kanban",
+    label: "Luồng 4: Sprint Kanban & Git Hub",
+    color: "#16a34a",
+    summary: "Luồng quản lý 72 tasks chuẩn 4 Sprint -> Khóa phụ thuộc task cha-con -> Xuất/nhập file Excel -> Đối sánh commit Git Kraken.",
+    nodeIds: ["user", "app-shell", "git-hub", "kanban-board", "task-csv", "v1-router", "kanban-apis", "sqlite-db"],
+    edgeIds: ["e-user-app", "e-app-hub", "e-app-kanban", "e-kanban-csv", "e-router-kanban", "e-kanban-db"],
+  },
+];
 
 // ─── Custom Group Container Node (for GitDiagram subsystems) ───────────────
 function ContainerBoxNode({ data }: NodeProps) {
@@ -55,11 +140,18 @@ function ContainerBoxNode({ data }: NodeProps) {
     bgColor: string;
     borderColor: string;
     textColor: string;
+    isDimmed?: boolean;
   };
   return (
     <div
-      style={{ width: c.width, height: c.height }}
-      className={`rounded-3xl border-2 pointer-events-none select-none p-4 relative shadow-xs transition-all ${c.bgColor} ${c.borderColor}`}
+      style={{
+        width: c.width,
+        height: c.height,
+        animation: "archContainerFade 0.6s ease-out both",
+      }}
+      className={`rounded-3xl border-2 pointer-events-none select-none p-4 relative shadow-xs transition-all duration-300 ${c.bgColor} ${c.borderColor} ${
+        c.isDimmed ? "opacity-35" : "opacity-100"
+      }`}
     >
       <div className={`absolute top-3 right-5 text-sm font-bold font-mono tracking-wider ${c.textColor}`}>
         {c.label}
@@ -80,17 +172,27 @@ function GitDiagramCardNode({ data }: NodeProps) {
     description: string;
     badge: string;
     isSelected?: boolean;
+    isFlowActive?: boolean;
+    isDimmed?: boolean;
     isCylinder?: boolean;
     isCircle?: boolean;
+    animDelay?: number;
   };
+
+  const delay = nodeData.animDelay ?? 0.35;
 
   if (nodeData.isCircle) {
     return (
       <div
-        className={`w-20 h-20 rounded-full border-2 flex flex-col items-center justify-center text-center p-1 shadow-md transition-all cursor-pointer ${
-          nodeData.isSelected
-            ? "border-blue-600 bg-blue-600 text-white ring-4 ring-blue-500/30 scale-105"
-            : "border-blue-400 bg-blue-50 text-blue-900 hover:border-blue-500"
+        style={{
+          animation: `archNodePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}s both`,
+        }}
+        className={`w-20 h-20 rounded-full border-2 flex flex-col items-center justify-center text-center p-1 shadow-md transition-all duration-300 cursor-pointer ${
+          nodeData.isDimmed ? "opacity-25 grayscale scale-95" : "opacity-100"
+        } ${
+          nodeData.isSelected || nodeData.isFlowActive
+            ? "border-blue-600 bg-blue-600 text-white ring-4 ring-blue-500/30 scale-105 shadow-xl"
+            : "border-blue-400 bg-blue-50 text-blue-900 hover:border-blue-500 hover:scale-105"
         }`}
       >
         <Handle type="source" position={Position.Bottom} className="!w-2.5 !h-2.5 !bg-blue-600 !border-white" />
@@ -102,20 +204,28 @@ function GitDiagramCardNode({ data }: NodeProps) {
   if (nodeData.isCylinder) {
     return (
       <div
-        className={`w-[230px] rounded-2xl border-2 px-4 py-3 text-center shadow-md transition-all cursor-pointer ${
-          nodeData.isSelected
-            ? "border-blue-700 bg-blue-600 text-white ring-4 ring-blue-500/30 scale-105"
-            : "border-blue-500 bg-blue-50/90 text-blue-950 hover:bg-blue-100"
+        style={{
+          animation: `archNodePop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}s both`,
+        }}
+        className={`w-[240px] rounded-2xl border-2 px-4 py-3 text-center shadow-md transition-all duration-300 cursor-pointer ${
+          nodeData.isDimmed ? "opacity-25 grayscale scale-95" : "opacity-100"
+        } ${
+          nodeData.isSelected || nodeData.isFlowActive
+            ? "border-blue-700 bg-blue-600 text-white ring-4 ring-blue-500/30 scale-105 shadow-xl"
+            : "border-blue-500 bg-blue-50/90 text-blue-950 hover:bg-blue-100 hover:scale-[1.02]"
         }`}
       >
         <Handle type="target" position={Position.Top} className="!w-2.5 !h-2.5 !bg-blue-600 !border-white" />
         <Handle type="target" position={Position.Left} className="!w-2.5 !h-2.5 !bg-blue-600 !border-white" />
         <Handle type="target" position={Position.Right} className="!w-2.5 !h-2.5 !bg-blue-600 !border-white" />
-        <div className="text-xs font-bold leading-tight">{nodeData.label}</div>
-        <div className={`text-[10px] font-mono mt-0.5 ${nodeData.isSelected ? "text-blue-100" : "text-blue-700 font-semibold"}`}>
+        <div className="flex items-center justify-center gap-1.5">
+          <Database size={14} className={nodeData.isSelected || nodeData.isFlowActive ? "text-blue-100 animate-pulse" : "text-blue-600"} />
+          <div className="text-xs font-bold leading-tight">{nodeData.label}</div>
+        </div>
+        <div className={`text-[10px] font-mono mt-0.5 ${nodeData.isSelected || nodeData.isFlowActive ? "text-blue-100" : "text-blue-700 font-semibold"}`}>
           {nodeData.subLabel}
         </div>
-        <div className={`text-[9px] mt-1 font-mono ${nodeData.isSelected ? "text-blue-200" : "text-slate-500"}`}>
+        <div className={`text-[9px] mt-1 font-mono ${nodeData.isSelected || nodeData.isFlowActive ? "text-blue-200" : "text-slate-500"}`}>
           {nodeData.tech}
         </div>
       </div>
@@ -124,10 +234,17 @@ function GitDiagramCardNode({ data }: NodeProps) {
 
   return (
     <div
-      className={`relative w-[175px] rounded-xl border-2 p-2.5 shadow-sm transition-all cursor-pointer bg-white ${
+      style={{
+        animation: `archNodePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}s both`,
+      }}
+      className={`relative w-[175px] rounded-xl border-2 p-2.5 shadow-sm transition-all duration-300 cursor-pointer bg-white ${
+        nodeData.isDimmed ? "opacity-25 grayscale scale-95" : "opacity-100"
+      } ${
         nodeData.isSelected
-          ? "border-blue-600 ring-4 ring-blue-500/20 shadow-md scale-[1.02]"
-          : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+          ? "border-blue-600 ring-4 ring-blue-500/25 shadow-lg scale-[1.04] z-20"
+          : nodeData.isFlowActive
+          ? "border-emerald-500 ring-4 ring-emerald-500/20 shadow-md scale-[1.02] z-10"
+          : "border-slate-200 hover:border-slate-300 hover:shadow-md hover:scale-[1.02]"
       }`}
     >
       <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-slate-400 !border-white" />
@@ -1472,6 +1589,7 @@ export default function GitProjectHub() {
     setViewMode(mode);
     setStatAnimKey((k) => k + 1);
     if (mode === "topology") setTopoAnimKey((k) => k + 1);
+    if (mode === "gitdiagram") setDiagramAnimKey((k) => k + 1);
   };
 
   const handleSetCrPillar = (pillar: "review" | "prioritize" | "impact" | "security") => {
@@ -1526,23 +1644,92 @@ export default function GitProjectHub() {
     });
   }, [memberFilter, branchFilter]);
 
-  // ReactFlow state
+  // ReactFlow state & Branch-Tree Flow Simulation
   const [archNodes, , onNodesChange] = useNodesState(INITIAL_ARCH_NODES);
   const [archEdges, , onEdgesChange] = useEdgesState(INITIAL_ARCH_EDGES);
+  const [diagramAnimKey, setDiagramAnimKey] = useState<number>(0);
+  const [activeArchFlow, setActiveArchFlow] = useState<string>("all");
 
-  // Highlight selected card node
+  const currentFlow = useMemo(() => {
+    return ARCH_FLOWS.find((f) => f.id === activeArchFlow) || ARCH_FLOWS[0];
+  }, [activeArchFlow]);
+
+  // Compute display nodes with spring pop delay & flow filtering
   const displayNodes = useMemo(() => {
+    const isFlowMode = activeArchFlow !== "all";
+    const flowNodeSet = new Set(currentFlow.nodeIds);
+
     return archNodes.map((n) => {
-      if (n.type === "containerBox") return n;
+      const animDelay = NODE_ANIM_DELAYS[n.id] ?? 0.4;
+      if (n.type === "containerBox") {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            isDimmed: isFlowMode,
+          },
+        };
+      }
+
+      const isSelected = n.id === selectedNodeId;
+      const isFlowActive = isFlowMode && flowNodeSet.has(n.id);
+      const isDimmed = isFlowMode && !flowNodeSet.has(n.id);
+
       return {
         ...n,
         data: {
           ...n.data,
-          isSelected: n.id === selectedNodeId,
+          animDelay,
+          isSelected,
+          isFlowActive,
+          isDimmed,
         },
       };
     });
-  }, [archNodes, selectedNodeId]);
+  }, [archNodes, selectedNodeId, activeArchFlow, currentFlow]);
+
+  // Compute display edges with branch-like animated pulses & flow highlights
+  const displayEdges = useMemo(() => {
+    const isFlowMode = activeArchFlow !== "all";
+    const flowEdgeSet = new Set(currentFlow.edgeIds);
+
+    return archEdges.map((edge) => {
+      const isConnectedToSelected = edge.source === selectedNodeId || edge.target === selectedNodeId;
+
+      if (isFlowMode) {
+        const inFlow = flowEdgeSet.has(edge.id);
+        return {
+          ...edge,
+          animated: inFlow,
+          className: inFlow ? "arch-edge-active arch-edge-draw" : "arch-edge-dimmed arch-edge-draw",
+          style: {
+            ...edge.style,
+            stroke: inFlow ? currentFlow.color : "#cbd5e1",
+            strokeWidth: inFlow ? 3.5 : 1,
+          },
+        };
+      }
+
+      if (selectedNodeId && isConnectedToSelected) {
+        return {
+          ...edge,
+          animated: true,
+          className: "arch-edge-active arch-edge-draw",
+          style: {
+            ...edge.style,
+            stroke: "#2563eb",
+            strokeWidth: 3.5,
+          },
+        };
+      }
+
+      return {
+        ...edge,
+        animated: edge.animated || false,
+        className: "arch-edge-draw",
+      };
+    });
+  }, [archEdges, activeArchFlow, currentFlow, selectedNodeId]);
 
   const selectedNode = useMemo(() => {
     return archNodes.find((n) => n.id === selectedNodeId) ?? archNodes[5];
@@ -2853,11 +3040,12 @@ export default function GitProjectHub() {
         </div>
       )}
 
-      {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS */}
+      {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS (WITH BRANCH-TREE FLOW ANIMATIONS) */}
       {viewMode === "gitdiagram" && (
-        <div key="mode-gitdiagram" className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start animate-tab-slide-down">
+        <div key={`mode-gitdiagram-${diagramAnimKey}`} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start animate-tab-slide-down">
           {/* ReactFlow Interactive Graph Canvas (8 Cols) */}
           <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 flex flex-col">
+            {/* Top Toolbar: Header + Replay Animation Button */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -2865,31 +3053,95 @@ export default function GitProjectHub() {
                   Sơ đồ Kiến trúc Phân tầng (GitDiagram ReactFlow Canvas)
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Cấu trúc chuẩn theo gitdiagram.com: 4 khối container subsystem, liên kết dòng chảy và CSDL trung tâm.
+                  Mô phỏng hiệu ứng phân nhánh sống động: đường ống tự vẽ, node nảy đàn hồi và xung năng lượng truyền dữ liệu.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold">
-                  Campus App
-                </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold">
-                  Project Workspace
-                </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-semibold">
-                  API Platform
-                </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold">
-                  Learning Services
-                </span>
+              {/* Replay Branch Animation & Subsystem Badges */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setDiagramAnimKey((k) => k + 1)}
+                  title="Kích hoạt lại chuyển động vẽ nhánh sơ đồ kiến trúc"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition shadow-2xs cursor-pointer"
+                >
+                  <RotateCw size={13} className="text-slate-600" />
+                  Phát Lại Mô Phỏng Luồng
+                </button>
+
+                <div className="hidden sm:flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold">
+                    Campus App
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold">
+                    Project WS
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-semibold">
+                    API Platform
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold">
+                    Learning
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Interactive Architecture Flow Selector (Branch Filters) */}
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-xl">
+              <span className="text-[11px] font-bold text-slate-500 px-2 flex items-center gap-1 font-mono">
+                <Network size={12} className="text-blue-600" />
+                Mô phỏng luồng:
+              </span>
+              {ARCH_FLOWS.map((flow) => {
+                const isActive = activeArchFlow === flow.id;
+                return (
+                  <button
+                    key={flow.id}
+                    onClick={() => {
+                      setActiveArchFlow(flow.id);
+                      setDiagramAnimKey((k) => k + 1);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isActive
+                        ? "bg-white text-slate-900 shadow-xs font-bold ring-1 ring-slate-200"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                    }`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: flow.color }}
+                    />
+                    {flow.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Active Flow Explanation Banner */}
+            {activeArchFlow !== "all" && (
+              <div className="flex items-center justify-between p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 text-xs text-blue-950 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <Zap size={15} className="text-blue-600 shrink-0 animate-pulse" />
+                  <span className="font-semibold">{currentFlow.label}:</span>
+                  <span className="text-blue-800">{currentFlow.summary}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setActiveArchFlow("all");
+                    setDiagramAnimKey((k) => k + 1);
+                  }}
+                  className="text-xs font-bold text-blue-700 hover:underline shrink-0 ml-3 cursor-pointer"
+                >
+                  Xem tất cả luồng →
+                </button>
+              </div>
+            )}
 
             {/* ReactFlow Canvas Window */}
             <div className="w-full h-[740px] rounded-xl border border-slate-200 overflow-hidden relative bg-slate-50/50">
               <ReactFlow
+                key={`rf-canvas-${diagramAnimKey}-${activeArchFlow}`}
                 nodes={displayNodes}
-                edges={archEdges}
+                edges={displayEdges}
                 nodeTypes={nodeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
