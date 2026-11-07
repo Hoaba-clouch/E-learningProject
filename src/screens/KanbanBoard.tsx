@@ -35,6 +35,8 @@ import {
   UserPlus,
   Users,
   X,
+  RotateCcw,
+  CheckCheck,
 } from "lucide-react";
 import TaskCsvManagerModal from "../components/TaskCsvManagerModal";
 
@@ -768,6 +770,53 @@ export default function KanbanBoard() {
   const [kanbanAnimKey, setKanbanAnimKey] = useState<number>(0);
   const [analyticsAnimTrigger, setAnalyticsAnimTrigger] = useState(false);
 
+  // Floating Toast Notification with Undo Pill (solvik.mp4 t=10s, gustra.mp4 t=12s)
+  const [undoToast, setUndoToast] = useState<{
+    taskId: string;
+    taskCode: string;
+    taskTitle: string;
+    fromColTitle: string;
+    toColTitle: string;
+    fromCol: ColumnId;
+    toCol: ColumnId;
+    undone?: boolean;
+  } | null>(null);
+  const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerUndoToast = (task: KanbanTask, fromCol: ColumnId, toCol: ColumnId) => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const fromTitle = columnsConfig.find((c) => c.id === fromCol)?.title || fromCol;
+    const toTitle = columnsConfig.find((c) => c.id === toCol)?.title || toCol;
+
+    setUndoToast({
+      taskId: task.id,
+      taskCode: task.code,
+      taskTitle: task.title,
+      fromColTitle: fromTitle,
+      toColTitle: toTitle,
+      fromCol,
+      toCol,
+      undone: false,
+    });
+
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+    }, 6000);
+  };
+
+  const handleUndo = () => {
+    if (!undoToast || undoToast.undone) return;
+    const { taskId, fromCol } = undoToast;
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, column: fromCol } : t))
+    );
+    setUndoToast((prev) => (prev ? { ...prev, undone: true } : null));
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+    }, 2500);
+  };
+
   const handleTabChange = (tab: TabView) => {
     setActiveTab(tab);
     setKanbanAnimKey((k) => k + 1);
@@ -927,9 +976,12 @@ export default function KanbanBoard() {
       }
     }
 
+    const previousCol = task.column;
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, column: targetCol } : t))
     );
+
+    triggerUndoToast(task, previousCol, targetCol);
   };
 
   // Drag Handlers
@@ -1563,7 +1615,7 @@ export default function KanbanBoard() {
                   col.borderTop
                 } border-t-4 ${
                   isDraggingOver
-                    ? "bg-blue-50/80 border-blue-400 ring-2 ring-blue-300/60"
+                    ? "kanban-col-droptarget"
                     : ""
                 }`}
               >
@@ -1621,7 +1673,7 @@ export default function KanbanBoard() {
                         }}
                         className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl border bg-white p-3.5 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md ${
                           isDragging
-                            ? "opacity-40 scale-95 border-blue-400"
+                            ? "kanban-card-dragging"
                             : isLocked
                             ? "border-slate-200 bg-slate-50/80"
                             : "border-slate-200 hover:border-blue-300"
@@ -2847,7 +2899,16 @@ export default function KanbanBoard() {
       {/* ── TASK DETAIL MODAL (LINEAR / JIRA STYLE WITH SCRUM & SE SPECS) ────────────────────────── */}
       {selectedTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl overflow-hidden">
+          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl overflow-hidden relative">
+            {/* Rubber Stamp Slam for Completed Task (solvik.mp4 t=30s) */}
+            {(selectedTask.column === "done" || selectedTask.column === "verified") && (
+              <div className="absolute right-6 top-16 pointer-events-none rubber-stamp-slam z-20">
+                <div className="border-3 border-emerald-600 text-emerald-700 font-black font-mono tracking-widest text-xs px-3 py-1 rounded-lg bg-emerald-50/95 shadow-md backdrop-blur-xs flex items-center gap-1.5 uppercase -rotate-6">
+                  <CheckCheck size={14} className="stroke-[3]" />
+                  <span>ĐÃ NGHIỆM THU • DoD 100%</span>
+                </div>
+              </div>
+            )}
             {/* Header */}
             <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -3470,6 +3531,44 @@ export default function KanbanBoard() {
                 Đã hiểu quy chuẩn
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FLOATING TOAST NOTIFICATION WITH UNDO PILL (From solvik t=10s & gustra t=12s) ── */}
+      {undoToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 toast-slide-up pointer-events-auto">
+          <div className="flex items-center gap-3 bg-slate-900/95 text-white px-4 py-2.5 rounded-full shadow-2xl border border-slate-700/80 backdrop-blur-md text-xs sm:text-sm">
+            <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+              <Check size={13} className="stroke-[3]" />
+            </div>
+            {undoToast.undone ? (
+              <span className="text-slate-200 font-medium">
+                Đã hoàn tác thẻ <strong className="font-mono text-emerald-400">#{undoToast.taskCode}</strong> về cột <span className="text-white font-semibold">{undoToast.fromColTitle}</span>.
+              </span>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-200">
+                  Đã chuyển <strong className="font-mono text-blue-300">#{undoToast.taskCode}</strong> sang <span className="text-white font-bold">{undoToast.toColTitle}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  className="ml-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs shadow-sm transition active:scale-95 cursor-pointer"
+                >
+                  <RotateCcw size={11} className="stroke-[2.5]" />
+                  <span>Hoàn tác</span>
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setUndoToast(null)}
+              className="ml-1 text-slate-400 hover:text-white transition p-1 cursor-pointer"
+              title="Đóng thông báo"
+            >
+              <X size={14} />
+            </button>
           </div>
         </div>
       )}

@@ -2044,7 +2044,7 @@ export default function GitProjectHub() {
             </div>
 
             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 pulse-radar-dot" />
               <span className="text-[11px] text-slate-300">Scanning PRs in real-time</span>
             </div>
           </div>
@@ -2054,7 +2054,16 @@ export default function GitProjectHub() {
           {crPillar === "review" && (
             <div key={`pillar-review-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
               {/* Highlight Banner: Exact Image 1 Committable Review Card with Staggered Cascading Elements */}
-              <div className="bg-[#0f141c] text-white rounded-2xl border border-slate-700/80 p-5 space-y-4 shadow-xl">
+              <div className="bg-[#0f141c] text-white rounded-2xl border border-slate-700/80 p-5 space-y-4 shadow-xl relative overflow-hidden">
+                {/* Rubber Stamp Slam (solvik.mp4 t=30s) */}
+                {committableSuggestionApplied && (
+                  <div className="absolute right-4 sm:right-6 top-14 pointer-events-none rubber-stamp-slam z-20">
+                    <div className="border-2 sm:border-3 border-emerald-400 text-emerald-300 font-black font-mono tracking-wider text-xs sm:text-sm px-3.5 py-1.5 rounded-lg bg-emerald-950/90 shadow-2xl backdrop-blur-xs flex items-center gap-1.5 uppercase shadow-emerald-900/40">
+                      <CheckCheck size={16} className="stroke-[3] text-emerald-400" />
+                      <span>COMMITTED • 881A4FC</span>
+                    </div>
+                  </div>
+                )}
                 {/* 1. Header Row (Bot Avatar & Review Change Stack button) */}
                 <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3 animate-cascade-1">
                   <div className="flex items-center gap-2.5">
@@ -2100,7 +2109,7 @@ export default function GitProjectHub() {
                 </div>
 
                 {/* 3. Code Diff Box with Granular Cascading Lines (Chuẩn 100% Ảnh 1) */}
-                <div className="rounded-xl overflow-hidden border border-slate-800 font-mono text-xs bg-[#0b0f14] animate-cascade-6">
+                <div className="rounded-xl overflow-hidden border border-slate-800 font-mono text-xs bg-[#0b0f14] diff-scan-shimmer animate-cascade-6">
                   <div className="bg-slate-900/90 px-3 py-1.5 text-[11px] text-slate-400 border-b border-slate-800 flex items-center justify-between">
                     <span>@@ -42,2 +42,3 @@ export async function createSession</span>
                     <span className="text-[10px] text-slate-500 font-sans">src/server/auth/session.ts</span>
@@ -2873,7 +2882,7 @@ export default function GitProjectHub() {
 
                   <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
                     <span className="flex items-center gap-1.5 text-emerald-400">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 pulse-radar-dot" />
                       Scanning every PR
                     </span>
                     <span>Last scan now</span>
@@ -3849,10 +3858,16 @@ export default function GitProjectHub() {
           </div>
 
           {/* AI Anti-Cheating Banner (Xuất hiện sau cùng với các số liệu nhảy thống kê) */}
-          <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 space-y-2 animate-cascade-6 shadow-xs">
-            <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm animate-cascade-7">
-              <ShieldCheck size={18} className="text-emerald-600" />
-              Báo cáo Xác thực Liêm chính & Chống Gian lận AI (AI Anti-Cheating)
+          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-emerald-50/80 border border-emerald-300/80 space-y-2 animate-cascade-6 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm animate-cascade-7">
+                <ShieldCheck size={18} className="text-emerald-600" />
+                <span>Báo cáo Xác thực Liêm chính & Chống Gian lận AI (AI Anti-Cheating)</span>
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-300 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-radar-dot" />
+                CADENCE ACTIVE
+              </span>
             </div>
             <p className="text-xs text-emerald-950 leading-relaxed animate-cascade-8">
               Toàn bộ <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={77} key={`c77-${statAnimKey}`} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={4.8} decimals={1} suffix="h" key={`cv-${statAnimKey}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={100} suffix="%" key={`cr-${statAnimKey}`} /></span>.
