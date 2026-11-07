@@ -1294,7 +1294,7 @@ export default function KanbanBoard() {
       {/* ── TOP CONTROL BAR (LINEAR / JIRA STYLE) ────────────────────────── */}
       <header className="mb-5 flex flex-col gap-4">
         {/* Row 1: Project Identity, Dynamic Team Roster & Primary Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-4 animate-cascade-1">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25">
               <FolderKanban size={22} />
@@ -1397,7 +1397,7 @@ export default function KanbanBoard() {
         </div>
 
         {/* Row 2: Sprint Progress & Dynamic Anti-Freerider Contribution Ribbon */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs animate-cascade-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           {/* Sprint Points & Burndown Progress (5 cols) */}
           <div className="lg:col-span-5 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100 pb-3 lg:pb-0 lg:pr-5">
             <div className="flex items-center justify-between mb-2">
@@ -1477,7 +1477,7 @@ export default function KanbanBoard() {
         </div>
 
         {/* Row 3: Filter & Search Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 animate-cascade-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             {/* View Mode: Team vs My */}
             <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
@@ -1544,7 +1544,7 @@ export default function KanbanBoard() {
 
       {/* ── TAB 1: KANBAN BOARD WITH REAL DRAG AND DROP (WITH STAGGERED WATERFALL CASCADE) ─ */}
       {activeTab === "board" && (
-        <div key={`board-view-${kanbanAnimKey}`} className="flex gap-4 items-start overflow-x-auto pb-8 min-w-full animate-tab-slide-down">
+        <div key={`board-view-${kanbanAnimKey}`} className="flex gap-4 items-start overflow-x-auto pb-8 min-w-full">
           {columnsConfig.map((col, colIdx) => {
             const colTasks = filteredTasks.filter((t) => t.column === col.id);
             const isDraggingOver = dragOverCol === col.id;
@@ -1557,7 +1557,7 @@ export default function KanbanBoard() {
                 onDragLeave={(e) => handleDragLeave(e, col.id)}
                 onDrop={(e) => handleDrop(e, col.id)}
                 style={{
-                  animation: `item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) ${0.04 + colIdx * 0.08}s both`,
+                  animation: `item-cascade-down 0.3s cubic-bezier(0.16, 1, 0.3, 1) ${colIdx * 0.05}s both`,
                 }}
                 className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/70 p-2.5 shadow-xs transition-all w-[310px] min-w-[300px] shrink-0 max-h-[calc(100vh-210px)] ${
                   col.borderTop
@@ -1617,7 +1617,7 @@ export default function KanbanBoard() {
                         onDrop={(e) => handleDrop(e, col.id)}
                         onClick={() => setSelectedTask(task)}
                         style={{
-                          animation: `item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) ${0.08 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.04}s both`,
+                          animation: `item-cascade-down 0.25s cubic-bezier(0.16, 1, 0.3, 1) ${0.04 + colIdx * 0.04 + Math.min(taskIdx, 6) * 0.02}s both`,
                         }}
                         className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl border bg-white p-3.5 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md ${
                           isDragging

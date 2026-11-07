@@ -1776,22 +1776,18 @@ button:disabled {
 @keyframes tab-slide-down {
   0% {
     opacity: 0;
-    transform: translateY(-16px) scale(0.99);
-  }
-  60% {
-    opacity: 0.95;
-    transform: translateY(2px) scale(1.002);
+    transform: translateY(-8px);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
 @keyframes tab-cascade-drop {
   0% {
     opacity: 0;
-    transform: translateY(-22px);
+    transform: translateY(-10px);
   }
   100% {
     opacity: 1;
@@ -1800,33 +1796,29 @@ button:disabled {
 }
 
 .animate-tab-slide-down {
-  animation: tab-slide-down 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: tab-slide-down 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: transform, opacity;
 }
 
 .animate-tab-cascade {
-  animation: tab-cascade-drop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: tab-cascade-drop 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: transform, opacity;
 }
 
-/* Staggered Item Dropdown Waterfall Classes */
+/* Staggered Item Dropdown Waterfall Classes (Pure Smooth Settlement, Zero Layout Jitter) */
 @keyframes item-cascade-down {
   0% {
     opacity: 0;
-    transform: translateY(-20px) scale(0.97);
-  }
-  60% {
-    opacity: 0.95;
-    transform: translateY(2px) scale(1.002);
+    transform: translateY(-8px);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
 .animate-cascade-item {
-  animation: item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: item-cascade-down 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-cascade-1 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.03s both; }
