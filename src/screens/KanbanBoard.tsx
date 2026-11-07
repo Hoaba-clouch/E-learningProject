@@ -1557,7 +1557,7 @@ export default function KanbanBoard() {
                 onDragLeave={(e) => handleDragLeave(e, col.id)}
                 onDrop={(e) => handleDrop(e, col.id)}
                 style={{
-                  animation: `item-cascade-down 0.3s cubic-bezier(0.16, 1, 0.3, 1) ${colIdx * 0.05}s both`,
+                  animation: `item-cascade-down 0.45s cubic-bezier(0.16, 1, 0.3, 1) ${0.05 + colIdx * 0.08}s both`,
                 }}
                 className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/70 p-2.5 shadow-xs transition-all w-[310px] min-w-[300px] shrink-0 max-h-[calc(100vh-210px)] ${
                   col.borderTop
@@ -1617,7 +1617,7 @@ export default function KanbanBoard() {
                         onDrop={(e) => handleDrop(e, col.id)}
                         onClick={() => setSelectedTask(task)}
                         style={{
-                          animation: `item-cascade-down 0.25s cubic-bezier(0.16, 1, 0.3, 1) ${0.04 + colIdx * 0.04 + Math.min(taskIdx, 6) * 0.02}s both`,
+                          animation: `item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) ${0.08 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.06}s both`,
                         }}
                         className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl border bg-white p-3.5 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md ${
                           isDragging

@@ -1818,7 +1818,7 @@ button:disabled {
 }
 
 .animate-cascade-item {
-  animation: item-cascade-down 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-cascade-1 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.03s both; }
