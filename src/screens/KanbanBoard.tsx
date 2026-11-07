@@ -1669,11 +1669,11 @@ export default function KanbanBoard() {
                         onDrop={(e) => handleDrop(e, col.id)}
                         onClick={() => setSelectedTask(task)}
                         style={{
-                          animation: `item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) ${0.08 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.06}s both`,
+                          animation: isDragging ? "none" : `item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) ${0.08 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.06}s both`,
                         }}
                         className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl border bg-white p-3.5 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md ${
                           isDragging
-                            ? "kanban-card-dragging"
+                            ? "opacity-25 border-2 border-dashed border-blue-400 bg-blue-50/50 shadow-none scale-100 pointer-events-none"
                             : isLocked
                             ? "border-slate-200 bg-slate-50/80"
                             : "border-slate-200 hover:border-blue-300"

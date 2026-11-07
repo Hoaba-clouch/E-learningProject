@@ -2016,11 +2016,12 @@ button:disabled {
 
 /* 3. Dragging Card Tilt & Elevation (solvik.mp4 t=8s) */
 .kanban-card-dragging {
-  transform: rotate(2deg) scale(1.025) !important;
-  box-shadow: 0 20px 30px -10px rgba(15, 23, 42, 0.25), 0 0 0 2px rgba(59, 130, 246, 0.4) !important;
-  opacity: 0.92;
+  opacity: 0.25 !important;
+  border: 2px dashed #3b82f6 !important;
+  background-color: #eff6ff !important;
+  box-shadow: none !important;
+  transform: none !important;
   cursor: grabbing !important;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* 4. Column Drop Target Glow & Dash Pulse */
