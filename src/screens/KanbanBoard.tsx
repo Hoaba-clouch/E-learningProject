@@ -765,7 +765,13 @@ export default function KanbanBoard() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialMembers);
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
   const [activeTab, setActiveTab] = useState<TabView>("board");
+  const [kanbanAnimKey, setKanbanAnimKey] = useState<number>(0);
   const [analyticsAnimTrigger, setAnalyticsAnimTrigger] = useState(false);
+
+  const handleTabChange = (tab: TabView) => {
+    setActiveTab(tab);
+    setKanbanAnimKey((k) => k + 1);
+  };
 
   useEffect(() => {
     if (activeTab === "analytics") {
@@ -785,7 +791,7 @@ export default function KanbanBoard() {
 
   const handleImportCsvTasks = (newTasks: KanbanTask[]) => {
     setTasks((prev) => [...prev, ...newTasks]);
-    setActiveTab("board");
+    handleTabChange("board");
   };
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("Frontend Developer");
@@ -1288,7 +1294,7 @@ export default function KanbanBoard() {
       {/* ── TOP CONTROL BAR (LINEAR / JIRA STYLE) ────────────────────────── */}
       <header className="mb-5 flex flex-col gap-4">
         {/* Row 1: Project Identity, Dynamic Team Roster & Primary Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 animate-cascade-1">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25">
               <FolderKanban size={22} />
@@ -1312,7 +1318,7 @@ export default function KanbanBoard() {
             {/* View Switcher: Board vs Dependencies vs Analytics */}
             <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-2xs">
               <button
-                onClick={() => setActiveTab("board")}
+                onClick={() => handleTabChange("board")}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                   activeTab === "board"
                     ? "bg-slate-900 text-white shadow-xs"
@@ -1323,7 +1329,7 @@ export default function KanbanBoard() {
                 Bảng Kanban
               </button>
               <button
-                onClick={() => setActiveTab("dependencies")}
+                onClick={() => handleTabChange("dependencies")}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                   activeTab === "dependencies"
                     ? "bg-slate-900 text-white shadow-xs"
@@ -1334,7 +1340,7 @@ export default function KanbanBoard() {
                 Cây Phụ thuộc (H2)
               </button>
               <button
-                onClick={() => setActiveTab("analytics")}
+                onClick={() => handleTabChange("analytics")}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                   activeTab === "analytics"
                     ? "bg-slate-900 text-white shadow-xs"
@@ -1391,7 +1397,7 @@ export default function KanbanBoard() {
         </div>
 
         {/* Row 2: Sprint Progress & Dynamic Anti-Freerider Contribution Ribbon */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs animate-cascade-2">
           {/* Sprint Points & Burndown Progress (5 cols) */}
           <div className="lg:col-span-5 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100 pb-3 lg:pb-0 lg:pr-5">
             <div className="flex items-center justify-between mb-2">
@@ -1462,7 +1468,7 @@ export default function KanbanBoard() {
                 return (
                   <span key={member.id} className="flex items-center gap-1.5 font-medium text-slate-700">
                     <span className={`h-2 w-2 rounded-full ${member.color}`} />
-                    {member.name} ({stat?.percent || 0}% • {stat?.tasksDone || 0} tasks)
+                    {member.name} (<AnimatedNumber value={stat?.percent || 0} suffix="%" key={`mem-pct-${member.id}-${kanbanAnimKey}`} /> • <AnimatedNumber value={stat?.tasksDone || 0} key={`mem-td-${member.id}-${kanbanAnimKey}`} /> tasks)
                   </span>
                 );
               })}
@@ -1471,7 +1477,7 @@ export default function KanbanBoard() {
         </div>
 
         {/* Row 3: Filter & Search Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 animate-cascade-3">
           <div className="flex items-center gap-2">
             {/* View Mode: Team vs My */}
             <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
@@ -1536,10 +1542,10 @@ export default function KanbanBoard() {
         </div>
       </header>
 
-      {/* ── TAB 1: KANBAN BOARD WITH REAL DRAG AND DROP ──────────────────── */}
+      {/* ── TAB 1: KANBAN BOARD WITH REAL DRAG AND DROP (WITH STAGGERED WATERFALL CASCADE) ─ */}
       {activeTab === "board" && (
-        <div className="flex gap-4 items-start overflow-x-auto pb-8 min-w-full">
-          {columnsConfig.map((col) => {
+        <div key={`board-view-${kanbanAnimKey}`} className="flex gap-4 items-start overflow-x-auto pb-8 min-w-full animate-tab-slide-down">
+          {columnsConfig.map((col, colIdx) => {
             const colTasks = filteredTasks.filter((t) => t.column === col.id);
             const isDraggingOver = dragOverCol === col.id;
             const colPoints = colTasks.reduce((s, t) => s + t.points, 0);
@@ -1550,6 +1556,9 @@ export default function KanbanBoard() {
                 onDragOver={(e) => handleDragOver(e, col.id)}
                 onDragLeave={(e) => handleDragLeave(e, col.id)}
                 onDrop={(e) => handleDrop(e, col.id)}
+                style={{
+                  animation: `item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) ${0.04 + colIdx * 0.08}s both`,
+                }}
                 className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/70 p-2.5 shadow-xs transition-all w-[310px] min-w-[300px] shrink-0 max-h-[calc(100vh-210px)] ${
                   col.borderTop
                 } border-t-4 ${
@@ -1585,7 +1594,7 @@ export default function KanbanBoard() {
                     </div>
                   )}
 
-                  {colTasks.map((task) => {
+                  {colTasks.map((task, taskIdx) => {
                     const parentTask = task.dependsOn ? getTaskById(task.dependsOn) : null;
                     const isParentDone = parentTask ? parentTask.column === "done" : true;
                     const isLocked = !isParentDone;
@@ -1607,6 +1616,9 @@ export default function KanbanBoard() {
                         onDragOver={(e) => handleDragOver(e, col.id)}
                         onDrop={(e) => handleDrop(e, col.id)}
                         onClick={() => setSelectedTask(task)}
+                        style={{
+                          animation: `item-cascade-down 0.38s cubic-bezier(0.16, 1, 0.3, 1) ${0.08 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.04}s both`,
+                        }}
                         className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl border bg-white p-3.5 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md ${
                           isDragging
                             ? "opacity-40 scale-95 border-blue-400"
@@ -1796,8 +1808,8 @@ export default function KanbanBoard() {
 
       {/* ── TAB 2: DEPENDENCIES & CONSTRAINT H2 GRAPH ────────────────────── */}
       {activeTab === "dependencies" && (
-        <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs overflow-y-auto">
-          <div className="mb-6 flex items-center justify-between">
+        <div key={`deps-view-${kanbanAnimKey}`} className="flex-1 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs overflow-y-auto animate-tab-slide-down">
+          <div className="mb-6 flex items-center justify-between animate-cascade-1">
             <div>
               <h2 className="text-base font-bold text-slate-900">
                 Sơ đồ Ràng buộc Phụ thuộc Nhiệm vụ (Hard Constraint H2)
@@ -1814,12 +1826,15 @@ export default function KanbanBoard() {
           <div className="space-y-4 max-w-3xl">
             {tasks
               .filter((t) => t.dependsOn)
-              .map((task) => {
+              .map((task, idx) => {
                 const parent = getTaskById(task.dependsOn!);
                 const isParentDone = parent?.column === "done";
                 return (
                   <div
                     key={task.id}
+                    style={{
+                      animation: `item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${0.05 + idx * 0.06}s both`,
+                    }}
                     className="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4"
                   >
                     {/* Parent Task */}
@@ -1880,9 +1895,9 @@ export default function KanbanBoard() {
 
       {/* ── TAB 3: PROJECT OVERVIEW, BURNDOWN CHART & ANTI-FREERIDER DASHBOARD ──────────────────────── */}
       {activeTab === "analytics" && (
-        <div className="flex-1 space-y-5 overflow-y-auto pr-1 animate-in fade-in">
+        <div key={`analytics-view-${kanbanAnimKey}`} className="flex-1 space-y-5 overflow-y-auto pr-1 animate-tab-slide-down">
           {/* Header & Quick Action */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs animate-cascade-1">
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900">
@@ -1915,27 +1930,27 @@ export default function KanbanBoard() {
             </div>
           </div>
 
-          {/* 4 Summary KPI Cards */}
+          {/* 4 Summary KPI Cards (Xuất hiện lần lượt từng thẻ với số liệu nhảy tự động) */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs animate-cascade-2 hover:shadow-md transition-all">
               <span className="text-[11px] font-medium text-slate-400 block mb-1">Tổng Điểm Sprint:</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-slate-900">
-                  <AnimatedNumber value={sprintStats.totalPoints} trigger={analyticsAnimTrigger} />
+                  <AnimatedNumber value={sprintStats.totalPoints} trigger={analyticsAnimTrigger} key={`an-tp-${kanbanAnimKey}`} />
                 </span>
                 <span className="text-xs font-bold text-slate-500">Story Points</span>
               </div>
               <p className="text-[10px] text-slate-400 mt-1">Cam kết 9 tasks trong Sprint 1</p>
             </div>
 
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-xs">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-xs animate-cascade-3 hover:shadow-md transition-all">
               <span className="text-[11px] font-medium text-emerald-700 block mb-1">Đã Hoàn Thành (Done):</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-emerald-700">
-                  <AnimatedNumber value={sprintStats.donePoints} trigger={analyticsAnimTrigger} />
+                  <AnimatedNumber value={sprintStats.donePoints} trigger={analyticsAnimTrigger} key={`an-dp-${kanbanAnimKey}`} />
                 </span>
                 <span className="text-xs font-bold text-emerald-600">
-                  pts (<AnimatedNumber value={sprintStats.percentDone} trigger={analyticsAnimTrigger} suffix="%" />)
+                  pts (<AnimatedNumber value={sprintStats.percentDone} trigger={analyticsAnimTrigger} suffix="%" key={`an-pcd-${kanbanAnimKey}`} />)
                 </span>
               </div>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200/60">
@@ -1946,22 +1961,22 @@ export default function KanbanBoard() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-rose-200 bg-rose-50/40 p-4 shadow-xs">
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/40 p-4 shadow-xs animate-cascade-4 hover:shadow-md transition-all">
               <span className="text-[11px] font-medium text-rose-700 block mb-1">Điểm Còn Lại (Remaining):</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-rose-600">
-                  <AnimatedNumber value={sprintStats.totalPoints - sprintStats.donePoints} trigger={analyticsAnimTrigger} />
+                  <AnimatedNumber value={sprintStats.totalPoints - sprintStats.donePoints} trigger={analyticsAnimTrigger} key={`an-rp-${kanbanAnimKey}`} />
                 </span>
                 <span className="text-xs font-bold text-rose-600">pts (Đường Đỏ)</span>
               </div>
               <p className="text-[10px] text-rose-600/80 mt-1">Cần hoàn tất trước hạn 15/11</p>
             </div>
 
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 shadow-xs">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 shadow-xs animate-cascade-5 hover:shadow-md transition-all">
               <span className="text-[11px] font-medium text-amber-700 block mb-1">Vận tốc Sprint (Velocity):</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-amber-800">
-                  <AnimatedNumber value={36.5} decimals={1} trigger={analyticsAnimTrigger} />
+                  <AnimatedNumber value={36.5} decimals={1} trigger={analyticsAnimTrigger} key={`an-v-${kanbanAnimKey}`} />
                 </span>
                 <span className="text-xs font-bold text-amber-700">SP / Sprint</span>
               </div>
@@ -1970,7 +1985,7 @@ export default function KanbanBoard() {
           </div>
 
           {/* Main Visuals Grid: Burndown Chart with Red Line + Velocity Chart */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 animate-cascade-6">
             {/* 1. SPRINT BURNDOWN CHART (7 cols) - REFINED CLASSIC */}
             <div className="lg:col-span-7 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs flex flex-col justify-between">
               {/* Header: Exact Classic Structure as requested */}
