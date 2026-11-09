@@ -1,0 +1,1 @@
+﻿Write-Output 'Tiếng Việt có dấu: Kiểm tra thành công!' 
