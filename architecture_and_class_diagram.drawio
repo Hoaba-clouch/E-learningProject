@@ -1,0 +1,296 @@
+<mxfile host="app.diagrams.net" modified="2026-11-09T08:15:00.000Z" agent="Antigravity AI" version="24.7.5">
+  <!-- PAGE 1: 3-TIER LAYERED ARCHITECTURE -->
+  <diagram id="arch-diagram" name="1. Architecture (Quy hoạch phân tầng)">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title-arch" value="&lt;b style=&quot;font-size:22px;&quot;&gt;KIẾN TRÚC PHÂN TẦNG HỆ THỐNG (3-TIER LAYERED ARCHITECTURE)&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:13px;color:#555;&quot;&gt;React 19 + FastAPI Router | Business Logic Layer | Data Access Layer&lt;/span&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="380" y="20" width="840" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- 1. PRESENTATION LAYER - FRONTEND -->
+        <mxCell id="box-fe" value="&lt;b&gt;PRESENTATION LAYER: CLIENT (React 19)&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;strokeWidth=2;fontSize=14;fontColor=#01579b;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="90" width="1400" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="fe-1" value="&lt;b&gt;React 19 Core &amp;amp; Actions&lt;/b&gt;&lt;hr/&gt;• useActionState (Submit, Hint)&lt;br/&gt;• useOptimistic (Instant UI update)&lt;br/&gt;• Server &amp;amp; Client Actions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0288d1;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-fe">
+          <mxGeometry x="40" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="fe-2" value="&lt;b&gt;UI Components (Tailwind &amp;amp; Shadcn)&lt;/b&gt;&lt;hr/&gt;• Course Catalog &amp;amp; Details&lt;br/&gt;• Code Editor (Monaco / CodeMirror)&lt;br/&gt;• Socratic Dialogue Chat Widget" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0288d1;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-fe">
+          <mxGeometry x="380" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="fe-3" value="&lt;b&gt;Streaming &amp;amp; Communication&lt;/b&gt;&lt;hr/&gt;• SSE (Server-Sent Events) Stream&lt;br/&gt;• TanStack Query v5 (Caching)&lt;br/&gt;• Axios / Fetch API Client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0288d1;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-fe">
+          <mxGeometry x="720" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="fe-4" value="&lt;b&gt;State Management&lt;/b&gt;&lt;hr/&gt;• Zustand (Auth &amp;amp; Theme State)&lt;br/&gt;• URL State (Search, Filters)&lt;br/&gt;• Streaming Suspense Boundaries" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0288d1;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-fe">
+          <mxGeometry x="1060" y="38" width="290" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- Connector FE -> BE Router -->
+        <mxCell id="conn-fe-be" value="&lt;b&gt;HTTPS RESTful JSON / SSE Streaming (Token-by-Token Hints)&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0288d1;strokeWidth=2;fontSize=12;fontColor=#0288d1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="box-fe" target="box-be-router">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 2. PRESENTATION LAYER - FASTAPI ROUTER -->
+        <mxCell id="box-be-router" value="&lt;b&gt;PRESENTATION LAYER: SERVER API GATEWAY (FastAPI Routers &amp;amp; DTOs)&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e8eaf6;strokeColor=#3f51b5;strokeWidth=2;fontSize=14;fontColor=#1a237e;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="270" width="1400" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-1" value="&lt;b&gt;API Routers (/api/v1)&lt;/b&gt;&lt;hr/&gt;• /auth (Login, Register, Refresh)&lt;br/&gt;• /courses (Catalog, Syllabus, Enrolls)&lt;br/&gt;• /submissions (Code intake, Results)&lt;br/&gt;• /hints (Socratic Prompt &amp;amp; SSE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f51b5;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-be-router">
+          <mxGeometry x="40" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-2" value="&lt;b&gt;Pydantic v2 DTOs / Schemas&lt;/b&gt;&lt;hr/&gt;• Request Body Validation&lt;br/&gt;• Response Serializers (filter hash)&lt;br/&gt;• Strict Data Types &amp;amp; Constraints" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f51b5;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-be-router">
+          <mxGeometry x="380" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-3" value="&lt;b&gt;FastAPI Dependencies&lt;/b&gt;&lt;hr/&gt;• Depends(get_current_active_user)&lt;br/&gt;• Depends(require_role([...]))&lt;br/&gt;• Depends(get_async_session)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f51b5;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-be-router">
+          <mxGeometry x="720" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-4" value="&lt;b&gt;Middlewares &amp;amp; Docs&lt;/b&gt;&lt;hr/&gt;• CORS &amp;amp; Rate Limiter (SlowAPI)&lt;br/&gt;• Global Exception Handling&lt;br/&gt;• OpenAPI / Swagger Auto-docs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f51b5;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-be-router">
+          <mxGeometry x="1060" y="38" width="290" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- Connector Router -> BLL -->
+        <mxCell id="conn-router-bll" value="&lt;b&gt;Calls Domain Services (Passes Validated DTOs &amp;amp; User Context)&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#3f51b5;strokeWidth=2;fontSize=12;fontColor=#3f51b5;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="box-be-router" target="box-bll">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 3. BUSINESS LOGIC LAYER (BLL) -->
+        <mxCell id="box-bll" value="&lt;b&gt;BUSINESS LOGIC LAYER - BLL (Domain Services &amp;amp; Socratic AI Engine)&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#8e24aa;strokeWidth=2;fontSize=14;fontColor=#4a148c;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="450" width="1400" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="bll-1" value="&lt;b&gt;AuthService&lt;/b&gt;&lt;hr/&gt;• Argon2 / Bcrypt Password Hash&lt;br/&gt;• JWT Token Generation &amp;amp; Refresh&lt;br/&gt;• RBAC Policy &amp;amp; Permission Checks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8e24aa;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-bll">
+          <mxGeometry x="40" y="42" width="280" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="bll-2" value="&lt;b&gt;CourseService&lt;/b&gt;&lt;hr/&gt;• Course Lifecycle (Draft/Publish)&lt;br/&gt;• Enrollment &amp;amp; Syllabus Validation&lt;br/&gt;• Student Progress Calculation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8e24aa;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-bll">
+          <mxGeometry x="380" y="42" width="280" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="bll-3" value="&lt;b&gt;SubmissionService&lt;/b&gt;&lt;hr/&gt;• Code Sanitization &amp;amp; Formatting&lt;br/&gt;• Sandbox Job Dispatch (Judge0/Docker)&lt;br/&gt;• Test Case Scoring &amp;amp; Error Capture" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8e24aa;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-bll">
+          <mxGeometry x="720" y="42" width="280" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="bll-4" value="&lt;b&gt;SocraticHintService (AI Core)&lt;/b&gt;&lt;hr/&gt;• Socratic Prompting &amp;amp; Scaffolding&lt;br/&gt;• Hint Level 1 (Concept) → 2 (Line) → 3 (Q)&lt;br/&gt;• LLM Stream Orchestration &amp;amp; History" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8e24aa;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-bll">
+          <mxGeometry x="1060" y="42" width="290" height="85" as="geometry" />
+        </mxCell>
+
+        <!-- Connector BLL -> DAL -->
+        <mxCell id="conn-bll-dal" value="&lt;b&gt;Invokes Repositories &amp;amp; Commits via Unit of Work (ACID)&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8e24aa;strokeWidth=2;fontSize=12;fontColor=#8e24aa;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="box-bll" target="box-dal">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 4. DATA ACCESS LAYER (DAL) -->
+        <mxCell id="box-dal" value="&lt;b&gt;DATA ACCESS LAYER - DAL (Repository Pattern &amp;amp; Unit of Work)&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#fb8c00;strokeWidth=2;fontSize=14;fontColor=#e65100;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="640" width="1400" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="dal-1" value="&lt;b&gt;Unit of Work (UoW)&lt;/b&gt;&lt;hr/&gt;• Async Session Lifecycle&lt;br/&gt;• commit() / rollback()&lt;br/&gt;• Multi-entity Transaction Boundary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#fb8c00;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-dal">
+          <mxGeometry x="40" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="dal-2" value="&lt;b&gt;Entity Repositories&lt;/b&gt;&lt;hr/&gt;• UserRepository &amp;amp; RoleRepository&lt;br/&gt;• CourseRepository (with filter/search)&lt;br/&gt;• SubmissionRepository &amp;amp; HintRepo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#fb8c00;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-dal">
+          <mxGeometry x="380" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="dal-3" value="&lt;b&gt;Generic / Base Repository&lt;/b&gt;&lt;hr/&gt;• get_by_id(UUID)&lt;br/&gt;• create(), update(), delete()&lt;br/&gt;• paginate(offset, limit)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#fb8c00;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-dal">
+          <mxGeometry x="720" y="38" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="dal-4" value="&lt;b&gt;ORM &amp;amp; Database Drivers&lt;/b&gt;&lt;hr/&gt;• SQLAlchemy 2.0 Async (asyncpg)&lt;br/&gt;• Connection Pooling (QueuePool)&lt;br/&gt;• Alembic DB Migrations" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#fb8c00;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-dal">
+          <mxGeometry x="1060" y="38" width="290" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- Connector DAL -> INFRA -->
+        <mxCell id="conn-dal-infra" value="&lt;b&gt;Async I/O Query Execution &amp;amp; Cache Access&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#fb8c00;strokeWidth=2;fontSize=12;fontColor=#fb8c00;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="box-dal" target="box-infra">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 5. INFRASTRUCTURE & EXTERNAL -->
+        <mxCell id="box-infra" value="&lt;b&gt;INFRASTRUCTURE, PERSISTENCE &amp;amp; EXTERNAL SERVICES&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#43a047;strokeWidth=2;fontSize=14;fontColor=#1b5e20;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="810" width="1400" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="inf-1" value="&lt;b&gt;PostgreSQL 16&lt;/b&gt;&lt;hr/&gt;• Tables: Users, Roles, Courses&lt;br/&gt;• Tables: Submissions, SocraticHints&lt;br/&gt;• JSONB &amp;amp; Indexes on FKs" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#ffffff;strokeColor=#43a047;fontSize=11;align=center;" vertex="1" parent="box-infra">
+          <mxGeometry x="80" y="35" width="210" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="inf-2" value="&lt;b&gt;Redis 7 (In-Memory)&lt;/b&gt;&lt;hr/&gt;• User Session &amp;amp; Blacklist Tokens&lt;br/&gt;• API Rate Limiting Counter&lt;br/&gt;• Course Catalog Caching" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#ffffff;strokeColor=#43a047;fontSize=11;align=center;" vertex="1" parent="box-infra">
+          <mxGeometry x="420" y="35" width="210" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="inf-3" value="&lt;b&gt;LLM Provider (Gemini / Claude)&lt;/b&gt;&lt;hr/&gt;• Generative Socratic Dialogue&lt;br/&gt;• Streaming Responses (SSE)&lt;br/&gt;• Pedagogy System Prompts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#43a047;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-infra">
+          <mxGeometry x="760" y="38" width="250" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="inf-4" value="&lt;b&gt;Code Sandbox (Judge0 / Docker)&lt;/b&gt;&lt;hr/&gt;• Isolated execution container&lt;br/&gt;• Resource limit (CPU, RAM, Time)&lt;br/&gt;• Output &amp;amp; Stacktrace capture" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#43a047;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="box-infra">
+          <mxGeometry x="1090" y="38" width="250" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- Direct connectors from BLL to LLM and Sandbox -->
+        <mxCell id="conn-bll-llm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8e24aa;strokeWidth=1.5;dashed=1;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="box-bll" target="inf-3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1290" y="620" />
+              <mxPoint x="885" y="620" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn-bll-sandbox" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8e24aa;strokeWidth=1.5;dashed=1;exitX=0.6;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="box-bll" target="inf-4">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="940" y="620" />
+              <mxPoint x="1215" y="620" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- PAGE 2: CLASS DIAGRAM -->
+  <diagram id="class-diagram" name="2. Class Diagram (Thực thể)">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title-class" value="&lt;b style=&quot;font-size:22px;&quot;&gt;THIẾT KẾ CLASS DIAGRAM CÁC THỰC THỂ&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:13px;color:#555;&quot;&gt;User, Role, Course, Submission, SocraticHint&lt;/span&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="490" y="20" width="620" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- 1. ROLE -->
+        <mxCell id="class-role" value="&lt;p style=&quot;margin:0;padding:4px;background:#e3f2fd;text-align:center;&quot;&gt;&lt;b&gt;Role&lt;/b&gt;&lt;/p&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ id: UUID [PK]&lt;br/&gt;+ name: String&lt;br/&gt;+ description: String&lt;br/&gt;+ permissions: List&amp;lt;String&amp;gt;&lt;br/&gt;+ created_at: DateTime&lt;/div&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ has_permission(perm: String): bool&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;fillColor=#ffffff;strokeColor=#1976d2;strokeWidth=2;align=left;verticalAlign=top;fontSize=12;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="260" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- 2. USER -->
+        <mxCell id="class-user" value="&lt;p style=&quot;margin:0;padding:4px;background:#e8eaf6;text-align:center;&quot;&gt;&lt;b&gt;User&lt;/b&gt;&lt;/p&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ id: UUID [PK]&lt;br/&gt;+ email: String [Unique]&lt;br/&gt;+ password_hash: String&lt;br/&gt;+ full_name: String&lt;br/&gt;+ avatar_url: String&lt;br/&gt;+ is_active: Boolean&lt;br/&gt;+ role_id: UUID [FK]&lt;br/&gt;+ created_at: DateTime&lt;br/&gt;+ updated_at: DateTime&lt;/div&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ verify_password(plain_pwd: String): bool&lt;br/&gt;+ is_admin(): bool&lt;br/&gt;+ is_instructor(): bool&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;fillColor=#ffffff;strokeColor=#3f51b5;strokeWidth=2;align=left;verticalAlign=top;fontSize=12;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="80" width="300" height="240" as="geometry" />
+        </mxCell>
+
+        <!-- 3. COURSE -->
+        <mxCell id="class-course" value="&lt;p style=&quot;margin:0;padding:4px;background:#e0f2f1;text-align:center;&quot;&gt;&lt;b&gt;Course&lt;/b&gt;&lt;/p&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ id: UUID [PK]&lt;br/&gt;+ title: String&lt;br/&gt;+ slug: String [Unique]&lt;br/&gt;+ description: String&lt;br/&gt;+ syllabus: String&lt;br/&gt;+ instructor_id: UUID [FK]&lt;br/&gt;+ is_published: Boolean&lt;br/&gt;+ created_at: DateTime&lt;br/&gt;+ updated_at: DateTime&lt;/div&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ publish(): void&lt;br/&gt;+ is_enrolled(student_id: UUID): bool&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;fillColor=#ffffff;strokeColor=#00796b;strokeWidth=2;align=left;verticalAlign=top;fontSize=12;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="80" width="290" height="240" as="geometry" />
+        </mxCell>
+
+        <!-- 4. SUBMISSION -->
+        <mxCell id="class-submission" value="&lt;p style=&quot;margin:0;padding:4px;background:#fff3e0;text-align:center;&quot;&gt;&lt;b&gt;Submission&lt;/b&gt;&lt;/p&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ id: UUID [PK]&lt;br/&gt;+ student_id: UUID [FK]&lt;br/&gt;+ course_id: UUID [FK]&lt;br/&gt;+ source_code: String&lt;br/&gt;+ programming_language: String&lt;br/&gt;+ status: SubmissionStatus&lt;br/&gt;+ score: Float&lt;br/&gt;+ execution_output: String&lt;br/&gt;+ error_trace: String&lt;br/&gt;+ submitted_at: DateTime&lt;/div&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ mark_evaluated(status, score, output): void&lt;br/&gt;+ can_request_hint(): bool&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;fillColor=#ffffff;strokeColor=#f57c00;strokeWidth=2;align=left;verticalAlign=top;fontSize=12;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="470" width="310" height="260" as="geometry" />
+        </mxCell>
+
+        <!-- 5. SOCRATIC HINT -->
+        <mxCell id="class-hint" value="&lt;p style=&quot;margin:0;padding:4px;background:#f3e5f5;text-align:center;&quot;&gt;&lt;b&gt;SocraticHint&lt;/b&gt;&lt;/p&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ id: UUID [PK]&lt;br/&gt;+ submission_id: UUID [FK]&lt;br/&gt;+ student_id: UUID [FK]&lt;br/&gt;+ hint_level: Int (1, 2, 3)&lt;br/&gt;+ student_query: String&lt;br/&gt;+ prompt_context: String&lt;br/&gt;+ socratic_question: String&lt;br/&gt;+ feedback: HintFeedback&lt;br/&gt;+ created_at: DateTime&lt;/div&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ mark_feedback(rating: HintFeedback): void&lt;br/&gt;+ is_max_level(): bool&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;fillColor=#ffffff;strokeColor=#7b1fa2;strokeWidth=2;align=left;verticalAlign=top;fontSize=12;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="930" y="470" width="310" height="260" as="geometry" />
+        </mxCell>
+
+        <!-- ENUM 1: SubmissionStatus -->
+        <mxCell id="enum-status" value="&lt;p style=&quot;margin:0;padding:4px;background:#eceff1;text-align:center;&quot;&gt;&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;&lt;br/&gt;&lt;b&gt;SubmissionStatus&lt;/b&gt;&lt;/p&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ PENDING&lt;br/&gt;+ EVALUATING&lt;br/&gt;+ ACCEPTED&lt;br/&gt;+ WRONG_ANSWER&lt;br/&gt;+ COMPILATION_ERROR&lt;br/&gt;+ RUNTIME_ERROR&lt;br/&gt;+ TIME_LIMIT_EXCEEDED&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;fillColor=#ffffff;strokeColor=#78909c;strokeWidth=1.5;align=left;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="100" y="500" width="220" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- ENUM 2: HintFeedback -->
+        <mxCell id="enum-feedback" value="&lt;p style=&quot;margin:0;padding:4px;background:#eceff1;text-align:center;&quot;&gt;&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;&lt;br/&gt;&lt;b&gt;HintFeedback&lt;/b&gt;&lt;/p&gt;&lt;hr style=&quot;margin:0;&quot;/&gt;&lt;div style=&quot;padding:6px;text-align:left;&quot;&gt;+ HELPFUL&lt;br/&gt;+ CONFUSING&lt;br/&gt;+ IRRELEVANT&lt;br/&gt;+ RESOLVED_PROBLEM&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;fillColor=#ffffff;strokeColor=#78909c;strokeWidth=1.5;align=left;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1310" y="530" width="200" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- RELATIONSHIPS -->
+
+        <!-- 1. Role 1 - 0..* User -->
+        <mxCell id="rel-role-user" value="assigned to" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#37474f;strokeWidth=1.5;fontSize=11;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="class-role" target="class-user">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl-role-1" value="1" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-role-user">
+          <mxGeometry x="-0.8" relative="1" as="geometry">
+            <mxPoint x="-10" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl-user-n" value="0..*" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-role-user">
+          <mxGeometry x="0.8" relative="1" as="geometry">
+            <mxPoint x="10" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 2. User 1 - 0..* Course (Instructor) -->
+        <mxCell id="rel-user-course" value="instructs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#37474f;strokeWidth=1.5;fontSize=11;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="class-user" target="class-course">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl-inst-1" value="1" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-user-course">
+          <mxGeometry x="-0.8" relative="1" as="geometry">
+            <mxPoint x="-10" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl-course-n" value="0..*" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-user-course">
+          <mxGeometry x="0.8" relative="1" as="geometry">
+            <mxPoint x="10" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 3. User 1 - 0..* Submission (Student) -->
+        <mxCell id="rel-user-sub" value="submits" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#37474f;strokeWidth=1.5;fontSize=11;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="class-user" target="class-submission">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl-user-sub-1" value="1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-user-sub">
+          <mxGeometry x="-0.7" relative="1" as="geometry">
+            <mxPoint x="15" y="-5" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl-user-sub-n" value="0..*" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-user-sub">
+          <mxGeometry x="0.7" relative="1" as="geometry">
+            <mxPoint x="18" y="5" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 4. Course 1 - 0..* Submission (Belongs to course) -->
+        <mxCell id="rel-course-sub" value="evaluates for" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#37474f;strokeWidth=1.5;fontSize=11;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.9;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="class-course" target="class-submission">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1045" y="390" />
+              <mxPoint x="739" y="390" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl-crs-sub-1" value="1" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-course-sub">
+          <mxGeometry x="-0.8" relative="1" as="geometry">
+            <mxPoint x="15" y="-5" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl-crs-sub-n" value="0..*" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-course-sub">
+          <mxGeometry x="0.8" relative="1" as="geometry">
+            <mxPoint x="15" y="5" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 5. Submission 1 - 0..* SocraticHint -->
+        <mxCell id="rel-sub-hint" value="triggers dialogue" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#37474f;strokeWidth=1.5;fontSize=11;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="class-submission" target="class-hint">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl-sub-hint-1" value="1" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-sub-hint">
+          <mxGeometry x="-0.75" relative="1" as="geometry">
+            <mxPoint x="-10" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl-sub-hint-n" value="0..*" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=12;fontStyle=1;" vertex="1" connectable="0" parent="rel-sub-hint">
+          <mxGeometry x="0.75" relative="1" as="geometry">
+            <mxPoint x="10" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 6. User 1 - 0..* SocraticHint (Receives guidance) -->
+        <mxCell id="rel-user-hint" value="receives guidance" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#7b1fa2;strokeWidth=1.5;dashed=1;exitX=0.8;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="class-user" target="class-hint">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="700" y="360" />
+              <mxPoint x="1085" y="360" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 7. Dependencies with Enums -->
+        <mxCell id="dep-sub-status" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#78909c;strokeWidth=1.5;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="class-submission" target="enum-status">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dep-hint-feedback" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#78909c;strokeWidth=1.5;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="class-hint" target="enum-feedback">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
