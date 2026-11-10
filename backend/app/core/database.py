@@ -7,7 +7,7 @@ from typing import Any, Iterator
 
 from app.core.config import DB_PATH
 from app.core.timezone import now_utc
-from app.core.security import uid, sha256
+from app.core.security import uid, sha256, hash_password
 
 
 @contextmanager
@@ -36,6 +36,36 @@ def _migrate_existing_tables(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'Asia/Ho_Chi_Minh'")
     if user_cols and "theme_preference" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN theme_preference TEXT DEFAULT 'one-dark'")
+    if user_cols and "password_hash" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+    if user_cols and "full_name" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN full_name TEXT")
+    if user_cols and "role" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'student'")
+
+    # Cập nhật thông tin và mật khẩu băm Bcrypt cho các tài khoản demo nếu chưa có
+    demo_credentials = {
+        "student-demo": ("Student@123", "Minh Anh", "student"),
+        "instructor-demo": ("Instructor@123", "Cô Linh", "instructor"),
+        "admin-demo": ("Admin@123", "Content Admin", "admin"),
+    }
+    for uid_key, (pwd, d_name, r_name) in demo_credentials.items():
+        existing_user = conn.execute("SELECT id, password_hash, full_name, role FROM users WHERE id=?", (uid_key,)).fetchone()
+        if existing_user:
+            updates = []
+            params = []
+            if not existing_user["password_hash"]:
+                updates.append("password_hash=?")
+                params.append(hash_password(pwd))
+            if not existing_user["full_name"]:
+                updates.append("full_name=?")
+                params.append(d_name)
+            if existing_user["role"] != r_name:
+                updates.append("role=?")
+                params.append(r_name)
+            if updates:
+                params.append(uid_key)
+                conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id=?", tuple(params))
 
     # 2. learning_sessions
     ls_cols = {col[1] for col in conn.execute("PRAGMA table_info(learning_sessions)").fetchall()}
@@ -59,7 +89,9 @@ def init_db() -> None:
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL,
+                id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT,
+                full_name TEXT NOT NULL, display_name TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'student',
                 status TEXT NOT NULL DEFAULT 'active', locale TEXT NOT NULL DEFAULT 'vi-VN',
                 timezone TEXT NOT NULL DEFAULT 'Asia/Ho_Chi_Minh', theme_preference TEXT NOT NULL DEFAULT 'one-dark',
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL
@@ -267,18 +299,19 @@ def seed_data(conn: sqlite3.Connection) -> None:
         (org_id, "CodeMind Demo Campus", "active", created, created),
     )
     demo_users = [
-        ("student-demo", "student.demo@codemind.local", "Minh Anh", "student"),
-        ("instructor-demo", "instructor.demo@codemind.local", "Cô Linh", "instructor"),
-        ("admin-demo", "admin.demo@codemind.local", "Content Admin", "org_admin"),
+        ("student-demo", "student.demo@codemind.local", hash_password("Student@123"), "Minh Anh", "student"),
+        ("instructor-demo", "instructor.demo@codemind.local", hash_password("Instructor@123"), "Cô Linh", "instructor"),
+        ("admin-demo", "admin.demo@codemind.local", hash_password("Admin@123"), "Content Admin", "admin"),
     ]
-    for user_id, email, display_name, role in demo_users:
+    for user_id, email, pwd_hash, display_name, role in demo_users:
         conn.execute(
-            "INSERT INTO users(id,email,display_name,status,locale,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
-            (user_id, email, display_name, "active", "vi-VN", created, created),
+            "INSERT INTO users(id,email,password_hash,full_name,display_name,role,status,locale,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (user_id, email, pwd_hash, display_name, display_name, role, "active", "vi-VN", created, created),
         )
+        membership_role = "org_admin" if role == "admin" else role
         conn.execute(
             "INSERT INTO memberships(id,organization_id,user_id,role,status) VALUES(?,?,?,?,?)",
-            (uid(), org_id, user_id, role, "active"),
+            (uid(), org_id, user_id, membership_role, "active"),
         )
         for purpose, granted in [("academic_integrity", 1 if role == "student" else 0), ("teacher_visibility", 1 if role == "student" else 0)]:
             conn.execute(
