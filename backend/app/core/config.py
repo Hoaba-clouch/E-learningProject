@@ -18,8 +18,10 @@ CORS_ORIGINS = [
     "http://localhost:3000",
 ]
 
-SECRET_KEY = os.getenv("SECRET_KEY", "codemind-dev-secret-key-super-safe-2026")
+SECRET_KEY = os.getenv("SECRET_KEY", "codemind-campus-secret-key-super-safe-2026")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+# Access token: 15 phút, Refresh token: 7 ngày theo đặc tả CodeMind Campus
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 DEFAULT_TIMEZONE = "Asia/Ho_Chi_Minh"

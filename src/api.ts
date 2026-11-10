@@ -6,6 +6,7 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const TOKEN_KEY = "codemind.access_token";
+const REFRESH_TOKEN_KEY = "codemind.refresh_token";
 
 export interface TestCaseResult {
   id: number;
@@ -83,12 +84,90 @@ export async function demoLogin(role: "student" | "instructor" | "admin" = "stud
     const data = await res.json();
     if (typeof window !== "undefined") {
       window.localStorage.setItem(TOKEN_KEY, data.access_token);
+      if (data.refresh_token) {
+        window.localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+      }
     }
     return data;
   } catch (err) {
     console.warn("Backend offline, running in standalone client mode.", err);
     return { access_token: "mock-token", role };
   }
+}
+
+export async function loginUser(email: string, password: string) {
+  const res = await fetch(`${API_BASE}/v1/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Đăng nhập thất bại");
+  }
+  const data = await res.json();
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(TOKEN_KEY, data.access_token);
+    if (data.refresh_token) {
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+    }
+  }
+  return data;
+}
+
+export async function registerUser(payload: {
+  email: string;
+  password: string;
+  full_name: string;
+  role?: "student" | "instructor" | "admin";
+  timezone?: string;
+}) {
+  const res = await fetch(`${API_BASE}/v1/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Đăng ký thất bại");
+  }
+  const data = await res.json();
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(TOKEN_KEY, data.access_token);
+    if (data.refresh_token) {
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+    }
+  }
+  return data;
+}
+
+export async function refreshAccessToken() {
+  const refreshToken = typeof window !== "undefined" ? window.localStorage.getItem(REFRESH_TOKEN_KEY) : null;
+  if (!refreshToken) throw new Error("Không tìm thấy Refresh Token");
+  const res = await fetch(`${API_BASE}/v1/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  if (!res.ok) throw new Error("Cấp lại Access Token thất bại");
+  const data = await res.json();
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(TOKEN_KEY, data.access_token);
+    if (data.refresh_token) {
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+    }
+  }
+  return data;
+}
+
+export async function fetchCurrentUser() {
+  const token = getToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/v1/users/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return await res.json();
 }
 
 // Compute deterministic SHA-256 for browser / demo
