@@ -14,22 +14,28 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: 🟢 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'pnpm'
 
-      - name: 📦 Install Dependencies
-        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: 📦 Install Dependencies (pnpm)
+        run: pnpm install --no-frozen-lockfile
 
       - name: ⚡ Run Lint Check (ESLint / Oxlint)
-        run: npx -y oxlint src || true
+        run: pnpm run lint || true
 
       - name: 🎨 Check Code Formatting (Prettier / Oxfmt)
-        run: npx -y oxfmt --check src || true
+        run: pnpm run format:check || true
 
       - name: 🛡️ Verify TypeScript Types (TypeCheck)
-        run: npx tsc --noEmit || true
+        run: pnpm run typecheck || true
 
       - name: ⚡ Build Vite Production Artifact
-        run: npm run build
+        run: pnpm run build
