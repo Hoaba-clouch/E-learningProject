@@ -108,3 +108,16 @@ def decode_token(token: str) -> dict[str, Any]:
     Ném ra ExpiredSignatureError nếu token hết hạn, InvalidTokenError nếu token không hợp lệ.
     """
     return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+
+def verify_token(token: str, expected_type: str | None = None) -> dict[str, Any]:
+    """
+    Xác minh chữ ký, hạn sử dụng, trường định danh `sub` và loại token (`access` | `refresh`).
+    Ném ra ExpiredSignatureError / InvalidTokenError nếu token không hợp lệ.
+    """
+    payload = decode_token(token)
+    if not payload.get("sub"):
+        raise jwt.InvalidTokenError("Token thiếu thông tin định danh (sub)")
+    if expected_type is not None and payload.get("type") != expected_type:
+        raise jwt.InvalidTokenError(f"Token không đúng loại '{expected_type}'")
+    return payload

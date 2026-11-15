@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-class SubmissionIn(BaseModel):
+from app.schemas.common import UTCSchema
+
+
+class SubmissionIn(UTCSchema):
     exercise_id: str = "exercise-deque"
     code: str
-    idempotency_key: str
+    idempotency_key: str = Field(min_length=1, max_length=128)
 
-class AIInteractionIn(BaseModel):
-    message: str
+
+class AIInteractionIn(UTCSchema):
+    message: str = Field(min_length=1)
     submission_id: str | None = None
-    idempotency_key: str
+    idempotency_key: str = Field(min_length=1, max_length=128)

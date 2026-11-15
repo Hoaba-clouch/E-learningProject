@@ -1,23 +1,29 @@
 from __future__ import annotations
 
-from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-class SessionStartIn(BaseModel):
+from app.schemas.common import UTCSchema
+
+
+class SessionStartIn(UTCSchema):
     lesson_id: str
-    organization_id: str
+    organization_id: str | None = "org-demo-codemind"
 
-class ProgressIn(BaseModel):
+
+class ProgressIn(UTCSchema):
     target_step: int = Field(ge=1, le=6)
-    progress_version: int
+    progress_version: int = Field(ge=1)
 
-class TermsIn(BaseModel):
+
+class TermsIn(UTCSchema):
     source_version_id: str
     terms: list[str]
 
-class ConceptAnswerItem(BaseModel):
+
+class ConceptAnswerItem(UTCSchema):
     relation_key: str
     selected_option: str
 
-class ConceptAnswersIn(BaseModel):
+
+class ConceptAnswersIn(UTCSchema):
     answers: list[ConceptAnswerItem]

@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import sqlite3
+import sys
+from logging.config import fileConfig
+from pathlib import Path
+
+from alembic import context
+from sqlalchemy import engine_from_config, event, pool
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from app.core.config import settings  # noqa: E402
+from app.models import Base  # noqa: E402
+
+config = context.config
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", settings.database_url)
+
+target_metadata = Base.metadata
+
+
+def _is_sqlite_url(url: str) -> bool:
+    return url.startswith("sqlite")
+
+
+def run_migrations_offline() -> None:
+    """Chạy migrations ở chế độ offline (xuất DDL SQL)."""
+    url = config.get_main_option("sqlalchemy.url") or settings.database_url
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        render_as_batch=_is_sqlite_url(url),
+        dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    """Chạy migrations ở chế độ online; hỗ trợ sẵn connection truyền vào cho SQLite in-memory tests."""
+    provided_connection = config.attributes.get("connection")
+    if provided_connection is not None:
+        is_sqlite = provided_connection.dialect.name == "sqlite"
+        context.configure(
+            connection=provided_connection,
+            target_metadata=target_metadata,
+            render_as_batch=is_sqlite,
+            compare_type=True,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+        return
+
+    url = config.get_main_option("sqlalchemy.url") or settings.database_url
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    @event.listens_for(connectable, "connect")
+    def _enable_sqlite_fk(dbapi_conn: object, _record: object) -> None:
+        if isinstance(dbapi_conn, sqlite3.Connection):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys = ON")
+            cursor.close()
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=_is_sqlite_url(url),
+            compare_type=True,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
