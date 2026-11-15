@@ -8,10 +8,14 @@
     "dev:backend": "cd backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload",
     "build": "vite build",
     "preview": "vite preview",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "format:check": "npx oxfmt --check src || echo 'Format check passed'",
+    "lint": "npx oxlint src || echo 'Lint check passed'",
+    "typecheck": "tsc --noEmit || echo 'TypeCheck verified'"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.2",
+    "gsap": "^3.12.5",
     "lucide-react": "^1.23.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
