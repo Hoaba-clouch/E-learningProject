@@ -6,13 +6,9 @@ on:
   pull_request:
     branches: [main, master, dev, develop]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  lint-and-format:
-    name: 🔍 Linting & Format Check
+  ci-pipeline:
+    name: 🚀 CI / Verification (Lint, TypeCheck & Build)
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout repository
@@ -22,15 +18,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: 📦 Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci || npm install
-          else
-            npm install
-          fi
+        run: npm install --no-audit --no-fund --legacy-peer-deps
 
       - name: ⚡ Run Lint Check (ESLint / Oxlint)
         run: npm run lint
@@ -38,37 +28,8 @@ jobs:
       - name: 🎨 Check Code Formatting (Prettier / Oxfmt)
         run: npm run format:check
 
-  typecheck-and-build:
-    name: 🛡️ TypeCheck & Vite Production Build
-    runs-on: ubuntu-latest
-    needs: [lint-and-format]
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 🟢 Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: 📦 Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci || npm install
-          else
-            npm install
-          fi
-
       - name: 🛡️ Verify TypeScript Types (TypeCheck)
         run: npm run typecheck
 
       - name: ⚡ Build Vite Production Artifact
         run: npm run build
-
-      - name: 📤 Upload Build Artifacts (dist)
-        uses: actions/upload-artifact@v4
-        with:
-          name: vite-production-build
-          path: dist/
-          retention-days: 7
