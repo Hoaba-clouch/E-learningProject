@@ -1,74 +1,52 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useState, useMemo, useRef } from "react";
+import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import {
   ArrowRight,
+  ArrowUpRight,
   BookOpen,
-  BrainCircuit,
+  Calendar,
+  Check,
   CheckCircle2,
+  ChevronDown,
+  Clock,
   Clock3,
+  Columns3,
+  ExternalLink,
   Eye,
   Flame,
+  Folder,
+  FolderKanban,
   GitFork,
-  Headphones,
-  Lock,
-  Crown,
-  Shield,
+  GraduationCap,
+  Layers,
   MessageSquareText,
-  MousePointer2,
+  Pin,
   PlayCircle,
+  ShieldCheck,
+  Sparkles,
   Star,
-  Target,
   Trophy,
-  X,
+  Users,
 } from "lucide-react";
-import type { Screen } from "../App";
-import type { AvatarStyle, BadgeFrame, SkillMapSkin } from "../App";
+import type { Screen, AvatarStyle, BadgeFrame, SkillMapSkin, Role, Theme } from "../App";
+import MarloTitle from "../components/MarloTitle";
+import MarloNumber from "../components/MarloNumber";
+import MarloActivityRing from "../components/MarloActivityRing";
+import MarloCapacityBar from "../components/MarloCapacityBar";
+import MarloToast from "../components/MarloToast";
+import { CNTT_PROJECTS, type CNTTProjectItem } from "./MarloProjectsScreen";
 
 interface Props {
   avatarStyle: AvatarStyle;
-  skillMapSkin: SkillMapSkin;
+  skillMapSkin?: SkillMapSkin;
   badgeFrame: BadgeFrame;
   onNavigate: (s: Screen) => void;
+  theme?: Theme;
+  onToggleTheme?: (trigger?: any) => void;
+  role?: Role;
+  onLogout?: () => void;
+  onOpenCommandPalette?: () => void;
 }
-
-const nodes = [
-  { id: 1, level: "Lv.1", label: "OOP căn bản", caption: "2 bài", xp: "+120 XP", status: "done", x: 50, y: 16 },
-  { id: 2, level: "Lv.2", label: "Kế thừa", caption: "đã mở", xp: "+80 XP", status: "done", x: 27, y: 36 },
-  { id: 3, level: "Lv.3", label: "Đa hình", caption: "đang học", xp: "+150 XP", status: "active", x: 66, y: 36 },
-  { id: 4, level: "Lv.4", label: "Interface", caption: "kế tiếp", xp: "+90 XP", status: "next", x: 42, y: 61 },
-  { id: 5, level: "Boss", label: "Abstract class", caption: "cần quiz", xp: "+100 XP", status: "locked", x: 76, y: 61 },
-  { id: 6, level: "Gate", label: "SOLID", caption: "cuối chương", xp: "+180 XP", status: "locked", x: 56, y: 82 },
-];
-
-const edges = [
-  [1, 2, "done"],
-  [1, 3, "done"],
-  [2, 4, "done"],
-  [4, 3, "next"],
-  [3, 5, "locked"],
-  [4, 6, "locked"],
-  [6, 5, "locked"],
-];
-
-const nodeStyle: Record<string, string> = {
-  done: "skill-node-done",
-  active: "skill-node-active",
-  next: "skill-node-next",
-  locked: "skill-node-locked",
-};
-
-const edgeStyle: Record<string, string> = {
-  done: "skill-edge-done",
-  next: "skill-edge-next",
-  locked: "skill-edge-locked",
-};
-
-const avatarLabel: Record<AvatarStyle, string> = {
-  initials: "A",
-  pixel: "PX",
-  coder: "</>",
-  robot: "AI",
-  silver: "Ag",
-};
 
 const badgeLabel: Record<BadgeFrame, string> = {
   streak: "14-day Streak",
@@ -78,60 +56,241 @@ const badgeLabel: Record<BadgeFrame, string> = {
   explorer: "OOP Explorer",
 };
 
-const vakProfile = [
-  { label: "Visual", value: 72, icon: <Eye size={15} />, desc: "nhìn sơ đồ trước" },
-  { label: "Auditory", value: 38, icon: <Headphones size={15} />, desc: "nghe nhắc lại ngắn" },
-  { label: "Kinesthetic", value: 64, icon: <MousePointer2 size={15} />, desc: "làm quiz/code ngay" },
-];
-
-const personalTasks = [
-  "Xem lại flow override bằng sơ đồ 3 node",
-  "Làm 5 câu quiz Đa hình trước khi mở bài mới",
-  "Vẽ thêm quan hệ Animal -> Dog -> speak()",
-];
-
-const vakDetails: Record<string, { title: string; explanation: string; action: string }> = {
-  Visual: {
-    title: "Phóng đại hình ảnh (Visual Learner)",
-    explanation: "Bạn ghi nhớ thông tin tốt nhất khi được tổ chức trực quan. AI Mentor khuyên bạn nên sử dụng tab 'Mindmap Canvas' để liên kết các khái niệm OOP trước khi viết code.",
-    action: "Hãy vẽ 3 node mindmap hôm nay để nhận +30 XP!",
-  },
-  Auditory: {
-    title: "Trải nghiệm âm thanh (Auditory Learner)",
-    explanation: "Bạn học hiệu quả nhất thông qua giọng đọc và diễn giải âm thanh. AI Mentor đã tạo sẵn giọng nói thuyết minh bài đọc đầy đủ có thể kéo tua và chọn tốc độ đọc.",
-    action: "Nghe thuyết minh bài 1.3 và hoàn thành mục tiêu hôm nay nhé!",
-  },
-  Kinesthetic: {
-    title: "Thực hành thực tế (Kinesthetic Learner)",
-    explanation: "Bạn tiếp thu nhanh nhất khi trực tiếp tương tác, viết thử code và làm quiz kiểm tra ngay lập tức. Hãy sử dụng tab 'Code Lab' chia đôi màn hình có AI Review.",
-    action: "Hãy chạy thử code Java và làm Quiz trắc nghiệm đạt trên 70% nhé!",
-  },
-};
-
-export default function StudentDashboard({ avatarStyle, skillMapSkin, badgeFrame, onNavigate }: Props) {
-  const mapViewportRef = useRef<HTMLDivElement | null>(null);
-  const isPanningRef = useRef(false);
-  const panStartRef = useRef({ x: 0, y: 0, left: 0, top: 0 });
-
+export default function StudentDashboard({
+  avatarStyle,
+  skillMapSkin,
+  badgeFrame,
+  onNavigate,
+  theme = "light",
+  onToggleTheme,
+  role = "student",
+  onLogout,
+  onOpenCommandPalette,
+}: Props) {
   const [totalXp, setTotalXp] = useState(3240);
+
+  // ─── ACTIVE FOCUSED PROJECT (Giải quyết triệt để: Biết chính xác tiến độ của dự án nào) ───
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("prj-codemind");
+  const [workScope, setWorkScope] = useState<"project" | "all">("project");
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+
+  const selectedProject = useMemo(() => {
+    return CNTT_PROJECTS.find((p) => p.id === selectedProjectId) || CNTT_PROJECTS[0];
+  }, [selectedProjectId]);
+
+  const selectedProgressPct = Math.round(selectedProject.progress * 100);
+
+  // Dynamic calculations for Where the work stands:
+  const workStats = useMemo(() => {
+    if (workScope === "project") {
+      const p = selectedProject;
+      const tasksTotal = p.tasksTotal;
+      const tasksDone = p.tasksDone;
+      const tasksMoving = Math.max(0, Math.round((tasksTotal - tasksDone) * 0.7));
+      const tasksWaiting = Math.max(0, tasksTotal - tasksDone - tasksMoving);
+
+      const spTotal = p.storyPoints;
+      const spDone = p.pointsBurned;
+      const spMoving = Math.max(0, Math.round((spTotal - spDone) * 0.75));
+      const spWaiting = Math.max(0, spTotal - spDone - spMoving);
+
+      const reviewsTotal = Math.max(2, Math.round(tasksTotal * 0.6));
+      const reviewsDone = Math.max(1, Math.min(reviewsTotal, Math.round(tasksDone * 0.55)));
+      const reviewsMoving = Math.max(0, reviewsTotal - reviewsDone);
+
+      return {
+        subtitle: `Done, moving & waiting cho đồ án: ${p.name.split(" - ")[0]}`,
+        row1: {
+          label: "Tasks",
+          icon: "check" as const,
+          total: tasksTotal,
+          done: tasksDone,
+          moving: tasksMoving,
+          waiting: tasksWaiting,
+          navigate: () => onNavigate("workspace"),
+          navTitle: `Xem nhiệm vụ của ${p.name}`,
+        },
+        row2: {
+          label: "Story Points",
+          icon: "points" as const,
+          total: spTotal,
+          done: spDone,
+          moving: spMoving,
+          waiting: spWaiting,
+          navigate: () => onNavigate("projects"),
+          navTitle: `Xem tiến độ Story Points của ${p.name}`,
+        },
+        row3: {
+          label: "Reviews & PRs",
+          icon: "eye" as const,
+          total: reviewsTotal,
+          done: reviewsDone,
+          moving: reviewsMoving,
+          waiting: 0,
+          navigate: () => onNavigate("github"),
+          navTitle: `Xem code reviews & PRs của ${p.name}`,
+        },
+      };
+    } else {
+      // Aggregated for all 8 projects
+      const totalTasks = CNTT_PROJECTS.reduce((sum, p) => sum + p.tasksTotal, 0);
+      const doneTasks = CNTT_PROJECTS.reduce((sum, p) => sum + p.tasksDone, 0);
+      const movingTasks = Math.round((totalTasks - doneTasks) * 0.6);
+      const waitingTasks = Math.max(0, totalTasks - doneTasks - movingTasks);
+
+      const deliveredProjects = CNTT_PROJECTS.filter((p) => p.status === "delivered").length;
+      const movingProjects = CNTT_PROJECTS.filter((p) => p.status === "active" || p.status === "review").length;
+      const waitingProjects = CNTT_PROJECTS.filter((p) => p.status === "planning").length;
+
+      return {
+        subtitle: "Done, moving and waiting, across every live job",
+        row1: {
+          label: "Tasks",
+          icon: "check" as const,
+          total: totalTasks,
+          done: doneTasks,
+          moving: movingTasks,
+          waiting: waitingTasks,
+          navigate: () => onNavigate("workspace"),
+          navTitle: "Xem toàn bộ nhiệm vụ",
+        },
+        row2: {
+          label: "Projects",
+          icon: "folder" as const,
+          total: CNTT_PROJECTS.length,
+          done: deliveredProjects,
+          moving: movingProjects,
+          waiting: waitingProjects,
+          navigate: () => onNavigate("projects"),
+          navTitle: "Mở danh sách 8 đồ án",
+        },
+        row3: {
+          label: "Reviews",
+          icon: "eye" as const,
+          total: 27,
+          done: 23,
+          moving: 4,
+          waiting: 0,
+          navigate: () => onNavigate("github"),
+          navTitle: "Xem danh sách review",
+        },
+      };
+    }
+  }, [workScope, selectedProject, onNavigate]);
+
+  // ─── NEXT UP TASKS (Từng task có nhãn Dự án cụ thể) ───
   const [tasks, setTasks] = useState([
-    { id: 1, label: "Làm quiz Đa hình", xp: 50, done: false },
-    { id: 2, label: "Xem 1 Tech Reel", xp: 10, done: false },
-    { id: 3, label: "Cập nhật bài theo review", xp: 80, done: false },
-    { id: 4, label: "Ôn lại super()", xp: 0, done: true },
+    {
+      id: 1,
+      label: "Làm quiz Đa hình (Polymorphism) & vtable lookup đạt >= 70%",
+      projectId: "prj-codemind",
+      projectName: "CodeMind AI",
+      code: "OOP-12",
+      xp: 50,
+      points: 3,
+      done: false,
+      epic: "Sprint 2: Core Engine",
+      duration: "2 h",
+      status: "in-progress",
+      due: "Hôm nay",
+    },
+    {
+      id: 2,
+      label: "Thiết kế Sơ đồ Luồng Kafka Saga & Outbox Pattern",
+      projectId: "prj-ecommerce",
+      projectName: "Microservices",
+      code: "SE-402",
+      xp: 60,
+      points: 4,
+      done: false,
+      epic: "Sprint 1: Event Cluster",
+      duration: "3 h",
+      status: "in-progress",
+      due: "Ngày mai",
+    },
+    {
+      id: 3,
+      label: "Tạo Pull Request tích hợp AST Visualizer & Lexer LR(1)",
+      projectId: "prj-compiler",
+      projectName: "Mini C++ Compiler",
+      code: "CS-308",
+      xp: 80,
+      points: 5,
+      done: false,
+      epic: "Sprint 3: Parser Core",
+      duration: "2.5 h",
+      status: "ready",
+      due: "Còn 3 ngày",
+    },
+    {
+      id: 4,
+      label: "Chạy DAST Fuzzing kiểm tra lỗ hổng SQLi trên Gateway",
+      projectId: "prj-security",
+      projectName: "Security DAST",
+      code: "SEC-305",
+      xp: 70,
+      points: 4,
+      done: false,
+      epic: "Sprint 2: Vulnerability Scan",
+      duration: "1.5 h",
+      status: "ready",
+      due: "Còn 4 ngày",
+    },
+    {
+      id: 5,
+      label: "Nghiệm thu Đồ án Kernel PintOS: Priority Scheduling",
+      projectId: "prj-pintos",
+      projectName: "PintOS Kernel",
+      code: "CS-204",
+      xp: 100,
+      points: 8,
+      done: true,
+      epic: "Nghiệm thu Đồ án",
+      duration: "6 h",
+      status: "done",
+      due: "Đã hoàn thành",
+    },
+    {
+      id: 6,
+      label: "Tối ưu hóa mô hình MobileFaceNet INT8 trên Raspberry Pi 4",
+      projectId: "prj-faceattend",
+      projectName: "FaceAttend AI",
+      code: "CS-315",
+      xp: 50,
+      points: 3,
+      done: true,
+      epic: "Sprint 1: Edge Quantization",
+      duration: "4 h",
+      status: "done",
+      due: "Đã hoàn thành",
+    },
   ]);
-  const [selectedVak, setSelectedVak] = useState<string | null>(null);
+
+  // Dynamic Time Greeting
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Chào buổi sáng";
+    if (hour < 18) return "Chào buổi chiều";
+    return "Chào buổi tối";
+  }, []);
+
+  // Floating Toast Notification
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [lastToggledTaskId, setLastToggledTaskId] = useState<number | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const toggleTask = (id: number) => {
     setTasks((current) =>
       current.map((task) => {
         if (task.id === id) {
           const nextDone = !task.done;
-          if (nextDone) {
-            setTotalXp((xp) => xp + task.xp);
-          } else {
-            setTotalXp((xp) => xp - task.xp);
-          }
+          setTotalXp((xp) => (nextDone ? xp + task.xp : Math.max(0, xp - task.xp)));
+          setLastToggledTaskId(id);
+          setToastMessage(nextDone ? "Marked done." : "Marked not done.");
+          if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+          toastTimerRef.current = setTimeout(() => {
+            setToastMessage(null);
+          }, 4500);
           return { ...task, done: nextDone };
         }
         return task;
@@ -139,183 +298,336 @@ export default function StudentDashboard({ avatarStyle, skillMapSkin, badgeFrame
     );
   };
 
-  useEffect(() => {
-    const viewport = mapViewportRef.current;
-    if (!viewport) return;
-    viewport.scrollLeft = 90;
-    viewport.scrollTop = 26;
-  }, []);
-
-  const handleMapPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest("button")) return;
-    const viewport = mapViewportRef.current;
-    if (!viewport) return;
-    isPanningRef.current = true;
-    panStartRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-      left: viewport.scrollLeft,
-      top: viewport.scrollTop,
-    };
-    viewport.setPointerCapture(event.pointerId);
+  const handleUndoTask = () => {
+    if (lastToggledTaskId === null) return;
+    const targetId = lastToggledTaskId;
+    setLastToggledTaskId(null);
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.id === targetId) {
+          const prevDone = !task.done;
+          setTotalXp((xp) => (prevDone ? xp + task.xp : Math.max(0, xp - task.xp)));
+          return { ...task, done: prevDone };
+        }
+        return task;
+      })
+    );
+    setToastMessage("Action undone.");
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 2500);
   };
 
-  const handleMapPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!isPanningRef.current) return;
-    const viewport = mapViewportRef.current;
-    if (!viewport) return;
-    viewport.scrollLeft = panStartRef.current.left - (event.clientX - panStartRef.current.x);
-    viewport.scrollTop = panStartRef.current.top - (event.clientY - panStartRef.current.y);
-  };
+  const dashboardRef = useRef<HTMLDivElement>(null);
 
-  const stopMapPan = (event: PointerEvent<HTMLDivElement>) => {
-    isPanningRef.current = false;
-    if (mapViewportRef.current?.hasPointerCapture(event.pointerId)) {
-      mapViewportRef.current.releasePointerCapture(event.pointerId);
+  useMarloPageEntrance(dashboardRef, (el) => {
+    const cards = el.querySelectorAll(".marlo-card");
+    if (cards.length > 0) {
+      animateMarloCards(cards, { stagger: 0.055, y: 24 });
     }
-  };
+    const rows = el.querySelectorAll(".marlo-row");
+    if (rows.length > 0) {
+      animateMarloRows(rows, { y: 12, stagger: 0.03, delay: 0.22 });
+    }
+  });
 
   return (
-    <div className="min-h-full p-5 relative">
-      <header className="mb-6 flex min-w-0 items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-4">
-          <span className={`student-avatar student-avatar-${avatarStyle} flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-base font-black border-2 border-white dark:border-slate-800 shadow-md`}>
-            {avatarLabel[avatarStyle]}
-          </span>
-          <div className="min-w-0">
-            <div className="theme-primary-text truncate text-xs font-bold uppercase tracking-wider">Lập trình hướng đối tượng - Nhóm 01</div>
-            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 dark:text-white leading-tight">Chào trở lại, Nguyễn Văn A</h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <p className="min-w-0 text-sm text-slate-500 dark:text-slate-400">Hôm nay nên hoàn thành quiz Đa hình và phác thảo mindmap chương 1.</p>
-              <span className="rounded-full border border-amber-200 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">{badgeLabel[badgeFrame]}</span>
-            </div>
+    <div ref={dashboardRef} className="min-h-full p-4 sm:p-6 lg:p-7 relative select-none transform-gpu">
+      {/* ─── 1. TOP HEADER (MARLO PAGE HEAD) ─── */}
+      <header className="marlo-card mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200/90 dark:border-slate-800">
+        <div className="min-w-0">
+          <div className="theme-primary-text truncate text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+            <span>CodeMind Campus</span>
+            <span className="text-slate-300 dark:text-slate-700">·</span>
+            <span>Khoa Công nghệ Thông tin & AI</span>
+          </div>
+          <MarloTitle
+            text={`${greeting}, Nguyễn Văn A`}
+            className="mt-0.5 text-2xl sm:text-3xl font-black tracking-tight text-slate-950 dark:text-white leading-tight"
+          />
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="min-w-0 text-xs text-[#62656b] dark:text-[#a0a3a9]">
+              Lộ trình kỹ sư công nghệ C++20, AI Socratic Mentor & tiến độ học tập hôm nay.
+            </p>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 text-[11px] font-semibold">
+              <Flame size={12} className="text-amber-500 fill-amber-500" />
+              <span>{badgeLabel[badgeFrame]}</span>
+            </span>
           </div>
         </div>
-        <div className="flex shrink-0 gap-2">
-          {[
-            { icon: <Flame size={15} />, value: "14", label: "ngày streak", tone: "text-amber-755 bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60" },
-            { icon: <Star size={15} />, value: totalXp.toLocaleString(), label: "XP tích lũy", tone: "text-teal-700 bg-teal-50/60 dark:bg-emerald-950/20 border-teal-200 dark:border-emerald-900/60" },
-            { icon: <Trophy size={15} />, value: "Bạc", label: "Hạng giải", tone: "theme-primary-soft theme-primary-border border" },
-          ].map((item) => (
-            <div key={item.label} className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2 ${item.tone} shadow-sm`}>
-              {item.icon}
+
+        {/* Stats Chips & Quick Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
+              <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-500 shrink-0">
+                <Flame size={14} className="fill-amber-500" />
+              </div>
               <div>
-                <div className="text-sm font-black leading-none">{item.value}</div>
-                <div className="mt-1 text-[10px] font-bold uppercase tracking-wide opacity-80">{item.label}</div>
+                <div className="text-xs font-black leading-none text-slate-900 dark:text-white">
+                  <MarloNumber value={14} durationMs={900} />
+                </div>
+                <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">ngày streak</div>
               </div>
             </div>
-          ))}
+
+            <div className="flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
+              <div className="p-1.5 rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
+                <Star size={14} className="fill-teal-500" />
+              </div>
+              <div>
+                <div className="text-xs font-black leading-none text-slate-900 dark:text-white">
+                  <MarloNumber value={totalXp} durationMs={900} />
+                </div>
+                <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">XP tích lũy</div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
+              <div className="p-1.5 rounded-lg bg-[#f29b23]/15 text-[#f29b23] shrink-0">
+                <Trophy size={14} />
+              </div>
+              <div>
+                <div className="text-xs font-black leading-none text-slate-900 dark:text-white">Hạng Bạc</div>
+                <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">BXH Sprint</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 hidden md:block" />
+
+          {/* Quick Primary Actions */}
+          <button
+            onClick={() => onNavigate("defense-room")}
+            className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 active:scale-95 transition cursor-pointer shadow-2xs"
+            title="Mở phòng mô phỏng bảo vệ đồ án 1:1 với Hội đồng AI Tech Lead"
+          >
+            <ShieldCheck size={15} className="text-slate-500 dark:text-slate-400 shrink-0" />
+            <span>Phòng Phản Biện AI</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </button>
+
+          <button
+            onClick={() => onNavigate("kanban")}
+            className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+          >
+            <Columns3 size={15} className="text-[#1c1304] shrink-0" />
+            <span>Bảng Kanban</span>
+            <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+          </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_280px] gap-4">
-        <section className="space-y-4">
-          <div className="surface rounded-xl p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-slate-950 dark:text-white">Bài học đang theo học</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">1.3 Đa hình và ghi đè phương thức (Polymorphism)</p>
+      {/* ─── 2. TWO-COLUMN MARLO OVERVIEW GRID ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
+        {/* ═══ LEFT MAIN STACK ═══ */}
+        <section className="space-y-5 min-w-0">
+          
+          {/* 🌟 A. TIẾP TỤC HỌC TẬP (CONTINUE LEARNING HERO - NỀN TẢNG HỌC LẬP TRÌNH CODEMIND AI) */}
+          <div className="marlo-card rounded-[28px] sm:rounded-[32px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-7 shadow-xs relative overflow-hidden">
+            {/* Ambient subtle glow */}
+            <div className="absolute -right-20 -top-20 w-64 h-64 bg-amber-500/10 dark:bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Top Bar: Course Category & Progress Stats */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100 dark:border-slate-800/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <BookOpen size={17} />
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Khóa học trọng tâm · Lộ trình Kỹ sư 2026
+                  </div>
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Lập trình Hướng đối tượng C++20 & Cấu trúc Dữ liệu</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={() => onNavigate("workspace")}
-                className="theme-primary-bg flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition shadow-md hover:opacity-90 active:scale-[0.98]"
-              >
-                Tiếp tục học
-                <ArrowRight size={15} />
-              </button>
+
+              {/* Progress Chip */}
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                  Đã hoàn thành 68%
+                </span>
+                <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 font-mono">
+                  14/22 bài
+                </span>
+              </div>
             </div>
-            <div className="mt-4 grid grid-cols-4 gap-3">
-              {[
-                { icon: <BookOpen size={15} />, label: "Bài đọc lý thuyết", status: "Đã đọc xong", done: true },
-                { icon: <PlayCircle size={15} />, label: "Video tóm tắt", status: "4:32 phút", done: true },
-                { icon: <MessageSquareText size={15} />, label: "Quiz nhanh", status: "Cần đạt >= 70%", done: false },
-                { icon: <GitFork size={15} />, label: "Bài tập code", status: "Chờ review", done: false },
-              ].map((step) => (
-                <div key={step.label} className="relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-3.5 hover:shadow-md transition duration-200">
-                  <div className="flex justify-between items-start">
-                    <div className={`p-1.5 rounded-lg ${
-                      step.done
-                        ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-450"
-                        : "bg-slate-150 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400"
-                    }`}>
-                      {step.icon}
-                    </div>
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                      step.done
-                        ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-450"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-450 dark:text-slate-500"
-                    }`}>
-                      {step.done ? "Đã xong" : "Chưa làm"}
+
+            {/* Main Lesson Focus Card */}
+            <div className="pt-5">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="pill pill--accent font-mono text-[10.5px] font-bold tracking-wide">
+                      CHƯƠNG 3 · BÀI 3.2
+                    </span>
+                    <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
+                      Đang học dở
+                    </span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1">
+                      <Clock size={12} />
+                      <span>~25 phút thực hành</span>
+                    </span>
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <Sparkles size={12} />
+                      <span>+150 XP</span>
                     </span>
                   </div>
-                  <div className="mt-3 text-sm font-bold text-slate-800 dark:text-slate-200">{step.label}</div>
-                  <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{step.status}</div>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="personal-plan surface overflow-hidden rounded-xl p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-2.5">
-                <span className="theme-primary-bg flex h-8 w-8 items-center justify-center rounded-xl text-white">
-                  <BrainCircuit size={17} />
-                </span>
-                <div>
-                  <h2 className="text-base font-bold text-slate-950 dark:text-white">Lộ trình cá nhân hoá AI</h2>
-                  <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Học máy ưu tiên Visual + Kinesthetic cho Nguyễn Văn A.</p>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-2.5 leading-snug tracking-tight">
+                    Cơ chế Đa hình (Polymorphism) & Bản đồ Con trỏ ảo vtable
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed max-w-2xl">
+                    Khám phá cách CPU giải quyết Dynamic Dispatch tại runtime, cấu trúc ô nhớ của con trỏ <code className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-amber-600 dark:text-amber-400">vptr</code> và cách phòng tránh vtable overhead trong hệ thống nhúng.
+                  </p>
+
+                  {/* Quick CTAs */}
+                  <div className="mt-5 flex items-center gap-3 flex-wrap">
+                    <button
+                      onClick={() => onNavigate("workspace")}
+                      className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-xs font-black text-[#1C1304] bg-gradient-to-r from-[#F8BD57] via-[#F29B23] to-[#EE8420] hover:brightness-105 active:scale-95 shadow-md shadow-amber-500/20 transition cursor-pointer"
+                    >
+                      <PlayCircle size={16} strokeWidth={2.4} />
+                      <span>Vào Code Lab & Học tiếp ngay</span>
+                      <ArrowRight size={14} strokeWidth={2.4} />
+                    </button>
+
+                    <button
+                      onClick={() => onNavigate("defense-room")}
+                      className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
+                    >
+                      <ShieldCheck size={14} className="text-slate-500 dark:text-slate-400" />
+                      <span>Phòng Phản Biện AI (Live)</span>
+                    </button>
+
+                    <button
+                      onClick={() => onNavigate("workspace")}
+                      className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
+                    >
+                      <Layers size={14} className="text-[#EE8420]" />
+                      <span>Xem Mindmap chương</span>
+                    </button>
+
+                    <button
+                      onClick={() => onNavigate("workspace")}
+                      className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
+                    >
+                      <MessageSquareText size={14} className="text-amber-500" />
+                      <span>Hỏi AI Socratic Mentor</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Progress Visual Box */}
+                <div className="w-full md:w-56 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 shrink-0">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-slate-500 dark:text-slate-400">Tiến độ chương 3</span>
+                    <span className="text-slate-900 dark:text-white font-mono">68%</span>
+                  </div>
+                  <div className="mt-2 h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-[#EE8420] transition-all duration-700"
+                      style={{ width: "68%" }}
+                    />
+                  </div>
+                  <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
+                    <div className="flex justify-between">
+                      <span>Bài tập đã nộp:</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">12/16</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Quiz đạt chuẩn:</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">100%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Thời gian học:</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">4.5 / 6h</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <span className="rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-400">
-                VAK Profile
-              </span>
-            </div>
 
-            <div className="mt-4 grid grid-cols-[1fr_320px] gap-4">
-              <div className="grid grid-cols-3 gap-2.5">
-                {vakProfile.map((item, index) => {
-                  const colors = [
-                    { bar: "bg-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400" },
-                    { bar: "bg-purple-500", bg: "bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400" },
-                    { bar: "bg-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400" }
-                  ][index];
-                  return (
-                    <button
-                      key={item.label}
-                      onClick={() => setSelectedVak(item.label)}
-                      className="vak-card text-left w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-3.5 hover:border-blue-300 dark:hover:border-blue-700 transition hover:shadow-sm"
+              {/* 4 Learning Roadmap Milestone Cards */}
+              <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800/80">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Lộ trình 4 chặng kỹ năng chuyên sâu
+                  </h4>
+                  <button
+                    onClick={() => onNavigate("workspace")}
+                    className="text-xs font-bold text-[#EE8420] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Xem toàn bộ giáo trình</span>
+                    <ArrowUpRight size={13} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    {
+                      step: "Chặng 1",
+                      title: "C++20 & Quản lý Bộ nhớ",
+                      desc: "Heap, Stack, Con trỏ raw",
+                      status: "Hoàn thành",
+                      done: true,
+                    },
+                    {
+                      step: "Chặng 2",
+                      title: "OOP & Con trỏ thông minh",
+                      desc: "Virtual Table, Smart Ptr",
+                      status: "Đang học (68%)",
+                      active: true,
+                    },
+                    {
+                      step: "Chặng 3",
+                      title: "DSA & Giải thuật STL",
+                      desc: "Red-Black Tree, Hash Map",
+                      status: "Sẵn sàng mở khóa",
+                    },
+                    {
+                      step: "Chặng 4",
+                      title: "Kiến trúc & Đồ án AI",
+                      desc: "Phân tán & CodeMind Capstone",
+                      status: "Mục tiêu tốt nghiệp",
+                    },
+                  ].map((m) => (
+                    <div
+                      key={m.step}
+                      onClick={() => onNavigate("workspace")}
+                      className={`relative rounded-2xl border p-3.5 transition-all cursor-pointer ${
+                        m.active
+                          ? "border-[#EE8420] bg-amber-50/20 dark:bg-amber-950/20 shadow-xs ring-1 ring-[#EE8420]/30"
+                          : m.done
+                          ? "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10"
+                          : "border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 hover:border-slate-300 dark:hover:border-slate-700"
+                      }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                          <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${colors.bg}`}>{item.icon}</span>
-                          {item.label}
+                        <span className="text-[10px] font-bold font-mono uppercase text-slate-400">
+                          {m.step}
                         </span>
-                        <span className="font-mono text-xs font-black text-slate-700 dark:text-slate-300">{item.value}%</span>
+                        <span
+                          className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full ${
+                            m.done
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
+                              : m.active
+                              ? "bg-amber-100 text-amber-900 dark:bg-amber-950/70 dark:text-amber-300"
+                              : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                          }`}
+                        >
+                          {m.status}
+                        </span>
                       </div>
-                      <div className="mt-3.5 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div className={`h-full rounded-full ${colors.bar}`} style={{ width: `${item.value}%` }} />
+                      <div className="mt-2 text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
+                        {m.title}
                       </div>
-                      <div className="mt-2.5 text-xs text-slate-500 dark:text-slate-400 leading-tight">{item.desc}</div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-4 text-white shadow-xl">
-                <div className="mb-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-bold">
-                    <Target size={15} className="text-emerald-400" />
-                    Nhiệm vụ hợp gu
-                  </div>
-                  <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-300">hôm nay</span>
-                </div>
-                <div className="space-y-2">
-                  {personalTasks.map((task, index) => (
-                    <div key={task} className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/5 p-3 hover:bg-white/10 transition">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-[10px] font-black text-slate-950 shadow-md shadow-emerald-500/20">
-                        {index + 1}
-                      </span>
-                      <span className="text-xs leading-5 text-slate-350">{task}</span>
+                      <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                        {m.desc}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -323,314 +635,605 @@ export default function StudentDashboard({ avatarStyle, skillMapSkin, badgeFrame
             </div>
           </div>
 
-          <div className="surface rounded-xl p-4">
-            <div className="mb-3 flex items-center justify-between">
+          {/* 🌟 C. WHERE THE WORK STANDS HERO SECTION (Strictly Black, Amber, Grey - Marlo Authentic & Reactive to Selected Project) */}
+          <div className="marlo-card rounded-[28px] sm:rounded-[32px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-7 shadow-xs select-none">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
-                <h2 className="text-base font-semibold text-slate-950 dark:text-white">Bản đồ kỹ năng OOP</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Mở khóa bài mới bằng quiz, không chặn tiến độ vì bài tập lớn.</p>
-              </div>
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">2/6 hoàn thành</span>
-            </div>
-            <div className={`skill-map skill-map-${skillMapSkin} relative h-[460px] overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800`}>
-              <div
-                ref={mapViewportRef}
-                onPointerDown={handleMapPointerDown}
-                onPointerMove={handleMapPointerMove}
-                onPointerUp={stopMapPan}
-                onPointerCancel={stopMapPan}
-                onPointerLeave={stopMapPan}
-                className="skill-map-viewport absolute inset-0 overflow-scroll"
-              >
-                <div className={`skill-map-world pc-canvas-bg skill-map-world-${skillMapSkin}`}>
-                  <div className="skill-reward absolute left-[47%] top-[73%] z-[3]">
-                    <Star size={14} />
-                    +180 XP
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+                    Where the work stands
+                  </h3>
+
+                  {/* Interactive Project Dropdown Button */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWorkScope("project");
+                        setProjectMenuOpen(!projectMenuOpen);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-all cursor-pointer shadow-2xs"
+                      title="Bấm để chọn đồ án khác"
+                    >
+                      <FolderKanban size={13} />
+                      <span>{workScope === "project" ? selectedProject.name.split(" - ")[0] : "Tất cả 8 đồ án"}</span>
+                      <ChevronDown size={13} className={`transition-transform duration-200 ${projectMenuOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {projectMenuOpen && (
+                      <div className="absolute left-0 top-full mt-2 w-80 rounded-2xl bg-white dark:bg-[#1A1D28] border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-2 space-y-1">
+                        <div className="px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+                          Chọn 1 trong 8 Đồ án:
+                        </div>
+                        {CNTT_PROJECTS.map((p) => {
+                          const isCur = p.id === selectedProjectId && workScope === "project";
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedProjectId(p.id);
+                                setWorkScope("project");
+                                setProjectMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left text-xs transition cursor-pointer ${
+                                isCur
+                                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20"
+                                  : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                              }`}
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="truncate font-bold">{p.name.split(" - ")[0]}</div>
+                                <div className="text-[10px] text-slate-400 truncate">{p.client}</div>
+                              </div>
+                              <span className="font-mono text-xs font-bold shrink-0">{Math.round(p.progress * 100)}%</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-<svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <defs>
-                      <marker id="skill-arrow-done" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                        <path d="M0,0 L8,4 L0,8 z" fill="#10b981" />
-                      </marker>
-                      <marker id="skill-arrow-next" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                        <path d="M0,0 L8,4 L0,8 z" fill="#cbd5e1" />
-                      </marker>
-                      <marker id="skill-arrow-locked" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                        <path d="M0,0 L8,4 L0,8 z" fill="#94a3b8" />
-                      </marker>
-                    </defs>
-                     {edges.map(([from, to, status], index) => {
-                      const start = nodes.find((node) => node.id === from)!;
-                      const end = nodes.find((node) => node.id === to)!;
-                      const curve = index % 2 === 0 ? -8 : 8;
-                      const midX = (start.x + end.x) / 2;
-                      const midY = (start.y + end.y) / 2 + curve;
-                      return (
-                        <g key={index}>
-                          {/* Static background path */}
-                          <path
-                            d={`M ${start.x} ${start.y} Q ${midX} ${midY} ${end.x} ${end.y}`}
-                            className={`skill-edge ${edgeStyle[status as string]}`}
-                            markerEnd={`url(#skill-arrow-${status})`}
-                          />
-                          {/* Animated flow path for active connections - made thin and delicate */}
-                          {status === "done" && (
-                            <path
-                              d={`M ${start.x} ${start.y} Q ${midX} ${midY} ${end.x} ${end.y}`}
-                              fill="none"
-                              stroke="#10b981"
-                              strokeWidth="1.2"
-                              strokeDasharray="3, 8"
-                              strokeLinecap="round"
-                              className="animate-flow-dash opacity-50"
-                            />
-                          )}
-                          {status === "next" && (
-                            <path
-                              d={`M ${start.x} ${start.y} Q ${midX} ${midY} ${end.x} ${end.y}`}
-                              fill="none"
-                              stroke="#3b82f6"
-                              strokeWidth="1.2"
-                              strokeDasharray="3, 8"
-                              strokeLinecap="round"
-                              className="animate-flow-dash opacity-50"
-                            />
-                          )}
-                        </g>
-                      );
-                    })}
-                  </svg>
-                  {nodes.map((node) => {
-                    const isBoss = node.level === "Boss";
-                    const isGate = node.level === "Gate";
-                    const isDone = node.status === "done";
-                    const isActive = node.status === "active";
-                    const isNext = node.status === "next";
-                    const isLocked = node.status === "locked";
+                </div>
 
-                    return (
-                      <button
-                        key={node.id}
-                        onClick={() => {
-                          if (node.status !== "locked") {
-                            onNavigate("workspace");
-                          }
-                        }}
-                        className={`skill-node absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center outline-none focus:outline-none transition-all duration-300 ${nodeStyle[node.status]}`}
-                        style={{ left: `${node.x}%`, top: `${node.y}%` }}
+                <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-0.5 font-medium">
+                  {workStats.subtitle}
+                </p>
+              </div>
+
+              {/* Scope Switcher + Legend */}
+              <div className="flex flex-wrap items-center gap-4">
+                {/* 2-pill toggle: Dự án đang chọn vs Tất cả 8 đồ án */}
+                <div className="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setWorkScope("project")}
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                      workScope === "project"
+                        ? "bg-white dark:bg-[#14161a] text-slate-950 dark:text-white shadow-xs font-bold"
+                        : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    Dự án đang chọn
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWorkScope("all");
+                      setProjectMenuOpen(false);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                      workScope === "all"
+                        ? "bg-white dark:bg-[#14161a] text-slate-950 dark:text-white shadow-xs font-bold"
+                        : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    Tất cả 8 đồ án
+                  </button>
+                </div>
+
+                {/* Legend: Black (Done), Amber (Moving), Light Grey (Waiting) */}
+                <div className="flex items-center gap-3.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-[3px] bg-[#14161a] dark:bg-white" />
+                    <span>Done</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: "linear-gradient(to right, #f59e0b, #fbbf24)" }} />
+                    <span>Moving</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-[3px] bg-[#e5e7eb] dark:bg-[#2d313d]" />
+                    <span>Waiting</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Project Switcher Horizontal Pills Bar */}
+            {workScope === "project" && (
+              <div className="mb-5 pb-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center gap-2 overflow-x-auto scrollbar-none pt-0.5">
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+                  <FolderKanban size={13} />
+                  <span>Chọn đồ án:</span>
+                </span>
+                {CNTT_PROJECTS.map((p) => {
+                  const isActive = p.id === selectedProjectId;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(p.id);
+                        setWorkScope("project");
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                        isActive
+                          ? "bg-[#141619] dark:bg-white text-white dark:text-slate-950 shadow-2xs scale-102"
+                          : "bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      <span>{p.name.split(" - ")[0]}</span>
+                      <span className={`text-[10px] font-mono font-semibold ${isActive ? "text-amber-400 dark:text-amber-600" : "text-slate-400"}`}>
+                        {Math.round(p.progress * 100)}%
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Rows: Tasks, Projects/Story Points, Reviews */}
+            <div className="space-y-3 sm:space-y-4">
+              {/* 1. Tasks Row */}
+              <div className="cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200">
+                <div className="flex items-center gap-3 w-36 shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 group-hover:bg-amber-500/10 group-hover:text-amber-500 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0 transition-colors">
+                    <Check size={16} strokeWidth={2.4} />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">{workStats.row1.label}</span>
+                </div>
+
+                <div className="w-20 shrink-0">
+                  <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
+                    <MarloNumber key={`r1-t-${workStats.row1.total}`} value={workStats.row1.total} durationMs={800} />
+                  </div>
+                  <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
+                    <MarloNumber key={`r1-d-${workStats.row1.done}`} value={workStats.row1.done} durationMs={800} /> done
+                  </div>
+                </div>
+
+                {/* Progress Capsules Bar */}
+                <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
+                  {workStats.row1.done > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row1.done), animationDelay: "0.15s" }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      title={`Done: ${workStats.row1.done}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r1-cd-${workStats.row1.done}`} value={workStats.row1.done} durationMs={700} delayMs={150} /></span>
+                    </div>
+                  )}
+                  {workStats.row1.moving > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row1.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.25s" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      title={`Moving: ${workStats.row1.moving}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r1-cm-${workStats.row1.moving}`} value={workStats.row1.moving} durationMs={700} delayMs={250} /></span>
+                    </div>
+                  )}
+                  {workStats.row1.waiting > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row1.waiting), animationDelay: "0.35s" }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-500"
+                      title={`Waiting: ${workStats.row1.waiting}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r1-cw-${workStats.row1.waiting}`} value={workStats.row1.waiting} durationMs={700} delayMs={350} /></span>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={workStats.row1.navigate}
+                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
+                  title={workStats.row1.navTitle}
+                >
+                  <ArrowUpRight size={15} />
+                </button>
+              </div>
+
+              {/* 2. Projects or Story Points Row */}
+              <div className="cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200">
+                <div className="flex items-center gap-3 w-36 shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 group-hover:bg-amber-500/10 group-hover:text-amber-500 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0 transition-colors">
+                    {workStats.row2.icon === "points" ? (
+                      <Flame size={16} strokeWidth={2} />
+                    ) : (
+                      <Folder size={16} strokeWidth={2} />
+                    )}
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">{workStats.row2.label}</span>
+                </div>
+
+                <div className="w-20 shrink-0">
+                  <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
+                    <MarloNumber key={`r2-t-${workStats.row2.total}`} value={workStats.row2.total} durationMs={800} />
+                  </div>
+                  <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
+                    <MarloNumber key={`r2-d-${workStats.row2.done}`} value={workStats.row2.done} durationMs={800} /> done
+                  </div>
+                </div>
+
+                {/* Progress Capsules Bar */}
+                <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
+                  {workStats.row2.done > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row2.done), animationDelay: "0.22s" }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      title={`Done: ${workStats.row2.done}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r2-cd-${workStats.row2.done}`} value={workStats.row2.done} durationMs={700} delayMs={220} /></span>
+                    </div>
+                  )}
+                  {workStats.row2.moving > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row2.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.32s" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      title={`Moving: ${workStats.row2.moving}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r2-cm-${workStats.row2.moving}`} value={workStats.row2.moving} durationMs={700} delayMs={320} /></span>
+                    </div>
+                  )}
+                  {workStats.row2.waiting > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row2.waiting), animationDelay: "0.42s" }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-500"
+                      title={`Waiting: ${workStats.row2.waiting}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r2-cw-${workStats.row2.waiting}`} value={workStats.row2.waiting} durationMs={700} delayMs={420} /></span>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={workStats.row2.navigate}
+                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
+                  title={workStats.row2.navTitle}
+                >
+                  <ArrowUpRight size={15} />
+                </button>
+              </div>
+
+              {/* 3. Reviews Row */}
+              <div className="cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200">
+                <div className="flex items-center gap-3 w-36 shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 group-hover:bg-amber-500/10 group-hover:text-amber-500 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0 transition-colors">
+                    <Eye size={16} strokeWidth={2} />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">{workStats.row3.label}</span>
+                </div>
+
+                <div className="w-20 shrink-0">
+                  <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
+                    <MarloNumber key={`r3-t-${workStats.row3.total}`} value={workStats.row3.total} durationMs={800} />
+                  </div>
+                  <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
+                    <MarloNumber key={`r3-d-${workStats.row3.done}`} value={workStats.row3.done} durationMs={800} /> done
+                  </div>
+                </div>
+
+                {/* Progress Capsules Bar */}
+                <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
+                  {workStats.row3.done > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row3.done), animationDelay: "0.30s" }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      title={`Done: ${workStats.row3.done}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r3-cd-${workStats.row3.done}`} value={workStats.row3.done} durationMs={700} delayMs={300} /></span>
+                    </div>
+                  )}
+                  {workStats.row3.moving > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row3.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.40s" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      title={`Moving: ${workStats.row3.moving}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r3-cm-${workStats.row3.moving}`} value={workStats.row3.moving} durationMs={700} delayMs={400} /></span>
+                    </div>
+                  )}
+                  {workStats.row3.waiting > 0 && (
+                    <div
+                      style={{ flex: Math.max(1, workStats.row3.waiting), animationDelay: "0.50s" }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-500"
+                      title={`Waiting: ${workStats.row3.waiting}`}
+                    >
+                      <span className="tabular-nums"><MarloNumber key={`r3-cw-${workStats.row3.waiting}`} value={workStats.row3.waiting} durationMs={700} delayMs={500} /></span>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={workStats.row3.navigate}
+                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
+                  title={workStats.row3.navTitle}
+                >
+                  <ArrowUpRight size={15} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 🌟 D. VIỆC CẦN LÀM HÔM NAY (NEXT UP TASKS VỚI NHÃN DỰ ÁN RÕ RÀNG) */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Clock3 size={16} className="text-[#EE8420]" />
+                <h3 className="text-base font-bold text-slate-950 dark:text-white">
+                  Việc cần làm hôm nay (Next up)
+                </h3>
+              </div>
+
+              <button
+                onClick={() => onNavigate("kanban")}
+                className="text-xs font-bold text-[#8F5404] dark:text-amber-400 hover:text-[#EE8420] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>Xem bảng Kanban</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
+
+            {/* CARD 1: ACTIVE TASKS (In progress & Up next) */}
+            {tasks.filter((t) => !t.done).length > 0 && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs overflow-hidden">
+                <div className="divide-y divide-slate-100/90 dark:divide-slate-800/70">
+                  {tasks
+                    .filter((t) => !t.done)
+                    .map((task) => (
+                      <div
+                        key={task.id}
+                        onClick={() => toggleTask(task.id)}
+                        className="group flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer select-none"
                       >
-                        {/* Level badge with gamified icons */}
-                        <span className={`skill-node-level flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border transition shadow-sm ${
-                          isBoss
-                            ? "bg-gradient-to-r from-red-650 to-amber-600 text-white border-red-400/30 shadow-red-500/20"
-                            : isGate
-                            ? "bg-gradient-to-r from-indigo-600 to-purple-650 text-white border-indigo-400/30 shadow-indigo-500/20"
-                            : isDone
-                            ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-450"
-                            : isActive
-                            ? "bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/20"
-                            : "bg-slate-900/80 text-slate-350 border-slate-750"
-                        }`}>
-                          {isBoss && <Crown size={10} className="animate-bounce" />}
-                          {isGate && <Shield size={10} />}
-                          {node.level}
-                        </span>
+                        {/* Checkbox + Title + Subtitle */}
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTask(task.id);
+                            }}
+                            className="shrink-0 flex h-5 w-5 items-center justify-center rounded-[5px] border border-slate-300 dark:border-slate-600 hover:border-[#EE8420] bg-white dark:bg-slate-800 transition-colors cursor-pointer"
+                            title="Đánh dấu đã hoàn thành"
+                          />
 
-                        {/* Tech multi-layered node orb */}
-                        <div className={`relative p-1.5 rounded-full transition-all duration-300 ${
-                          isBoss
-                            ? isLocked ? "border-slate-800 bg-slate-900/60 scale-100" : "border-red-500/40 bg-red-950/20 scale-110 shadow-lg shadow-red-500/20"
-                            : isActive
-                            ? "border-blue-500/30 bg-blue-500/5 shadow-md shadow-blue-500/10"
-                            : isDone
-                            ? "border-emerald-500/20 bg-emerald-500/5"
-                            : "border-transparent bg-transparent"
-                        }`}>
-                          {/* Rotating outer tech ring */}
-                          <span className={`absolute inset-0 rounded-full border border-dashed pointer-events-none opacity-50 ${
-                            isActive ? "border-blue-400 animate-[spin_10s_linear_infinite]" :
-                            isBoss && !isLocked ? "border-red-500 animate-[spin_8s_linear_infinite]" :
-                            isDone ? "border-emerald-400" : "border-transparent"
-                          }`} />
-
-                          {/* Inner Orb Core with glossy gradients */}
-                          <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 shadow-md overflow-hidden ${
-                            isBoss
-                              ? isLocked
-                                ? "h-16 w-16 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 text-slate-500"
-                                : "h-16 w-16 bg-gradient-to-br from-red-600 via-red-750 to-rose-900 border-2 border-red-400 text-white shadow-lg shadow-red-500/30 scale-105"
-                              : isActive
-                              ? "h-14 w-14 bg-gradient-to-br from-blue-500 via-indigo-600 to-violet-750 border-2 border-blue-300 text-white shadow-lg shadow-blue-500/35 scale-105"
-                              : isDone
-                              ? "h-14 w-14 bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-600 border border-emerald-300 text-white shadow-sm"
-                              : isNext
-                              ? "h-14 w-14 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 text-blue-400"
-                              : "h-14 w-14 bg-gradient-to-br from-slate-900 via-slate-950 to-black border border-slate-800 text-slate-600"
-                          }`}>
-                            {isDone ? (
-                              <CheckCircle2 size={20} className="text-white drop-shadow" />
-                            ) : isLocked ? (
-                              <Lock size={17} />
-                            ) : isBoss ? (
-                              <Crown size={22} className="text-white animate-pulse" />
-                            ) : (
-                              <BookOpen size={18} />
-                            )}
-
-                            {/* Floating glossy glass reflection overlay */}
-                            <span className="absolute top-0.5 left-2 right-2 h-2.5 bg-white/20 rounded-full filter blur-[0.5px] pointer-events-none" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                {task.projectName}
+                              </span>
+                              <h4 className="text-[13.5px] font-medium leading-snug text-slate-900 dark:text-slate-100 transition-colors truncate">
+                                {task.label}
+                              </h4>
+                            </div>
+                            <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-normal mt-0.5 truncate">
+                              {task.epic} · {task.duration}
+                            </p>
                           </div>
-
-                          {/* Pulse wave for active node */}
-                          {isActive && (
-                            <span className="absolute -inset-0.5 rounded-full border-2 border-blue-400/40 animate-ping opacity-75 pointer-events-none" />
-                          )}
-                          {/* Fiery particles/rings for boss node (if unlocked) */}
-                          {isBoss && !isLocked && (
-                            <span className="absolute -inset-1 rounded-full border border-red-500 animate-pulse opacity-85 pointer-events-none" />
-                          )}
                         </div>
 
-                        {/* Label */}
-                        <span className={`skill-node-label font-black tracking-tight mt-2 text-center text-xs ${
-                          isBoss
-                            ? "text-red-500 dark:text-red-400 text-sm font-black uppercase tracking-wider text-shadow-md"
-                            : "text-slate-800 dark:text-white"
-                        }`}>
-                          {node.label}
-                        </span>
-                        
-                        <span className="skill-node-caption">{node.caption}</span>
-                        <span className="skill-node-xp">{node.xp}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                        {/* Status + Due date */}
+                        <div className="flex items-center gap-3.5 shrink-0 ml-2">
+                          {task.status === "in-progress" ? (
+                            <span className="pill pill--warn text-[11px] font-medium">
+                              In progress
+                            </span>
+                          ) : (
+                            <span className="pill pill--plain text-[11px] font-medium">
+                              Up next
+                            </span>
+                          )}
 
-              <div className="absolute inset-x-5 bottom-4 z-[3]">
-                <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-slate-300">
-                  <span>46%</span>
+                          <span className="text-[11.5px] text-slate-400 dark:text-slate-500 font-normal min-w-[65px] sm:min-w-[75px] text-right whitespace-nowrap">
+                            {task.due}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-800/80">
-                  <div className="theme-primary-progress h-full w-[46%] rounded-full" />
+              </div>
+            )}
+
+            {/* CARD 2: DONE LATELY */}
+            {tasks.filter((t) => t.done).length > 0 && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs overflow-hidden">
+                <div className="flex items-center justify-between px-4 sm:px-5 pt-3.5 pb-2.5">
+                  <h3 className="text-[13px] font-semibold text-slate-900 dark:text-white">
+                    Done lately
+                  </h3>
+                  <span className="h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 font-mono">
+                    {tasks.filter((t) => t.done).length}
+                  </span>
+                </div>
+
+                <div className="divide-y divide-slate-100/90 dark:divide-slate-800/70">
+                  {tasks
+                    .filter((t) => t.done)
+                    .map((task) => (
+                      <div
+                        key={task.id}
+                        onClick={() => toggleTask(task.id)}
+                        className="group flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer select-none bg-slate-50/20 dark:bg-slate-900/30"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTask(task.id);
+                            }}
+                            className="shrink-0 flex h-5 w-5 items-center justify-center rounded-[5px] bg-[#EE8420] border border-[#EE8420] text-white shadow-2xs transition-colors cursor-pointer"
+                            title="Đánh dấu chưa hoàn thành"
+                          >
+                            <Check size={13} strokeWidth={3.5} className="text-white" />
+                          </button>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded-md bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                {task.projectName}
+                              </span>
+                              <h4 className="text-[13.5px] font-medium leading-snug line-through text-slate-400 dark:text-slate-500 truncate">
+                                {task.label}
+                              </h4>
+                            </div>
+                            <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-normal mt-0.5 truncate">
+                              {task.epic} · {task.duration}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3.5 shrink-0 ml-2">
+                          <span className="pill pill--good text-[11px] font-medium">
+                            Done
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               </div>
-              <div className="pointer-events-none absolute left-4 top-4 z-[3] rounded-full border border-emerald-300/30 bg-slate-950/60 px-3 py-1 text-xs font-semibold text-emerald-100 backdrop-blur">
-                Campaign 01 · OOP Trail
-              </div>
-              <div className="pointer-events-none absolute right-4 top-4 z-[3] rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 shadow-lg backdrop-blur">
-                Boss khóa: Abstract class
-              </div>
-              <div className="pointer-events-none absolute right-4 bottom-12 z-[3] rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-[11px] font-semibold text-slate-300 backdrop-blur">
-                Kéo nền để xem map
-              </div>
-            </div>
+            )}
           </div>
         </section>
 
-        <aside className="space-y-4">
-          <div className="surface rounded-xl p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-950 dark:text-white">Việc hôm nay</h2>
-              <Clock3 size={15} className="text-slate-400" />
-            </div>
-            {/* Interactive checklist */}
-            <div className="mt-3 space-y-2">
-              {tasks.map((task) => (
-                <button
-                  key={task.id}
-                  onClick={() => toggleTask(task.id)}
-                  className="flex items-center gap-3 text-left w-full hover:bg-slate-50 dark:hover:bg-slate-800/40 p-1.5 rounded-lg transition"
-                >
-                  <span className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition ${
-                    task.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white dark:bg-slate-800"
-                  }`}>
-                    {task.done && <CheckCircle2 size={10} className="stroke-[3]" />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className={`truncate text-sm font-medium ${task.done ? "text-slate-450 dark:text-slate-500 line-through animate-pulse" : "text-slate-800 dark:text-slate-200"}`}>
-                      {task.label}
-                    </div>
-                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">
-                      {task.done ? "đã xong" : `+${task.xp} XP`}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+        {/* ═══ RIGHT ASIDE STACK (MARLO METRICS & ROTAS LIÊN KẾT TRỰC TIẾP DỰ ÁN) ═══ */}
+        <aside className="space-y-5">
+          {/* 1. MARLO TASK STATUS DONUT (Gắn trực tiếp với dự án đang chọn) */}
+          <MarloActivityRing
+            className="marlo-card"
+            size={128}
+            centerValue={selectedProgressPct}
+            centerLabel="tiến độ"
+            title={selectedProject.name.split(" - ")[0]}
+            subtitle={`Sprint · ${selectedProject.tasksDone}/${selectedProject.tasksTotal} task`}
+            actionText="Bảng Kanban"
+            onAction={() => onNavigate("kanban")}
+            segments={[
+              {
+                id: "upnext",
+                label: "Chờ làm",
+                value: Math.max(10, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4) / selectedProject.tasksTotal * 100)),
+                count: Math.max(1, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4)),
+                color: "#cbd5e1"
+              },
+              {
+                id: "prog",
+                label: "Đang làm",
+                value: Math.max(15, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6) / selectedProject.tasksTotal * 100)),
+                count: Math.max(1, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6)),
+                color: "#f97316"
+              },
+              {
+                id: "review",
+                label: "Cần review",
+                value: 15,
+                count: 2,
+                color: "#64748b"
+              },
+              {
+                id: "done",
+                label: "Đã hoàn thành",
+                value: selectedProgressPct,
+                count: selectedProject.tasksDone,
+                color: "#1e293b"
+              },
+            ]}
+          />
+
+          {/* 2. MARLO SPRINT CAPACITY BAR (Gắn với số Story Points của dự án đang chọn) */}
+          <div className="marlo-card">
+            <MarloCapacityBar
+              title={`Năng lực: ${selectedProject.name.split(" - ")[0]}`}
+              subtitle={`Phân bổ ${selectedProject.storyPoints} Story Points`}
+              items={[
+                { id: "done", label: "Đã xong", count: selectedProject.pointsBurned, color: "#14161a" },
+                { id: "prog", label: "Đang làm", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.6), color: "#f59e0b" },
+                { id: "review", label: "Review", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.25), color: "#fbbf24" },
+                { id: "backlog", label: "Tồn đọng", count: Math.max(20, selectedProject.storyPoints - selectedProject.pointsBurned - Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.85)), color: "#94a3b8" },
+              ]}
+            />
           </div>
 
-          <div className="surface rounded-xl p-4">
-            <h2 className="text-base font-semibold text-slate-950 dark:text-white">Gợi ý từ AI mentor</h2>
-            <div className="mt-3 rounded-xl bg-slate-950 p-3.5 text-white">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold">Theo hồ sơ Visual/Kinetic</div>
-                <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">cá nhân</span>
+          {/* 3. CA THI & HẸN GẶP HÔM NAY (TODAY'S BOOKED SESSIONS) */}
+          <div className="marlo-card surface rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Calendar size={15} className="text-[#EE8420]" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                  Lịch bảo vệ & Ca hẹn hôm nay
+                </h4>
               </div>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                Bài quiz gần nhất sai ở nhóm `super()` và override. Nên mở workspace, xem sơ đồ Animal/Dog rồi tự kéo thêm một node quan hệ kế thừa trước khi làm quiz.
-              </p>
+              <button
+                onClick={() => onNavigate("schedule")}
+                className="text-[11px] font-bold text-[#EE8420] hover:underline cursor-pointer"
+              >
+                Mở Calendar ↗
+              </button>
             </div>
-          </div>
 
-          <div className="surface rounded-xl p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-950 dark:text-white">Bảng Bạc</h2>
-              <span className="text-xs text-slate-400">Tuần 28</span>
+            {/* Session 1 */}
+            <div
+              onClick={() => onNavigate("schedule")}
+              className="marlo-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition cursor-pointer space-y-1.5"
+            >
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-900 dark:text-white">CodeMind AI · Khảo thí Sprint 2</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/80 font-semibold text-[10px]">
+                  Chờ hội đồng
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+                <Clock size={12} className="text-[#EE8420]" />
+                <span>10:15 – 15:45 (5h 30m)</span>
+                <span>·</span>
+                <span>Phòng B102</span>
+              </div>
             </div>
-            <div className="space-y-2">
-              {[
-                ["Trần Thị B", "1,240 XP", false],
-                ["Lê Văn C", "980 XP", false],
-                ["Nguyễn Văn A", "840 XP", true],
-                ["Phạm Thị D", "720 XP", false],
-              ].map(([name, xp, me], index) => (
-                <div key={name as string} className={`flex items-center gap-3 rounded-lg px-3 py-2 ${me ? "theme-primary-soft" : "bg-slate-50 dark:bg-slate-900/40"}`}>
-                  <span className={`w-5 text-sm font-semibold ${index < 2 ? "text-amber-600" : "text-slate-400"}`}>{index + 1}</span>
-                  {me && <span className={`student-avatar student-avatar-${avatarStyle} flex h-6 w-6 items-center justify-center rounded-md text-[9px] font-black`}>{avatarLabel[avatarStyle]}</span>}
-                  <span className={`flex-1 text-sm ${me ? "theme-primary-text font-semibold" : "text-slate-750 dark:text-slate-300"}`}>{name}</span>
-                  <span className="text-xs text-slate-500">{xp}</span>
-                </div>
-              ))}
+
+            {/* Session 2 */}
+            <div
+              onClick={() => onNavigate("schedule")}
+              className="marlo-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition cursor-pointer space-y-1.5"
+            >
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-900 dark:text-white">Review Kiến trúc Microservices</span>
+                <span className="pill pill--good font-semibold text-[10px]">
+                  Đã duyệt
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+                <Clock size={12} className="text-[#EE8420]" />
+                <span>16:00 – 17:00 (1h)</span>
+                <span>·</span>
+                <span>Tòa Alpha P302</span>
+              </div>
             </div>
           </div>
         </aside>
       </div>
 
-      {/* ── VAK EXPLANATION MODAL ── */}
-      {selectedVak && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 pointer-events-auto">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl animate-in scale-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <BrainCircuit size={16} className="text-blue-500 shrink-0" />
-                {vakDetails[selectedVak].title}
-              </h3>
-              <button
-                onClick={() => setSelectedVak(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X size={15} />
-              </button>
-            </div>
-            
-            <div className="mt-3 text-xs leading-5 text-slate-600 dark:text-slate-400 space-y-3">
-              <p>{vakDetails[selectedVak].explanation}</p>
-              <div className="rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 p-2.5 text-blue-700 dark:text-blue-300 font-semibold">
-                🎯 {vakDetails[selectedVak].action}
-              </div>
-            </div>
-
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setSelectedVak(null)}
-                className="rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-355 hover:bg-slate-200 transition"
-              >
-                Đã hiểu
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* ── FLOATING TOAST NOTIFICATION WITH UNDO PILL ── */}
+      {toastMessage && (
+        <MarloToast
+          message={toastMessage}
+          onUndo={lastToggledTaskId !== null ? handleUndoTask : undefined}
+          onClose={() => setToastMessage(null)}
+        />
       )}
     </div>
   );

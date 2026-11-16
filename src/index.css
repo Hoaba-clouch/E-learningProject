@@ -1,24 +1,79 @@
 @import 'tailwindcss';
 
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Be Vietnam Pro", "Urbanist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Be Vietnam Pro", "Urbanist", system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --font: "Plus Jakarta Sans", "Be Vietnam Pro", "Urbanist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --muted: #62656b;
+}
+
+.dark, [data-theme=dark] {
+  --muted: #a0a3a9;
+}
+
+.text-marlo-muted,
+.phead p {
+  color: var(--muted);
+}
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+
+/* 🌊 Authentic Marlo Circular Ripple View Transition ("Kiểu nó lan từ nút bấm") */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 9999;
+}
+::view-transition-group(root) {
+  animation: none;
+  z-index: 999999;
+}
+
+/* Smooth theme transition */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *:before,
+html.theme-transition *:after {
+  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.2s ease !important;
+  transition-delay: 0s !important;
+}
+
+html.dark,
+body.dark {
+  background: #111213;
+  color: #f0f0f1;
+}
+
 @theme inline {
-  --color-background: #f4f7fb;
-  --color-foreground: #172033;
+  --color-background: #FAF9F6;
+  --color-foreground: #1E1D1B;
   --color-card: #ffffff;
-  --color-card-foreground: #172033;
-  --color-primary: #2563eb;
-  --color-primary-foreground: #fff;
-  --color-secondary: #e8eef7;
-  --color-secondary-foreground: #526179;
-  --color-muted: #edf2f8;
-  --color-muted-foreground: #66758c;
-  --color-accent: #0f766e;
+  --color-card-foreground: #1E1D1B;
+  --color-primary: #f29b23;
+  --color-primary-foreground: #1c1304;
+  --color-secondary: #F4F2ED;
+  --color-secondary-foreground: #4A4843;
+  --color-muted: #EFECE6;
+  --color-muted-foreground: #7A7873;
+  --color-accent: #e8712a;
   --color-accent-foreground: #fff;
-  --color-border: #dbe3ee;
-  --color-ring: #2563eb;
+  --color-border: #E8E5DF;
+  --color-ring: #f29b23;
   --color-destructive: #dc2626;
-  --color-warning: #b45309;
+  --color-warning: #de9b35;
   --color-success: #15803d;
-  --radius: 8px;
+  --radius: 12px;
 }
 
 * {
@@ -28,29 +83,34 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: #f4f7fb;
-  color: #172033;
+  background: #FAF9F6;
+  color: #1E1D1B;
   font-size: 14px;
-  font-family: 'Inter', 'SF Pro Text', system-ui, -apple-system, sans-serif;
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
+button, input, select, textarea {
+  font-family: inherit;
+}
+
 .pc-app-bg {
-  --theme-primary: #2563eb;
-  --theme-primary-rgb: 37, 99, 235;
-  --theme-accent: #0f766e;
-  --theme-accent-rgb: 15, 118, 110;
-  --theme-contrast: #ffffff;
+  --theme-primary: #f29b23;
+  --theme-primary-rgb: 242, 155, 35;
+  --theme-accent: #e8712a;
+  --theme-accent-rgb: 232, 113, 42;
+  --theme-contrast: #1c1304;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #c9d3e1; border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: #9cabc0; }
+::-webkit-scrollbar-thumb { background: #d7d3cb; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #aba599; }
 
 /* Selection */
-::selection { background: rgba(37,99,235,0.18); color: #172033; }
+::selection { background: rgba(242, 155, 35, 0.22); color: #1c1304; }
 
 button, input, textarea {
   font: inherit;
@@ -66,20 +126,20 @@ button:disabled {
 
 .surface {
   background: #ffffff;
-  border: 1px solid #dbe3ee;
-  box-shadow: 0 6px 18px rgba(30, 41, 59, 0.045);
+  border: 1px solid #E8E5DF;
+  box-shadow: 0 4px 18px rgba(30, 29, 27, 0.035);
 }
 
 .soft-surface {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #FAF8F5;
+  border: 1px solid #EAE7E1;
 }
 
 .pc-app-bg {
-  background-color: #fafafa;
+  background-color: #FAF9F6;
   background-image:
-    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.1) 0, rgba(0, 0, 0, 0.1) 1px, transparent 1px, transparent 20px),
-    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.1) 0, rgba(0, 0, 0, 0.1) 1px, transparent 1px, transparent 20px);
+    repeating-linear-gradient(45deg, rgba(30, 29, 27, 0.035) 0, rgba(30, 29, 27, 0.035) 1px, transparent 1px, transparent 20px),
+    repeating-linear-gradient(-45deg, rgba(30, 29, 27, 0.035) 0, rgba(30, 29, 27, 0.035) 1px, transparent 1px, transparent 20px);
   background-size: 40px 40px;
 }
 
@@ -222,10 +282,6 @@ button:disabled {
 
 .pc-app-bg .to-teal-600 {
   --tw-gradient-to: var(--theme-accent) var(--tw-gradient-to-position) !important;
-}
-
-.pc-app-bg .bg-gradient-to-r {
-  background-image: linear-gradient(to right, var(--theme-primary), var(--theme-accent)) !important;
 }
 
 .pc-login-bg {
@@ -390,6 +446,17 @@ button:disabled {
 .personal-plan > * {
   position: relative;
   z-index: 1;
+}
+
+.snav__pill {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  will-change: clip-path;
 }
 
 .vak-card {
@@ -882,10 +949,10 @@ button:disabled {
 
 .theme-dark.pc-app-bg,
 .theme-dark .pc-login-bg {
-  background-color: #0f172a;
+  background-color: #111213;
   background-image:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.08) 0, rgba(255, 255, 255, 0.08) 1px, transparent 1px, transparent 20px),
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0, rgba(255, 255, 255, 0.06) 1px, transparent 1px, transparent 20px);
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.03) 0, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 20px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.02) 0, rgba(255, 255, 255, 0.02) 1px, transparent 1px, transparent 20px);
   background-size: 40px 40px;
 }
 
@@ -973,16 +1040,79 @@ button:disabled {
   color: #60a5fa !important;
 }
 
-.theme-dark .sidebar-nav-item:hover,
+.sidebar-nav-item {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.sidebar-nav-item[data-active="true"],
+.sidebar-nav-item[aria-current="page"] {
+  font-weight: 700 !important;
+}
+.sidebar-nav-item:not(.justify-center) {
+  justify-content: flex-start !important;
+}
+.sidebar-nav-item:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.sidebar-nav-item:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4) !important;
+}
+
+html.dark .sidebar-nav-item:hover:not([aria-current="page"]):not([data-active="true"]),
+.theme-dark .sidebar-nav-item:hover:not([aria-current="page"]):not([data-active="true"]),
+html.dark .theme-toggle-button:hover,
 .theme-dark .theme-toggle-button:hover {
-  background-color: #1e293b !important;
-  color: #f8fafc !important;
+  background-color: #222326 !important;
+  color: #f0f0f1 !important;
+}
+
+html.dark .sidebar-nav-item[aria-current="page"],
+html.dark .sidebar-nav-item[aria-current="page"]:hover,
+html.dark .sidebar-nav-item[data-active="true"],
+html.dark .sidebar-nav-item[data-active="true"]:hover,
+.theme-dark .sidebar-nav-item[aria-current="page"],
+.theme-dark .sidebar-nav-item[aria-current="page"]:hover,
+.theme-dark .sidebar-nav-item[data-active="true"],
+.theme-dark .sidebar-nav-item[data-active="true"]:hover {
+  background-color: transparent !important;
+  color: #161718 !important;
+}
+
+html.dark .sidebar-nav-item[data-active="true"] span,
+html.dark .sidebar-nav-item[data-active="true"]:hover span,
+html.dark .sidebar-nav-item[aria-current="page"] span,
+html.dark .sidebar-nav-item[aria-current="page"]:hover span,
+.theme-dark .sidebar-nav-item[data-active="true"] span,
+.theme-dark .sidebar-nav-item[data-active="true"]:hover span,
+.theme-dark .sidebar-nav-item[aria-current="page"] span,
+.theme-dark .sidebar-nav-item[aria-current="page"]:hover span {
+  color: #161718 !important;
+}
+
+html:not(.dark) .sidebar-nav-item[aria-current="page"],
+html:not(.dark) .sidebar-nav-item[aria-current="page"]:hover,
+html:not(.dark) .sidebar-nav-item[data-active="true"],
+html:not(.dark) .sidebar-nav-item[data-active="true"]:hover {
+  background-color: transparent !important;
+  color: #ffffff !important;
+}
+
+html:not(.dark) .sidebar-nav-item[data-active="true"] span,
+html:not(.dark) .sidebar-nav-item[data-active="true"]:hover span,
+html:not(.dark) .sidebar-nav-item[aria-current="page"] span,
+html:not(.dark) .sidebar-nav-item[aria-current="page"]:hover span {
+  color: #ffffff !important;
 }
 
 .theme-dark .sidebar-nav-active,
 .theme-dark .sidebar-nav-active:hover {
-  background-color: rgba(37, 99, 235, 0.22) !important;
-  color: #93c5fd !important;
+  background-color: transparent !important;
+  color: #161718 !important;
 }
 
 .theme-dark .sidebar-logout-button:hover {
@@ -1034,6 +1164,7 @@ button:disabled {
   font-size: 12px;
   font-weight: 700;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease !important;
 }
 
 .mindmap-node-card {
@@ -1757,99 +1888,387 @@ button:disabled {
   }
 }
 
-@keyframes scale-in {
-  from {
+/* ==========================================================================
+   MARLO 1:1 MODAL DIALOG & BACKDROP SYSTEM (Ported from kit.jsx Fc & Pc)
+   - Modal Dialog: duration 0.5s, ease back.out(1.5), scale 0.86 -> 1
+   - Backdrop Scrim: duration 0.3s, ease-out, opacity 0 -> 1
+   - Drawer Slide: duration 0.6s, ease expo.out, x 104% -> 0
+   ========================================================================== */
+
+@keyframes marloScrimIn {
+  0% {
     opacity: 0;
-    transform: scale(0.95);
   }
-  to {
+  100% {
+    opacity: 1;
+  }
+}
+
+.marlo-scrim {
+  animation: marloScrimIn 0.3s ease-out backwards;
+  will-change: opacity;
+}
+
+@keyframes marloScrimOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.marlo-scrim-out {
+  animation: marloScrimOut 0.25s ease-in forwards !important;
+  will-change: opacity;
+}
+
+@keyframes marloModalIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  100% {
     opacity: 1;
     transform: scale(1);
   }
 }
 
-.animate-scale-in {
-  animation: scale-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-/* Smooth Dropdown / Slide-Down Cascade Animation for Tabs & Workspaces */
-@keyframes tab-slide-down {
+@keyframes scale-in {
   0% {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: scale(0.86);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1);
+  }
+}
+
+.marlo-modal, .animate-scale-in, .animate-modal-in {
+  animation: marloModalIn 0.5s cubic-bezier(0.34, 1.35, 0.64, 1) backwards;
+  will-change: transform, opacity;
+  transform-origin: center center;
+}
+
+@keyframes marloModalOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.93);
+  }
+}
+
+.marlo-modal-out {
+  animation: marloModalOut 0.22s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards !important;
+  will-change: transform, opacity;
+}
+
+@keyframes marloDrawerIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(104%, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.marlo-drawer, .drawer-slide-in-right, .animate-drawer-slide-in {
+  animation: marloDrawerIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  will-change: transform, opacity;
+}
+
+@keyframes marloDrawerOut {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(104%, 0, 0);
+  }
+}
+
+.marlo-drawer-out {
+  animation: marloDrawerOut 0.3s cubic-bezier(0.7, 0, 0.84, 0) forwards !important;
+  will-change: transform, opacity;
+}
+
+.marlo-drawer-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 150, 150, 0.3) transparent;
+}
+.marlo-drawer-body::-webkit-scrollbar {
+  width: 5px;
+}
+.marlo-drawer-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.marlo-drawer-body::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 150, 0.25);
+  border-radius: 999px;
+}
+.marlo-drawer-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(150, 150, 150, 0.45);
+}
+
+.marlo-drawer-body > *, .drawer-body-stagger > * {
+  animation: marloRowIn 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
+}
+.marlo-drawer-body > *:nth-child(1), .drawer-body-stagger > *:nth-child(1) { animation-delay: 0.08s; }
+.marlo-drawer-body > *:nth-child(2), .drawer-body-stagger > *:nth-child(2) { animation-delay: 0.12s; }
+.marlo-drawer-body > *:nth-child(3), .drawer-body-stagger > *:nth-child(3) { animation-delay: 0.16s; }
+.marlo-drawer-body > *:nth-child(4), .drawer-body-stagger > *:nth-child(4) { animation-delay: 0.20s; }
+.marlo-drawer-body > *:nth-child(5), .drawer-body-stagger > *:nth-child(5) { animation-delay: 0.24s; }
+.marlo-drawer-body > *:nth-child(6), .drawer-body-stagger > *:nth-child(6) { animation-delay: 0.28s; }
+.marlo-drawer-body > *:nth-child(7), .drawer-body-stagger > *:nth-child(7) { animation-delay: 0.32s; }
+.marlo-drawer-body > *:nth-child(8), .drawer-body-stagger > *:nth-child(8) { animation-delay: 0.36s; }
+.marlo-drawer-body > *:nth-child(9), .drawer-body-stagger > *:nth-child(9) { animation-delay: 0.40s; }
+.marlo-drawer-body > *:nth-child(10), .drawer-body-stagger > *:nth-child(10) { animation-delay: 0.44s; }
+
+/* Smooth Static Transition for Tabs & Workspaces (Zero Bounce, Zero Jitter, Zero Lag) */
+@keyframes tab-slide-down {
+  0% {
+    opacity: 0.92;
+  }
+  100% {
+    opacity: 1;
   }
 }
 
 @keyframes tab-cascade-drop {
   0% {
-    opacity: 0;
-    transform: translateY(-10px);
+    opacity: 0.92;
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 .animate-tab-slide-down {
-  animation: tab-slide-down 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: transform, opacity;
+  animation: tab-slide-down 0.15s ease-out forwards;
 }
 
 .animate-tab-cascade {
-  animation: tab-cascade-drop 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: transform, opacity;
+  animation: tab-cascade-drop 0.15s ease-out forwards;
 }
 
-/* Staggered Item Dropdown Waterfall Classes (Pure Smooth Settlement, Zero Layout Jitter) */
-/* Staggered Item Dropdown Waterfall Classes (Từ từ dài xuống, không làm mờ, nghiêng nhẹ tự nhiên) */
-@keyframes item-cascade-down {
+/* ==========================================================================
+   MARLO 1:1 ENTRANCE & CASCADE ANIMATION SYSTEM (Ported from D:\C++\ul\marlo-app)
+   - Outer Cards & Lanes: duration 0.8s, ease expo.out, stagger 0.06s
+   - Inner Items & Rows: duration 0.55s, ease power3.out, stagger 0.03s, delay 0.22s
+   - 100% GPU accelerated, ZERO bounce/jitter, backwards fill prevents stuck transforms
+   ========================================================================== */
+
+@keyframes marloCardIn {
   0% {
-    opacity: 0.85;
-    transform-origin: top center;
-    transform: translateY(-24px) scaleY(0.4) rotate(-2deg);
-    max-height: 40px;
-    filter: none;
-  }
-  60% {
-    opacity: 1;
-    transform-origin: top center;
-    transform: translateY(3px) scaleY(1.04) rotate(0.8deg);
-    max-height: 280px;
-  }
-  85% {
-    transform-origin: top center;
-    transform: translateY(-1px) scaleY(0.99) rotate(-0.3deg);
+    opacity: 0;
+    transform: translate3d(0, 26px, 0) scale(0.985);
   }
   100% {
     opacity: 1;
-    transform-origin: top center;
-    transform: translateY(0) scaleY(1) rotate(0deg);
-    max-height: 500px;
-    filter: none;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes marloRowIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Backward compatibility keyframe */
+@keyframes item-cascade-down {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* 🏷️ Base Animation Classes (GPU-optimized: driven 1:1 by GSAP Marlo Engine) */
+.marlo-card {
+  transform: translateZ(0);
+}
+
+.marlo-row {
+  transform: translateZ(0);
+}
+
+/* ─── Snappy Kanban Task Waterfall ─── */
+@keyframes marloCardWaterfall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-kanban-card {
+  animation: marloCardWaterfall 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* ─── Sequential Course Card Waterfall ─── */
+@keyframes marloCourseCardEnter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-course-card {
+  animation: marloCourseCardEnter 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes marloCascadeItem {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
   }
 }
 
 .animate-cascade-item {
-  animation: item-cascade-down 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: marloCascadeItem 0.44s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.animate-cascade-1 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.03s both; }
-.animate-cascade-2 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both; }
-.animate-cascade-3 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.13s both; }
-.animate-cascade-4 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both; }
-.animate-cascade-5 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.23s both; }
-.animate-cascade-6 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both; }
-.animate-cascade-7 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.34s both; }
-.animate-cascade-8 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.40s both; }
-.animate-cascade-9 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.46s both; }
-.animate-cascade-10 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.52s both; }
-.animate-cascade-11 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.58s both; }
-.animate-cascade-12 { animation: item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.64s both; }
+/* 🏷️ Card & Container Staggers (Hardware-accelerated) */
+.marlo-card-1, .animate-cascade-1, .animate-box-stagger-1 { transform: translateZ(0); }
+.marlo-card-2, .animate-cascade-2, .animate-box-stagger-2 { transform: translateZ(0); }
+.marlo-card-3, .animate-cascade-3, .animate-box-stagger-3 { transform: translateZ(0); }
+.marlo-card-4, .animate-cascade-4, .animate-box-stagger-4 { transform: translateZ(0); }
+.marlo-card-5, .animate-cascade-5, .animate-box-stagger-5 { transform: translateZ(0); }
+.marlo-card-6, .animate-cascade-6, .animate-box-stagger-6 { transform: translateZ(0); }
+.marlo-card-7, .animate-cascade-7, .animate-box-stagger-7 { transform: translateZ(0); }
+.marlo-card-8, .animate-cascade-8, .animate-box-stagger-8 { transform: translateZ(0); }
+.marlo-card-9, .animate-cascade-9, .animate-box-stagger-9 { transform: translateZ(0); }
+.marlo-card-10, .animate-cascade-10, .animate-box-stagger-10 { transform: translateZ(0); }
+.marlo-card-11, .animate-cascade-11, .animate-box-stagger-11 { transform: translateZ(0); }
+.marlo-card-12, .animate-cascade-12, .animate-box-stagger-12 { transform: translateZ(0); }
+
+/* 🏷️ Inner Rows & List Items Stagger (Smooth 20ms offset) */
+.marlo-row-1  { transform: translateZ(0); }
+.marlo-row-2  { transform: translateZ(0); }
+.marlo-row-3  { transform: translateZ(0); }
+.marlo-row-4  { transform: translateZ(0); }
+.marlo-row-5  { transform: translateZ(0); }
+.marlo-row-6  { transform: translateZ(0); }
+.marlo-row-7  { transform: translateZ(0); }
+.marlo-row-8  { transform: translateZ(0); }
+.marlo-row-9  { transform: translateZ(0); }
+.marlo-row-10 { transform: translateZ(0); }
+.marlo-row-11 { transform: translateZ(0); }
+.marlo-row-12 { transform: translateZ(0); }
+.marlo-row-13 { transform: translateZ(0); }
+.marlo-row-14 { transform: translateZ(0); }
+.marlo-row-15 { transform: translateZ(0); }
+.marlo-row-16 { transform: translateZ(0); }
+
+/* ==========================================================================
+   MARLO KINETIC TYPOGRAPHY, NUMBERS & ITEM TRANSITION SYSTEM
+   ========================================================================== */
+
+/* 1. Kinetic Typography (Marlo oo & ao character split) */
+@keyframes marloCharIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 115%, 0) rotate(6deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+.marlo-word {
+  display: inline-block;
+  vertical-align: top;
+  padding-top: 0.18em;
+  margin-top: -0.18em;
+  padding-bottom: 0.18em;
+  margin-bottom: -0.18em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.marlo-ch {
+  display: inline-block;
+  animation: marloCharIn 0.65s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  transform: translateZ(0);
+}
+
+/* 2. Marlo Numbers (Tabular figures, smooth counting) */
+.marlo-num {
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+}
+
+@keyframes marloBarGrow {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.marlo-bar-grow {
+  transform-origin: left center;
+  animation: marloBarGrow 1.0s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  will-change: transform;
+}
+
+/* 3. Marlo Item & Tab Transition (Smooth glide, zero sudden jump) */
+.marlo-tab-btn {
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.marlo-tab-btn:active {
+  transform: scale(0.97);
+}
+
+.marlo-item-interactive {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.18s ease,
+              border-color 0.18s ease;
+}
+
+.marlo-item-interactive:hover {
+  transform: translate3d(0, -2px, 0);
+}
+
+.marlo-item-interactive:active {
+  transform: scale(0.985);
+}
 
 @keyframes barGrow {
   0% { transform: scaleX(0); opacity: 0; }
@@ -1991,19 +2410,17 @@ button:disabled {
   0% {
     opacity: 0;
     transform: scale(2.4) rotate(-26deg);
-    filter: blur(3px);
   }
   45% {
     opacity: 0.95;
     transform: scale(0.92) rotate(-8deg);
-    filter: blur(0px);
   }
   70% {
     transform: scale(1.05) rotate(-11deg);
   }
   100% {
     opacity: 0.95;
-    transform: scale(1) rotate(-9deg);
+    transform: scale(1) rotate(-10deg);
   }
 }
 
@@ -2019,11 +2436,11 @@ button:disabled {
 @keyframes toastSlideUp {
   0% {
     opacity: 0;
-    transform: translate(-50%, 28px) scale(0.94);
+    transform: translate3d(0, 24px, 0) scale(0.94);
   }
   100% {
     opacity: 1;
-    transform: translate(-50%, 0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
@@ -2042,11 +2459,23 @@ button:disabled {
   user-select: none !important;
 }
 
+html.dark .kanban-trello-slot,
+.theme-dark .kanban-trello-slot {
+  background-color: rgba(30, 41, 59, 0.65) !important;
+  border: 1.5px dashed rgba(100, 116, 139, 0.6) !important;
+}
+
 /* 4. Trello-style Column Drop Target (No harsh dashed blue outline) */
 .kanban-col-droptarget {
   background-color: #f1f5f9 !important;
   box-shadow: inset 0 0 0 2px #cbd5e1 !important;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+html.dark .kanban-col-droptarget,
+.theme-dark .kanban-col-droptarget {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.45), 0 0 20px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* 5. Ambient Radar Pulse for AI Anti-Cheating & Scanning */
@@ -2088,4 +2517,2597 @@ button:disabled {
   background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.09) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: diffScanLine 3s infinite linear;
+}
+/* ─── Trello Origin Slot (Solid anchor, zero flicker at source) ─── */
+.trello-slot-origin {
+  height: 84px;
+  min-height: 84px;
+  background-color: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.7;
+}
+
+html.dark .trello-slot-origin,
+.theme-dark .trello-slot-origin {
+  background-color: rgba(30, 41, 59, 0.65) !important;
+  border: 1.5px dashed rgba(100, 116, 139, 0.6) !important;
+}
+
+/* ─── Trello Expanding Slot Animation (Dài xuống từ từ, mượt mà, không giật) ─── */
+@keyframes trello-slot-expand {
+  0% {
+    height: 0px;
+    min-height: 0px;
+    opacity: 0.15;
+    transform: scaleY(0.15);
+    transform-origin: top center;
+    overflow: hidden;
+  }
+  50% {
+    opacity: 0.75;
+  }
+  100% {
+    height: 84px;
+    min-height: 84px;
+    opacity: 0.85;
+    transform: scaleY(1);
+    transform-origin: top center;
+  }
+}
+
+.trello-slot-unfurl {
+  height: 84px;
+  min-height: 84px;
+  background-color: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  animation: trello-slot-expand 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: height, transform, opacity;
+}
+
+html.dark .trello-slot-unfurl,
+.theme-dark .trello-slot-unfurl {
+  background-color: rgba(30, 41, 59, 0.65) !important;
+  border: 1.5px dashed rgba(100, 116, 139, 0.6) !important;
+}
+
+/* ─── Newly Dropped Card Spring Bounce & Glow Highlight ─── */
+@keyframes card-drop-settle {
+  0% {
+    transform: scale(0.98) translateY(3px);
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08);
+  }
+  35% {
+    transform: scale(1.02) translateY(-6px);
+    box-shadow: 0 8px 16px -2px rgba(59, 130, 246, 0.16);
+  }
+  70% {
+    transform: scale(0.995) translateY(1.5px);
+    box-shadow: 0 4px 8px -2px rgba(15, 23, 42, 0.08);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+  }
+}
+
+.animate-card-drop-settle {
+  animation: card-drop-settle 0.46s cubic-bezier(0.2, 0.85, 0.3, 1.2) forwards;
+  z-index: 20;
+  will-change: transform, box-shadow;
+}
+
+/* ─── Slide-over Drawer Animation (Aliased to Marlo 1:1 Drawer) ─── */
+.drawer-slide-in-right {
+  animation: marloDrawerIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  will-change: transform, opacity;
+}
+
+/* Scrubber Head Pulse */
+@keyframes scrubberPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px rgba(234, 179, 8, 0.8));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(234, 179, 8, 1));
+    transform: scale(1.15);
+  }
+}
+
+.scrubber-dot-pulse {
+  animation: scrubberPulse 2s infinite ease-in-out;
+  transform-origin: center;
+}
+
+/* ─── F8 Course Catalog & Learning Workspace Modern Animations ─── */
+@keyframes f8FadeScaleIn {
+  0% {
+    opacity: 0.88;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.f8-fade-scale {
+  animation: f8FadeScaleIn 0.22s ease-out forwards;
+}
+
+@keyframes f8Shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.f8-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: f8Shimmer 2.2s infinite;
+}
+
+@keyframes f8PulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+.f8-pulse-glow {
+  animation: f8PulseGlow 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.f8-card-hover {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.f8-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+}
+
+/* ─── Git Commit Hover Popover Spring Entrance Animation ─── */
+@keyframes commitPopoverPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translate3d(0, -6px, 0);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.015) translate3d(0, 1px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+.animate-commit-popover {
+  animation: commitPopoverPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top center;
+  will-change: transform, opacity;
+}
+
+/* ─── F8 Course Catalog & Learning Workspace Marlo Cascades ─── */
+@keyframes f8CardStaggerIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-card-stagger {
+  animation: f8CardStaggerIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  will-change: transform, opacity;
+}
+
+@keyframes workspaceCascadeIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* ─── Mindmap Node Staggered Cascade Entrance (Smooth Marlo curve, zero bounce) ─── */
+@keyframes mindmapNodePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+.animate-mindmap-node {
+  animation: mindmapNodePop 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  will-change: transform, opacity;
+}
+
+/* Staggered entrance for mindmap edges */
+.react-flow__edge-path {
+  animation: edgeFadeIn 0.35s ease-out forwards;
+}
+
+@keyframes edgeFadeIn {
+  0% {
+    opacity: 0;
+    stroke-dasharray: 6 6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Universal Silky Screen Entrance Animation (Ported 1:1 from Marlo: 60FPS GPU, backwards fill) */
+@keyframes marloScreenEnter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-screen-enter {
+  animation: marloScreenEnter 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 🏷️ Marlo Smooth Accordion Cascade (Staggered row pop-in on expand) */
+@keyframes marloAccordionExpand {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-accordion-expand {
+  animation: marloAccordionExpand 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes marloAccordionRow {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-accordion-row {
+  animation: marloAccordionRow 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 🏷️ Marlo Smooth Dropdown Pop-in / Pop-out with Spring Deceleration */
+@keyframes marloDropdownIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translate3d(0, -10px, 0);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.018) translate3d(0, 1px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes marloDropdownOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.94) translate3d(0, -8px, 0);
+  }
+}
+
+.marlo-dropdown-in {
+  animation: marloDropdownIn 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top right;
+  will-change: transform, opacity;
+}
+
+.marlo-dropdown-out {
+  animation: marloDropdownOut 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+  transform-origin: top right;
+  will-change: transform, opacity;
+}
+
+@keyframes marloItemStaggerIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.marlo-item-in {
+  animation: marloItemStaggerIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@keyframes marloFadeIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: marloFadeIn 0.44s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-enter-stagger-1 { transform: translateZ(0); }
+.animate-enter-stagger-2 { transform: translateZ(0); }
+.animate-enter-stagger-3 { transform: translateZ(0); }
+.animate-enter-stagger-4 { transform: translateZ(0); }
+.animate-enter-stagger-5 { transform: translateZ(0); }
+.animate-enter-stagger-6 { transform: translateZ(0); }
+
+/* 🌊 Thin Liquid Water Transition Light Beam Across Top of Content */
+@keyframes waterTransitionBar {
+  0% {
+    transform: scaleX(0.02);
+    transform-origin: left;
+    opacity: 0.95;
+  }
+  50% {
+    transform: scaleX(0.75);
+    transform-origin: left;
+    opacity: 0.85;
+  }
+  100% {
+    transform: scaleX(1);
+    transform-origin: left;
+    opacity: 0;
+  }
+}
+
+.animate-water-transition-bar {
+  animation: waterTransitionBar 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 🌊 LIQUID WATER RIPPLE & GLIDE TRANSITIONS (Hiệu ứng lan nước) */
+@keyframes waterRippleExpand {
+  0% {
+    transform: translate(-50%, -50%) scale(0.15);
+    opacity: 0.9;
+  }
+  45% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.5);
+    opacity: 0;
+  }
+}
+
+.animate-water-ripple {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.55) 0%, rgba(56, 189, 248, 0.25) 50%, transparent 75%);
+  animation: waterRippleExpand 0.65s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+  z-index: 25;
+}
+
+@keyframes liquidDropletPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+.animate-liquid-pulse {
+  animation: liquidDropletPulse 2.8s ease-in-out infinite;
+}
+
+/* 🏷️ MARLO AUTHENTIC RUBBER STAMP & DRAWER ANIMATIONS (from marlo-app) */
+.animate-drawer-slide-in {
+  animation: marloDrawerIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  will-change: transform, opacity;
+}
+
+@keyframes rubberStampSlam {
+  0% {
+    opacity: 0;
+    transform: scale(2.8) rotate(22deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(0.88) rotate(-13deg);
+  }
+  65% {
+    transform: scale(1.08) rotate(-8deg);
+  }
+  85% {
+    transform: scale(0.97) rotate(-11deg);
+  }
+  100% {
+    opacity: 0.94;
+    transform: scale(1) rotate(-10deg);
+  }
+}
+
+.animate-stamp-slam {
+  animation: rubberStampSlam 0.48s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  transform-origin: center center;
+}
+
+@keyframes paperCardJolt {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.982) translateY(2px); }
+  65% { transform: scale(1.006) translateY(-1px); }
+  100% { transform: scale(1) translateY(0); }
+}
+
+.animate-paper-jolt {
+  animation: paperCardJolt 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ─── 📅 Engineering Schedule Rota Timeline Animations ─── */
+@keyframes timelineBarUnfurl {
+  0% {
+    opacity: 0;
+    transform: scaleX(0);
+    transform-origin: left center;
+  }
+  20% {
+    opacity: 1;
+  }
+  85% {
+    transform: scaleX(1.015);
+    transform-origin: left center;
+  }
+  100% {
+    opacity: 1;
+    transform: scaleX(1);
+    transform-origin: left center;
+  }
+}
+
+.animate-timeline-bar {
+  transform-origin: left center;
+  animation: timelineBarUnfurl 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes timelineTextReveal {
+  0%, 25% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-timeline-text {
+  animation: timelineTextReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes barberPoleSweep {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 32px 0;
+  }
+}
+
+.animate-striped-slot {
+  background-size: 32px 32px;
+  animation: barberPoleSweep 2.2s linear infinite;
+}
+
+@keyframes timeMarkerPing {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.8));
+  }
+}
+
+.animate-time-marker-pulse {
+  animation: timeMarkerPing 2s infinite ease-in-out;
+}
+
+/* ==========================================================================
+   MARLO SUITE PRIMITIVES (Donut, Capacity Stack, Focus Timer, Heatmap)
+   ========================================================================== */
+
+/* 1. Marlo Capacity Stack Bar (scaleX from 0 to 1 stagger) */
+@keyframes capSegGrow {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.cap__seg {
+  transform-origin: left center;
+  animation: capSegGrow 0.85s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  will-change: transform, opacity;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), filter 0.22s ease, box-shadow 0.22s ease;
+}
+
+.cap__seg:hover {
+  filter: brightness(1.09);
+  transform: translateY(-1px) scaleY(1.02);
+  z-index: 5;
+}
+
+.cap__row:hover .cap__go {
+  background-color: #14161a;
+  color: #ffffff;
+  border-color: #14161a;
+  transform: scale(1.05);
+}
+
+.dark .cap__row:hover .cap__go {
+  background-color: #f59e0b;
+  color: #14161a;
+  border-color: #f59e0b;
+}
+
+/* 2. Marlo Activity Ring (Donut Stroke) */
+.donut__arc {
+  transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.3s ease;
+}
+
+/* 3. Focus Timer Ambient Glow */
+@keyframes timerPulseRing {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(242, 155, 35, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(242, 155, 35, 0);
+  }
+}
+
+.timer-running {
+  animation: timerPulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MARLO NATIVE TIMER WIDGET (1:1 Exact Match from marlo-app shell.jsx)
+   ───────────────────────────────────────────────────────────────────────────── */
+.marlo-timer-card {
+  background: #f5f5f6;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 26, 0.08), 0 4px 14px -2px rgba(20, 22, 26, 0.05);
+  border-radius: 26px;
+  flex: none;
+  padding: 16px;
+  transition: all 0.25s ease;
+}
+:is(.dark) .marlo-timer-card {
+  background: #1b1c1e;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 4px 14px -2px rgba(0, 0, 0, 0.4);
+}
+
+.marlo-timer-top {
+  justify-content: space-between;
+  align-items: center;
+  display: flex;
+}
+.marlo-timer-top small {
+  font-size: 12px;
+  color: #62656b;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+:is(.dark) .marlo-timer-top small {
+  color: #a0a3a9;
+}
+
+.marlo-timer-stop {
+  width: 30px;
+  height: 30px;
+  color: #62656b;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 26, 0.12);
+  border-radius: 50%;
+  place-items: center;
+  display: grid;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+:is(.dark) .marlo-timer-stop {
+  color: #d2d3d6;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.marlo-timer-stop:hover {
+  background: #ecedef;
+  color: #161718;
+}
+:is(.dark) .marlo-timer-stop:hover {
+  background: #222326;
+  color: #f0f0f1;
+}
+
+.marlo-timer-today {
+  font-size: 24px;
+  letter-spacing: -0.015em;
+  margin: 3px 0 2px;
+  font-weight: 700;
+  display: block;
+  color: #161718;
+  line-height: 1.2;
+}
+:is(.dark) .marlo-timer-today {
+  color: #f0f0f1;
+}
+.marlo-timer-today small {
+  font-size: 13.5px;
+  color: #62656b;
+  letter-spacing: 0;
+  font-weight: 500;
+  margin-left: 4px;
+}
+:is(.dark) .marlo-timer-today small {
+  color: #a0a3a9;
+}
+
+.marlo-timer-proj {
+  max-width: 100%;
+  font-size: 12px;
+  color: #393b3f;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  display: flex;
+  overflow: hidden;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+:is(.dark) .marlo-timer-proj {
+  color: #d2d3d6;
+}
+.marlo-timer-proj:hover {
+  color: #161718;
+}
+:is(.dark) .marlo-timer-proj:hover {
+  color: #f0f0f1;
+}
+
+.marlo-timer-pill {
+  background: #ecedef;
+  height: 48px;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 26, 0.08);
+  border-radius: 99px;
+  align-items: center;
+  padding: 4px 4px 4px 18px;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+:is(.dark) .marlo-timer-pill {
+  background: linear-gradient(90deg, #4e3314 0%, #85531e 40%, #ea8c26 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.marlo-timer-pill.is-on {
+  box-shadow: inset 0 0 0 1px #fdba74, 0 0 0 3px rgba(254, 215, 170, 0.5);
+}
+:is(.dark) .marlo-timer-pill.is-on {
+  box-shadow: inset 0 0 0 1px #f4a43a, 0 0 0 3px rgba(244, 164, 58, 0.3);
+}
+
+.marlo-timer-fill {
+  border-radius: inherit;
+  background: linear-gradient(90deg, #fde2bd, #f29b23);
+  transform-origin: left;
+  position: absolute;
+  inset: 0;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+:is(.dark) .marlo-timer-fill {
+  background: linear-gradient(90deg, #4e3314 0%, #85531e 40%, #ea8c26 100%);
+}
+
+.marlo-timer-clock {
+  z-index: 1;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  color: #161718;
+  flex: 1;
+  font-weight: 700;
+  font-family: "Plus Jakarta Sans", "Be Vietnam Pro", "Urbanist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+:is(.dark) .marlo-timer-clock {
+  color: #ffffff;
+}
+
+.marlo-timer-play {
+  z-index: 1;
+  background: #161718;
+  width: 40px;
+  height: 40px;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  flex: none;
+  place-items: center;
+  display: grid;
+  position: relative;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s ease, background-color 0.2s ease;
+}
+:is(.dark) .marlo-timer-play {
+  background: #1b1c1e;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.marlo-timer-play:hover {
+  transform: scale(1.05);
+}
+:is(.dark) .marlo-timer-play:hover {
+  background: #141517;
+  color: #ffffff;
+}
+.marlo-timer-play:active {
+  transform: scale(0.95);
+}
+.marlo-timer-pill.is-on .marlo-timer-play {
+  background: #1b1c1e !important;
+  color: #f4a43a !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MARLO DUAL THEME TOGGLE CAPSULE SWITCH (.themesw - 1:1 Match from shell.jsx)
+   ───────────────────────────────────────────────────────────────────────────── */
+.themesw {
+  background: #f5f5f6;
+  width: 66px;
+  height: 36px;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 26, 0.08);
+  border-radius: 99px;
+  flex: none;
+  align-items: center;
+  padding: 3px;
+  display: inline-flex;
+  position: relative;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  user-select: none;
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+:is(.dark) .themesw,
+.theme-dark .themesw,
+html.dark .themesw {
+  background: #1b1c1e;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.themesw:hover {
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 26, 0.16);
+}
+:is(.dark) .themesw:hover,
+.theme-dark .themesw:hover,
+html.dark .themesw:hover {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.themesw__knob {
+  background: #161718;
+  width: 30px;
+  height: 30px;
+  box-shadow: 0 1px 2px rgba(20, 22, 26, 0.12), 0 2px 4px rgba(20, 22, 26, 0.08);
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  pointer-events: none;
+  transition: transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.25s ease,
+              box-shadow 0.25s ease;
+  will-change: transform;
+}
+
+:is(.dark) .themesw__knob,
+.theme-dark .themesw__knob,
+html.dark .themesw__knob {
+  background: #f0f0f1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.themesw[aria-checked="true"] .themesw__knob {
+  transform: translateX(30px);
+}
+
+.themesw:active .themesw__knob {
+  transform: scale(0.94);
+}
+.themesw[aria-checked="true"]:active .themesw__knob {
+  transform: translateX(30px) scale(0.94);
+}
+
+.themesw span {
+  z-index: 1;
+  color: #62656b;
+  flex: 1;
+  place-items: center;
+  display: grid;
+  position: relative;
+  pointer-events: none;
+  transition: color 0.25s ease;
+}
+
+:is(.dark) .themesw span,
+.theme-dark .themesw span,
+html.dark .themesw span {
+  color: #a0a3a9;
+}
+
+.themesw span.is-on {
+  color: #f0f0f1;
+}
+
+:is(.dark) .themesw span.is-on,
+.theme-dark .themesw span.is-on,
+html.dark .themesw span.is-on {
+  color: #161718;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MARLO TASK DRAWER & STEPPER & CHECKLIST (1:1 Exact Match from marlo-app tasks.jsx)
+   ───────────────────────────────────────────────────────────────────────────── */
+.marlo-stepper {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+}
+.marlo-stepper li {
+  flex-direction: column;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  display: flex;
+  position: relative;
+}
+.marlo-stepper li:last-child {
+  flex: none;
+}
+.marlo-stepper-dot {
+  z-index: 2;
+  background: #ffffff;
+  width: 24px;
+  height: 24px;
+  box-shadow: inset 0 0 0 2px #cbd5e1;
+  border-radius: 50%;
+  place-items: center;
+  display: grid;
+  position: relative;
+  transition: all 0.25s ease;
+}
+:is(.dark) .marlo-stepper-dot {
+  background: #0f172a;
+  box-shadow: inset 0 0 0 2px #334155;
+}
+.marlo-stepper li.is-done .marlo-stepper-dot {
+  background: #f97316;
+  color: #ffffff;
+  box-shadow: none;
+}
+.marlo-stepper li.is-now .marlo-stepper-dot {
+  box-shadow: inset 0 0 0 2.5px #f97316;
+}
+.marlo-stepper li.is-now .marlo-stepper-dot:after {
+  content: "";
+  background: #f97316;
+  border-radius: 50%;
+  position: absolute;
+  inset: 5px;
+}
+.marlo-stepper li.is-now .marlo-stepper-dot:before {
+  content: "";
+  background: rgba(249, 115, 22, 0.22);
+  border-radius: 50%;
+  position: absolute;
+  inset: -5px;
+  animation: 2.2s ease-in-out infinite breathe-ring;
+}
+@keyframes breathe-ring {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+}
+.marlo-stepper-bar {
+  background: #e2e8f0;
+  border-radius: 2px;
+  height: 2.5px;
+  position: absolute;
+  top: 11px;
+  left: 28px;
+  right: 6px;
+  overflow: hidden;
+  z-index: 1;
+}
+:is(.dark) .marlo-stepper-bar {
+  background: #334155;
+}
+.marlo-stepper-fill {
+  background: #f97316;
+  transform-origin: left;
+  position: absolute;
+  inset: 0;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.marlo-stepper small {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding-right: 6px;
+  font-weight: 600;
+  overflow: hidden;
+  transition: color 0.2s ease;
+}
+:is(.dark) .marlo-stepper small {
+  color: #64748b;
+}
+.marlo-stepper li.is-done small,
+.marlo-stepper li.is-now small {
+  color: #0f172a;
+  font-weight: 700;
+}
+:is(.dark) .marlo-stepper li.is-done small,
+:is(.dark) .marlo-stepper li.is-now small {
+  color: #f8fafc;
+}
+
+
+/* Marlo Authentic Checklist Cards */
+.marlo-check-card {
+  background: #f8fafc;
+  cursor: pointer;
+  border-radius: 14px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  font-weight: 600;
+  display: flex;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+:is(.dark) .marlo-check-card {
+  background: #131722;
+  border-color: #1e293b;
+}
+.marlo-check-card:hover {
+  background: #f1f5f9;
+}
+:is(.dark) .marlo-check-card:hover {
+  background: #1a2030;
+}
+.marlo-check-card.is-done {
+  opacity: 0.85;
+}
+.marlo-check-card.is-done span {
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+:is(.dark) .marlo-check-card.is-done span {
+  color: #64748b;
+}
+
+.marlo-chk-box {
+  width: 22px;
+  height: 22px;
+  box-shadow: inset 0 0 0 1.8px #cbd5e1;
+  background: #ffffff;
+  border-radius: 7px;
+  flex: none;
+  place-items: center;
+  display: grid;
+  transition: all 0.15s ease;
+}
+:is(.dark) .marlo-chk-box {
+  background: #1e293b;
+  box-shadow: inset 0 0 0 1.8px #475569;
+}
+.marlo-check-card:hover .marlo-chk-box {
+  box-shadow: inset 0 0 0 2px #f97316;
+}
+.marlo-chk-box[data-checked="true"] {
+  background: #f97316 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.marlo-chk-box[data-checked="true"] svg {
+  animation: marloCheckBounce 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes marloCheckBounce {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 4. Heatmap Cell Hover */
+.heat-cell {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease;
+}
+.heat-cell:hover {
+  transform: scale(1.22);
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* 5. Authentic Marlo Rail Tooltip (Floating black pill on hover) */
+@keyframes marloTipIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(-6px, -50%, 0) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, -50%, 0) scale(1);
+  }
+}
+.animate-marlo-tip {
+  animation: marloTipIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. AUTHENTIC MARLO GOLDEN PRIMARY BUTTON & MAGNETIC PHYSICS
+   Exact color tokens & CSS from marlo-app/src/styles/index-DPV1UCmh.css
+   --accent: #f29b23; --accent-from: #f8bd57; --accent-to: #ee8420;
+   --accent-ink: #1c1304; --accent-glow: #ee842073;
+   ═══════════════════════════════════════════════════════════════════════════ */
+.btn-marlo-primary,
+.btn--primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 9999px; /* Pill capsule shape matching media_1794395451557_dfb0f990.png */
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  outline: none;
+  color: #1c1304; /* --accent-ink */
+  background: linear-gradient(135deg, #f8bd57, #f29b23 52%, #ee8420);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 10px 22px -12px rgba(238, 132, 32, 0.5);
+  transition: filter 0.18s ease, box-shadow 0.2s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  text-decoration: none;
+}
+
+.btn-marlo-primary:hover,
+.btn--primary:hover {
+  filter: brightness(1.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 14px 28px -10px rgba(238, 132, 32, 0.65);
+}
+
+.btn-marlo-primary:active,
+.btn--primary:active {
+  transform: scale(0.96) !important;
+  filter: brightness(0.97);
+}
+
+/* Secondary Button in Marlo style */
+.btn-marlo-secondary,
+.btn--secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 9999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+  color: #1e1d1b;
+  background: #ffffff;
+  border: 1px solid #ebe8e2;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-marlo-secondary:active,
+.btn--secondary:active {
+  transform: scale(0.96) !important;
+}
+
+.dark .btn-marlo-secondary,
+.dark .btn--secondary {
+  background: #1e222b;
+  border-color: #2e3545;
+  color: #e2e8f0;
+}
+
+.btn-marlo-secondary:hover,
+.btn--secondary:hover {
+  background: #f4f2ed;
+  border-color: #ded9cf;
+}
+
+.dark .btn-marlo-secondary:hover,
+.dark .btn--secondary:hover {
+  background: #283040;
+}
+
+/* Magnetic Physics class */
+.magnetic {
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+}
+
+/* ─── Marlo Authentic Segmented Control (.seg) ─── */
+.seg,
+.marlo-seg {
+  background: #eaebed;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 26, 0.08);
+  border-radius: 13px;
+  padding: 3px;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  user-select: none;
+  max-width: 100%;
+}
+
+.dark .seg, .dark .marlo-seg {
+  background: #222326;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.seg__thumb, .marlo-seg__thumb {
+  pointer-events: none;
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  background: #161718;
+  box-shadow: 0 3px 8px -1px rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  z-index: 0;
+  will-change: clip-path;
+  transform: translateZ(0);
+}
+
+.dark .seg__thumb,
+.dark .marlo-seg__thumb {
+  background: #f0f0f1;
+  box-shadow: 0 3px 8px -1px rgba(0, 0, 0, 0.5);
+}
+
+.marlo-seg--tone-blue .seg__thumb,
+.marlo-seg--tone-blue .marlo-seg__thumb {
+  background: #2563eb;
+  box-shadow: 0 4px 14px -3px rgba(37, 99, 235, 0.45);
+}
+
+.marlo-seg--accent .seg__thumb,
+.marlo-seg--accent .marlo-seg__thumb,
+.marlo-seg--tone-accent .seg__thumb,
+.marlo-seg--tone-accent .marlo-seg__thumb {
+  background: linear-gradient(135deg, #f8bd57, #f29b23 52%, #ee8420);
+  box-shadow: 0 4px 14px -3px rgba(238, 132, 32, 0.45);
+}
+
+.seg button,
+.marlo-seg button {
+  z-index: 1;
+  height: 32px;
+  font-size: 13px;
+  color: #1f2937 !important;
+  white-space: nowrap;
+  border-radius: 9px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 0 16px;
+  font-weight: 600;
+  display: inline-flex;
+  position: relative;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: color 0.16s ease;
+  line-height: 1;
+}
+
+.seg button > *,
+.marlo-seg button > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dark .seg button,
+.dark .marlo-seg button {
+  color: #94a3b8 !important;
+}
+
+.seg button:hover:not([aria-pressed="true"]),
+.marlo-seg button:hover:not([aria-pressed="true"]) {
+  color: #000000 !important;
+}
+
+.dark .seg button:hover:not([aria-pressed="true"]),
+.dark .marlo-seg button:hover:not([aria-pressed="true"]) {
+  color: #ffffff !important;
+}
+
+.seg button[aria-pressed="true"],
+.marlo-seg button[aria-pressed="true"] {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.dark .seg button[aria-pressed="true"],
+.dark .marlo-seg button[aria-pressed="true"] {
+  color: #0f172a !important;
+  font-weight: 700;
+}
+
+.marlo-seg--tone-blue button[aria-pressed="true"] {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.marlo-seg--accent button[aria-pressed="true"],
+.marlo-seg--tone-accent button[aria-pressed="true"] {
+  color: #1c1304 !important;
+  font-weight: 700;
+}
+
+.marlo-seg--sm button {
+  height: 28px;
+  font-size: 11.5px;
+  padding: 0 10px;
+  gap: 5px;
+}
+
+.marlo-seg--lg button {
+  height: 36px;
+  font-size: 13.5px;
+  padding: 0 15px;
+  gap: 7px;
+}
+
+
+/* ─── MARLO SUB-NAV TABS & SLIDING UNDERLINE ─── */
+.tabs {
+  border-bottom: 1px solid var(--line, #EBE8E2);
+  scrollbar-width: none;
+  gap: 4px;
+  margin-bottom: 16px;
+  display: flex;
+  position: relative;
+  overflow-x: auto;
+  align-items: center;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tabs button,
+.tabs a {
+  height: 42px;
+  font-size: 14px;
+  color: var(--muted, #7A7873);
+  white-space: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  font-weight: 600;
+  display: inline-flex;
+  position: relative;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.16s ease;
+  user-select: none;
+}
+.tabs button:hover,
+.tabs a:hover {
+  color: #1E1D1B;
+}
+.dark .tabs button:hover,
+.dark .tabs a:hover {
+  color: #FFFFFF;
+}
+.tabs button[aria-current="page"],
+.tabs a[aria-current="page"] {
+  color: #1E1D1B;
+  font-weight: 700;
+}
+.dark .tabs button[aria-current="page"],
+.dark .tabs a[aria-current="page"] {
+  color: #FFFFFF;
+  font-weight: 700;
+}
+.tabs__line {
+  background: #E5A023;
+  pointer-events: none;
+  opacity: 0;
+  height: 3px;
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  border-radius: 3px 3px 0 0;
+  z-index: 10;
+}
+.dark .tabs {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ─── MARLO TOOLBAR (Segmented controls row) ─── */
+.toolbar {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  display: flex;
+}
+
+/* ─── MARLO TIMELINE (GANTT OVER TIME) EXACT REPLICA ─── */
+.tl {
+  background: #FFFFFF;
+  border-radius: 20px;
+  border: 1px solid var(--line, #EBE8E2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+.dark .tl {
+  background: #1E1E22;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.tl .chead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.chead__text {
+  flex: 1;
+  min-width: 0;
+}
+.chead__text h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1E1D1B;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin: 0;
+}
+.dark .chead__text h2 {
+  color: #FFFFFF;
+}
+.chead__text p {
+  font-size: 13px;
+  color: #7A7873;
+  margin-top: 3px;
+  margin-bottom: 0;
+}
+.dark .chead__text p {
+  color: #A1A1AA;
+}
+.tl .legend {
+  font-size: 12.5px;
+  color: #7A7873;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+.dark .tl .legend {
+  color: #A1A1AA;
+}
+.tl .legend span {
+  align-items: center;
+  gap: 6px;
+  display: inline-flex;
+}
+.tl .legend i {
+  background: #161718;
+  border-radius: 3px;
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+}
+.dark .tl .legend i {
+  background: #F3F4F6;
+}
+.tl .legend i.is-ghost {
+  background: #E5E2DA;
+}
+.dark .tl .legend i.is-ghost {
+  background: #374151;
+}
+
+.tl__scroll {
+  padding: 4px 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tl__scroll::-webkit-scrollbar {
+  display: none;
+}
+.tl__inner {
+  --namew: 220px;
+  min-width: 960px;
+  padding: 0 24px 8px;
+  position: relative;
+}
+.tl__axis {
+  grid-template-columns: var(--namew) minmax(0, 1fr);
+  border-bottom: 1px solid var(--line, #EBE8E2);
+  align-items: end;
+  height: 36px;
+  display: grid;
+}
+.dark .tl__axis {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+.tl__namehead {
+  font-size: 12px;
+  color: #7A7873;
+  padding-bottom: 8px;
+  font-weight: 600;
+}
+.dark .tl__namehead {
+  color: #A1A1AA;
+}
+.tl__weeks {
+  grid-template-columns: repeat(16, 1fr);
+  display: grid;
+}
+.tl__weeks span {
+  font-size: 11px;
+  color: #7A7873;
+  border-left: 1px solid var(--line, #EBE8E2);
+  white-space: nowrap;
+  padding: 0 0 8px 6px;
+  font-weight: 600;
+}
+.dark .tl__weeks span {
+  color: #A1A1AA;
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+.tl__weeks span.is-now {
+  color: #E5A023;
+  font-weight: 700;
+}
+
+.tl__body {
+  position: relative;
+}
+.tl__body:before {
+  content: "";
+  left: var(--namew);
+  background: repeating-linear-gradient(90deg, var(--line, #EBE8E2) 0 1px, transparent 1px calc(100% / 16));
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+}
+.dark .tl__body:before {
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px calc(100% / 16));
+}
+
+.tl__row {
+  grid-template-columns: var(--namew) minmax(0, 1fr);
+  border-bottom: 1px solid var(--line, #EBE8E2);
+  cursor: pointer;
+  align-items: center;
+  height: 60px;
+  display: grid;
+  transition: background 0.15s ease;
+}
+.dark .tl__row {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+.tl__row:hover {
+  background: #FAF9F5;
+}
+.dark .tl__row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tl__name {
+  min-width: 0;
+  padding-right: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-decoration: none;
+}
+.tl__name b {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: #1E1D1B;
+  display: block;
+  overflow: hidden;
+  transition: color 0.15s ease;
+}
+.dark .tl__name b {
+  color: #FFFFFF;
+}
+.tl__row:hover .tl__name b {
+  color: #E5A023;
+}
+.tl__name small {
+  color: #7A7873;
+  font-weight: 500;
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  margin-top: 1px;
+}
+.dark .tl__name small {
+  color: #A1A1AA;
+}
+
+.tl__lane {
+  height: 100%;
+  position: relative;
+}
+
+.tl__bar {
+  background: #E5E2DA;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  transform-origin: 0;
+  border-radius: 99px;
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  overflow: hidden;
+}
+.dark .tl__bar {
+  background: #2E2F35;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.tl__fill {
+  border-radius: inherit;
+  background: linear-gradient(90deg, #F59E0B, #E5A023);
+  transform-origin: 0;
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+}
+.dark .tl__fill {
+  background: linear-gradient(90deg, #F59E0B, #E5A023);
+}
+
+.tl__bar.c--amber .tl__fill,
+.tl__bar.c--1 .tl__fill,
+.tl__bar.c--2 .tl__fill {
+  background: linear-gradient(90deg, #F59E0B, #E5A023);
+}
+
+.tl__bar.is-done .tl__fill {
+  background: #10B981 !important;
+}
+
+.tl__label {
+  font-size: 10.5px;
+  color: #161718;
+  mix-blend-mode: normal;
+  background: #FFFFFF;
+  border-radius: 99px;
+  padding: 1px 7px;
+  font-weight: 700;
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  z-index: 1;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.dark .tl__label {
+  background: #161718;
+  color: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.tl__today {
+  z-index: 2;
+  background: #E5A023;
+  pointer-events: none;
+  width: 2px;
+  position: absolute;
+  top: -8px;
+  bottom: 0;
+}
+.tl__today em {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  color: #FFFFFF;
+  font-style: normal;
+  font-size: 10.5px;
+  white-space: nowrap;
+  border-radius: 99px;
+  padding: 2px 9px;
+  font-weight: 700;
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translate(-50%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.tl__foot {
+  font-size: 13px;
+  padding: 14px 24px 18px;
+  color: #7A7873;
+  font-weight: 500;
+  margin: 0;
+}
+.dark .tl__foot {
+  color: #A1A1AA;
+}
+
+/* ─── MARLO PCARD & PGRID STYLES ─── */
+.pgrid {
+  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  display: grid;
+}
+.pcard {
+  background: #FFFFFF;
+  border-radius: 20px;
+  border: 1px solid var(--line, #EBE8E2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 20px;
+  flex-direction: column;
+  gap: 14px;
+  display: flex;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+.dark .pcard {
+  background: #1E1E22;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.pcard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.pcard__top {
+  justify-content: space-between;
+  align-items: center;
+  display: flex;
+}
+.pcard__kind {
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #7A7873;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  display: inline-flex;
+}
+.dark .pcard__kind {
+  color: #A1A1AA;
+}
+.pcard__kind:before {
+  content: "";
+  background: var(--cc, #E5A023);
+  border-radius: 3px;
+  width: 8px;
+  height: 8px;
+}
+.pcard__pin {
+  width: 32px;
+  height: 30px;
+  color: #7A7873;
+  box-shadow: inset 0 0 0 1px var(--line, #EBE8E2);
+  border-radius: 10px;
+  place-items: center;
+  display: grid;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.dark .pcard__pin {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  color: #A1A1AA;
+}
+.pcard__pin.is-on {
+  background: #1E1D1B;
+  color: #FFFFFF;
+  box-shadow: none;
+}
+.dark .pcard__pin.is-on {
+  background: #FFFFFF;
+  color: #1E1D1B;
+}
+.pcard__mid {
+  align-items: center;
+  gap: 14px;
+  display: flex;
+}
+.pcard__name {
+  min-width: 0;
+  flex: 1;
+}
+.pcard__name b {
+  font-size: 15px;
+  letter-spacing: -.01em;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #1E1D1B;
+  display: block;
+}
+.dark .pcard__name b {
+  color: #FFFFFF;
+}
+.pcard__name small {
+  color: #7A7873;
+  font-weight: 600;
+  font-size: 12px;
+  display: block;
+  margin-top: 2px;
+}
+.dark .pcard__name small {
+  color: #A1A1AA;
+}
+.pcard__meta {
+  font-size: 11.5px;
+  color: #7A7873;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  display: flex;
+}
+.dark .pcard__meta {
+  color: #A1A1AA;
+}
+.pcard__meta > span:not(.pill) {
+  align-items: center;
+  gap: 4px;
+  display: inline-flex;
+}
+.pcard__meta .pill,
+.pill {
+  height: 24px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  background: var(--card-3, #E1E2E5);
+  color: var(--ink-2, #393B3F);
+  border-radius: 99px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  font-weight: 600;
+  display: inline-flex;
+}
+.pill:before {
+  content: "";
+  background: currentColor;
+  border-radius: 50%;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.pill--plain:before,
+.pill.tone-gray:before {
+  display: none;
+}
+.pill--good,
+.pill.tone-green {
+  background: rgba(30, 130, 80, 0.13) !important;
+  color: #1C7046 !important;
+}
+.dark .pill--good,
+.dark .pill.tone-green {
+  background: rgba(127, 214, 162, 0.15) !important;
+  color: #7FD6A2 !important;
+}
+.pill--bad,
+.pill.tone-red {
+  background: rgba(200, 60, 40, 0.12) !important;
+  color: #AD3622 !important;
+}
+.dark .pill--bad,
+.dark .pill.tone-red {
+  background: rgba(245, 155, 134, 0.15) !important;
+  color: #F59B86 !important;
+}
+.pill--warn,
+.pill--accent,
+.pill.tone-amber,
+.pill.tone-warm {
+  background: rgba(242, 155, 35, 0.16) !important;
+  color: #8F5404 !important;
+}
+.dark .pill--warn,
+.dark .pill--accent,
+.dark .pill.tone-amber,
+.dark .pill.tone-warm {
+  background: rgba(244, 164, 58, 0.16) !important;
+  color: #F6B95E !important;
+}
+.pill--info,
+.pill.tone-blue {
+  background: rgba(40, 100, 170, 0.12) !important;
+  color: #285B91 !important;
+}
+.dark .pill--info,
+.dark .pill.tone-blue {
+  background: rgba(159, 196, 238, 0.14) !important;
+  color: #9FC4EE !important;
+}
+.pill--plain,
+.pill.tone-gray {
+  background: #F1F0EB !important;
+  color: #62656B !important;
+}
+.dark .pill--plain,
+.dark .pill.tone-gray {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #A0A3A9 !important;
+}
+.pcard__burn {
+  font-size: 12.5px;
+  color: #62656b;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-weight: 600;
+  display: flex;
+}
+.dark .pcard__burn {
+  color: #a0a3a9;
+}
+.pcard__burn b {
+  color: #161718;
+  font-weight: 700;
+}
+.dark .pcard__burn b {
+  color: #f0f0f1;
+}
+.pcard__progress {
+  height: 6px;
+  background: #e1e2e5;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.dark .pcard__progress {
+  background: #2c2d31;
+}
+.pcard__progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #f8bd57, #f29b23 52%, #ee8420);
+  transition: width 0.4s ease;
+}
+.dark .pcard__progress-bar {
+  background: #f4a43a;
+}
+.pcard__progress-bar.is-warn,
+.pcard__progress-bar.is-done {
+  background: #8a5208 !important;
+}
+.dark .pcard__progress-bar.is-warn,
+.dark .pcard__progress-bar.is-done {
+  background: #f3c27a !important;
+}
+.pcard__foot {
+  border-top: 1px solid rgba(20, 22, 26, 0.08);
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  display: flex;
+}
+.dark .pcard__foot {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+.pcard__budget {
+  font-weight: 700;
+  font-size: 15px;
+  color: #161718;
+}
+.dark .pcard__budget {
+  color: #f0f0f1;
+}
+
+/* ─── MARLO CIRCULAR RING (charts.jsx Ring) ─── */
+.marlo-ring,
+.ring {
+  flex: none;
+  place-items: center;
+  display: inline-grid;
+  position: relative;
+  width: 64px;
+  height: 64px;
+  box-shadow: none !important;
+  border: none !important;
+  outline: none !important;
+}
+.marlo-ring svg,
+.ring svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.marlo-ring .ring__track,
+.ring .ring__track {
+  fill: none;
+  stroke: #E5E2DA;
+}
+.dark .marlo-ring .ring__track,
+.dark .ring .ring__track {
+  stroke: #2E2F35;
+}
+.marlo-ring .ring__arc,
+.ring .ring__arc {
+  fill: none;
+  stroke: #E5A023;
+  stroke-linecap: round;
+  transition: stroke 0.3s ease;
+}
+.marlo-ring.is-done .ring__arc,
+.ring.is-done .ring__arc {
+  stroke: #E5A023;
+}
+.marlo-ring .ring__in,
+.ring .ring__in {
+  text-align: center;
+  line-height: 1.1;
+  position: relative;
+}
+.marlo-ring .ring__in b,
+.ring .ring__in b {
+  font-weight: 700;
+  font-size: 13px;
+  color: #1E1D1B;
+  font-family: inherit;
+}
+.dark .marlo-ring .ring__in b,
+.dark .ring .ring__in b {
+  color: #FFFFFF;
+}
+
+/* ─── MARLO AVATAR STACK ─── */
+.av {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+  color: #1E1D1B;
+  background: #e6d6c4;
+  border-radius: 50%;
+  flex: none;
+  place-items: center;
+  font-weight: 700;
+  display: grid;
+  position: relative;
+  overflow: hidden;
+}
+.av--sm {
+  width: 26px;
+  height: 26px;
+  font-size: 10px;
+}
+.avstack {
+  display: flex;
+  align-items: center;
+}
+.avstack > * + * {
+  box-shadow: 0 0 0 2px #FFFFFF;
+  margin-left: -6px;
+}
+.dark .avstack > * + * {
+  box-shadow: 0 0 0 2px #1E1E22;
+}
+.av--more {
+  background: #EBE8E2;
+  color: #7A7873;
+}
+.dark .av--more {
+  background: #2E2F35;
+  color: #A1A1AA;
+}
+
+/* ─── MARLO AUTHENTIC MULTI-LAYER DIFFUSED SHADOWS ─── */
+:root {
+  --marlo-shadow-sm: 0 1px 2px rgba(20, 22, 26, 0.05);
+  --marlo-shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 14px 32px -22px rgba(20, 22, 26, 0.28);
+  --marlo-shadow-lg: 0 2px 6px rgba(20, 22, 26, 0.08), 0 30px 60px -24px rgba(20, 22, 26, 0.38);
+}
+
+.dark {
+  --marlo-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --marlo-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+  --marlo-shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 30px 70px -24px rgba(0, 0, 0, 0.85);
+}
+
+.marlo-card-shadow {
+  box-shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 14px 32px -22px rgba(20, 22, 26, 0.28) !important;
+}
+
+.dark .marlo-card-shadow {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.7) !important;
+}
+
+.marlo-card-shadow-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 2px 6px rgba(20, 22, 26, 0.08), 0 24px 48px -20px rgba(20, 22, 26, 0.32) !important;
+}
+
+.dark .marlo-card-shadow-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 30px 60px -20px rgba(0, 0, 0, 0.85) !important;
+}
+
+.marlo-modal-shadow {
+  box-shadow: 0 2px 6px rgba(20, 22, 26, 0.08), 0 30px 60px -24px rgba(20, 22, 26, 0.38) !important;
+}
+
+.dark .marlo-modal-shadow {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 30px 70px -24px rgba(0, 0, 0, 0.85) !important;
+}
+
+.agenda__day {
+  background: #FFFFFF;
+  border-radius: 22px;
+  border: 1px solid var(--line, #EBE8E2);
+  box-shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 14px 32px -22px rgba(20, 22, 26, 0.28);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dark .agenda__day {
+  background: #1E1E22;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+}
+
+.agenda__day:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 2px 6px rgba(20, 22, 26, 0.08), 0 24px 48px -20px rgba(20, 22, 26, 0.32);
+}
+
+.dark .agenda__day:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 30px 60px -20px rgba(0, 0, 0, 0.85);
+}
+
+.agenda__day.is-today {
+  border: 2px solid #E5A023 !important;
+  box-shadow: inset 0 0 0 1px #E5A023, 0 1px 2px rgba(20, 22, 26, 0.04), 0 14px 32px -22px rgba(20, 22, 26, 0.28) !important;
+}
+
+.dark .agenda__day.is-today {
+  box-shadow: inset 0 0 0 1px #E5A023, 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.7) !important;
+}
+
+/* ─── MARLO AGENDA VIEW EXACT REPLICA (calendar-B0FoRPvk.css) ─── */
+.agenda {
+  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  align-items: start;
+  display: grid;
+}
+@media (max-width: 760px) {
+  .agenda {
+    grid-template-columns: 1fr;
+  }
+}
+.agenda__day {
+  background: #FFFFFF;
+  border-radius: 22px;
+  border: 1px solid var(--line, #EBE8E2);
+  box-shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 14px 32px -22px rgba(20, 22, 26, 0.28);
+  padding: 18px 22px 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+.dark .agenda__day {
+  background: #1E1E22;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+}
+.agenda__day:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 2px 6px rgba(20, 22, 26, 0.08), 0 24px 48px -20px rgba(20, 22, 26, 0.32);
+}
+.dark .agenda__day:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 30px 60px -20px rgba(0, 0, 0, 0.85);
+}
+.agenda__day.is-today {
+  border: 2px solid #E5A023 !important;
+  box-shadow: inset 0 0 0 1px #E5A023, 0 1px 2px rgba(20, 22, 26, 0.04), 0 14px 32px -22px rgba(20, 22, 26, 0.28) !important;
+}
+.dark .agenda__day.is-today {
+  box-shadow: inset 0 0 0 1px #E5A023, 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.7) !important;
+}
+
+.agenda__day .chead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0;
+}
+.agenda__day .chead h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1E1D1B;
+  line-height: 1.25;
+  margin: 0;
+}
+.dark .agenda__day .chead h2 {
+  color: #FFFFFF;
+}
+.agenda__day .chead p {
+  font-size: 12px;
+  color: #7A7873;
+  margin-top: 2px;
+  margin-bottom: 0;
+  font-weight: 500;
+}
+.dark .agenda__day .chead p {
+  color: #A1A1AA;
+}
+
+.agenda__row {
+  border-top: 1px solid var(--line, #EBE8E2);
+  text-align: left;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 0;
+  display: flex;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+.dark .agenda__row {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+.agenda__row:hover .cell__text b {
+  color: #E5A023;
+}
+.agenda__row.is-done {
+  opacity: .6;
+}
+
+.agenda__time {
+  min-width: 56px;
+  line-height: 1.15;
+  flex: none;
+}
+.agenda__time b {
+  font-weight: 700;
+  font-size: 13px;
+  color: #1E1D1B;
+  display: block;
+}
+.dark .agenda__time b {
+  color: #FFFFFF;
+}
+.agenda__time small {
+  color: #7A7873;
+  font-size: 11px;
+  font-weight: 500;
+  display: block;
+  margin-top: 1px;
+}
+.dark .agenda__time small {
+  color: #A1A1AA;
+}
+
+.agenda__ico {
+  background: #F3F1EC;
+  width: 34px;
+  height: 34px;
+  color: #1E1D1B;
+  border-radius: 11px;
+  flex: none;
+  place-items: center;
+  display: grid;
+}
+.dark .agenda__ico {
+  background: #2E2F35;
+  color: #FFFFFF;
+}
+.agenda__ico.k--review {
+  background: #FCE4D6;
+  color: #D95D24;
+}
+.agenda__ico.k--grade {
+  background: #F7EBD9;
+  color: #D4801B;
+}
+.agenda__ico.k--mix {
+  background: #E8D1C5;
+  color: #A8521A;
+}
+.agenda__ico.k--edit {
+  background: #F2EADC;
+  color: #9E7432;
+}
+.agenda__ico.k--call {
+  background: #E2E5EA;
+  color: #4B5563;
+}
+.agenda__ico.k--delivery {
+  background: #E2E4E8;
+  color: #2A2C2F;
+}
+
+.agenda__row .cell__text {
+  flex: 1;
+  min-width: 0;
+}
+.cell__text b {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: #1E1D1B;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  display: block;
+  transition: color 0.15s ease;
+}
+.dark .cell__text b {
+  color: #FFFFFF;
+}
+.cell__text small {
+  color: #7A7873;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  display: block;
+  margin-top: 1px;
+}
+.dark .cell__text small {
+  color: #A1A1AA;
+}
+
+.ibtn {
+  background: #FFFFFF;
+  width: 32px;
+  height: 30px;
+  color: #7A7873;
+  box-shadow: inset 0 0 0 1px var(--line, #EBE8E2);
+  border-radius: 50%;
+  flex: none;
+  place-items: center;
+  display: grid;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.dark .ibtn {
+  background: #1E1E22;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  color: #A1A1AA;
+}
+.ibtn:hover {
+  background: #F3F1EC;
+  color: #1E1D1B;
+  box-shadow: inset 0 0 0 1px #1E1D1B;
+}
+.dark .ibtn:hover {
+  background: #2E2F35;
+  color: #FFFFFF;
+}
+
+/* ─── MARLO SLIDE-OVER DRAWER (calendar.jsx & index-DPV1UCmh.css) ─── */
+.drawer {
+  z-index: 61;
+  background: #FFFFFF;
+  box-shadow: inset 0 0 0 1px var(--line, #EBE8E2), 0 2px 6px rgba(20, 22, 26, 0.08), 0 30px 60px -24px rgba(20, 22, 26, 0.38);
+  border-radius: 24px;
+  flex-direction: column;
+  width: min(440px, calc(100vw - 20px));
+  display: flex;
+  position: fixed;
+  top: 10px;
+  bottom: 10px;
+  right: 10px;
+  overflow: hidden;
+}
+.dark .drawer {
+  background: #1C1D21;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 2px 6px rgba(0, 0, 0, 0.4), 0 30px 70px -24px rgba(0, 0, 0, 0.85);
+}
+.drawer__head {
+  border-bottom: 1px solid var(--line, #EBE8E2);
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 20px 14px 24px;
+  display: flex;
+}
+.dark .drawer__head {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+.drawer__head-text {
+  flex: 1;
+  min-width: 0;
+}
+.drawer__head h2 {
+  font-size: 20px;
+  letter-spacing: -.02em;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #1E1D1B;
+  margin: 0;
+}
+.dark .drawer__head h2 {
+  color: #FFFFFF;
+}
+.drawer__head p {
+  color: #7A7873;
+  font-size: 13px;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+.dark .drawer__head p {
+  color: #A1A1AA;
+}
+.drawer__body {
+  flex: 1;
+  padding: 20px 24px 28px;
+  overflow-y: auto;
+}
+.drawer__close {
+  width: 32px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #7A7873;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.drawer__close:hover {
+  background: #F3F1EC;
+  color: #1E1D1B;
+}
+.dark .drawer__close:hover {
+  background: #2E2F35;
+  color: #FFFFFF;
+}
+
+.sdraw {
+  flex-direction: column;
+  gap: 16px;
+  display: flex;
+}
+.sdraw__hero {
+  border-radius: 18px;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  display: flex;
+  background: #F3F1EC;
+}
+.dark .sdraw__hero {
+  background: #25262B;
+}
+.sdraw__hero.k--review {
+  background: #FCE4D6;
+  color: #D95D24;
+}
+.sdraw__hero.k--grade {
+  background: #F7EBD9;
+  color: #D4801B;
+}
+.sdraw__hero.k--mix {
+  background: #E8D1C5;
+  color: #A8521A;
+}
+.sdraw__hero.k--edit {
+  background: #F2EADC;
+  color: #9E7432;
+}
+.sdraw__hero.k--call {
+  background: #E2E5EA;
+  color: #4B5563;
+}
+.sdraw__hero.k--delivery {
+  background: #E2E4E8;
+  color: #2A2C2F;
+}
+
+.sdraw__hero svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+.sdraw__hero-text {
+  flex: 1;
+  min-width: 0;
+}
+.sdraw__hero b {
+  font-size: 17px;
+  letter-spacing: -.015em;
+  font-weight: 700;
+  display: block;
+  color: #1E1D1B;
+}
+.dark .sdraw__hero b {
+  color: #FFFFFF;
+}
+.sdraw__hero small {
+  color: #7A7873;
+  font-weight: 500;
+  font-size: 12px;
+}
+.dark .sdraw__hero small {
+  color: #A1A1AA;
+}
+
+.dl-marlo {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  row-gap: 14px;
+  column-gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  margin: 6px 0;
+}
+.dl-marlo dt {
+  color: #7A7873;
+  font-weight: 500;
+}
+.dark .dl-marlo dt {
+  color: #A1A1AA;
+}
+.dl-marlo dd {
+  color: #1E1D1B;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.dark .dl-marlo dd {
+  color: #FFFFFF;
+}
+
+.sdraw__who {
+  flex-direction: column;
+  gap: 10px;
+  display: flex;
+  margin-top: 4px;
+}
+.sdraw__who .cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1E1D1B;
+}
+.dark .sdraw__who .cell {
+  color: #FFFFFF;
+}
+
+.sdraw-section-label {
+  font-size: 11px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #7A7873;
+  font-weight: 700;
+  margin-top: 14px;
+  margin-bottom: 2px;
+}
+.dark .sdraw-section-label {
+  color: #A1A1AA;
+}
+
+.sdraw-foot {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line, #EBE8E2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dark .sdraw-foot {
+  border-top-color: rgba(255, 255, 255, 0.08);
 }

@@ -1,22 +1,12 @@
+import ChapterExerciseStudio from "../components/ChapterExerciseStudio";
+import { getChapterExercise } from "../data/chapterExercises";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
+import MarloTitle from "../components/MarloTitle";
+import MarloNumber from "../components/MarloNumber";
+import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import {
-  Background,
-  Controls,
-  Handle,
-  MiniMap,
-  ReactFlow,
-  addEdge,
-  MarkerType,
-  Position,
-  useEdgesState,
-  useNodesState,
-  type Connection,
-  type Edge,
-  type Node,
-  type NodeProps,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import {
+  ArrowLeft,
   CheckCircle2,
   ChevronRight,
   Code2,
@@ -24,17 +14,11 @@ import {
   ExternalLink,
   FileText,
   GitBranch,
-  Headphones,
   HelpCircle,
   Lock,
-  Pause,
-  Play,
   Send,
   Sparkles,
-  Wand2,
-  Upload,
   Video,
-  WandSparkles,
   X,
   Zap,
   Bot,
@@ -42,9 +26,6 @@ import {
   Clock,
   Star,
   PlayCircle,
-  ChevronsLeft,
-  ChevronsRight,
-  Keyboard,
   Award,
   Check,
   Copy,
@@ -53,525 +34,158 @@ import {
   Terminal,
   Trash2,
   Loader2,
+  Globe,
+  Layers,
+  Database,
+  Lightbulb,
+  BookOpen,
+  ArrowRight,
+  GraduationCap,
 } from "lucide-react";
 import {
   askSocraticTutor,
-  type SubmissionResult,
 } from "../api";
 import type { ChatSkin, MentorMascot } from "../App";
+import {
+  SUBJECT_MODULES,
+  type SubjectId,
+} from "../data/learningCurriculum";
+import {
+  MULTI_CHAPTER_SUBJECTS,
+  type SubjectModuleData,
+  type LessonItem,
+  type ChapterItem,
+} from "../data/multiChapterCurriculum";
+import { LessonMindmapStudio } from "../components/LessonMindmapStudio";
+import { LessonVideoStudio } from "../components/LessonVideoStudio";
+import { CourseCatalogHub } from "../components/CourseCatalogHub";
+import { MultiChapterSidebar } from "../components/MultiChapterSidebar";
+import { triggerMarloConfetti } from "../utils/confetti";
+import { HeaderProfileDropdown } from "../components/HeaderProfileDropdown";
+import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
 
 interface LearningWorkspaceProps {
   mentorMascot: MentorMascot;
   chatSkin: ChatSkin;
+  theme?: Theme;
+  onToggleTheme?: () => void;
+  role?: Role;
+  avatarStyle?: AvatarStyle;
+  badgeFrame?: BadgeFrame;
+  onNavigate?: (screen: Screen) => void;
+  onLogout?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
-type Tab = "lecture" | "video" | "quiz" | "mindmap" | "code";
-
-// ─── Per-lesson metadata for the Progress Stepper ───────────────────────────
-const lessonMeta: Record<string, { xp: number; readMins: number; quizPct: number; codePct: number }> = {
-  "1.1": { xp: 80,  readMins: 5,  quizPct: 100, codePct: 100 },
-  "1.2": { xp: 90,  readMins: 7,  quizPct: 80,  codePct: 50  },
-  "1.3": { xp: 120, readMins: 10, quizPct: 0,   codePct: 0   },
-};
-
-// ─── Confetti particle helpers ───────────────────────────────────────────────
-function randomBetween(a: number, b: number) { return a + Math.random() * (b - a); }
-const COLORS = ["#facc15","#f97316","#22d3ee","#a78bfa","#34d399","#f472b6","#60a5fa"];
-function spawnConfetti(container: HTMLElement) {
-  for (let i = 0; i < 55; i++) {
-    const el = document.createElement("span");
-    const size = randomBetween(6, 12);
-    el.style.cssText = `
-      position:absolute; pointer-events:none; z-index:100;
-      width:${size}px; height:${size}px;
-      background:${COLORS[Math.floor(Math.random()*COLORS.length)]};
-      border-radius:${Math.random()>0.5?"50%":"2px"};
-      left:${randomBetween(5,95)}%;
-      top:${randomBetween(10,60)}%;
-      transform: translateY(0); opacity:1;
-      animation: confetti-fall ${randomBetween(0.7,1.4)}s ease-out ${randomBetween(0,0.3)}s forwards;
-    `;
-    container.appendChild(el);
-    setTimeout(() => el.remove(), 1800);
-  }
-}
-
-// ─── Quiz data extended with explanations ───────────────────────────────────
-interface QuizOption { id: string; text: string; }
-const quizQuestions: { q: string; options: QuizOption[]; correct: string; explanation: string }[] = [
-  {
-    q: "Kế thừa trong OOP là gì?",
-    options: [
-      { id: "a", text: "Lớp con nhận thuộc tính và hành vi từ lớp cha" },
-      { id: "b", text: "Lớp cha tự động sao chép toàn bộ lớp con" },
-      { id: "c", text: "Hai lớp ngang hàng dùng chung biến toàn cục" },
-      { id: "d", text: "Một lớp chỉ có thể chứa phương thức static" },
-    ],
-    correct: "a",
-    explanation: "Kế thừa (inheritance) cho phép lớp con tái sử dụng code của lớp cha. Đây là nguyên tắc DRY cốt lõi trong OOP giúp tránh viết lại logic trùng lặp.",
-  },
-  {
-    q: "Từ khóa nào dùng để gọi constructor của lớp cha trong Java?",
-    options: [
-      { id: "a", text: "parent()" },
-      { id: "b", text: "super()" },
-      { id: "c", text: "base()" },
-      { id: "d", text: "this()" },
-    ],
-    correct: "b",
-    explanation: "super() gọi constructor của lớp cha, phải đặt ở dòng đầu tiên trong constructor của lớp con. Nếu không gọi tường minh, Java tự thêm super() không tham số.",
-  },
-  {
-    q: "Override trong Java có nghĩa là gì?",
-    options: [
-      { id: "a", text: "Định nghĩa method mới hoàn toàn không liên quan lớp cha" },
-      { id: "b", text: "Xóa method của lớp cha" },
-      { id: "c", text: "Viết lại phương thức đã tồn tại ở lớp cha với cùng chữ ký" },
-      { id: "d", text: "Tạo nhiều phương thức trùng tên khác tham số" },
-    ],
-    correct: "c",
-    explanation: "Override là ghi đè — lớp con định nghĩa lại method đã có ở lớp cha với cùng tên, tham số và kiểu trả về. Dùng annotation @Override để compiler kiểm tra chính xác.",
-  },
-];
+type Tab = "lecture" | "video" | "quiz" | "exercise" | "mindmap";
 type ReadingMode = "full" | "summary" | "resources";
-type WorkspaceView = "lesson" | "chapterAssignments";
-type AssignmentReviewStatus = "not-submitted" | "submitted" | "pending-review" | "needs-revision" | "approved";
-
-const assignmentStatusConfig: Record<AssignmentReviewStatus, { label: string; desc: string; className: string }> = {
-  "not-submitted": {
-    label: "Chưa nộp",
-    desc: "Học viên chưa gửi bài cho giảng viên.",
-    className: "border-slate-200 bg-slate-50 text-slate-600",
-  },
-  submitted: {
-    label: "Đã nộp",
-    desc: "Hệ thống đã nhận bài và ghi nhận thời gian nộp.",
-    className: "border-blue-200 bg-blue-50 text-blue-700",
-  },
-  "pending-review": {
-    label: "Đang chờ review",
-    desc: "Bài đang nằm trong hàng chờ nhận xét của giảng viên.",
-    className: "border-amber-200 bg-amber-50 text-amber-700",
-  },
-  "needs-revision": {
-    label: "Cần sửa",
-    desc: "Giảng viên đã phản hồi, học viên cần chỉnh và gửi lại.",
-    className: "border-rose-200 bg-rose-50 text-rose-700",
-  },
-  approved: {
-    label: "Đã đạt",
-    desc: "Bài đã được giảng viên duyệt hoàn thành.",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  },
-};
-
-const assignmentReviewSteps: AssignmentReviewStatus[] = ["not-submitted", "submitted", "pending-review", "needs-revision", "approved"];
-
-const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
-  { id: "lecture", icon: <FileText size={15} />, label: "Bài đọc" },
-  { id: "video", icon: <Video size={15} />, label: "Video" },
-  { id: "quiz", icon: <HelpCircle size={15} />, label: "Quiz" },
-  { id: "mindmap", icon: <GitBranch size={15} />, label: "Mindmap" },
-  { id: "code", icon: <Code2 size={15} />, label: "Code lab" },
-];
-
-const lessons = [
-  {
-    id: "1.1",
-    title: "Khái niệm kế thừa",
-    topic: "Inheritance basics",
-    status: "done",
-    full:
-      "Kế thừa cho phép một lớp con tái sử dụng thuộc tính và hành vi của lớp cha. Quan hệ này nên được dùng khi lớp con thật sự là một phiên bản chuyên biệt của lớp cha.",
-    summary: [
-      ["is-a", "Dog là một Animal, vì vậy Dog có thể kế thừa Animal."],
-      ["reuse", "Lớp con tái sử dụng code chung từ lớp cha."],
-      ["specialize", "Lớp con có thể bổ sung hoặc thay đổi hành vi riêng."],
-    ],
-  },
-  {
-    id: "1.2",
-    title: "extends và super",
-    topic: "Java inheritance keywords",
-    status: "done",
-    full:
-      "`extends` khai báo quan hệ kế thừa trong Java. `super` dùng để gọi constructor, thuộc tính hoặc phương thức của lớp cha từ bên trong lớp con.",
-    summary: [
-      ["extends", "Khai báo lớp con kế thừa lớp cha."],
-      ["super()", "Gọi constructor của lớp cha."],
-      ["super.method()", "Gọi lại hành vi đã có ở lớp cha."],
-    ],
-  },
-  {
-    id: "1.3",
-    title: "Đa hình và override",
-    topic: "Polymorphism",
-    status: "active",
-    full:
-      "Đa hình cho phép cùng một lời gọi phương thức tạo ra hành vi khác nhau tùy đối tượng cụ thể. Khi Dog và Cat cùng kế thừa Animal, mỗi lớp con có thể override phương thức speak().",
-    summary: [
-      ["override", "Lớp con viết lại hành vi đã có ở lớp cha."],
-      ["runtime dispatch", "Java chọn phương thức dựa trên đối tượng thật khi chạy."],
-      ["less if/else", "Đa hình giúp giảm kiểm tra thủ công từng loại đối tượng."],
-    ],
-  },
-];
-
-// quizOptions removed — now inline in quizQuestions above
-
-type MindmapNodeData = {
-  title: string;
-  subtitle: string;
-  tag: string;
-  tone: "source" | "concept" | "practice" | "review";
-};
-
-function MindmapNode({ data }: NodeProps<Node<MindmapNodeData>>) {
-  return (
-    <div className={`mindmap-flow-node mindmap-flow-node-${data.tone}`}>
-      <Handle type="target" position={Position.Left} className="mindmap-flow-handle" />
-      <div className="mindmap-flow-node-head">
-        <span>{data.tag}</span>
-        <span />
-      </div>
-      <div className="mindmap-flow-node-title">{data.title}</div>
-      <div className="mindmap-flow-node-subtitle">{data.subtitle}</div>
-      <Handle type="source" position={Position.Right} className="mindmap-flow-handle" />
-      <Handle type="source" position={Position.Bottom} className="mindmap-flow-handle" />
-    </div>
-  );
-}
-
-const mindmapNodeTypes = { mindmapNode: MindmapNode };
-
-const initialMindmapNodes: Node[] = [
-  {
-    id: "reading",
-    type: "mindmapNode",
-    position: { x: 40, y: 126 },
-    data: { title: "Bài đọc", subtitle: "Nắm ý chính và ví dụ nền", tag: "INPUT", tone: "source" },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    style: { width: 178 },
-  },
-  {
-    id: "concept",
-    type: "mindmapNode",
-    position: { x: 325, y: 72 },
-    data: { title: "OOP căn bản", subtitle: "class, object, is-a", tag: "CORE", tone: "concept" },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    style: { width: 190 },
-  },
-  {
-    id: "interface",
-    type: "mindmapNode",
-    position: { x: 300, y: 234 },
-    data: { title: "Interface", subtitle: "hợp đồng hành vi", tag: "ABSTRACT", tone: "concept" },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    style: { width: 184 },
-  },
-  {
-    id: "polymorphism",
-    type: "mindmapNode",
-    position: { x: 592, y: 132 },
-    data: { title: "Đa hình", subtitle: "override và runtime dispatch", tag: "FLOW", tone: "concept" },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    style: { width: 198 },
-  },
-  {
-    id: "quiz",
-    type: "mindmapNode",
-    position: { x: 602, y: 304 },
-    data: { title: "Quiz kiểm tra", subtitle: "đạt 70% để mở code lab", tag: "CHECK", tone: "practice" },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    style: { width: 194 },
-  },
-  {
-    id: "code-lab",
-    type: "mindmapNode",
-    position: { x: 875, y: 214 },
-    data: { title: "Code lab", subtitle: "viết Animal -> Dog/Cat", tag: "PRACTICE", tone: "practice" },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    style: { width: 198 },
-  },
-  {
-    id: "ai-review",
-    type: "mindmapNode",
-    position: { x: 1130, y: 126 },
-    data: { title: "AI Review", subtitle: "góp ý sơ đồ sau khi vẽ", tag: "MENTOR", tone: "review" },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    style: { width: 190 },
-  },
-];
-
-const initialMindmapEdges: Edge[] = [
-  { id: "reading-concept", type: "bezier", source: "reading", target: "concept", label: "rút ý", animated: true, interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#38bdf8", strokeWidth: 2.4 } },
-  { id: "reading-interface", type: "bezier", source: "reading", target: "interface", label: "ví dụ", interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#64748b", strokeWidth: 2.2 } },
-  { id: "concept-polymorphism", type: "bezier", source: "concept", target: "polymorphism", label: "mở rộng", animated: true, interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#10b981", strokeWidth: 2.4 } },
-  { id: "interface-polymorphism", type: "bezier", source: "interface", target: "polymorphism", label: "áp dụng", interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#a78bfa", strokeWidth: 2.3 } },
-  { id: "polymorphism-quiz", type: "bezier", source: "polymorphism", target: "quiz", label: "kiểm tra", interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#f59e0b", strokeWidth: 2.2 } },
-  { id: "quiz-code", type: "bezier", source: "quiz", target: "code-lab", label: "luyện tập", animated: true, interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#10b981", strokeWidth: 2.4 } },
-  { id: "code-review", type: "bezier", source: "code-lab", target: "ai-review", label: "review", interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#f472b6", strokeWidth: 2.3 } },
-];
-
-const chapterAssignments = [
-  {
-    id: "CH1-BT01",
-    title: "Animal hierarchy",
-    prompt: "Thiết kế hệ phân cấp Animal, Dog, Cat. Mỗi lớp con override speak() và có ít nhất một thuộc tính riêng.",
-    requirements: ["Có class cha Animal", "Có ít nhất 2 class con", "Override speak()", "Có README giải thích thiết kế"],
-  },
-  {
-    id: "CH1-BT02",
-    title: "Shape polymorphism",
-    prompt: "Tạo interface Shape và các lớp Circle, Rectangle. Viết chương trình tính tổng diện tích từ danh sách Shape.",
-    requirements: ["Dùng interface hoặc abstract class", "Có ít nhất 2 hình", "Không dùng if/else để phân loại hình", "Có test dữ liệu mẫu"],
-  },
-  {
-    id: "CH1-BT03",
-    title: "Mini project Vehicle",
-    prompt: "Xây dựng mô phỏng đội xe gồm Vehicle, Car, Bike và Truck. Tập trung vào kế thừa, override và đa hình.",
-    requirements: ["Có sơ đồ class ngắn trong README", "Có ít nhất 3 loại xe", "Có hàm chạy demo", "Commit lịch sử tự nhiên"],
-  },
-];
-
-const mentorQuickPrompts = [
-  "Giải thích override bằng ví dụ dễ hiểu",
-  "Hỏi em 1 câu Socratic",
-  "Gợi ý node mindmap tiếp theo",
-];
 
 const mentorConfig: Record<MentorMascot, { name: string; mark: string; mode: string; hint: string; emoji: string; color: string }> = {
-  mino: { name: "Mino", mark: "MI", mode: "thân thiện", hint: "Mình đi chậm từng bước nhé.", emoji: "🐸", color: "bg-emerald-500" },
-  nova: { name: "Nova", mark: "NV", mode: "nghiêm túc", hint: "Tập trung vào lỗi cốt lõi trước.", emoji: "⭐", color: "bg-purple-600" },
-  byte: { name: "Byte", mark: "BY", mode: "vui tính", hint: "Bẻ lỗi nhỏ trước, lên XP sau.", emoji: "🐶", color: "bg-orange-500" },
+  mino: { name: "Mino", mark: "MI", mode: "thân thiện", hint: "Mình đi chậm từng bước nhé.", emoji: "🦊", color: "bg-emerald-500" },
+  nova: { name: "Nova", mark: "NV", mode: "nghiêm túc", hint: "Tập trung vào lỗi cốt lõi trước.", emoji: "⚡", color: "bg-purple-600" },
+  byte: { name: "Byte", mark: "BY", mode: "vui tính", hint: "Bắt lỗi nhỏ trước, lên XP sau.", emoji: "🤖", color: "bg-orange-500" },
   sage: { name: "Sage", mark: "SG", mode: "Socratic", hint: "Mentor sẽ hỏi ngược để bạn tự tìm ra lỗi.", emoji: "🦉", color: "bg-indigo-600" },
-  luna: { name: "Mecha-Luna", mark: "LN", mode: "logic / mecha", hint: "Luna đã tối ưu hóa logic này cho huynh.", emoji: "🤖", color: "bg-sky-500" },
-  kuro: { name: "Kuro", mark: "KR", mode: "cute / ninja", hint: "Kuro phát hiện lỗi cú pháp rất nhanh nha!", emoji: "🐈‍⬛", color: "bg-neutral-800" },
-  ignis: { name: "Ignis", mark: "IG", mode: "cool / dragon", hint: "Bùng cháy năng lượng lập trình lên nào huynh!", emoji: "🐉", color: "bg-rose-600" },
-  sylph: { name: "Sylph", mark: "SP", mode: "kawaii / tiên", hint: "Để tiên gió nâng đỡ tư duy OOP của huynh.", emoji: "🧚", color: "bg-teal-500" },
+  luna: { name: "Mecha-Luna", mark: "LN", mode: "logic / mecha", hint: "Luna đã tối ưu hóa logic này cho bạn.", emoji: "🚀", color: "bg-sky-500" },
+  kuro: { name: "Kuro", mark: "KR", mode: "cute / ninja", hint: "Kuro phát hiện lỗi cú pháp rất nhanh nha!", emoji: "🥷", color: "bg-neutral-800" },
+  ignis: { name: "Ignis", mark: "IG", mode: "cool / dragon", hint: "Bùng cháy năng lượng lập trình lên nào bạn ơi!", emoji: "🐉", color: "bg-rose-600" },
+  sylph: { name: "Sylph", mark: "SP", mode: "kawaii / tiên", hint: "Dạ tiên gió nâng đỡ tư duy của bạn.", emoji: "🧚", color: "bg-teal-500" },
 };
 
-const starterCodeSnippets: Record<"python" | "java" | "cpp", string> = {
-  python: `# Thực hành Lập trình Hướng đối tượng (OOP) - Kế thừa & Đa hình
-class Animal:
-    def __init__(self, name: str):
-        self.name = name
-
-    def speak(self) -> str:
-        return f"{self.name} phát ra âm thanh."
-
-class Dog(Animal):
-    def __init__(self, name: str, breed: str):
-        super().__init__(name)
-        self.breed = breed
-
-    def speak(self) -> str:
-        return f"{self.name} ({self.breed}) sủa: Gâu gâu!"
-
-class Cat(Animal):
-    def speak(self) -> str:
-        return f"{self.name} kêu: Meo meo!"
-
-# Thử nghiệm tính Đa hình (Polymorphism)
-animals = [Dog("Milo", "Golden Retriever"), Cat("Kitty")]
-for a in animals:
-    print(a.speak())
-`,
-  java: `// Thực hành Lập trình Hướng đối tượng - Kế thừa (extends & super)
-class Animal {
-    protected String name;
-
-    public Animal(String name) {
-        this.name = name;
-    }
-
-    public void speak() {
-        System.out.println(name + " phát ra âm thanh.");
-    }
-}
-
-class Dog extends Animal {
-    private String breed;
-
-    public Dog(String name, String breed) {
-        super(name);
-        this.breed = breed;
-    }
-
-    @Override
-    public void speak() {
-        System.out.println(name + " (" + breed + ") sủa: Gâu gâu!");
-    }
-}
-
-public class Main {
-    public static void main(String[] args) {
-        Animal myDog = new Dog("Milo", "Golden");
-        myDog.speak();
-    }
-}
-`,
-  cpp: `// Thực hành Kế thừa và Đa hình ảo (Virtual Function) trong C++
-#include <iostream>
-#include <string>
-#include <vector>
-#include <memory>
-
-class Animal {
-protected:
-    std::string name;
-
-public:
-    Animal(const std::string& n) : name(n) {}
-    virtual void speak() const {
-        std::cout << name << " phat ra am thanh." << std::endl;
-    }
-    virtual ~Animal() = default;
-};
-
-class Dog : public Animal {
-private:
-    std::string breed;
-
-public:
-    Dog(const std::string& n, const std::string& b) : Animal(n), breed(b) {}
-    void speak() const override {
-        std::cout << name << " (" << breed << ") sua: Gau gau!" << std::endl;
-    }
-};
-
-int main() {
-    std::unique_ptr<Animal> myDog = std::make_unique<Dog>("Milo", "Golden");
-    myDog->speak();
-    return 0;
-}
-`
-};
-
-export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWorkspaceProps) {
+export default function LearningWorkspace({
+  mentorMascot,
+  chatSkin,
+  theme = "light",
+  onToggleTheme = () => {},
+  role = "student",
+  avatarStyle = "initials",
+  badgeFrame = "none",
+  onNavigate,
+  onLogout,
+  onOpenCommandPalette,
+}: LearningWorkspaceProps) {
+  // ── 2-Tier Architecture: "catalog" (F8 Course Hub) or "player" (Course Learning View) ──
+  const [workspaceView, setWorkspaceView] = useState<"catalog" | "player">("catalog");
+  const [selectedSubjectId, setSelectedSubjectId] = useState<SubjectId>("oop");
+  const [activeLessonId, setActiveLessonId] = useState<string>("1.1");
   const [tab, setTab] = useState<Tab>("lecture");
-  const [view, setView] = useState<WorkspaceView>("lesson");
-  const [mentorCollapsed, setMentorCollapsed] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const workspaceRef = useRef<HTMLDivElement>(null);
+
   const [readingMode, setReadingMode] = useState<ReadingMode>("full");
-  const [selectedLesson, setSelectedLesson] = useState(2);
-  const [selectedChapterAssignment, setSelectedChapterAssignment] = useState(0);
-  const [assignmentStatuses, setAssignmentStatuses] = useState<Record<string, AssignmentReviewStatus>>({
-    "CH1-BT01": "needs-revision",
-    "CH1-BT02": "pending-review",
-    "CH1-BT03": "not-submitted",
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [mentorCollapsed, setMentorCollapsed] = useState<boolean>(false);
+  const [copiedCodeIndex, setCopiedCodeIndex] = useState<number | null>(null);
+
+
+
   // Quiz state
-  const [quizIndex, setQuizIndex] = useState(0);
+  const [quizIndex, setQuizIndex] = useState<number>(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
-  const [quizStreak, setQuizStreak] = useState(0);
-  const [quizTimer, setQuizTimer] = useState(30);
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [quizDone, setQuizDone] = useState(false);
-  const [totalXpEarned, setTotalXpEarned] = useState(0);
+  const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
+  const [quizStreak, setQuizStreak] = useState<number>(0);
+  const [totalXpEarned, setTotalXpEarned] = useState<number>(120);
+  const [quizDone, setQuizDone] = useState<boolean>(false);
+  const [showXpToast, setShowXpToast] = useState<boolean>(false);
   const quizConfettiRef = useRef<HTMLDivElement>(null);
-  // Audio state
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [audioProgress, setAudioProgress] = useState(0.38);
-  const [audioSpeed, setAudioSpeed] = useState("1x");
-  const audioIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Code Lab state - Industrial 3-Pane Runner
-  const [selectedLanguage, setSelectedLanguage] = useState<"python" | "java" | "cpp">("python");
-  const [codeValue, setCodeValue] = useState<string>(starterCodeSnippets.python);
-  const [consoleOutput, setConsoleOutput] = useState<string[]>([
-    "Sẵn sàng thực thi. Nhấn \"Chạy Sandbox\" (Ctrl + Enter) để biên dịch & kiểm thử cô lập.",
-  ]);
-  const [isRunningSandbox, setIsRunningSandbox] = useState<boolean>(false);
-  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
-  const [showSelfCorrectionCert, setShowSelfCorrectionCert] = useState<boolean>(false);
-  const [copiedSha, setCopiedSha] = useState<boolean>(false);
+
+  // AI Mentor Chat State
+  const [chatInput, setChatInput] = useState<string>("");
   const [isAskingAi, setIsAskingAi] = useState<boolean>(false);
-  const [message, setMessage] = useState("");
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialMindmapNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialMindmapEdges);
-  const [messages, setMessages] = useState([
-    { from: "mentor", text: "Bạn đang ở bài Đa hình. Hãy nối khái niệm override với ví dụ Dog.speak() để kiểm tra mình hiểu đúng chưa." },
-    { from: "user", text: "Em hay nhầm giữa extends và override." },
-    { from: "mentor", text: "Tách làm 2 câu: extends trả lời 'là một loại gì?', override trả lời 'hành vi được viết lại ra sao?'." },
+  const [messages, setMessages] = useState<Array<{ from: "mentor" | "user"; text: string }>>([
+    {
+      from: "mentor",
+      text: "Chào bạn! Mình là trợ lý AI Socratic. Mình sẽ cùng bạn phản biện bản chất kỹ thuật của môn học này, gợi mở tư duy chứ tuyệt đối không mớm sẵn lời giải nhé!",
+    },
   ]);
 
-  const lesson = lessons[selectedLesson];
+  // Resolve Multi-Chapter Data
+  const currentMultiSubject: SubjectModuleData =
+    MULTI_CHAPTER_SUBJECTS.find((m) => m.id === selectedSubjectId) || MULTI_CHAPTER_SUBJECTS[0];
+
+  let activeChapter: ChapterItem = currentMultiSubject.chapters[0];
+  let activeMultiLesson: LessonItem = activeChapter.lessons[0];
+
+  for (const ch of currentMultiSubject.chapters) {
+    const found = ch.lessons.find((l) => l.id === activeLessonId);
+    if (found) {
+      activeChapter = ch;
+      activeMultiLesson = found;
+      break;
+    }
+  }
+
+  const currentChapterExercise = getChapterExercise(
+    selectedSubjectId,
+    activeChapter.number,
+    activeChapter.title,
+    currentMultiSubject.code,
+    currentMultiSubject.name
+  );
+
+  // Fallback to legacy subject data for quiz questions and audio
+  const currentSubject =
+    SUBJECT_MODULES.find((m) => m.id === selectedSubjectId) || SUBJECT_MODULES[0];
+  const legacyLesson = currentSubject.lessons[0];
   const mentor = mentorConfig[mentorMascot];
-  const chapterAssignment = chapterAssignments[selectedChapterAssignment];
-  const chapterAssignmentStatus = assignmentStatuses[chapterAssignment.id] ?? "not-submitted";
-  const chapterAssignmentStatusInfo = assignmentStatusConfig[chapterAssignmentStatus];
-  const currentQuestion = quizQuestions[quizIndex];
 
-  // ── Dispatch events to Mascot Pet based on active tab ─────────────────────
-  useEffect(() => {
-    if (view === "chapterAssignments") {
-      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "idle" } }));
-      return;
-    }
-    if (tab === "code") {
-      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "coding" } }));
-    } else if (tab === "quiz") {
-      if (quizDone) {
-        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success", text: "Huynh hoàn thành quiz xuất sắc!" } }));
-      } else if (!timerRunning && quizTimer === 30) {
-        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "idle", text: "Bấm Bắt đầu để thử thách Quiz nhé!" } }));
-      } else {
-        window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "quiz" } }));
-      }
-    } else {
-      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "idle" } }));
-    }
-  }, [tab, view, quizDone, timerRunning, quizTimer]);
 
-  // ── Quiz timer countdown ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!timerRunning) return;
-    if (quizTimer <= 0) {
-      setTimerRunning(false);
-      setSubmitted(true);
-      window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "error", text: "Hết giờ mất rồi huynh ơi! ⏰" } }));
-      return;
-    }
-    const id = setInterval(() => setQuizTimer((t) => t - 1), 1000);
-    return () => clearInterval(id);
-  }, [timerRunning, quizTimer]);
 
-  // ── Audio fake progress ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (audioPlaying) {
-      audioIntervalRef.current = setInterval(() => {
-        setAudioProgress((p) => { if (p >= 1) { setAudioPlaying(false); return 1; } return p + 0.002; });
-      }, 80);
-    } else {
-      if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
-    }
-    return () => { if (audioIntervalRef.current) clearInterval(audioIntervalRef.current); };
-  }, [audioPlaying]);
-
-  const startQuiz = () => {
-    setQuizIndex(0); setSelectedOption(null); setSubmitted(false);
-    setQuizDone(false); setTotalXpEarned(0); setQuizStreak(0);
-    setQuizTimer(30); setTimerRunning(true);
+  const handleCopyCode = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCodeIndex(index);
+    setTimeout(() => setCopiedCodeIndex(null), 2000);
   };
 
-  const submitQuiz = () => {
+  const handleQuizSubmit = () => {
     if (!selectedOption) return;
-    setSubmitted(true);
-    setTimerRunning(false);
-    const correct = selectedOption === currentQuestion.correct;
-    if (correct) {
-      const bonus = quizStreak >= 2 ? 2 : 1;
-      setTotalXpEarned((x) => x + 15 * bonus);
+    setQuizSubmitted(true);
+    const currQ = currentSubject.quizQuestions[quizIndex];
+    if (currQ && selectedOption === currQ.correct) {
+      setTotalXpEarned((x) => x + 25);
       setQuizStreak((s) => s + 1);
-      if (quizConfettiRef.current) spawnConfetti(quizConfettiRef.current);
+      setShowXpToast(true);
+      setTimeout(() => setShowXpToast(false), 2200);
+      triggerMarloConfetti(0.52, 0.45);
       window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success" } }));
     } else {
       setQuizStreak(0);
@@ -579,136 +193,37 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
     }
   };
 
-  const nextQuizQuestion = () => {
-    if (quizIndex + 1 >= quizQuestions.length) { setQuizDone(true); return; }
-    setQuizIndex((i) => i + 1);
-    setSelectedOption(null); setSubmitted(false);
-    setQuizTimer(30); setTimerRunning(true);
-  };
-
-  const handleLanguageChange = (lang: "python" | "java" | "cpp") => {
-    setSelectedLanguage(lang);
-    setCodeValue(starterCodeSnippets[lang]);
-    setSubmissionResult(null);
-  };
-
-  const resetStarterCode = () => {
-    setCodeValue(starterCodeSnippets[selectedLanguage]);
-    setSubmissionResult(null);
-  };
-
-  const runSandbox = () => {
-    setIsRunningSandbox(true);
-    const time = new Date().toLocaleTimeString();
-
-    setTimeout(() => {
-      let output = "";
-      if (selectedLanguage === "python") {
-        output = `Milo (Golden Retriever) sủa: Gâu gâu!\nKitty kêu: Meo meo!\n\n[Thực thi hoàn tất] Exit code: 0 • Thời gian: 28ms • RAM: 11.4MB`;
-      } else if (selectedLanguage === "java") {
-        output = `Milo (Golden) sủa: Gâu gâu!\nAnimal speak() executed via Polymorphism.\n\n[Thực thi hoàn tất] Exit code: 0 • Thời gian: 45ms • RAM: 16.8MB`;
-      } else {
-        output = `Milo (Golden) sua: Gau gau!\nAnimal speak() executed via C++ Virtual Function.\n\n[Thực thi hoàn tất] Exit code: 0 • Thời gian: 15ms • RAM: 8.2MB`;
-      }
-
-      setConsoleOutput([
-        `[${time}] $ run-sandbox --runtime=isolated --lang=${selectedLanguage}`,
-        `[${time}] Biên dịch và thực thi chương trình...`,
-        output,
-      ]);
-      setIsRunningSandbox(false);
-    }, 350);
-  };
-
-  const handleCopySha = (sha: string) => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(sha);
+  const handleNextQuiz = () => {
+    if (quizIndex + 1 >= currentSubject.quizQuestions.length) {
+      setQuizDone(true);
+    } else {
+      setQuizIndex((i) => i + 1);
+      setSelectedOption(null);
+      setQuizSubmitted(false);
     }
-    setCopiedSha(true);
-    setTimeout(() => setCopiedSha(false), 2000);
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && tab === "code") {
-        e.preventDefault();
-        runSandbox();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [tab, codeValue, selectedLanguage]);
-
-  const onConnect = useCallback(
-    (connection: Connection) =>
-      setEdges((current) =>
-        addEdge(
-          {
-            ...connection,
-            type: "bezier",
-            label: "liên hệ",
-            markerEnd: { type: MarkerType.ArrowClosed },
-            style: { stroke: "#d88b64", strokeWidth: 2 },
-          },
-          current,
-        ),
-      ),
-    [setEdges],
-  );
-
-  const addMindmapNode = () => {
-    const index = nodes.length + 1;
-    setNodes((current) => [
-      ...current,
-      {
-        id: `custom-${index}`,
-        type: "mindmapNode",
-        position: { x: 160 + index * 42, y: 380 + (index % 3) * 24 },
-        data: {
-          title: `Ý mới ${index}`,
-          subtitle: "kéo để sắp xếp lại mindmap",
-          tag: "NEW",
-          tone: "source",
-        },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-        style: { width: 176 },
-      },
-    ]);
-  };
-
-  const selectLesson = (index: number) => {
-    setView("lesson");
-    setSelectedLesson(index);
-    setTab("lecture");
-    setReadingMode("full");
-    setSelectedOption(null);
-    setSubmitted(false);
-  };
-
-  const sendMessage = async (text = message) => {
-    if (!text.trim()) return;
-    const userMsg = text.trim();
-    setMessages((current) => [...current, { from: "user", text: userMsg }]);
-    setMessage("");
+  const handleSendMessage = async () => {
+    if (!chatInput.trim()) return;
+    const userMsg = chatInput.trim();
+    setChatInput("");
+    setMessages((prev) => [...prev, { from: "user", text: userMsg }]);
     setIsAskingAi(true);
 
     try {
-      const res = await askSocraticTutor(userMsg, codeValue);
-      setMessages((current) => [
-        ...current,
-        {
-          from: "mentor",
-          text: res.assistant_message,
-          isGuardrail: res.policy_decision === "refuse_answer",
-        },
-      ]);
+      const response = await askSocraticTutor({
+        subjectId: selectedSubjectId,
+        question: userMsg,
+        currentTopic: activeMultiLesson.title,
+        chatSkin,
+      });
+      setMessages((prev) => [...prev, { from: "mentor", text: response.answer }]);
     } catch {
-      setMessages((current) => [
-        ...current,
+      setMessages((prev) => [
+        ...prev,
         {
           from: "mentor",
-          text: "Hãy quan sát kỹ phương thức visit() và kiểm tra điều kiện chuỗi rỗng trước khi append.",
+          text: `Câu hỏi rất hay! Trong môn ${currentMultiSubject.name}, theo bạn yếu tố nào đóng vai trò then chốt trong bài "${activeMultiLesson.title}"?`,
         },
       ]);
     } finally {
@@ -716,439 +231,467 @@ export default function LearningWorkspace({ mentorMascot, chatSkin }: LearningWo
     }
   };
 
+  useMarloPageEntrance(
+    workspaceRef,
+    (el) => {
+      // In player mode, animate initial entrance on mount / subject change
+      if (workspaceView === "player") {
+        const cards = el.querySelectorAll(".marlo-card, .course-card, .chapter-card, article");
+        if (cards.length > 0) {
+          animateMarloCards(cards, { stagger: 0.05, y: 22 });
+        }
+        const rows = el.querySelectorAll(".marlo-row, .lesson-row, .tab-item");
+        if (rows.length > 0) {
+          animateMarloRows(rows, { y: 12, stagger: 0.025, delay: 0.2 });
+        }
+      }
+    },
+    [workspaceView, selectedSubjectId]
+  );
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // TIER 1: F8 COURSE CATALOG HUB (DANH SÁCH MÔN HỌC BÊN NGOÀI)
+  // ═════════════════════════════════════════════════════════════════════════
+  if (workspaceView === "catalog") {
+    return (
+      <div ref={workspaceRef} className="flex h-full min-h-full w-full flex-col bg-transparent text-slate-800 dark:text-slate-100 overflow-hidden font-sans">
+
+
+        {/* F8 Course Grid Catalog Component */}
+        <CourseCatalogHub
+          onSelectCourse={(courseId) => {
+            setSelectedSubjectId(courseId);
+            setActiveLessonId("1.1");
+            setWorkspaceView("player");
+            window.dispatchEvent(
+              new CustomEvent("pet-state-change", {
+                detail: { state: "happy", text: `Đã mở môn học ${courseId.toUpperCase()}!` },
+              })
+            );
+          }}
+        />
+      </div>
+    );
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // TIER 2: F8 LEARNING WORKSPACE / PLAYER (TRANG HỌC CỦA MÔN)
+  // ═════════════════════════════════════════════════════════════════════════
+
   return (
-    <div className={`grid h-full transition-[grid-template-columns] duration-300 ${
-      sidebarCollapsed
-        ? (mentorCollapsed ? "grid-cols-[52px_minmax(0,1fr)_52px]" : "grid-cols-[52px_minmax(0,1fr)_310px]")
-        : (mentorCollapsed ? "grid-cols-[232px_minmax(0,1fr)_52px]" : "grid-cols-[232px_minmax(0,1fr)_310px]")
-    }`}>
-      {/* ── PROGRESS STEPPER SIDEBAR ──────────────────────────────────────── */}
-      {sidebarCollapsed ? (
-        <aside className="border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col items-center py-4 gap-4 w-12 shrink-0">
-          <button
-            onClick={() => setSidebarCollapsed(false)}
-            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 text-slate-500 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            title="Mở rộng tiến trình"
-          >
-            <ChevronsRight size={15} />
-          </button>
-          
-          <div className="flex-1 flex flex-col items-center gap-3 w-full px-1">
-            {lessons.map((item, index) => {
-              const active = selectedLesson === index && view === "lesson" && tab !== "mindmap";
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => selectLesson(index)}
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
-                    active
-                      ? "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-600"
-                      : "border-transparent text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                  }`}
-                  title={`Bài ${item.id}: ${item.title}`}
-                >
-                  {item.status === "done" ? (
-                    <CheckCircle2 size={16} className="text-emerald-500" />
-                  ) : (
-                    <Play size={16} className={active ? "text-blue-600" : "text-slate-400"} />
-                  )}
-                </button>
-              );
-            })}
-
+    <div ref={workspaceRef} className="flex h-full min-h-full w-full flex-col bg-transparent text-slate-800 dark:text-slate-100 p-3 sm:p-5 lg:p-6 overflow-hidden font-sans space-y-4">
+      {/* ── TOP F8 CLEAN WORKSPACE HEADER (SEPARATE FLOATING CARD) ── */}
+      <header className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-5 py-3.5 shrink-0 shadow-xs z-20">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Back button & Course identity */}
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => { setView("chapterAssignments"); setSelectedChapterAssignment(0); }}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition"
-              title="Bài tập cuối chương"
+              onClick={() => setWorkspaceView("catalog")}
+              className="group flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs active:scale-95"
+              title="Quay lại danh sách môn học"
             >
-              <Lock size={15} />
+              <ArrowLeft size={15} className="transition-transform group-hover:-translate-x-1" />
+              <span>Danh sách môn học</span>
             </button>
 
-            <button
-              onClick={() => { setView("lesson"); setTab("mindmap"); }}
-              className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
-                view === "lesson" && tab === "mindmap"
-                  ? "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300"
-                  : "border-transparent text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-              }`}
-              title="Sơ đồ Mindmap"
-            >
-              <Sparkles size={15} className="text-amber-500" />
-            </button>
-          </div>
-        </aside>
-      ) : (
-        <aside className="border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col">
-          <div className="border-b border-slate-200 dark:border-slate-800 p-4">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Chương 1</div>
-              <button
-                onClick={() => setSidebarCollapsed(true)}
-                className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                title="Thu nhỏ tiến trình"
-              >
-                <ChevronsLeft size={13} />
-              </button>
-            </div>
-            <h1 className="mt-1 text-base font-bold text-slate-900 dark:text-white leading-tight">Kế thừa và đa hình</h1>
-            <div className="mt-3">
-              <div className="flex justify-between text-[10px] font-semibold text-slate-500 mb-1">
-                <span>Tiến độ chương</span>
-                <span className="text-blue-600 dark:text-blue-400 font-bold">46%</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                <div className="h-full w-[46%] rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-center gap-3 text-[10px] text-slate-400">
-              <span className="flex items-center gap-1"><Star size={9} className="fill-amber-400 text-amber-400" /> 270 XP tích lũy</span>
-              <span className="flex items-center gap-1"><Clock size={9} /> ~22 phút còn lại</span>
+            <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+
+            {/* Course Title Badge */}
+            <div className="flex items-center gap-2.5">
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 ${currentMultiSubject.badgeBg} ${currentMultiSubject.badgeText}`}>
+                {currentMultiSubject.code}
+              </span>
+              <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white truncate max-w-[180px] sm:max-w-xs md:max-w-md">
+                {currentMultiSubject.name}
+              </span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1 p-2.5">
-            {lessons.map((item, index) => {
-              const active = selectedLesson === index && view === "lesson" && tab !== "mindmap";
-              const meta = lessonMeta[item.id];
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => selectLesson(index)}
-                  className={`lesson-outline-item w-full rounded-xl border px-3 py-2.5 text-left transition ${
-                    active
-                      ? "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50"
-                      : "border-transparent hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {item.status === "done"
-                      ? <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                      : <Play size={14} className={`shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`} />}
-                    <span className={`text-xs font-semibold leading-tight ${active ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-300"}`}>
-                      {item.id} · {item.title}
-                    </span>
-                  </div>
-                  {/* Mini sub-progress bars */}
-                  <div className="mt-2 space-y-1.5">
-                    {[
-                      { label: "Đọc", pct: item.status === "done" ? 100 : meta.readMins > 5 ? 60 : 100, color: "bg-blue-400" },
-                      { label: "Quiz", pct: meta.quizPct, color: "bg-amber-400" },
-                      { label: "Code", pct: meta.codePct, color: "bg-emerald-400" },
-                    ].map(({ label, pct, color }) => (
-                      <div key={label} className="flex items-center gap-1.5">
-                        <span className="w-7 text-[9px] font-bold text-slate-400">{label}</span>
-                        <div className="flex-1 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                          <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-[9px] font-bold text-slate-400 w-6 text-right">{pct}%</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-2 flex items-center gap-3">
-                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
-                      <Star size={8} className="fill-current" />+{meta.xp} XP
-                    </span>
-                    <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                      <Clock size={8} />{meta.readMins} phút
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-
-            <button
-              onClick={() => { setView("chapterAssignments"); setSelectedChapterAssignment(0); }}
-              className="lesson-outline-item w-full flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 hover:border-blue-200 hover:text-blue-700 transition"
-            >
-              <Lock size={13} className="text-slate-400 shrink-0" />
-              <span>Bài tập cuối chương</span>
-            </button>
-
-            <button
-              onClick={() => { setView("lesson"); setTab("mindmap"); }}
-              className={`lesson-outline-item w-full flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition ${
-                view === "lesson" && tab === "mindmap"
-                  ? "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300"
-                  : "border-transparent text-slate-600 dark:text-slate-400 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-              }`}
-            >
-              <Sparkles size={13} className="text-amber-500 shrink-0" />
-              <span>Mindmap Tổng hợp</span>
-            </button>
-          </div>
-        </aside>
-      )}
-
-      <main className="flex min-w-0 flex-col">
-        <div className="border-b border-slate-200 bg-white px-4 pt-3">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                {view === "lesson" ? `Bài ${lesson.id}` : "Cuối chương 1"}
-              </div>
-              <h2 className="text-lg font-semibold text-slate-950">
-                {view === "lesson" ? lesson.title : "Bài tập cuối chương"}
-              </h2>
-            </div>
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-              {view === "lesson" ? "Quiz yêu cầu ≥ 70%" : "Nộp trực tiếp tại đây"}
-            </span>
-          </div>
-          {view === "lesson" && <div className="flex gap-1">
-            {tabs.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setTab(item.id)}
-                className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition ${
-                  tab === item.id ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                {item.icon}
-                {item.label}
-              </button>
-            ))}
-          </div>}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5">
-          {view === "chapterAssignments" && (
-            <div className="grid max-w-5xl grid-cols-[280px_minmax(0,1fr)] gap-4">
-              <div className="surface rounded-xl p-4">
-                <h3 className="text-base font-semibold text-slate-950">Danh sách đề</h3>
-                <div className="mt-4 space-y-2">
-                  {chapterAssignments.map((assignment, index) => {
-                    const status = assignmentStatuses[assignment.id] ?? "not-submitted";
-                    const statusInfo = assignmentStatusConfig[status];
-                    return (
-                    <button
-                      key={assignment.id}
-                      onClick={() => setSelectedChapterAssignment(index)}
-                      className={`w-full rounded-lg border p-3 text-left ${
-                        selectedChapterAssignment === index ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-mono text-xs text-blue-700">{assignment.id}</div>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusInfo.className}`}>
-                          {statusInfo.label}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-sm font-semibold text-slate-900">{assignment.title}</div>
-                    </button>
-                    );
-                  })}
+          {/* Right side: Overall Course Progress, XP, & Mascot */}
+          <div className="flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+              <div className="text-right">
+                <div className="text-[10px] text-slate-400 font-semibold uppercase">Tiến độ khóa học</div>
+                <div className="text-xs font-bold font-mono text-amber-500 dark:text-amber-400">
+                  <MarloNumber value={currentMultiSubject.overallProgress} />% Hoàn thành
                 </div>
               </div>
+              <div className="w-24 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden relative">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-700 relative"
+                  style={{ width: `${currentMultiSubject.overallProgress}%` }}
+                >
+                  <div className="absolute inset-0 f8-shimmer" />
+                </div>
+              </div>
+            </div>
 
-              <div className="surface rounded-xl p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-sm font-semibold text-blue-700">{chapterAssignment.id}</div>
-                    <h3 className="mt-1 text-lg font-semibold text-slate-950">{chapterAssignment.title}</h3>
-                  </div>
-                  <span className={`rounded-full border px-3 py-1 text-xs font-bold ${chapterAssignmentStatusInfo.className}`}>
-                    {chapterAssignmentStatusInfo.label}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-mono shadow-2xs">
+              <Star size={13} className="text-amber-500 fill-amber-500" />
+              <span>+<MarloNumber value={totalXpEarned} /> XP</span>
+            </div>
+
+
+          </div>
+        </div>
+      </header>
+
+      {/* ── WORKSPACE BODY WITH DUAL VIEW ── */}
+      <div className="flex flex-1 min-h-0 gap-4 lg:gap-5 overflow-hidden">
+        {/* ── LEFT MULTI-CHAPTER ACCORDION SIDEBAR (CHUẨN F8) ── */}
+        <MultiChapterSidebar
+          subject={currentMultiSubject}
+          activeLessonId={activeLessonId}
+          activeChapterId={activeChapter.id}
+          activeTab={tab}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onSelectLesson={(lessonId, lessonType) => {
+            setActiveLessonId(lessonId);
+            if (lessonType) {
+              setTab(lessonType);
+            }
+          }}
+          onOpenMindmap={(chapterId) => {
+            if (chapterId) {
+              const chap = currentMultiSubject.chapters.find((c) => c.id === chapterId);
+              if (chap && chap.lessons.length > 0) {
+                setActiveLessonId(chap.lessons[0].id);
+              }
+            }
+            setTab("mindmap");
+          }}
+          onOpenExercise={(chapterId) => {
+            if (chapterId) {
+              const chap = currentMultiSubject.chapters.find((c) => c.id === chapterId);
+              if (chap && chap.lessons.length > 0) {
+                setActiveLessonId(chap.lessons[0].id);
+              }
+            }
+            setTab("exercise");
+          }}
+        />
+
+        {/* ── MAIN STAGE ── */}
+<main className="flex flex-1 flex-col min-w-0 overflow-y-auto space-y-4 pr-1 relative">
+          {/* 🌊 Dải sáng chuyển cảnh lan nước khi đổi bài học */}
+          <div
+            className="pointer-events-none sticky top-0 left-0 right-0 h-[2.5px] -mt-4 -mx-4 lg:-mt-6 lg:-mx-6 z-40 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 opacity-60"
+          />
+
+          <div
+            className="flex flex-col space-y-4"
+          >
+            {/* ── CARD 1: SEPARATE LESSON INFO & BREADCRUMB ── */}
+            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-3.5 sm:p-4 shadow-xs flex items-center justify-between flex-wrap gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Chương {activeChapter.number}: {activeChapter.title}
+                </span>
+                <span className="text-slate-300 dark:text-slate-700 font-bold">/</span>
+                <span className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  {tab === "exercise" ? (
+                    <>
+                      <span className="p-1 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300">
+                        <Code2 size={14} />
+                      </span>
+                      <span>Đề bài tập & Nộp bài Chương {activeChapter.number}</span>
+                    </>
+                  ) : tab === "mindmap" ? (
+                    <>
+                      <span className="p-1 rounded-md bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-300">
+                        <GitBranch size={14} />
+                      </span>
+                      <span>Sơ đồ Tư duy (Mindmap) Cuối Chương {activeChapter.number}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-mono font-bold">
+                        {activeMultiLesson.id}
+                      </span>
+                      <span className="font-bold text-slate-900 dark:text-white transition-colors">{activeMultiLesson.title}</span>
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {tab === "mindmap" || tab === "exercise" ? (
+                <button
+                  onClick={() => setTab("lecture")}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer active:scale-95 shadow-2xs"
+                >
+                  <ArrowLeft size={14} />
+                  <span>Quay lại bài học ({activeMultiLesson.id})</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md flex items-center gap-1 font-medium">
+                    <Clock size={13} /> {activeMultiLesson.duration}
+                  </span>
+                  <span className="text-xs font-mono text-amber-600 bg-amber-50 dark:bg-amber-950 px-2.5 py-1 rounded-md flex items-center gap-1 font-bold">
+                    <Star size={13} className="fill-amber-500 text-amber-500" /> +{activeMultiLesson.xp} XP
                   </span>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{chapterAssignment.prompt}</p>
-
-                <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Trạng thái review</div>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">{chapterAssignmentStatusInfo.desc}</p>
-                    </div>
-                    <div className="text-right text-xs text-slate-400">
-                      {chapterAssignmentStatus === "not-submitted" ? "Chưa có lịch sử" : "Cập nhật gần nhất: hôm nay"}
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-5 gap-2">
-                    {assignmentReviewSteps.map((status, index) => {
-                      const activeIndex = assignmentReviewSteps.indexOf(chapterAssignmentStatus);
-                      const active = status === chapterAssignmentStatus;
-                      const passed = index < activeIndex && chapterAssignmentStatus !== "needs-revision";
-                      const info = assignmentStatusConfig[status];
-                      return (
-                        <div
-                          key={status}
-                          className={`rounded-lg border p-2 text-center text-[11px] font-bold transition ${
-                            active ? info.className : passed ? "border-emerald-100 bg-emerald-50 text-emerald-600" : "border-slate-200 bg-slate-50 text-slate-400"
-                          }`}
-                        >
-                          {info.label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {chapterAssignmentStatus === "needs-revision" && (
-                    <div className="mt-4 rounded-lg border border-rose-100 bg-rose-50 p-3 text-sm leading-6 text-rose-700">
-                      Giảng viên góp ý: bổ sung ví dụ chạy demo và mô tả rõ hơn phần override trong README trước khi gửi lại.
-                    </div>
-                  )}
-                  {chapterAssignmentStatus === "approved" && (
-                    <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm leading-6 text-emerald-700">
-                      Bài đã đạt yêu cầu. XP chương sẽ được cộng vào tiến độ tổng.
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm font-semibold text-slate-900">Yêu cầu nộp</div>
-                  <div className="mt-3 grid gap-2">
-                    {chapterAssignment.requirements.map((item) => (
-                      <div key={item} className="flex items-center gap-2 text-sm text-slate-700">
-                        <CheckCircle2 size={15} className="text-emerald-600" />
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-3">
-                  <input
-                    placeholder="Dán link GitHub, ảnh mindmap hoặc link canvas..."
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400"
-                  />
-                  <textarea
-                    rows={5}
-                    placeholder="Ghi chú ngắn cho giảng viên..."
-                    className="resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400"
-                  />
-                  <button
-                    onClick={() =>
-                      setAssignmentStatuses((current) => ({
-                        ...current,
-                        [chapterAssignment.id]: "pending-review",
-                      }))
-                    }
-                    className="flex w-fit items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-                  >
-                    <Upload size={15} />
-                    {chapterAssignmentStatus === "needs-revision" ? "Gửi lại bài" : chapterAssignmentStatus === "pending-review" ? "Cập nhật bài nộp" : "Nộp bài tập"}
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
-          )}
 
-          {view === "lesson" && tab === "lecture" && (
-            <article className="surface max-w-5xl rounded-xl p-6">
-              <div className="mb-5 flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-                {[
-                  ["full", "Bài đọc đầy đủ"],
-                  ["summary", "Ý chính"],
-                  ["resources", "Đọc thêm"],
-                ].map(([id, label]) => (
-                  <button
-                    key={id}
-                    onClick={() => setReadingMode(id as ReadingMode)}
-                    className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${readingMode === id ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+            {/* ── CARD 2: STANDALONE FLOATING TAB BAR (TÁCH BIỆT CÓ KHE BG Ở GIỮA NHƯ GIT & KANBAN) ── */}
+            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-1.5 sm:p-2 shadow-xs flex items-center justify-between flex-wrap gap-2 shrink-0">
+              <MarloSegmentedControl
+                value={tab}
+                options={[
+                  { id: "lecture", label: "Bài đọc", icon: <FileText size={15} /> },
+                  { id: "video", label: "Video bài giảng", icon: <Video size={15} /> },
+                  { id: "quiz", label: `Quiz (${currentSubject.quizQuestions.length} câu)`, icon: <HelpCircle size={15} /> },
+                  { id: "exercise", label: `Bài tập C${activeChapter.number}`, icon: <Code2 size={15} /> },
+                  { id: "mindmap", label: "Sơ đồ Tư duy", icon: <GitBranch size={15} /> },
+                ]}
+                onChange={(val) => setTab(val as Tab)}
+                tone="dark"
+              />
 
+              {tab === "lecture" && (
+                <MarloSegmentedControl
+                  value={readingMode}
+                  options={[
+                    { id: "full", label: "Bài đọc đầy đủ" },
+                    { id: "summary", label: "Ý chính cần nắm" },
+                    { id: "resources", label: "Tài liệu đọc thêm" },
+                  ]}
+                  onChange={(val) => setReadingMode(val as ReadingMode)}
+                  size="sm"
+                  tone="dark"
+                />
+              )}
+            </div>
+
+          {/* ── TAB 1: BÀI ĐỌC (LECTURE - FULL UNIVERSITY DEPTH) ── */}
+          {tab === "lecture" && (
+            <article
+              key={`lecture-${selectedSubjectId}-${activeLessonId}-${readingMode}`}
+              className="animate-screen-enter rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 lg:p-8 shadow-xs space-y-6"
+            >
               {readingMode === "full" && (
-                <div>
-                  <div className="mb-5 rounded-lg bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-                    Mục tiêu: nắm được {lesson.topic.toLowerCase()} và áp dụng vào ví dụ Java ngắn.
+                <div className="space-y-6 w-full max-w-[1500px] mx-auto">
+                  {/* Objective Box - Minimalist Clean Tech Style */}
+                  <div
+                    className="animate-cascade-item flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800"
+                    style={{ animationDelay: "100ms" }}
+                  >
+                    <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0 mt-0.5">
+                        MỤC TIÊU
+                      </span>
+                      <span>{activeMultiLesson.objective || legacyLesson.objective}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] font-mono text-slate-500 dark:text-slate-400 shrink-0">
+                      <span className="flex items-center gap-1"><Clock size={12} /> {activeMultiLesson.duration}</span>
+                      <span>·</span>
+                      <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">+{activeMultiLesson.xp} XP</span>
+                    </div>
                   </div>
-                  {/* ── ENHANCED AUDIO PLAYER ─────────────────────────────── */}
-                  <div className="audio-reader mb-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
-                    {/* Top row: play button + title + speed selector */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => setAudioPlaying((v) => !v)}
-                          className="theme-primary-bg flex h-11 w-11 items-center justify-center rounded-full text-white shadow-lg hover:opacity-90 transition shrink-0"
-                        >
-                          {audioPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-                        </button>
-                        <div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                            <Headphones size={14} className="theme-primary-text" />
-                            Giọng đọc bài học
-                          </div>
-                          <div className="mt-0.5 text-xs text-slate-500">Auditory mode · giọng Nam ấm</div>
-                        </div>
-                      </div>
-                      {/* Speed buttons */}
-                      <div className="flex items-center gap-1">
-                        {["0.75x", "1x", "1.25x", "1.5x"].map((s) => (
+
+                  {/* Lesson Heading & Lead */}
+                  <div
+                    className="animate-cascade-item space-y-2.5 border-b border-slate-100 dark:border-slate-800 pb-5"
+                    style={{ animationDelay: "220ms" }}
+                  >
+                    <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                      {activeMultiLesson.title}
+                    </h1>
+                    <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
+                      {activeMultiLesson.lead}
+                    </p>
+                  </div>
+
+                  {/* Main Subsections with Code/Model Blocks */}
+                  <div className="space-y-6">
+                    {/* Code snippet block if present in lesson */}
+                    {activeMultiLesson.codeSnippet && (
+                      <div
+                        className="animate-cascade-item rounded-xl border border-slate-800 bg-slate-950 overflow-hidden shadow-md"
+                        style={{ animationDelay: "280ms" }}
+                      >
+                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-900/90 text-slate-300 text-xs sm:text-sm font-mono">
+                          <span className="font-bold text-slate-200 uppercase">{activeMultiLesson.codeSnippet.lang}</span>
                           <button
-                            key={s}
-                            onClick={() => setAudioSpeed(s)}
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold transition border ${
-                              audioSpeed === s
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 hover:border-blue-300"
-                            }`}
-                          >{s}</button>
-                        ))}
+                            onClick={() => handleCopyCode(activeMultiLesson.codeSnippet!.code, 0)}
+                            className="flex items-center gap-1.5 text-slate-400 hover:text-white text-xs transition cursor-pointer"
+                          >
+                            {copiedCodeIndex === 0 ? (
+                              <>
+                                <Check size={14} className="text-emerald-400" />
+                                <span className="text-emerald-400 font-semibold">Đã sao chép</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={14} />
+                                <span>Sao chép mã</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <pre className="p-4 sm:p-5 text-sm font-mono text-slate-100 leading-relaxed overflow-x-auto">
+                          {activeMultiLesson.codeSnippet.code}
+                        </pre>
+                        {activeMultiLesson.codeSnippet.caption && (
+                          <div className="px-4 py-2 bg-slate-900/40 border-t border-slate-800/60 text-xs text-slate-300 italic">
+                            {activeMultiLesson.codeSnippet.caption}
+                          </div>
+                        )}
                       </div>
+                    )}
+
+                    {/* Key takeaways list - Clean Tech Design */}
+                    <div
+                      className="animate-cascade-item rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3"
+                      style={{ animationDelay: activeMultiLesson.codeSnippet ? "340ms" : "280ms" }}
+                    >
+                      <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Nguyên lý cốt lõi cần nhớ
+                        </h4>
+                        <span className="text-xs font-mono text-slate-500">
+                          {activeMultiLesson.keyTakeaways.length} điểm chính
+                        </span>
+                      </div>
+                      <ul className="space-y-2.5 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                        {activeMultiLesson.keyTakeaways.map((point, pIdx) => (
+                          <li key={pIdx} className="flex items-start gap-2.5">
+                            <span className="font-mono text-xs font-bold text-slate-400 shrink-0 mt-0.5">0{pIdx + 1}.</span>
+                            <span>{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Architecture & Anti-Pattern Review - Clean Professional Split Grid */}
+                  <div
+                    className="animate-cascade-item rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-5 space-y-3.5"
+                    style={{ animationDelay: activeMultiLesson.codeSnippet ? "400ms" : "340ms" }}
+                  >
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-200/80 dark:border-slate-800">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">
+                        Lưu ý kiến trúc & Cạm bẫy thiết kế
+                      </span>
+                      <span className="text-xs font-mono font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded">
+                        Code Review Guidelines
+                      </span>
                     </div>
 
-                    {/* Waveform + timeline */}
-                    <div className="mt-3 space-y-2">
-                      {/* Waveform animation */}
-                      <div className={`audio-wave ${audioPlaying ? "audio-wave-playing" : ""}`} aria-hidden="true">
-                        {Array.from({ length: 40 }).map((_, i) => (
-                          <span key={i} style={{ height: `${10 + ((i * 13 + 7) % 30)}px` }} />
-                        ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Cột 1: Cạm bẫy / Sai lầm cần tránh */}
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                          <span>Sai lầm thường gặp (Anti-Pattern)</span>
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed pl-3 border-l-2 border-slate-200 dark:border-slate-800">
+                          {legacyLesson?.full?.antiPattern?.badDesc || legacyLesson?.full?.antiPattern?.badTitle || "Lạm dụng thừa kế hoặc phá vỡ tính đóng gói trong các module."}
+                        </p>
                       </div>
-                      {/* Scrubber */}
-                      <input
-                        type="range" min={0} max={100}
-                        value={Math.round(audioProgress * 100)}
-                        onChange={(e) => { setAudioProgress(Number(e.target.value) / 100); }}
-                        className="w-full h-1.5 accent-blue-600 cursor-pointer"
-                      />
-                      <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                        <span>{Math.floor(audioProgress * 252 / 60)}:{String(Math.floor(audioProgress * 252) % 60).padStart(2,"0")}</span>
-                        <span>4:12</span>
+
+                      {/* Cột 2: Giải pháp khuyến nghị */}
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                          <span>Giải pháp khuyến nghị</span>
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed pl-3 border-l-2 border-slate-300 dark:border-slate-700">
+                          {legacyLesson?.full?.antiPattern?.solution || "Áp dụng Composition over Inheritance và tuân thủ các nguyên lý SOLID."}
+                        </p>
                       </div>
                     </div>
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Bài đọc đầy đủ</h3>
-                  <p className="mt-4 text-base leading-8 text-slate-700 dark:text-slate-300">{lesson.full}</p>
-                  <pre className="mt-6 overflow-hidden rounded-xl bg-slate-950 p-6 text-base leading-8 text-slate-100 border border-slate-800">
-{`Animal pet = new Dog();
-pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
-                  </pre>
+
+                  {/* Callout Sơ đồ tư duy cuối chương - Neutral Minimalist */}
+                  <div
+                    className="animate-cascade-item p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex items-center justify-between flex-wrap gap-4"
+                    style={{ animationDelay: activeMultiLesson.codeSnippet ? "460ms" : "400ms" }}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="p-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shrink-0">
+                        <GitBranch size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Tổng kết kiến thức Chương {activeChapter.number}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          Xem Sơ đồ Tư duy (Mindmap) cuối chương để hệ thống hóa kiến thức tóm gọn các nút then chốt.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setTab("mindmap")}
+                      className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer active:scale-95 shadow-2xs"
+                    >
+                      <span>Mở Mindmap Cuối Chương</span>
+                      <ArrowRight size={15} />
+                    </button>
+                  </div>
                 </div>
               )}
 
+              {/* Mode Summary */}
               {readingMode === "summary" && (
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Ý chính cần nắm</h3>
-                  <div className="mt-5 grid gap-4">
-                    {lesson.summary.map(([term, desc]) => (
-                      <div key={term} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-4">
-                        <div className="font-mono text-base font-bold text-blue-750 dark:text-blue-400">{term}</div>
-                        <div className="mt-2 text-base leading-7 text-slate-700 dark:text-slate-300">{desc}</div>
+                <div className="space-y-4 w-full max-w-[1500px] mx-auto">
+                  <div
+                    className="animate-cascade-item border-b border-slate-100 dark:border-slate-800 pb-3"
+                    style={{ animationDelay: "80ms" }}
+                  >
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Ý chính cốt lõi (Core Key Takeaways)</h2>
+                    <p className="text-xs text-slate-500">Tóm tắt ngắn gọn các nguyên lý then chốt cần ghi nhớ.</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {activeMultiLesson.keyTakeaways.map((point, sIdx) => (
+                      <div
+                        key={sIdx}
+                        className="animate-cascade-item rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4 space-y-2"
+                        style={{ animationDelay: `${120 + sIdx * 70}ms` }}
+                      >
+                        <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-950/80 px-2 py-0.5 rounded">
+                          Điểm then chốt #{sIdx + 1}
+                        </span>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                          {point}
+                        </p>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
+              {/* Mode Resources */}
               {readingMode === "resources" && (
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Tài liệu đọc thêm</h3>
-                  <div className="mt-5 space-y-4">
-                    {[
-                      ["Oracle Java Tutorial", "Tài liệu nền tảng về OOP trong Java."],
-                      ["Effective Java", "Gợi ý thiết kế để tận dụng kế thừa và đa hình tốt hơn."],
-                      ["Refactoring Guru", "Ví dụ thực tế biến if/else thành đa hình."],
-                    ].map(([title, desc]) => (
-                      <div key={title} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                        <ExternalLink size={16} className="text-slate-400" />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-slate-900">{title}</div>
-                          <div className="text-xs text-slate-500">{desc}</div>
+                <div className="space-y-4 w-full max-w-[1500px] mx-auto">
+                  <div
+                    className="animate-cascade-item border-b border-slate-100 dark:border-slate-800 pb-3"
+                    style={{ animationDelay: "80ms" }}
+                  >
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Tài liệu tham khảo chuyên ngành (Curated Resources)</h2>
+                    <p className="text-xs text-slate-500">Các nguồn tài liệu chính thống RFC, IEEE/ACM và tài liệu chính thức từ hãng.</p>
+                  </div>
+                  <div className="space-y-3">
+                    {legacyLesson.resources.map(([title, desc, url], rIdx) => (
+                      <a
+                        key={rIdx}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="animate-cascade-item flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-white dark:hover:bg-slate-800 hover:border-blue-300 transition group cursor-pointer"
+                        style={{ animationDelay: `${120 + rIdx * 60}ms` }}
+                      >
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 flex items-center gap-1.5">
+                            <span>{title}</span>
+                            <ExternalLink size={12} className="text-slate-400 group-hover:text-blue-600" />
+                          </h4>
+                          <p className="text-xs text-slate-500">{desc}</p>
                         </div>
-                      </div>
+                        <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400 group-hover:underline">Truy cập →</span>
+                      </a>
                     ))}
                   </div>
                 </div>
@@ -1156,626 +699,188 @@ pet.speak(); // In ra "Woof" vì đối tượng thật là Dog`}
             </article>
           )}
 
-          {view === "lesson" && tab === "video" && (
-            <div className="surface max-w-5xl rounded-xl p-6">
-              <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-950">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(37,99,235,.45),transparent_35%),radial-gradient(circle_at_72%_60%,rgba(15,118,110,.35),transparent_32%)]" />
-                <div className="absolute inset-x-8 bottom-8">
-                  <div className="mb-4 text-sm font-medium text-blue-200">AI generated lesson video</div>
-                  <div className="text-2xl font-semibold text-white">{lesson.topic}</div>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20">
-                    <div className="h-full w-[38%] rounded-full bg-white" />
-                  </div>
-                </div>
-                <button className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-950 shadow-lg">
-                  <Play size={26} fill="currentColor" />
-                </button>
-              </div>
-              <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-                <span>Thời lượng 4:32 phút</span>
-                <span>Được tạo từ tài liệu chương 1</span>
-              </div>
+          {/* ── TAB 2: VIDEO BÀI GIẢNG TƯƠNG TÁC (F8 STYLE) ── */}
+          {tab === "video" && (
+            <div key={`video-${selectedSubjectId}-${activeLessonId}`} className="animate-screen-enter flex flex-col space-y-4">
+              <LessonVideoStudio
+                subjectId={selectedSubjectId}
+                mentorMascot={mentorMascot}
+                onNavigateToTab={(targetTab) => {
+                  if (targetTab !== "code") {
+                    setTab(targetTab as Tab);
+                  }
+                }}
+              />
             </div>
           )}
 
-          {/* ── GAMIFIED QUIZ ─────────────────────────────────────────── */}
-          {view === "lesson" && tab === "quiz" && (
-            <div className="surface max-w-4xl rounded-xl p-6 relative overflow-hidden" ref={quizConfettiRef}>
-              {/* confetti keyframe injected once */}
-              <style>{`@keyframes confetti-fall{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(140px) rotate(360deg);opacity:0}}`}</style>
-
-              {quizDone ? (
-                /* ── Results screen ── */
-                <div className="flex flex-col items-center py-8 gap-4 text-center">
-                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
-                    <Star size={32} className="fill-white text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Quiz hoàn thành!</h3>
-                  <p className="text-sm text-slate-500">Bạn đã trả lời xong {quizQuestions.length} câu hỏi.</p>
-                  <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-8 py-4">
-                    <div className="text-3xl font-black text-amber-600">+{totalXpEarned} XP</div>
-                    <div className="text-xs text-amber-600 mt-1">Đã tích lũy trong phiên này</div>
-                  </div>
-                  <button
-                    onClick={startQuiz}
-                    className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 transition"
-                  >
-                    <RotateCcw size={15} /> Làm lại Quiz
-                  </button>
-                </div>
-              ) : !timerRunning && quizTimer === 30 ? (
-                /* ── Start screen ── */
-                <div className="flex flex-col items-center py-8 gap-4 text-center">
-                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-                    <Zap size={30} className="text-white fill-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Quiz Bài {lesson.id}</h3>
-                  <p className="text-sm text-slate-500 max-w-xs">{quizQuestions.length} câu · 30 giây mỗi câu · Streak combo nhân đôi XP!</p>
-                  <button
-                    onClick={startQuiz}
-                    className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white hover:bg-blue-700 transition shadow-lg"
-                  >
-                    <PlayCircle size={18} /> Bắt đầu Quiz
-                  </button>
-                </div>
-              ) : (
-                /* ── Active question ── */
+          {/* ── TAB 3: QUIZ TRẮC NGHIỆM THỰC CHIẾN ── */}
+          {tab === "quiz" && (
+            <div
+              key={`quiz-${selectedSubjectId}-${quizIndex}`}
+              className="animate-screen-enter rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xs w-full max-w-5xl mx-auto space-y-5 relative"
+              style={{ animationDelay: "60ms" }}
+              ref={quizConfettiRef}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div>
-                  {/* Header: progress + timer + streak */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-blue-600 dark:text-blue-400">Câu {quizIndex + 1}/{quizQuestions.length}</span>
-                      <div className="flex gap-1">
-                        {quizQuestions.map((_, i) => (
-                          <span key={i} className={`h-1.5 w-6 rounded-full transition ${
-                            i < quizIndex ? "bg-emerald-400" : i === quizIndex ? "bg-blue-500" : "bg-slate-200 dark:bg-slate-700"
-                          }`} />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {quizStreak >= 2 && (
-                        <span className="flex items-center gap-1 rounded-full bg-orange-100 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 px-2 py-0.5 text-[10px] font-black text-orange-600 dark:text-orange-400 animate-pulse">
-                          <Zap size={9} className="fill-current" /> STREAK ×{quizStreak}
-                        </span>
-                      )}
-                      {/* Countdown ring */}
-                      <div className={`relative flex h-9 w-9 items-center justify-center rounded-full border-2 ${
-                        quizTimer <= 10 ? "border-red-400 text-red-500" : "border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400"
-                      }`}>
-                        <span className="text-[11px] font-black">{quizTimer}</span>
-                      </div>
-                    </div>
-                  </div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                    Trắc nghiệm Tình huống Kỹ thuật ({quizIndex + 1}/{currentSubject.quizQuestions.length})
+                  </h2>
+                  <p className="text-xs text-slate-500">Môn: {currentMultiSubject.name}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {showXpToast && (
+                    <span className="font-mono text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 px-2.5 py-0.5 rounded-full shadow-xs animate-in fade-in duration-200">
+                      +25 XP
+                    </span>
+                  )}
+                  <span className="text-xs font-mono font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                    🔥 Streak: <MarloNumber value={quizStreak} />
+                  </span>
+                </div>
+              </div>
 
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-relaxed">{currentQuestion.q}</h3>
+              {!quizDone ? (
+                <div className="space-y-4">
+                  <p className="animate-cascade-item text-sm font-semibold text-slate-900 dark:text-white" style={{ animationDelay: "120ms" }}>
+                    {currentSubject.quizQuestions[quizIndex]?.q}
+                  </p>
+                  <div className="space-y-2">
+                    {currentSubject.quizQuestions[quizIndex]?.options.map((opt, optIdx) => {
+                      const isSelected = selectedOption === opt.id;
+                      const isCorrect = opt.id === currentSubject.quizQuestions[quizIndex].correct;
+                      let btnCls = "border-slate-200 bg-slate-50/70 hover:bg-slate-100 text-slate-700";
+                      if (quizSubmitted) {
+                        if (isCorrect) btnCls = "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold";
+                        else if (isSelected && !isCorrect) btnCls = "border-rose-500 bg-rose-50 text-rose-800";
+                      } else if (isSelected) {
+                        btnCls = "border-blue-600 bg-blue-50 text-blue-800 font-bold ring-1 ring-blue-500";
+                      }
 
-                  <div className="mt-4 space-y-2.5">
-                    {currentQuestion.options.map((option) => {
-                      const isSelected = selectedOption === option.id;
-                      const isCorrect = option.id === currentQuestion.correct;
-                      let cls = "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-300";
-                      if (isSelected && !submitted) cls = "border-blue-500 bg-blue-50 dark:bg-blue-950/40";
-                      if (submitted && isCorrect) cls = "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40";
-                      if (submitted && isSelected && !isCorrect) cls = "border-red-400 bg-red-50 dark:bg-red-950/40";
                       return (
                         <button
-                          key={option.id}
-                          disabled={submitted}
-                          onClick={() => setSelectedOption(option.id)}
-                          className={`flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition ${cls}`}
+                          key={opt.id}
+                          disabled={quizSubmitted}
+                          onClick={() => setSelectedOption(opt.id)}
+                          className={`marlo-row marlo-item-interactive flex items-center w-full text-left p-3 rounded-xl border text-xs transition cursor-pointer ${btnCls}`}
+                          style={{ animationDelay: `${160 + optIdx * 60}ms` }}
                         >
-                          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold ${
-                            submitted && isCorrect ? "bg-emerald-500 text-white" :
-                            submitted && isSelected && !isCorrect ? "bg-red-400 text-white" :
-                            isSelected ? "bg-blue-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                          }`}>{option.id.toUpperCase()}</span>
-                          <span className={`flex-1 text-sm ${
-                            submitted && isCorrect ? "font-semibold text-emerald-800 dark:text-emerald-300" :
-                            submitted && isSelected && !isCorrect ? "text-red-700 dark:text-red-400" :
-                            "text-slate-700 dark:text-slate-300"
-                          }`}>{option.text}</span>
-                          {submitted && isCorrect && <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />}
-                          {submitted && isSelected && !isCorrect && <X size={16} className="text-red-400 shrink-0" />}
+                          <span className="flex h-5 w-5 items-center justify-center rounded-md font-mono text-[11px] font-bold border border-current mr-3 shrink-0">
+                            {opt.id.toUpperCase()}
+                          </span>
+                          <span>{opt.text}</span>
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* AI Explanation after submit */}
-                  {submitted && (
-                    <div className={`mt-4 rounded-xl border p-4 text-sm leading-6 ${
-                      selectedOption === currentQuestion.correct
-                        ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30"
-                        : "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30"
-                    }`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Bot size={14} className={selectedOption === currentQuestion.correct ? "text-emerald-600" : "text-red-500"} />
-                        <span className={`text-xs font-bold ${
-                          selectedOption === currentQuestion.correct ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-                        }`}>
-                          {selectedOption === currentQuestion.correct
-                            ? `Chính xác! +${quizStreak >= 2 ? 30 : 15} XP${quizStreak >= 2 ? " (Streak ×2)" : ""}`
-                            : "❌ Chưa đúng rồi — đừng nản nhé!"}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-5">{currentQuestion.explanation}</p>
+                  {quizSubmitted && (
+                    <div
+                      className="animate-cascade-item p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs space-y-1"
+                      style={{ animationDelay: "380ms" }}
+                    >
+                      <strong className="text-slate-900 dark:text-white font-bold">Giải thích kỹ thuật:</strong>
+                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {currentSubject.quizQuestions[quizIndex]?.explanation}
+                      </p>
                     </div>
                   )}
 
-                  <div className="mt-4 flex justify-between items-center">
-                    {!submitted ? (
+                  <div className="pt-2 flex justify-end gap-2">
+                    {!quizSubmitted ? (
                       <button
-                        onClick={submitQuiz}
+                        onClick={handleQuizSubmit}
                         disabled={!selectedOption}
-                        className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-700 dark:disabled:text-slate-500 transition hover:bg-blue-700"
+                        className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 text-xs transition disabled:opacity-40 cursor-pointer shadow-xs"
                       >
-                        Xác nhận <ChevronRight size={16} />
+                        Kiểm tra đáp án
                       </button>
                     ) : (
                       <button
-                        onClick={nextQuizQuestion}
-                        className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition"
+                        onClick={handleNextQuiz}
+                        className="rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2 text-xs transition cursor-pointer shadow-xs"
                       >
-                        {quizIndex + 1 >= quizQuestions.length ? "Xem kết quả" : "Câu tiếp theo"} <ChevronRight size={16} />
+                        {quizIndex + 1 >= currentSubject.quizQuestions.length ? "Hoàn thành Quiz" : "Câu tiếp theo →"}
                       </button>
                     )}
-                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                      <Star size={11} className="fill-current" /> {totalXpEarned} XP
-                    </span>
                   </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 space-y-3">
+                  <div className="h-14 w-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                    <Award size={32} />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Xuất sắc! Bạn đã hoàn thành bộ Quiz!</h3>
+                  <p className="text-xs text-slate-500">Đã cộng +{totalXpEarned} XP vào hồ sơ sinh viên.</p>
+                  <button
+                    onClick={() => {
+                      setQuizIndex(0);
+                      setSelectedOption(null);
+                      setQuizSubmitted(false);
+                      setQuizDone(false);
+                    }}
+                    className="rounded-xl bg-[#14161a] hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-5 py-2 text-xs font-bold transition cursor-pointer"
+                  >
+                    Luyện tập lại
+                  </button>
                 </div>
               )}
             </div>
           )}
 
-          {view === "lesson" && tab === "mindmap" && (
-            <div className="surface rounded-xl p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-950">Mindmap Canvas</h3>
-                  <p className="mt-1 text-sm text-slate-500">Học viên tự vẽ sơ đồ tư duy cho bài {lesson.id}. Vẽ xong bấm AI Review để nhận góp ý.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={addMindmapNode}
-                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-200 hover:text-blue-700"
-                  >
-                    <GitBranch size={15} />
-                    Thêm node
-                  </button>
-                  <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
-                    <WandSparkles size={15} />
-                    AI Review
-                  </button>
-                </div>
-              </div>
-
-              <div className="mindmap-flow-shell relative h-[560px] overflow-hidden rounded-xl border border-slate-800 shadow-2xl">
-                <div className="absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between border-b border-white/10 bg-black/35 px-5 backdrop-blur">
-                  <div className="flex items-center gap-3">
-                    <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                    <span className="ml-2 font-mono text-sm font-semibold text-slate-300">mindmap / oop-flow</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase text-slate-500">
-                    {["concepts", "runtime", "review"].map((item) => (
-                      <span key={item} className="rounded-full border border-white/10 px-2 py-1">{item}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <ReactFlow
-                  nodes={nodes}
-                  edges={edges}
-                  nodeTypes={mindmapNodeTypes}
-                  onNodesChange={onNodesChange}
-                  onEdgesChange={onEdgesChange}
-                  onConnect={onConnect}
-                  fitView
-                  minZoom={0.55}
-                  maxZoom={1.45}
-                  defaultEdgeOptions={{
-                    type: "bezier",
-                    markerEnd: { type: MarkerType.ArrowClosed },
-                    style: { strokeWidth: 2.2, stroke: "#64748b" },
-                  }}
-                  proOptions={{ hideAttribution: true }}
-                >
-                  <Background gap={30} color="rgba(148,163,184,.13)" />
-                  <MiniMap pannable zoomable />
-                  <Controls />
-                </ReactFlow>
-
-                <div className="absolute bottom-6 left-8 z-10 w-72 rounded-lg border border-red-300/35 bg-black/55 p-3 font-mono text-[11px] leading-5 text-red-100 shadow-xl">
-                  <div className="text-red-300">AI notes</div>
-                  <div>extends = quan hệ is-a</div>
-                  <div>override = thay đổi hành vi</div>
-                  <div>runtime dispatch phụ thuộc object thật</div>
-                </div>
-
-                <div className="absolute bottom-6 right-8 z-10 w-72 rounded-lg border border-white/10 bg-black/55 p-4 shadow-xl">
-                  <div className="text-sm font-semibold text-slate-100">AI Review</div>
-                  <p className="mt-2 text-xs leading-5 text-slate-400">
-                    Sơ đồ đã có đủ lớp cha, lớp con và luồng runtime. Nên bổ sung ví dụ super() để thấy rõ thứ tự khởi tạo.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── SPLIT-VIEW CODE LAB ────────────────────────────────────────── */}
-          {view === "lesson" && tab === "code" && (
-            <div className="surface overflow-hidden rounded-2xl flex flex-col border border-slate-200 dark:border-slate-800 shadow-sm" style={{ minHeight: "720px", height: "calc(100vh - 210px)" }}>
-              {/* ── TOP TOOLBAR ────────────────────────────────────────────── */}
-              <div className="flex flex-wrap items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 px-4 py-2.5 shrink-0 gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1.5">
-                    <span className="h-3 w-3 rounded-full bg-red-400" />
-                    <span className="h-3 w-3 rounded-full bg-amber-400" />
-                    <span className="h-3 w-3 rounded-full bg-emerald-400" />
-                  </div>
-
-                  {/* Language Selector */}
-                  <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs font-semibold">
-                    {(["python", "java", "cpp"] as const).map((lang) => (
-                      <button
-                        key={lang}
-                        onClick={() => handleLanguageChange(lang)}
-                        className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                          selectedLanguage === lang
-                            ? "bg-blue-600 text-white shadow-xs font-bold"
-                            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
-                        }`}
-                      >
-                        {lang === "python" ? "Python 3.12" : lang === "java" ? "Java 21" : "C++ 20"}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Sandbox Isolated Status */}
-                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 text-[11px] font-semibold">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Sandbox Thực hành Sẵn sàng</span>
-                    <span className="text-emerald-300 dark:text-emerald-700">|</span>
-                    <span>Tự do gõ & thử nghiệm</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={resetStarterCode}
-                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
-                    title="Khôi phục mã mẫu của bài học"
-                  >
-                    <RotateCcw size={13} />
-                    <span>Mã ban đầu</span>
-                  </button>
-
-                  <button
-                    onClick={() => setConsoleOutput([])}
-                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
-                    title="Xóa log terminal"
-                  >
-                    <Trash2 size={13} />
-                    <span>Xóa console</span>
-                  </button>
-
-                  <button
-                    onClick={runSandbox}
-                    disabled={isRunningSandbox}
-                    className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-1.5 text-xs shadow-sm disabled:opacity-50 transition cursor-pointer"
-                  >
-                    {isRunningSandbox ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <Play size={13} />
-                    )}
-                    <span>{isRunningSandbox ? "Đang chạy..." : "Chạy code (Ctrl + Enter)"}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* ── SPLIT VIEW: EDITOR ON LEFT, TERMINAL ON RIGHT ───────────── */}
-              <div className="flex flex-1 min-h-0 overflow-hidden">
-                {/* 1. CODE EDITOR */}
-                <div className="flex flex-1 flex-col bg-slate-950 min-w-0 overflow-hidden border-r border-slate-800/80">
-                  {/* File Header */}
-                  <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-1.5 bg-slate-950 text-slate-400 text-[11px] font-mono shrink-0">
-                    <div className="flex items-center gap-2">
-                      <Code2 size={13} className="text-blue-400" />
-                      <span className="font-bold text-slate-200">
-                        {selectedLanguage === "python" ? "main.py" : selectedLanguage === "java" ? "Main.java" : "main.cpp"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-slate-500 text-[10px]">
-                      <span>UTF-8</span>
-                      <span>4 Spaces</span>
-                      <span>{codeValue.split("\n").length} dòng</span>
-                    </div>
-                  </div>
-
-                  {/* Editor body */}
-                  <div className="flex flex-1 min-h-0 overflow-auto">
-                    {/* Line numbers */}
-                    <div className="select-none text-right px-3 pt-3 pb-3 font-mono text-xs leading-6 text-slate-600 border-r border-slate-800/80 shrink-0">
-                      {codeValue.split("\n").map((_, i) => (
-                        <div key={i}>{i + 1}</div>
-                      ))}
-                    </div>
-
-                    {/* Textarea */}
-                    <textarea
-                      value={codeValue}
-                      onChange={(e) => setCodeValue(e.target.value)}
-                      spellCheck={false}
-                      className="flex-1 resize-none bg-transparent p-3 font-mono text-xs leading-6 text-slate-100 outline-none min-w-0"
-                      style={{ tabSize: 4 }}
-                    />
-                  </div>
-
-                  {/* Editor footer */}
-                  <div className="border-t border-slate-800/80 bg-slate-900/90 px-4 py-1.5 text-[10px] text-slate-400 flex items-center justify-between shrink-0">
-                    <span className="flex items-center gap-1.5">
-                      <Keyboard size={13} className="text-slate-400" />
-                      <span>Phím tắt: <strong className="text-slate-300">Ctrl + Enter</strong> để thực thi code</span>
-                    </span>
-                    <span className="text-emerald-400 font-mono">Tự do chỉnh sửa & thử nghiệm</span>
-                  </div>
-                </div>
-
-                {/* 2. CONSOLE TERMINAL OUTPUT */}
-                <div className="w-80 xl:w-96 bg-slate-950 flex flex-col shrink-0 min-h-0">
-                  {/* Console Header */}
-                  <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2 bg-slate-900/80 text-slate-300 text-xs font-semibold shrink-0">
-                    <div className="flex items-center gap-2">
-                      <Terminal size={14} className="text-emerald-400" />
-                      <span>Console Terminal</span>
-                    </div>
-                    <span className="font-mono text-[10px] text-slate-500">Live Output</span>
-                  </div>
-
-                  {/* Console Log Area */}
-                  <div className="flex-1 overflow-y-auto p-4 font-mono text-xs text-emerald-400 space-y-1 leading-relaxed bg-slate-950">
-                    {consoleOutput.length === 0 ? (
-                      <div className="text-slate-500 italic text-[11px] py-4">
-                        Chưa có log thực thi. Bấm "Chạy code (Ctrl + Enter)" để chạy thử nghiệm mã nguồn...
-                      </div>
-                    ) : (
-                      consoleOutput.map((line, idx) => (
-                        <div key={idx} className="whitespace-pre-wrap">{line}</div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Console Footer */}
-                  <div className="border-t border-slate-800/80 bg-slate-900/90 px-4 py-2 text-[11px] text-slate-400 flex items-center justify-between shrink-0">
-                    <span>Trạng thái: <strong className="text-emerald-400">Sẵn sàng</strong></span>
-                    <span className="font-mono text-[10px]">Isolated Runtime</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── MODAL: PROOF OF SELF-CORRECTION (SHA-256 AUDIT CERTIFICATE) ── */}
-          {showSelfCorrectionCert && submissionResult && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-              <div className="surface w-full max-w-lg rounded-2xl border border-amber-300 dark:border-amber-700 shadow-2xl p-6 space-y-4 relative">
-                <button
-                  onClick={() => setShowSelfCorrectionCert(false)}
-                  className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-
-                <div className="text-center space-y-2">
-                  <div className="h-14 w-14 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-700 flex items-center justify-center mx-auto shadow-sm">
-                    <Award size={32} />
-                  </div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                    Chứng thực Tư duy Độc lập
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    (Proof of Independent Self-Correction & Academic Integrity)
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-3.5 space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
-                  <p className="leading-5">
-                    Hệ thống xác nhận học viên đã <strong className="text-slate-900 dark:text-white">chủ động nhận diện lỗi kiểm thử biên (Edge Case)</strong>, tham khảo gợi ý sư phạm và tự hoàn thiện mã nguồn đạt chuẩn công nghiệp <strong>5/5 Test Cases</strong> mà không sao chép code giải sẵn.
-                  </p>
-
-                  {/* SHA-256 Box */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Mã băm liêm chính học thuật (SHA-256):
-                    </span>
-                    <div className="flex items-center justify-between gap-2 bg-slate-950 text-emerald-400 p-2 rounded-lg font-mono text-[11px] break-all border border-slate-800">
-                      <span>{submissionResult.sha256}</span>
-                      <button
-                        onClick={() => handleCopySha(submissionResult.sha256)}
-                        className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer shrink-0"
-                        title="Sao chép SHA-256"
-                      >
-                        {copiedSha ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Audit Timeline */}
-                  <div className="space-y-1 pt-1 border-t border-slate-200 dark:border-slate-800 text-[11px]">
-                    <div className="flex items-center gap-2 text-red-500 font-medium">
-                      <span>1. Thất bại:</span>
-                      <span>Ca kiểm thử số 5 (Bị nhiễm chuỗi rỗng "")</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
-                      <span>2. Tham vấn:</span>
-                      <span>Tiếp thu nguyên lý Guard Clause từ Socratic AI</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
-                      <span>3. Thành công:</span>
-                      <span>Tự bổ sung điều kiện lọc, đạt 5/5 ca kiểm thử biên!</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 pt-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
-                    <Sparkles size={14} />
-                    <span>+100 XP Tự sửa bài</span>
-                  </div>
-                  <button
-                    onClick={() => setShowSelfCorrectionCert(false)}
-                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white transition shadow-sm cursor-pointer"
-                  >
-                    Xác nhận & Tiếp tục học
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-
-      {mentorCollapsed ? (
-        <aside className={`ai-mentor-panel chat-skin-${chatSkin} mentor-${mentorMascot} flex min-h-0 flex-col items-center border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 gap-4 shrink-0`} style={{ width: "52px" }}>
-          <button
-            onClick={() => setMentorCollapsed(false)}
-            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 text-slate-500 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            title="Mở rộng khung Mentor"
-          >
-            <ChevronsLeft size={15} />
-          </button>
-          <button
-            onClick={() => setMentorCollapsed(false)}
-            className={`ai-mentor-avatar ${mentor.color} flex h-10 w-10 items-center justify-center rounded-xl text-white text-2xl hover:scale-105 transition shadow-lg animate-bounce`}
-            title="Mở rộng chat"
-          >
-            {mentor.emoji}
-          </button>
-        </aside>
-      ) : (
-        <aside className={`ai-mentor-panel chat-skin-${chatSkin} mentor-${mentorMascot} flex min-h-0 flex-col border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-300`}>
-          <div className="border-b border-slate-200 dark:border-slate-800 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className={`ai-mentor-avatar ${mentor.color} flex h-10 w-10 items-center justify-center rounded-xl text-white text-2xl`}>
-                  {mentor.emoji}
-                </span>
-                <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
-                    {mentor.name}
-                    <span className="rounded-full bg-emerald-50 dark:bg-emerald-955/30 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">online</span>
-                  </div>
-                  <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{mentor.mode} · VAK aware</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition">
-                  <Wand2 size={15} />
-                </button>
-                <button
-                  onClick={() => setMentorCollapsed(true)}
-                  className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-                  title="Thu nhỏ khung Mentor"
-                >
-                  <ChevronsRight size={15} />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955/20 p-3">
-              <div className="text-[11px] font-bold uppercase text-slate-400 dark:text-slate-500">Đang theo dõi</div>
-              <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-200">{lesson.title}</div>
-              <div className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <span className="h-2 w-2 rounded-full bg-amber-400" />
-                Sai nhiều ở `super()` và override
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-4 overflow-y-auto p-4">
-            {messages.map((item, index) => {
-              const isMentorMessage = item.from === "mentor";
-              const isGuardrail = Boolean((item as any).isGuardrail);
-              return (
-                <div key={index} className={`flex gap-2 ${isMentorMessage ? "items-start" : "items-start justify-end"}`}>
-                  {isMentorMessage && (
-                    <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${mentor.color} text-white text-sm`}>
-                      {mentor.emoji}
-                    </span>
-                  )}
-                  <div className={`ai-bubble max-w-[245px] rounded-2xl px-3.5 py-3 text-xs leading-5 ${
-                    isMentorMessage
-                      ? isGuardrail
-                        ? "bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-                      : "theme-primary-bg text-white"
-                  }`}>
-                    {isGuardrail && (
-                      <div className="mb-1.5 flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400">
-                        <ShieldCheck size={12} />
-                        <span>Socratic Guardrail Active</span>
-                      </div>
-                    )}
-                    {item.text}
-                  </div>
-                </div>
-              );
-            })}
-            {isAskingAi && (
-              <div className="flex gap-2 items-start">
-                <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${mentor.color} text-white text-sm`}>
-                  {mentor.emoji}
-                </span>
-                <div className="ai-bubble rounded-2xl px-3.5 py-2 text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <RefreshCw size={12} className="animate-spin text-purple-500" />
-                  <span>Socratic Tutor đang phản biện...</span>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 p-3 text-xs text-slate-500 dark:text-slate-400">
-              <Sparkles size={14} className="theme-primary-text" />
-              {mentor.hint}
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200 dark:border-slate-800 p-4">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {mentorQuickPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => {
-                    sendMessage(prompt);
-                  }}
-                  className="rounded-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:border-blue-200 dark:hover:border-blue-400 hover:text-blue-700 dark:hover:text-blue-400"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-            <div className="ai-input flex gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-2 shadow-sm">
-              <input
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && sendMessage()}
-                placeholder="Hỏi mentor..."
-                className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none text-slate-800 dark:text-white"
+          {/* ── BÀI TẬP THỰC HÀNH & CODE LAB TỪNG CHƯƠNG ── */}
+          {tab === "exercise" && (
+            <div key={`exercise-${selectedSubjectId}-${activeChapter.id}`} className="animate-screen-enter flex-1 flex flex-col min-h-0">
+              <ChapterExerciseStudio
+                exercise={currentChapterExercise}
+                mentorMascot={mentorMascot}
+                onEarnXp={(xp) => setTotalXpEarned((prev) => prev + xp)}
+                onBackToLecture={() => setTab("lecture")}
               />
-              <span className="hidden items-center gap-1 px-1 text-[11px] text-slate-400 xl:flex">
-                <CornerDownLeft size={12} />
-                Enter
-              </span>
-              <button onClick={() => sendMessage()} className="theme-primary-bg flex h-9 w-9 items-center justify-center rounded-xl text-white">
-                <Send size={16} />
-              </button>
             </div>
+          )}
+
+          {/* ── SƠ ĐỒ TƯ DUY & THỐNG KÊ TIẾN TRÌNH BÀI HỌC (MINDMAP CUỐI CHƯƠNG) ── */}
+          {tab === "mindmap" && (
+            <div key={`mindmap-${selectedSubjectId}-${activeLessonId}`} className="animate-screen-enter space-y-4">
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 shrink-0">
+                    <GitBranch size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>Sơ đồ Tư duy (Mindmap) Cuối Chương {activeChapter.number}</span>
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                        {currentMultiSubject.code}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Cây tri thức tóm gọn kiến thức: Càng về các nút nhánh phía sau càng giải thích cô đọng.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setTab("lecture")}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                >
+                  <ArrowLeft size={13} />
+                  <span>Quay lại bài học ({activeMultiLesson.id})</span>
+                </button>
+              </div>
+
+              <LessonMindmapStudio
+                subjectId={selectedSubjectId}
+                mentorMascot={mentorMascot}
+                onNavigateToTab={(targetTab) => setTab(targetTab)}
+              />
+            </div>
+          )}
           </div>
-        </aside>
-      )}
+        </main>
+      </div>
     </div>
   );
 }

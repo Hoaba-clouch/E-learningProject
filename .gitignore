@@ -1,0 +1,14 @@
+# Vite and build caches
+.vite/
+node_modules/
+node_modules/.vite/
+node_modules/gsap/
+scratch/
+marlo-app/
+
+# Temp Excel locks
+~$*.xlsx
+
+# Dist build files
+dist/
+dist/*

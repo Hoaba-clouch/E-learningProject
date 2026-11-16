@@ -117,7 +117,7 @@ export default function GitHubSubmission() {
         <div>
           <div className="text-sm font-medium text-blue-700">Giảng viên - Review bài tập</div>
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">Chấm bài cuối chương</h1>
-          <p className="mt-1 text-sm text-slate-500">Chọn bài nộp, chấm rubric, gửi nhận xét và cập nhật trạng thái cho học viên.</p>
+          <p className="mt-1 text-sm text-[#62656b] dark:text-[#a0a3a9]">Chọn bài nộp, chấm rubric, gửi nhận xét và cập nhật trạng thái cho học viên.</p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
           {[

@@ -16,34 +16,34 @@ type PetState = "idle" | "coding" | "quiz" | "success" | "error";
 
 const speechPool: Record<PetState, string[]> = {
   idle: [
-    "Đệ đang ở đây sẵn sàng hỗ trợ huynh!",
-    "Huynh cần hỏi gì cứ click vào đệ nhé.",
+    "Mình đang ở đây sẵn sàng hỗ trợ bạn!",
+    "Bạn cần hỏi gì cứ click vào mình nhé.",
     "Hôm nay chúng ta sẽ chinh phục OOP!",
-    "Học đều tay, nhận XP đầy túi huynh ơi.",
+    "Học đều tay, nhận XP đầy túi bạn ơi.",
   ],
   coding: [
-    "Đệ đeo kính vào soi code sạch cùng huynh đây!",
-    "Logic này chạy mượt lắm huynh.",
-    "Đệ đang kiểm tra trùng lặp code...",
-    "Nhìn huynh gõ phím nghệ thuật quá!",
+    "Đeo kính vào soi code sạch cùng bạn đây!",
+    "Logic này chạy mượt lắm bạn ơi.",
+    "Đang kiểm tra trùng lặp code...",
+    "Nhìn bạn gõ phím nghệ thuật quá!",
   ],
   quiz: [
-    "Áp lực quá! Huynh đọc kỹ đề nhé.",
-    "Đồng hồ đang đếm ngược kìa huynh!",
-    "Chọn đáp án đúng nhất nha huynh ơi.",
-    "Nghĩ kỹ trước khi click nha huynh.",
+    "Tập trung nào! Bạn đọc kỹ đề nhé.",
+    "Đồng hồ đang đếm ngược kìa!",
+    "Chọn đáp án đúng nhất nha bạn ơi.",
+    "Nghĩ kỹ trước khi click nha.",
   ],
   success: [
-    "Đỉnh quá huynh ơi! Đúng chuẩn luôn! 🎉",
+    "Đỉnh quá bạn ơi! Đúng chuẩn luôn! 🎉",
     "Tuyệt vời! +XP xứng đáng!",
-    "Đệ biết ngay huynh sẽ làm được mà! ✨",
-    "Code chạy thông suốt rồi huynh ơi!",
+    "Mình biết ngay bạn sẽ làm được mà! ✨",
+    "Code chạy thông suốt rồi bạn ơi!",
   ],
   error: [
-    "Không sao huynh ơi, ngã ở đâu gấp đôi XP ở đó!",
+    "Không sao bạn ơi, ngã ở đâu gấp đôi XP ở đó!",
     "Lỗi tí thôi, sửa lại là chạy ngon lành.",
-    "Để đệ xem lại logic này cùng huynh nhé.",
-    "Đừng nản, đệ tin huynh làm được!",
+    "Để mình xem lại logic này cùng bạn nhé.",
+    "Đừng nản, mình tin bạn làm được!",
   ],
 };
 
@@ -59,7 +59,7 @@ const mascotConfig: Record<MentorMascot, { name: string; color: string; ringColo
 };
 
 export default function DesktopMascotPet({ mascot, activeScreen }: Props) {
-  if (activeScreen === "kanban" || activeScreen === "workspace") {
+  if (activeScreen === "kanban" || activeScreen === "workspace" || activeScreen === "schedule") {
     return null;
   }
   const [petState, setPetState] = useState<PetState>("idle");
@@ -76,7 +76,7 @@ export default function DesktopMascotPet({ mascot, activeScreen }: Props) {
   useEffect(() => {
     triggerSpeech("idle");
     setChatLog([
-      { from: "pet", text: `Chào huynh! Đệ là ${config.name}, trợ lý học tập để bàn của huynh. Cần hỏi gì cứ gõ vào đây nhé!` }
+      { from: "pet", text: `Chào bạn! Mình là ${config.name}, trợ lý học tập để bàn của bạn. Cần hỏi gì cứ gõ vào đây nhé!` }
     ]);
   }, [mascot]);
 
@@ -119,17 +119,17 @@ export default function DesktopMascotPet({ mascot, activeScreen }: Props) {
       if (lower.includes("override") || lower.includes("ghi đè")) {
         reply = "Override (ghi đè) là khi lớp con viết lại phương thức của lớp cha với cùng chữ ký. Hãy chú ý dùng @Override để compiler check lỗi chính xác nhé!";
       } else if (lower.includes("super") || lower.includes("cha")) {
-        reply = "super() dùng để gọi constructor lớp cha, super.method() để gọi phương thức lớp cha. Nhớ là super() constructor phải ở dòng đầu tiên của hàm tạo lớp con nha huynh!";
+        reply = "super() dùng để gọi constructor lớp cha, super.method() để gọi phương thức lớp cha. Nhớ là super() constructor phải ở dòng đầu tiên của hàm tạo lớp con nha bạn!";
       } else if (lower.includes("extends") || lower.includes("kế thừa")) {
         reply = "extends khai báo quan hệ kế thừa (is-a). Ví dụ Dog extends Animal nghĩa là Dog kế thừa mọi thuộc tính public/protected từ Animal.";
       } else if (lower.includes("đáp án") || lower.includes("quiz")) {
-        reply = "Quiz lần này hỏi về định nghĩa kế thừa, huynh chú ý chọn phương án mô tả việc lớp con nhận code từ lớp cha nhé.";
+        reply = "Quiz lần này hỏi về định nghĩa kế thừa, bạn chú ý chọn phương án mô tả việc lớp con nhận code từ lớp cha nhé.";
       } else {
-        reply = `Đệ khuyên huynh nên dùng tab "Mindmap Canvas" vẽ thử cấu trúc ${activeScreen === "workspace" ? "bài học" : "chương 1"} để dễ hình dung logic này hơn nhé!`;
+        reply = `Mình khuyên bạn nên dùng tab "Mindmap Canvas" vẽ thử cấu trúc ${activeScreen === "workspace" ? "bài học" : "chương 1"} để dễ hình dung logic này hơn nhé!`;
       }
       setChatLog((current) => [...current, { from: "pet", text: reply }]);
       setPetState("success");
-      triggerSpeech("success", "Đệ giải thích xong rồi kìa huynh!");
+      triggerSpeech("success", "Mình giải thích xong rồi kìa bạn!");
     }, 800);
   };
 
@@ -138,8 +138,8 @@ export default function DesktopMascotPet({ mascot, activeScreen }: Props) {
       {/* ── Keyframes animation inside style block ── */}
       <style>{`
         @keyframes pet-bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-8px); }
+          0%, 100% { transform: translate3d(0, 0, 0); }
+          50% { transform: translate3d(0, -8px, 0); }
         }
         @keyframes pet-shake {
           0%, 100% { transform: rotate(0deg); }

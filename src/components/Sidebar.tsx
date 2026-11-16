@@ -1,23 +1,36 @@
 import {
   BookOpen,
+  Bot,
+  CalendarDays,
   ChevronsLeft,
   ChevronsRight,
-  ChevronRight,
   Columns3,
+  Compass,
+  FolderKanban,
   GitFork,
   GraduationCap,
+  History,
   LayoutDashboard,
+  LayoutGrid,
   LogOut,
   Moon,
-  Play,
+  ServerCog,
   Shield,
+  ShieldCheck,
   ShoppingBag,
   Sun,
   UserRound,
+  Users,
   Zap,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import gsap from "gsap";
 import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
+import MarloFocusTimer from "./MarloFocusTimer";
+import MarloThemeSwitch from "./MarloThemeSwitch";
+import { animateMarloPill } from "../utils/marloAnimations";
 
 interface Props {
   screen: Screen;
@@ -25,9 +38,10 @@ interface Props {
   theme: Theme;
   avatarStyle: AvatarStyle;
   badgeFrame: BadgeFrame;
-  onToggleTheme: () => void;
+  onToggleTheme: (trigger?: any) => void;
   onNavigate: (s: Screen) => void;
   onLogout: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 interface NavItem {
@@ -35,148 +49,355 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   roles: Role[];
+  badge?: string;
+  badgeDot?: boolean;
 }
 
-const items: NavItem[] = [
-  { id: "student-dashboard", label: "Tổng quan", icon: <LayoutDashboard size={17} />, roles: ["student"] },
-  { id: "kanban", label: "Dự án & Kanban", icon: <Columns3 size={17} />, roles: ["student", "instructor"] },
-  { id: "profile", label: "Hồ sơ", icon: <UserRound size={17} />, roles: ["student"] },
-  { id: "workspace", label: "Không gian học", icon: <BookOpen size={17} />, roles: ["student"] },
-  { id: "reels", label: "Tech Reels", icon: <Play size={17} />, roles: ["student"] },
-  { id: "github", label: "Git & Kho mã nguồn", icon: <GitFork size={17} />, roles: ["student", "instructor"] },
-  { id: "xp-shop", label: "XP Shop", icon: <ShoppingBag size={17} />, roles: ["student"] },
-  { id: "instructor", label: "Giảng viên", icon: <GraduationCap size={17} />, roles: ["instructor"] },
-  { id: "admin", label: "Quản trị", icon: <Shield size={17} />, roles: ["admin"] },
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  // ── GROUP 1: WORKSPACE ──
+  {
+    label: "Workspace",
+    items: [
+      { id: "student-dashboard", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["student"] },
+      { id: "workspace", label: "Tasks", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["student"], badge: "7" },
+      { id: "projects", label: "Projects", icon: <FolderKanban size={18} strokeWidth={1.85} />, roles: ["student", "instructor"] },
+      { id: "kanban", label: "Kanban", icon: <Columns3 size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "9" },
+      { id: "schedule", label: "Calendar", icon: <CalendarDays size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "4" },
+    ],
+  },
+  {
+    label: "Studio",
+    items: [
+      { id: "intro", label: "Roadmap", icon: <Compass size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "Intro" },
+      { id: "defense-room", label: "AI Defense", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "Live" },
+      { id: "github", label: "Git", icon: <GitFork size={18} strokeWidth={1.85} />, roles: ["student", "instructor"] },
+      { id: "xp-shop", label: "Shop", icon: <ShoppingBag size={18} strokeWidth={1.85} />, roles: ["student"] },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { id: "profile", label: "Profile", icon: <UserRound size={18} strokeWidth={1.85} />, roles: ["student"] },
+      { id: "instructor", label: "Instructor", icon: <GraduationCap size={18} strokeWidth={1.85} />, roles: ["instructor"] },
+    ],
+  },
+
+  // ── GROUP 2: MANAGEMENT & SYSTEM ──
+  {
+    label: "Management",
+    items: [
+      { id: "admin", label: "Overview", icon: <LayoutDashboard size={18} />, roles: ["admin"] },
+      { id: "admin-users", label: "Users", icon: <Users size={18} />, roles: ["admin"], badge: "6" },
+      { id: "admin-classes", label: "Classes", icon: <GraduationCap size={18} />, roles: ["admin"], badge: "4" },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { id: "admin-ai", label: "AI", icon: <Bot size={18} />, roles: ["admin"] },
+      { id: "admin-sessions", label: "Security", icon: <ServerCog size={18} />, roles: ["admin"] },
+      { id: "admin-audit", label: "Logs", icon: <History size={18} />, roles: ["admin"] },
+    ],
+  },
 ];
 
-const roleLabel: Record<Role, string> = {
-  student: "Học viên",
-  instructor: "Giảng viên",
-  admin: "Quản trị viên",
-};
-
-const avatarLabel: Record<AvatarStyle, string> = {
-  initials: "A",
-  pixel: "PX",
-  coder: "</>",
-  robot: "AI",
-  silver: "Ag",
-};
-
-const badgeLabel: Record<BadgeFrame, string> = {
-  streak: "14-day Streak",
-  quiz: "Quiz Slayer",
-  mindmap: "Mindmap Builder",
-  rookie: "Code Lab Rookie",
-  explorer: "OOP Explorer",
-};
-
-export default function Sidebar({ screen, role, theme, avatarStyle, badgeFrame, onToggleTheme, onNavigate, onLogout }: Props) {
-  const visible = items.filter((item) => item.roles.includes(role));
+export default function Sidebar({
+  screen,
+  role,
+  theme,
+  avatarStyle,
+  badgeFrame,
+  onToggleTheme,
+  onNavigate,
+  onLogout,
+  onOpenCommandPalette,
+}: Props) {
+  const visibleGroups = navGroups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((item) => item.roles.includes(role)),
+    }))
+    .filter((g) => g.items.length > 0);
+  const visible = visibleGroups.flatMap((g) => g.items);
   const [collapsed, setCollapsed] = useState(false);
 
-  return (
-    <aside className={`flex shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ${collapsed ? "w-[68px]" : "w-[218px]"}`}>
-      <div className="border-b border-slate-200 px-4 py-4">
-        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
-          <div className="theme-primary-bg flex h-8 w-8 items-center justify-center rounded-md text-white">
-            <Zap size={16} fill="currentColor" />
-          </div>
-          {!collapsed && <div>
-            <div className="font-semibold tracking-tight text-slate-950">CODE-MIND</div>
-            <div className="text-xs text-slate-500">AI learning operating system</div>
-          </div>}
-        </div>
-      </div>
+  // Keyboard shortcut Ctrl+B / Cmd+B to toggle sidebar collapse
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setCollapsed((c) => !c);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
-      <div className={`px-3 py-3 ${collapsed ? "hidden" : ""}`}>
-        <button
-          onClick={() => role === "student" && onNavigate("profile")}
-          className={`w-full rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-left transition ${
-            role === "student" ? "hover:border-blue-200 hover:bg-blue-50" : ""
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {role === "student" && (
-              <span className={`student-avatar student-avatar-${avatarStyle} flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black`}>
-                {avatarLabel[avatarStyle]}
+  // 🏷️ Authentic Marlo Rail Tooltip State
+  const [hoveredTip, setHoveredTip] = useState<{
+    label: string;
+    badge?: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleItemClick = (e: React.MouseEvent<HTMLButtonElement>, id: Screen) => {
+    try {
+      // 🏷️ Marlo Micro-Pop on Active Click (marlo-app/src/kit.jsx - function ho)
+      const icon = e.currentTarget.querySelector("svg");
+      if (icon) {
+        gsap.killTweensOf(icon);
+        gsap.fromTo(
+          icon,
+          { scale: 0.72 },
+          {
+            scale: 1,
+            duration: 0.45,
+            ease: "back.out(3)",
+            clearProps: "transform",
+          }
+        );
+      }
+    } catch {
+      // safe fallback
+    }
+    hideTip();
+    onNavigate(id);
+  };
+
+  const showTip = (label: string, e: React.MouseEvent<HTMLElement>, badge?: string) => {
+    if (!collapsed) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoveredTip({
+      label,
+      badge,
+      x: rect.right + 12,
+      y: rect.top + rect.height / 2,
+    });
+  };
+
+  const hideTip = () => {
+    setHoveredTip(null);
+  };
+
+  useEffect(() => {
+    setHoveredTip(null);
+  }, [collapsed]);
+
+  // 🏷️ Marlo Liquid Rubberband Pill ("Hiệu ứng bị kéo theo")
+  const navRef = useRef<HTMLElement>(null);
+  const pillRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
+
+  const getActiveItem = () =>
+    navRef.current?.querySelector<HTMLElement>(`.sidebar-nav-item[data-id="${screen}"]`);
+
+  useLayoutEffect(() => {
+    animateMarloPill(pillRef.current, getActiveItem(), {
+      animate: !isFirstRender.current,
+      radius: 14,
+    });
+    isFirstRender.current = false;
+  }, [screen, collapsed, visible.length]);
+
+  useEffect(() => {
+    const reposition = () => {
+      animateMarloPill(pillRef.current, getActiveItem(), {
+        animate: false,
+        radius: 14,
+      });
+    };
+    const ro = new ResizeObserver(reposition);
+    if (navRef.current) ro.observe(navRef.current);
+    document.fonts?.ready?.then(reposition);
+    return () => ro.disconnect();
+  }, [screen, collapsed]);
+
+  return (
+    <aside
+      className={`app-sidebar relative flex shrink-0 flex-col p-2 sm:p-2.5 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] select-none bg-transparent ${
+        collapsed ? "w-[76px]" : "w-[248px]"
+      }`}
+    >
+      {/* ─── 🌟 BOX 1: TOP MAIN NAVIGATION CAPSULE (MARLO FLOATING CARD) ─── */}
+      <div className={`flex-1 min-h-0 flex flex-col rounded-[28px] sm:rounded-[32px] bg-white dark:bg-[#14161F] border border-black/[0.05] dark:border-white/[0.07] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)] overflow-hidden ${collapsed ? "items-center py-3.5" : ""}`}>
+        {/* Brand Header */}
+        <div className={`shrink-0 ${collapsed ? "flex flex-col items-center gap-2 px-1" : "px-4 pt-3.5 pb-2"}`}>
+          <div className={`flex items-center ${collapsed ? "flex-col gap-2.5 justify-center" : "justify-between"}`}>
+            {/* Logo & Brand title */}
+            <div
+              onClick={() => onNavigate("student-dashboard")}
+              className="flex items-center gap-2.5 min-w-0 cursor-pointer group"
+              title="CodeMind AI • Learning OS"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-[#F59E0B] via-[#EE8420] to-[#E07415] text-white shadow-2xs shrink-0 select-none group-hover:scale-105 transition-transform">
+                <Zap size={18} className="fill-white text-white drop-shadow-xs" />
+              </div>
+              {!collapsed && (
+                <div className="min-w-0 transition-opacity duration-200">
+                  <div className="font-extrabold text-[14.5px] tracking-tight text-[#161718] dark:text-[#F0F0F1] truncate flex items-center gap-1.5">
+                    <span>CodeMind</span>
+                    <span className="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded-md bg-[#EE8420]/15 text-[#EE8420] border border-[#EE8420]/30 leading-tight">
+                      AI
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#62656B] dark:text-[#A0A3A9] font-medium truncate">
+                    Learning OS
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Collapse Toggle Button - circle button matching Marlo side__fold */}
+            <button
+              type="button"
+              onClick={() => setCollapsed(!collapsed)}
+              className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center text-[#62656B] dark:text-[#A0A3A9] hover:bg-black/5 dark:hover:bg-white/5 hover:text-[#161718] dark:hover:text-[#F0F0F1] transition cursor-pointer shrink-0"
+              title={collapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
+            >
+              {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Divider in collapsed mode */}
+        {collapsed && <div className="h-px w-8 bg-black/10 dark:bg-white/10 my-1" />}
+
+      {/* ─── 3. NAVIGATION LIST (MARLO PILL & RAIL ICONS) ─── */}
+      <nav
+        ref={navRef}
+        className={`relative flex flex-1 min-h-0 overflow-y-auto flex-col gap-0.5 px-2.5 py-1.5 ${
+          collapsed ? "items-center" : ""
+        }`}
+      >
+        {/* 🏷️ Marlo Liquid Rubberband Active Pill - EXACT 1:1 WITH MARLO */}
+        <div
+          ref={pillRef}
+          aria-hidden="true"
+          className="snav__pill pointer-events-none absolute top-0 left-0 w-full h-full bg-[#141619] dark:bg-[#F4F4F6] shadow-[0_8px_18px_-10px_rgba(0,0,0,0.45)] z-0 rounded-[14px]"
+        />
+
+        {visibleGroups.map((group, gIdx) => (
+          <div key={group.label} className="flex flex-col gap-0.5">
+            {/* Section Header / Marlo Rail Divider */}
+            {collapsed ? (
+              gIdx > 0 && <div className="h-px bg-black/5 dark:bg-white/5 my-2 mx-1.5" />
+            ) : (
+              <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#526071] dark:text-[#94A3B8] px-3.5 pt-3.5 pb-1 select-none">
+                {group.label}
               </span>
             )}
-            <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{roleLabel[role]}</div>
-              <div className="mt-1 truncate text-sm font-medium text-slate-900">
-                {role === "student" ? "Nguyễn Văn A" : role === "instructor" ? "Cô Trần Thị B" : "Admin AIO"}
-              </div>
-            </div>
-          </div>
-          {role === "student" && <div className="mt-2 truncate text-xs font-semibold text-amber-600">{badgeLabel[badgeFrame]}</div>}
-          <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Đang hoạt động
-          </div>
-        </button>
-      </div>
 
-      <nav className={`flex flex-1 flex-col gap-1 px-3 ${collapsed ? "items-center" : ""}`}>
-        <button
-          onClick={() => setCollapsed((value) => !value)}
-          className="sidebar-nav-item mb-1 flex h-9 w-full items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-50 hover:text-slate-950"
-          title={collapsed ? "Mở sidebar" : "Thu sidebar"}
-        >
-          {collapsed ? <ChevronsRight size={17} /> : <ChevronsLeft size={17} />}
-        </button>
-        {visible.map((item) => {
-          const active = screen === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              title={collapsed ? item.label : undefined}
-              className={`sidebar-nav-item flex items-center rounded-lg text-left transition ${
-                active ? "sidebar-nav-active theme-primary-soft" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-              } ${collapsed ? "h-10 w-10 justify-center p-0" : "gap-2.5 px-2.5 py-2"}`}
-            >
-              <span className={active ? "theme-primary-text" : "text-slate-400"}>{item.icon}</span>
-              {!collapsed && <span className="min-w-0 flex-1 text-sm font-medium">{item.label}</span>}
-              {active && !collapsed && <ChevronRight size={15} />}
-            </button>
-          );
-        })}
+            {group.items.map((item) => {
+              const active = screen === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  data-id={item.id}
+                  data-active={active ? "true" : undefined}
+                  aria-current={active ? "page" : undefined}
+                  onClick={(e) => handleItemClick(e, item.id)}
+                  onMouseEnter={(e) => showTip(item.label, e, item.badge)}
+                  onMouseLeave={hideTip}
+                  className={`sidebar-nav-item relative z-10 flex items-center cursor-pointer outline-none focus:outline-none select-none transition-colors duration-150 active:scale-[0.98] ${
+                    collapsed
+                      ? `h-10 w-10 justify-center p-0 rounded-[14px] mx-auto ${
+                          active
+                            ? "text-white dark:text-[#141619] font-bold"
+                            : "text-[#555E6D] dark:text-[#A4ACB9] font-semibold hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
+                        }`
+                      : `w-full h-[42px] px-3.5 rounded-[14px] border-0 justify-start text-left gap-3 ${
+                          active
+                            ? "text-white dark:text-[#141619] font-bold"
+                            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
+                        }`
+                  }`}
+                >
+                  {/* Icon */}
+                  <span
+                    className={`shrink-0 flex items-center justify-center w-[18px] h-[18px] transition-colors duration-150 ${
+                      active
+                        ? "text-white dark:text-[#141619]"
+                        : "text-[#4B5262] dark:text-[#9DA4B2]"
+                    }`}
+                  >
+                    {item.icon}
+                  </span>
+
+                  {/* Expanded Label & Badges */}
+                  {!collapsed && (
+                    <>
+                      <span className={`flex-1 min-w-0 text-left text-[13.5px] leading-tight truncate ${active ? "font-bold text-white dark:text-[#141619]" : "font-medium"}`}>
+                        {item.label}
+                      </span>
+
+                      {/* Right side container: Badges */}
+                      {(item.badge || item.badgeDot) && (
+                        <div className="ml-auto flex items-center gap-1.5 shrink-0 pl-1">
+                          {/* Number / Text Badge */}
+                          {item.badge && (
+                            <span
+                              className={`min-w-[20px] h-[20px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-semibold font-sans transition-colors duration-150 leading-none ${
+                                active
+                                  ? "bg-[#EE8420] text-white font-bold shadow-2xs"
+                                  : "bg-[#E5E7EB] dark:bg-[#282B37] text-[#555E6D] dark:text-[#A4ACB9]"
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+
+                          {/* Dot Badge */}
+                          {item.badgeDot && (
+                            <span className="w-2 h-2 rounded-full bg-[#EE8420] animate-pulse" />
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Collapsed notification badge dot */}
+                  {collapsed && (item.badgeDot || item.badge) && (
+                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#EE8420] ring-2 ring-[#F5F5F6] dark:ring-[#1B1C1E] shadow-xs" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
-
-      <div className="border-t border-slate-200 p-3">
-        {!collapsed && (
-          <>
-        <div className="mb-2.5 rounded-lg bg-slate-950 p-2.5 text-white">
-          <div className="text-xs text-slate-300">Lớp hiện tại</div>
-          <div className="mt-1 text-sm font-medium">OOP - Nhóm 01</div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-700">
-            <div className="theme-primary-progress h-full w-[46%] rounded-full" />
-          </div>
-        </div>
-          </>
-        )}
-        <button
-          onClick={onToggleTheme}
-          title={collapsed ? (theme === "light" ? "Dark mode" : "Light mode") : undefined}
-          className={`theme-toggle-button mb-2 flex items-center rounded-lg border border-slate-200 bg-white text-sm text-slate-600 transition hover:bg-slate-50 ${
-            collapsed ? "h-10 w-10 justify-center p-0" : "w-full gap-2 px-3 py-2"
-          }`}
-        >
-          {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
-          {!collapsed && (theme === "light" ? "Dark mode" : "Light mode")}
-        </button>
-        <button
-          onClick={onLogout}
-          title={collapsed ? "Đăng xuất" : undefined}
-          className={`sidebar-logout-button flex items-center rounded-lg text-sm text-slate-500 transition hover:bg-red-50 hover:text-red-600 ${
-            collapsed ? "h-10 w-10 justify-center p-0" : "w-full gap-2 px-3 py-2"
-          }`}
-        >
-          <LogOut size={16} />
-          {!collapsed && "Đăng xuất"}
-        </button>
       </div>
+
+      {/* ─── 🌟 BOX 2: BOTTOM POMODORO TIMER CAPSULE (MARLO FLOATING CARD) ─── */}
+      {role === "student" && !screen.startsWith("admin") && screen !== "instructor" && (
+        <div className="shrink-0 mt-2">
+          <MarloFocusTimer collapsed={collapsed} />
+        </div>
+      )}
+
+      {/* ─── 5. AUTHENTIC MARLO RAIL TOOLTIP (Exact Replica from media_1794374799784_099e152f.png) ─── */}
+      {collapsed && hoveredTip && (
+        <div
+          className="fixed z-[100] pointer-events-none px-3.5 py-1.5 rounded-[10px] bg-[#161718] text-white text-[13px] font-bold tracking-tight shadow-[0_6px_20px_rgba(0,0,0,0.38)] border border-white/10 flex items-center gap-2 animate-marlo-tip select-none whitespace-nowrap"
+          style={{
+            left: `${hoveredTip.x}px`,
+            top: `${hoveredTip.y}px`,
+          }}
+        >
+          <span>{hoveredTip.label}</span>
+          {hoveredTip.badge && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono bg-orange-500 text-white">
+              {hoveredTip.badge}
+            </span>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

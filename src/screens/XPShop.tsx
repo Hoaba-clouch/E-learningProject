@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import {
   Bot,
   Check,
@@ -15,6 +16,8 @@ import {
   Clock
 } from "lucide-react";
 import type { AvatarStyle, BackgroundTheme, BadgeFrame, ChatSkin, MentorMascot, SkillMapSkin } from "../App";
+import MarloTitle from "../components/MarloTitle";
+import MarloNumber from "../components/MarloNumber";
 
 interface Props {
   activeTheme: BackgroundTheme;
@@ -116,6 +119,9 @@ export default function XPShop({
   onApplyBadge,
 }: Props) {
   const [xp, setXp] = useState(3240);
+  const shopRef = useRef<HTMLDivElement>(null);
+
+
   const [category, setCategory] = useState<ShopCategory>("theme");
   const [subTab, setSubTab] = useState<"store" | "quests">("store");
   const [owned, setOwned] = useState<Record<ShopCategory, string[]>>({
@@ -170,8 +176,23 @@ export default function XPShop({
   const userLevel = Math.floor(xp / 1000) + 1;
   const xpInCurrentLevel = xp % 1000;
 
+  useMarloPageEntrance(
+    shopRef,
+    (el) => {
+      const cards = el.querySelectorAll(".marlo-card, header, .shop-category-bar, .shop-quest-card");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { stagger: 0.06, y: 26 });
+      }
+      const rows = el.querySelectorAll(".marlo-row, .quest-row");
+      if (rows.length > 0) {
+        animateMarloRows(rows, { y: 14, stagger: 0.025, delay: 0.22 });
+      }
+    },
+    [category, subTab]
+  );
+
   return (
-    <div className="min-h-full p-5 space-y-6 animate-fade-in">
+    <div ref={shopRef} className="min-h-full p-5 space-y-6">
       {/* HEADER HERO AREA */}
       <header className="rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 p-5 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         {/* Glow vector backgrounds */}
@@ -183,7 +204,7 @@ export default function XPShop({
             <Trophy size={13} className="text-yellow-400 fill-yellow-400" />
             Personalization Hub
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Cửa hàng phần thưởng XP</h1>
+          <MarloTitle text="Cửa hàng phần thưởng XP" className="text-2xl font-bold tracking-tight" />
           <p className="text-sm text-slate-200">
             Hoàn thành nhiệm vụ nhận XP và mở khoá các vật phẩm trang trí hồ sơ cực độc đáo.
           </p>
@@ -195,7 +216,7 @@ export default function XPShop({
               <span>{xpInCurrentLevel} / 1000 XP</span>
             </div>
             <div className="h-1.5 w-full bg-white/20 rounded-full overflow-hidden">
-              <div className="h-full bg-yellow-400 rounded-full transition-all duration-300" style={{ width: `${xpInCurrentLevel / 10}%` }} />
+              <div className="h-full bg-yellow-400 rounded-full marlo-bar-grow transition-all duration-300" style={{ width: `${xpInCurrentLevel / 10}%` }} />
             </div>
           </div>
         </div>
@@ -206,7 +227,7 @@ export default function XPShop({
             <Star size={24} className="text-white fill-white animate-pulse" />
           </div>
           <div>
-            <div className="text-2xl font-black text-yellow-300 tracking-tight">{xp.toLocaleString()}</div>
+            <div className="text-2xl font-black text-yellow-300 tracking-tight"><MarloNumber value={xp} durationMs={1200} /></div>
             <div className="text-xs text-slate-200 font-semibold tracking-wider uppercase mt-0.5">XP KHẢ DỤNG</div>
           </div>
         </div>
@@ -277,8 +298,8 @@ export default function XPShop({
           </div>
 
           {/* GRID OF STORE ITEMS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {activeItems.map((item) => {
+          <div key={`store-grid-${category}`} className="animate-screen-enter grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {activeItems.map((item, itemIdx) => {
               const isOwned = owned[item.category].includes(item.id);
               const isActive = activeByCategory[item.category] === item.id;
               const isLevelLocked = userLevel < (item.levelReq || 1);
@@ -287,7 +308,8 @@ export default function XPShop({
               return (
                 <div
                   key={`${item.category}-${item.id}`}
-                  className={`rounded-2xl border bg-white dark:bg-slate-900 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group ${
+                  style={{ animationDelay: `${itemIdx * 40}ms` }}
+                  className={`marlo-row rounded-2xl border bg-white dark:bg-slate-900 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group ${
                     isActive
                       ? "border-blue-400 dark:border-blue-900"
                       : "border-slate-200 dark:border-slate-800"
@@ -368,8 +390,8 @@ export default function XPShop({
 
       {/* SUBTAB 2: QUEST HUB */}
       {subTab === "quests" && (
-        <div className="space-y-4">
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div key="shop-quests" className="animate-screen-enter space-y-4">
+          <div className="marlo-card-1 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <TrendingUp size={16} className="text-blue-500" />
               Nhiệm vụ tuần này
@@ -380,10 +402,11 @@ export default function XPShop({
           </div>
 
           <div className="space-y-3">
-            {quests.map((quest) => (
+            {quests.map((quest, qIdx) => (
               <div
                 key={quest.id}
-                className={`rounded-2xl border p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all ${
+                style={{ animationDelay: `${150 + qIdx * 40}ms` }}
+                className={`marlo-row rounded-2xl border p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all ${
                   quest.status === "claimable"
                     ? "border-blue-300 dark:border-blue-900 bg-blue-50/10 dark:bg-blue-955/10 scale-[1.01]"
                     : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"

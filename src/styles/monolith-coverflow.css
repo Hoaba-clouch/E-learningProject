@@ -1,0 +1,400 @@
+/*! MONOLITH — Impossible Architecture, in coverflow — © 2026 Hasib (OVERSHOOT). All rights reserved. */
+
+.monolith-scroll-pin-track {
+  position: relative;
+  width: 100%;
+}
+
+.monolith-wrapper {
+  --bone: #e9e3d7;
+  --bone-2: #f3eee4;
+  --ink: #16140f;
+  --muted: #6c6457;
+  --line: #16140f29;
+  --accent: #ff5b3a;
+  --radius: clamp(12px, 1.3vw, 20px);
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --fs-title: clamp(1.8rem, 1rem + 3.2vw, 3.8rem);
+
+  position: sticky;
+  top: 0;
+  width: 100%;
+  min-height: 100vh;
+  height: 100vh;
+  background: radial-gradient(130% 100% at 50% 6%, var(--bone-2) 0%, transparent 55%),
+              radial-gradient(120% 130% at 50% 124%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 56%),
+              var(--bone);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  transition: background 1s var(--ease);
+  font-family: 'Manrope', system-ui, sans-serif;
+  user-select: none;
+  overflow: hidden;
+}
+
+.mono-stage {
+  z-index: 1;
+  grid-template-rows: auto 1fr auto auto;
+  width: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  display: grid;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.mono-stage::after {
+  content: "";
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bone) 70%, transparent) 0%, transparent 14%),
+              linear-gradient(0deg, color-mix(in srgb, var(--bone) 55%, transparent) 0%, transparent 24%);
+  position: absolute;
+  inset: 0;
+}
+
+/* Eyebrow */
+.mono-eyebrow {
+  z-index: 6;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .32em;
+  color: var(--muted);
+  padding-top: clamp(12px, 2.5vh, 24px);
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(.66rem, .58rem + .28vw, .8rem);
+  font-weight: 600;
+  position: relative;
+}
+
+.mono-eyebrow b {
+  color: var(--accent);
+  transition: color .6s var(--ease);
+  font-weight: 700;
+}
+
+/* 3D Deck */
+.mono-deck {
+  z-index: 2;
+  perspective: 1800px;
+  perspective-origin: 50% 44%;
+  cursor: grab;
+  touch-action: pan-y;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  min-height: clamp(340px, 52vh, 600px);
+}
+
+.mono-deck.is-grabbing {
+  cursor: grabbing;
+}
+
+.mono-deck__glow {
+  z-index: 0;
+  aspect-ratio: 1;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 38%, transparent), transparent 70%);
+  filter: blur(10px);
+  opacity: .92;
+  pointer-events: none;
+  width: min(66vw, 660px);
+  transition: background .7s var(--ease);
+  position: absolute;
+  top: 44%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.mono-track {
+  transform-style: flat;
+  perspective: 1800px;
+  perspective-origin: 50% 44%;
+  position: absolute;
+  inset: 0;
+}
+
+/* Monolith Card */
+.mono-card {
+  cursor: pointer;
+  will-change: transform, opacity;
+  width: clamp(220px, 26vw, 340px);
+  height: clamp(300px, 56vh, 590px);
+  transform-style: preserve-3d;
+  isolation: isolate;
+  outline: none;
+  position: absolute;
+  top: 44%;
+  left: 50%;
+}
+
+.mono-card__face {
+  border-radius: var(--radius);
+  background: var(--bone-2);
+  backface-visibility: hidden;
+  transition: box-shadow .6s var(--ease);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  box-shadow: 0 30px 60px -28px rgba(20, 16, 8, 0.55), 0 8px 22px -14px rgba(20, 16, 8, 0.4);
+}
+
+.mono-card.is-hero .mono-card__face {
+  box-shadow: 0 48px 96px -30px color-mix(in srgb, var(--accent) 62%, transparent), 0 30px 60px -26px rgba(20, 16, 8, 0.55);
+}
+
+.mono-card:focus-visible .mono-card__face {
+  box-shadow: 0 0 0 3px var(--accent), 0 30px 60px -28px rgba(20, 16, 8, 0.55);
+}
+
+.mono-card__img {
+  object-fit: cover;
+  object-position: center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+
+.mono-card__veil {
+  pointer-events: none;
+  opacity: .55;
+  background: linear-gradient(rgba(0, 0, 0, 0.28) 0%, transparent 20% 72%, rgba(0, 0, 0, 0.18) 100%);
+  position: absolute;
+  inset: 0;
+}
+
+.mono-card__no {
+  z-index: 2;
+  letter-spacing: .08em;
+  color: #fffffff0;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+  font-family: 'Syne', sans-serif;
+  font-size: .82rem;
+  font-weight: 700;
+  position: absolute;
+  top: 12px;
+  left: 14px;
+}
+
+.mono-card__reflect {
+  border-radius: var(--radius);
+  opacity: .16;
+  pointer-events: none;
+  background-position: 50%;
+  background-size: cover;
+  height: 100%;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  transform: scaleY(-1);
+  -webkit-mask-image: linear-gradient(transparent 48%, rgba(0, 0, 0, 0.7) 100%);
+  mask-image: linear-gradient(transparent 48%, rgba(0, 0, 0, 0.7) 100%);
+}
+
+.mono-card.is-hero .mono-card__reflect {
+  opacity: .24;
+}
+
+/* Caption */
+.mono-caption {
+  z-index: 6;
+  text-align: center;
+  padding: 0 24px clamp(4px, 1vh, 10px);
+  position: relative;
+}
+
+.mono-caption__no {
+  letter-spacing: .1em;
+  color: var(--muted);
+  align-items: baseline;
+  gap: .4em;
+  font-family: 'Syne', sans-serif;
+  font-size: .78rem;
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.mono-caption__no b {
+  color: var(--accent);
+  transition: color .5s var(--ease);
+  will-change: transform;
+  font-size: 1rem;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.mono-caption__no i {
+  font-style: normal;
+}
+
+.mono-caption__title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-title);
+  letter-spacing: -.015em;
+  margin-top: .35rem;
+  line-height: .98;
+}
+
+.mono-caption__title .wm {
+  vertical-align: top;
+  padding-bottom: .08em;
+  display: inline-block;
+  overflow: hidden;
+}
+
+.mono-caption__title .ww {
+  will-change: transform;
+  display: inline-block;
+}
+
+.mono-caption__place {
+  text-transform: uppercase;
+  letter-spacing: .22em;
+  color: var(--accent);
+  transition: color .5s var(--ease);
+  will-change: transform;
+  margin-top: .55rem;
+  font-family: 'Syne', sans-serif;
+  font-size: .74rem;
+  font-weight: 600;
+}
+
+.mono-caption__blurb {
+  color: var(--muted);
+  margin-top: .5rem;
+  will-change: transform;
+  max-width: 46ch;
+  margin-inline: auto;
+  font-size: clamp(.9rem, .85rem + .25vw, 1rem);
+  line-height: 1.5;
+  font-family: 'Manrope', system-ui, sans-serif;
+}
+
+/* Controls */
+.mono-controls {
+  z-index: 6;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(14px, 2vw, 26px);
+  padding: clamp(10px, 2vh, 20px) 0 clamp(14px, 2.4vh, 26px);
+  display: flex;
+  position: relative;
+}
+
+.mono-nav {
+  border: 1px solid var(--line);
+  width: 46px;
+  height: 46px;
+  color: var(--ink);
+  cursor: pointer;
+  will-change: transform;
+  background: 0 0;
+  border-radius: 50%;
+  place-items: center;
+  padding: 0;
+  transition: background .3s, border-color .3s, color .3s;
+  display: grid;
+  position: relative;
+}
+
+.mono-nav__ico {
+  width: 22px;
+  height: 22px;
+}
+
+.mono-nav:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bone);
+}
+
+.mono-nav:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.mono-nav__ring {
+  display: none;
+}
+
+.mono-nav__ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6px;
+  stroke-linecap: round;
+  transition: color .5s var(--ease);
+}
+
+.mono-nav--next:hover .mono-nav__ring {
+  color: var(--bone);
+}
+
+.mono-ticks {
+  align-items: center;
+  gap: 10px;
+  display: flex;
+}
+
+.mono-tick {
+  cursor: pointer;
+  background: var(--line);
+  width: 26px;
+  height: 3px;
+  transition: background .4s var(--ease), transform .4s var(--ease);
+  border: 0;
+  border-radius: 3px;
+  padding: 0;
+}
+
+.mono-tick:hover {
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+}
+
+.mono-tick.is-on {
+  background: var(--accent);
+  transform: scaleY(1.7);
+}
+
+.mono-hint {
+  z-index: 6;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: .75;
+  transition: opacity .6s var(--ease);
+  pointer-events: none;
+  font-size: .72rem;
+  position: absolute;
+  bottom: clamp(8px, 1.6vh, 16px);
+  left: 50%;
+  transform: translate(-50%);
+  font-family: 'Syne', sans-serif;
+}
+
+.mono-hint span {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 820px) {
+  .mono-card {
+    width: clamp(190px, 56vw, 280px);
+    height: clamp(280px, 50vh, 440px);
+  }
+  .mono-deck {
+    perspective: 1300px;
+  }
+  .mono-caption__blurb {
+    display: none;
+  }
+  .mono-card__reflect {
+    opacity: .1;
+  }
+}
