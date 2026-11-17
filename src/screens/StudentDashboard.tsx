@@ -498,10 +498,10 @@ export default function StudentDashboard({
 
                     <button
                       onClick={() => onNavigate("defense-room")}
-                      className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
+                      className="inline-flex items-center justify-center rounded-2xl w-10 h-10 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#EE8420] hover:border-[#EE8420]/50 transition cursor-pointer shadow-2xs active:scale-95"
+                      title="Phòng Phản Biện AI (Live)"
                     >
-                      <ShieldCheck size={14} className="text-slate-500 dark:text-slate-400" />
-                      <span>Phòng Phản Biện AI (Live)</span>
+                      <ShieldCheck size={18} />
                     </button>
 
                     <button

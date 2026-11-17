@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import MarloSegmentedControl from "./MarloSegmentedControl";
 import MarloTitle from "./MarloTitle";
+import { SpotlightCard } from "./SpotlightCard";
 import {
   Play,
   Search,
@@ -485,16 +486,16 @@ export function CourseCatalogHub({ onSelectCourse }: CourseCatalogHubProps) {
 
   const isSearching = searchQuery.trim().length > 0;
 
-  // Single Course Card Renderer with Bespoke Fonts & Animations
+  // Single Course Card Renderer with Spotlight Card (Hiệu ứng 4)
   const renderCard = (sub: SubjectModuleData, idx: number) => {
     const theme = getSubjectVisualTheme(sub.id);
 
     return (
-      <div
+      <SpotlightCard
         key={`${sub.id}-${searchQuery}-${viewMode}`}
         onClick={() => onSelectCourse(sub.id)}
         style={{ animationDelay: `${Math.min(idx * 60, 600)}ms` }}
-        className={`animate-card-stagger group rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer flex flex-col justify-between ${theme.borderHover}`}
+        className={`animate-card-stagger rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer flex flex-col justify-between ${theme.borderHover}`}
       >
         <div>
           {/* 16:9 Thumbnail Banner with Custom Gradient, Font & Animation */}
@@ -567,7 +568,7 @@ export function CourseCatalogHub({ onSelectCourse }: CourseCatalogHubProps) {
             </div>
           </div>
         </div>
-      </div>
+      </SpotlightCard>
     );
   };
 

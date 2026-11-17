@@ -957,7 +957,7 @@ button:disabled {
 }
 
 .theme-dark.bg-theme-blueprint.pc-app-bg {
-  background-color: #07111f;
+  background-color: #101b2e;
   background-image:
     linear-gradient(to right, rgba(96, 165, 250, 0.14) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(96, 165, 250, 0.12) 1px, transparent 1px),
@@ -966,7 +966,7 @@ button:disabled {
 }
 
 .theme-dark.bg-theme-matrix.pc-app-bg {
-  background-color: #03110a;
+  background-color: #0d1e16;
   background-image:
     linear-gradient(to right, rgba(16, 185, 129, 0.16) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(16, 185, 129, 0.12) 1px, transparent 1px),
@@ -1054,13 +1054,10 @@ button:disabled {
 .sidebar-nav-item:not(.justify-center) {
   justify-content: flex-start !important;
 }
-.sidebar-nav-item:focus {
-  outline: none !important;
-  box-shadow: none !important;
-}
+.sidebar-nav-item:focus,
 .sidebar-nav-item:focus-visible {
   outline: none !important;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4) !important;
+  box-shadow: none !important;
 }
 
 html.dark .sidebar-nav-item:hover:not([aria-current="page"]):not([data-active="true"]),
@@ -2905,29 +2902,7 @@ html.dark .trello-slot-unfurl,
   animation: waterTransitionBar 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* 🌊 LIQUID WATER RIPPLE & GLIDE TRANSITIONS (Hiệu ứng lan nước) */
-@keyframes waterRippleExpand {
-  0% {
-    transform: translate(-50%, -50%) scale(0.15);
-    opacity: 0.9;
-  }
-  45% {
-    opacity: 0.5;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(3.5);
-    opacity: 0;
-  }
-}
 
-.animate-water-ripple {
-  position: absolute;
-  pointer-events: none;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.55) 0%, rgba(56, 189, 248, 0.25) 50%, transparent 75%);
-  animation: waterRippleExpand 0.65s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
-  z-index: 25;
-}
 
 @keyframes liquidDropletPulse {
   0%, 100% {
@@ -5111,3 +5086,38 @@ html.dark .themesw span.is-on {
 .dark .sdraw-foot {
   border-top-color: rgba(255, 255, 255, 0.08);
 }
+
+/* 🌊 DÒNG CHẢY LIÊN KẾT GIỮA 2 CARD: Giọt chất lỏng trượt êm từ trên xuống và lan nước ở đáy */
+@keyframes liquidDropFlow {
+  0% {
+    transform: translateY(-8px) scaleY(0.7);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(0px) scaleY(1.3);
+  }
+  75% {
+    opacity: 1;
+    transform: translateY(10px) scaleY(1.2);
+  }
+  100% {
+    transform: translateY(18px) scaleY(0.4);
+    opacity: 0;
+  }
+}
+
+.animate-liquid-drop-1 {
+  animation: liquidDropFlow 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-liquid-drop-2 {
+  animation: liquidDropFlow 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite 0.6s;
+}
+
+.animate-liquid-drop-3 {
+  animation: liquidDropFlow 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite 1.2s;
+}
+
+
+

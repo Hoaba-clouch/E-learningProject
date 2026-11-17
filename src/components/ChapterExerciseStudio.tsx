@@ -23,6 +23,7 @@ import {
   Code2,
 } from "lucide-react";
 import { triggerMarloConfetti } from "../utils/confetti";
+import LiquidCardConnector from "./LiquidCardConnector";
 import type { ChapterExerciseData } from "../data/chapterExercises";
 import type { MentorMascot } from "../App";
 
@@ -218,7 +219,7 @@ export default function ChapterExerciseStudio({
   };
 
   return (
-    <div className="flex-1 flex flex-col space-y-5 font-sans select-none max-w-4xl mx-auto w-full pb-8">
+    <div className="flex-1 flex flex-col font-sans select-none w-full pb-8">
       {/* ── TOP HEADER CỦA BÀI TẬP ──────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -273,6 +274,9 @@ export default function ChapterExerciseStudio({
         </div>
       </div>
 
+      {/* 🌊 DÒNG CHẤT LỎNG NỐI XUỐNG CARD YÊU CẦU */}
+      <LiquidCardConnector />
+
       {/* ── CARD 1: ĐỀ BÀI CHI TIẾT & YÊU CẦU ────────────────────────── */}
       <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 sm:p-6 shadow-xs space-y-4">
         <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -303,6 +307,9 @@ export default function ChapterExerciseStudio({
           </div>
         </div>
       </div>
+
+      {/* 🌊 DÒNG CHẤT LỎNG NỐI XUỐNG CARD NỘP BÀI */}
+      <LiquidCardConnector />
 
       {/* ── CARD 2: KHU VỰC NỘP BÀI & BÁO CÁO CHẤM TỰ ĐỘNG ────────────────── */}
       <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 sm:p-6 shadow-xs space-y-5">

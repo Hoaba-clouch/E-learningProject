@@ -106,6 +106,7 @@
   position: absolute;
   top: 0;
   left: 50%;
+  pointer-events: none;
 }
 
 /* Flood field */
@@ -116,6 +117,7 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  pointer-events: none;
 }
 .intro-blob {
   opacity: 0;
@@ -174,6 +176,7 @@
   will-change: transform;
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
 .intro-ladder {
   opacity: 1;
@@ -242,11 +245,12 @@
 .intro-dot--out {
   background: var(--intro-paper);
   z-index: 10;
+  pointer-events: none;
 }
 
 /* End card inside intro */
 .intro-endcard {
-  z-index: 8;
+  z-index: 50;
   background: var(--intro-paper);
   opacity: 0;
   text-align: center;
@@ -257,6 +261,7 @@
   position: absolute;
   inset: 0;
   padding: 24px;
+  pointer-events: auto;
 }
 .intro-endcard__cta {
   color: var(--intro-ink);
@@ -281,6 +286,15 @@
   flex-wrap: wrap;
   justify-content: center;
   margin-top: 12px;
+  position: relative;
+  z-index: 60;
+  pointer-events: auto;
+}
+.intro-endcard__actions button {
+  position: relative;
+  z-index: 60;
+  pointer-events: auto;
+  cursor: pointer;
 }
 .intro-btn-primary {
   background: linear-gradient(180deg, #f8bd57 0%, #ee8420 100%);

@@ -643,8 +643,8 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
       .set(allChars, { transformPerspective: 620, transformOrigin: "50% 100%", yPercent: 140, rotationX: -78 })
       .set(rungs, { opacity: 0 })
       .set(periods, { scale: 0 })
-      .set(dotOut, { opacity: 0, x: 0, y: 0, scale: 0.001 })
-      .set(endcard, { opacity: 0 })
+      .set(dotOut, { opacity: 0, x: 0, y: 0, scale: 0.001, display: "block" })
+      .set(endcard, { opacity: 0, pointerEvents: "none" })
       .set(".intro-endcard__cta", { opacity: 0, yPercent: 40 })
       .set(".intro-endcard__sub", { opacity: 0, y: 14 })
       .set(".intro-endcard__actions", { opacity: 0, y: 16 })
@@ -734,8 +734,8 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
       .to(dotOut, { scaleX: metrics.floodScale, scaleY: metrics.floodScale, duration: 0.22, ease: "power2.in" }, 4.72);
 
     // 7. Endcard Reveal
-    tl.set(endcard, { opacity: 1 }, 4.95)
-      .set([camera, field, dotOut], { opacity: 0 }, 4.96)
+    tl.set(endcard, { opacity: 1, pointerEvents: "auto", zIndex: 50 }, 4.95)
+      .set([camera, field, dotOut], { opacity: 0, pointerEvents: "none", display: "none" }, 4.96)
       .to(".intro-endcard__cta", { opacity: 1, yPercent: 0, duration: 0.32, ease: "power2.out" }, 4.98)
       .to(".intro-endcard__sub", { opacity: 1, y: 0, duration: 0.26, ease: "power2.out" }, 5.08)
       .to(".intro-endcard__actions", { opacity: 1, y: 0, duration: 0.26, ease: "power2.out" }, 5.18)
@@ -937,10 +937,11 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
               Chào mừng bạn đến với hệ sinh thái đào tạo kỹ sư công nghệ CodeMind AI Campus. Học thực chiến qua đồ án chuẩn doanh nghiệp cùng AI Mentor 24/7.
             </p>
 
-            <div className="intro-endcard__actions flex items-center justify-center gap-3 flex-wrap">
+            <div className="intro-endcard__actions flex items-center justify-center gap-3 flex-wrap relative z-20 pointer-events-auto">
               <button
+                type="button"
                 onClick={() => onEnterPlatform("defense-room")}
-                className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+                className="btn-marlo-primary btn--primary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
               >
                 <ShieldCheck size={15} className="text-[#1c1304] shrink-0" />
                 <span>Thử Phòng Phản Biện AI</span>
@@ -948,16 +949,18 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
               </button>
 
               <button
+                type="button"
                 onClick={() => onEnterPlatform()}
-                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2"
+                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
               >
                 <BookOpen size={15} className="shrink-0" />
                 <span>Vào trang Tổng quan</span>
               </button>
 
               <button
+                type="button"
                 onClick={handleScrollToContent}
-                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2"
+                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
               >
                 <Compass size={15} className="shrink-0" />
                 <span>Khám phá Lộ trình & Mức lương</span>

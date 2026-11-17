@@ -38,6 +38,9 @@ import {
   Layers,
   Database,
   Lightbulb,
+  Film,
+  Maximize2,
+  Minimize2,
   BookOpen,
   ArrowRight,
   GraduationCap,
@@ -60,6 +63,7 @@ import { LessonMindmapStudio } from "../components/LessonMindmapStudio";
 import { LessonVideoStudio } from "../components/LessonVideoStudio";
 import { CourseCatalogHub } from "../components/CourseCatalogHub";
 import { MultiChapterSidebar } from "../components/MultiChapterSidebar";
+import LiquidCardConnector from "../components/LiquidCardConnector";
 import { triggerMarloConfetti } from "../utils/confetti";
 import { HeaderProfileDropdown } from "../components/HeaderProfileDropdown";
 import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
@@ -114,6 +118,7 @@ export default function LearningWorkspace({
   const [readingMode, setReadingMode] = useState<ReadingMode>("full");
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mentorCollapsed, setMentorCollapsed] = useState<boolean>(false);
+  const [isCinemaMode, setIsCinemaMode] = useState<boolean>(false);
   const [copiedCodeIndex, setCopiedCodeIndex] = useState<number | null>(null);
 
 
@@ -169,6 +174,17 @@ export default function LearningWorkspace({
   const mentor = mentorConfig[mentorMascot];
 
 
+
+  // Escape key exits cinema mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isCinemaMode) {
+        setIsCinemaMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isCinemaMode]);
 
   const handleCopyCode = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
@@ -331,59 +347,94 @@ export default function LearningWorkspace({
               <span>+<MarloNumber value={totalXpEarned} /> XP</span>
             </div>
 
-
+            {/* Cinema Mode Focus Toggle (Hiệu ứng 9) */}
+            <button
+              onClick={() => setIsCinemaMode(!isCinemaMode)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                isCinemaMode
+                  ? "bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+              }`}
+              title="Chế độ Rạp chiếu phim Focus: Thu gọn sidebar và mở rộng toàn màn hình"
+            >
+              {isCinemaMode ? <Minimize2 size={13} /> : <Film size={13} />}
+              <span className="hidden sm:inline">
+                {isCinemaMode ? "Thoát Rạp chiếu phim" : "Tập trung học"}
+              </span>
+            </button>
           </div>
         </div>
       </header>
 
       {/* ── WORKSPACE BODY WITH DUAL VIEW ── */}
-      <div className="flex flex-1 min-h-0 gap-4 lg:gap-5 overflow-hidden">
-        {/* ── LEFT MULTI-CHAPTER ACCORDION SIDEBAR (CHUẨN F8) ── */}
-        <MultiChapterSidebar
-          subject={currentMultiSubject}
-          activeLessonId={activeLessonId}
-          activeChapterId={activeChapter.id}
-          activeTab={tab}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          onSelectLesson={(lessonId, lessonType) => {
-            setActiveLessonId(lessonId);
-            if (lessonType) {
-              setTab(lessonType);
-            }
-          }}
-          onOpenMindmap={(chapterId) => {
-            if (chapterId) {
-              const chap = currentMultiSubject.chapters.find((c) => c.id === chapterId);
-              if (chap && chap.lessons.length > 0) {
-                setActiveLessonId(chap.lessons[0].id);
+      <div className={`flex flex-1 min-h-0 gap-4 lg:gap-5 overflow-hidden transition-all duration-500 ${
+        isCinemaMode
+          ? "bg-[#161822] bg-[radial-gradient(ellipse_at_top,_rgba(40,49,70,0.55)_0%,_rgba(22,25,35,0.98)_65%,_rgba(18,20,28,1)_100%)] -m-3 sm:-m-5 lg:-m-6 p-4 sm:p-6 lg:p-8 fixed inset-0 z-50 overflow-y-auto"
+          : ""
+      }`}>
+        {/* Minimalist Exit Cinema Mode Icon Button */}
+        {isCinemaMode && (
+          <button
+            onClick={() => setIsCinemaMode(false)}
+            className="fixed top-4 right-4 z-50 p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/70 text-slate-200 hover:text-white transition shadow-lg cursor-pointer backdrop-blur-md"
+            title="Thoát chế độ Rạp chiếu phim (Esc)"
+          >
+            <Minimize2 size={16} />
+          </button>
+        )}
+
+        {/* ── LEFT MULTI-CHAPTER ACCORDION SIDEBAR (HIDDEN IN CINEMA MODE) ── */}
+        {!isCinemaMode && (
+          <MultiChapterSidebar
+            subject={currentMultiSubject}
+            activeLessonId={activeLessonId}
+            activeChapterId={activeChapter.id}
+            activeTab={tab}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+            onSelectLesson={(lessonId, lessonType) => {
+              setActiveLessonId(lessonId);
+              if (lessonType) {
+                setTab(lessonType);
               }
-            }
-            setTab("mindmap");
-          }}
-          onOpenExercise={(chapterId) => {
-            if (chapterId) {
-              const chap = currentMultiSubject.chapters.find((c) => c.id === chapterId);
-              if (chap && chap.lessons.length > 0) {
-                setActiveLessonId(chap.lessons[0].id);
+            }}
+            onOpenMindmap={(chapterId) => {
+              if (chapterId) {
+                const chap = currentMultiSubject.chapters.find((c) => c.id === chapterId);
+                if (chap && chap.lessons.length > 0) {
+                  setActiveLessonId(chap.lessons[0].id);
+                }
               }
-            }
-            setTab("exercise");
-          }}
-        />
+              setTab("mindmap");
+            }}
+            onOpenExercise={(chapterId) => {
+              if (chapterId) {
+                const chap = currentMultiSubject.chapters.find((c) => c.id === chapterId);
+                if (chap && chap.lessons.length > 0) {
+                  setActiveLessonId(chap.lessons[0].id);
+                }
+              }
+              setTab("exercise");
+            }}
+          />
+        )}
 
         {/* ── MAIN STAGE ── */}
-<main className="flex flex-1 flex-col min-w-0 overflow-y-auto space-y-4 pr-1 relative">
+        <main
+          className={`flex flex-1 flex-col min-w-0 overflow-y-auto space-y-4 pr-1 relative transition-all duration-300 ${
+            isCinemaMode ? "max-w-6xl mx-auto w-full pt-2" : ""
+          }`}
+        >
           {/* 🌊 Dải sáng chuyển cảnh lan nước khi đổi bài học */}
           <div
             className="pointer-events-none sticky top-0 left-0 right-0 h-[2.5px] -mt-4 -mx-4 lg:-mt-6 lg:-mx-6 z-40 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 opacity-60"
           />
 
           <div
-            className="flex flex-col space-y-4"
+            className="flex flex-col"
           >
             {/* ── CARD 1: SEPARATE LESSON INFO & BREADCRUMB ── */}
-            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-3.5 sm:p-4 shadow-xs flex items-center justify-between flex-wrap gap-3 shrink-0">
+            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-3.5 sm:p-4 shadow-xs flex items-center justify-between flex-wrap gap-3 shrink-0 relative z-10">
               <div className="flex items-center gap-2.5 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Chương {activeChapter.number}: {activeChapter.title}
@@ -435,8 +486,11 @@ export default function LearningWorkspace({
               )}
             </div>
 
-            {/* ── CARD 2: STANDALONE FLOATING TAB BAR (TÁCH BIỆT CÓ KHE BG Ở GIỮA NHƯ GIT & KANBAN) ── */}
-            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-1.5 sm:p-2 shadow-xs flex items-center justify-between flex-wrap gap-2 shrink-0">
+            {/* 🌊 DÒNG CHẤT LỎNG CHẢY TỪ CARD 1 XUỐNG CARD 2 */}
+            <LiquidCardConnector />
+
+            {/* ── CARD 2: STANDALONE FLOATING TAB BAR ── */}
+            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-1.5 sm:p-2 shadow-xs flex items-center justify-between flex-wrap gap-2 shrink-0 relative z-10">
               <MarloSegmentedControl
                 value={tab}
                 options={[
@@ -464,6 +518,9 @@ export default function LearningWorkspace({
                 />
               )}
             </div>
+
+            {/* 🌊 DÒNG CHẤT LỎNG CHẢY TỪ CARD 2 XUỐNG NỘI DUNG CHÍNH (CARD 3) */}
+            <LiquidCardConnector />
 
           {/* ── TAB 1: BÀI ĐỌC (LECTURE - FULL UNIVERSITY DEPTH) ── */}
           {tab === "lecture" && (
@@ -718,7 +775,7 @@ export default function LearningWorkspace({
           {tab === "quiz" && (
             <div
               key={`quiz-${selectedSubjectId}-${quizIndex}`}
-              className="animate-screen-enter rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xs w-full max-w-5xl mx-auto space-y-5 relative"
+              className="animate-screen-enter rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xs w-full space-y-5 relative"
               style={{ animationDelay: "60ms" }}
               ref={quizConfettiRef}
             >

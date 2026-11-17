@@ -28,6 +28,7 @@ import {
   type VideoChapter,
 } from "../data/videoLectureData";
 import type { MentorMascot } from "../App";
+import LiquidCardConnector from "./LiquidCardConnector";
 
 interface LessonVideoStudioProps {
   subjectId: string;
@@ -117,7 +118,7 @@ export function LessonVideoStudio({
   };
 
   return (
-    <div key={`video-studio-${subjectId}`} className="space-y-5 w-full max-w-5xl mx-auto px-1">
+    <div key={`video-studio-${subjectId}`} className="flex flex-col w-full">
       {/* ─── VIDEO PLAYER CONTAINER (16:9 F8 STYLE) ─────────────────── */}
       <div
         key={`video-screen-${currentVideo.subjectCode}-${currentVideo.youtubeId}`}
@@ -194,7 +195,7 @@ export function LessonVideoStudio({
 
       {/* ─── ADD NOTE INLINE FORM ─────────────────────────────────────── */}
       {isAddingNote && (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900 p-4 space-y-3 transition-all animate-in fade-in slide-in-from-top-2">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900 p-4 space-y-3 transition-all animate-in fade-in slide-in-from-top-2 mb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md font-mono text-xs font-bold bg-blue-600 text-white">
@@ -230,6 +231,9 @@ export function LessonVideoStudio({
           </div>
         </div>
       )}
+
+      {/* 🌊 DÒNG CHẤT LỎNG CHẢY TỪ VIDEO PLAYER XUỐNG KHỐI NỘI DUNG DƯỚI */}
+      <LiquidCardConnector />
 
       {/* ─── VIDEO DETAILS & INTERACTIVE TABS (F8 LAYOUT) ─────────────── */}
       {/* ─── VIDEO METADATA & SIDEBAR (CLEAN ENGINEERING GRADE) ─────── */}

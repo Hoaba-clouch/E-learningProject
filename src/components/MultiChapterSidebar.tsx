@@ -1,5 +1,5 @@
 import React, { useState, useRef, useLayoutEffect, useEffect } from "react";
-import { animateMarloElasticPill } from "../utils/marloAnimations";
+import { animateMarloPill } from "../utils/marloAnimations";
 import {
   Code2,
   ChevronDown,
@@ -78,19 +78,25 @@ function ChapterLessonGroup({
 
   useLayoutEffect(() => {
     const activeEl = getActiveElement();
-    animateMarloElasticPill(pillRef.current, activeEl, {
+    animateMarloPill(pillRef.current, activeEl, {
       animate: !isFirstRender.current,
+      radius: 14,
     });
     isFirstRender.current = false;
   }, [activeKey]);
 
   useEffect(() => {
     const handleResize = () => {
-      animateMarloElasticPill(pillRef.current, getActiveElement(), { animate: false });
+      animateMarloPill(pillRef.current, getActiveElement(), { animate: false, radius: 14 });
     };
     const ro = new ResizeObserver(handleResize);
     if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
+    document.fonts?.ready?.then(handleResize);
+    const rafId = requestAnimationFrame(handleResize);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(rafId);
+    };
   }, [activeKey]);
 
   return (
@@ -98,17 +104,12 @@ function ChapterLessonGroup({
       ref={containerRef}
       className="relative animate-accordion-expand bg-slate-50/70 dark:bg-slate-950/40 p-2 space-y-1.5 rounded-xl"
     >
-      {/* 🏷️ Marlo Smooth Active Pill (Co giãn nảy theo mục chọn siêu mượt) */}
+      {/* 🏷️ Marlo Liquid Rubberband Active Pill - EXACT 1:1 WITH NAVBAR */}
       <div
         ref={pillRef}
         aria-hidden="true"
-        className="pointer-events-none absolute z-0 rounded-xl shadow-xs will-change-[top,height] bg-white dark:bg-[#1a1d26] border border-amber-500/25 dark:border-amber-500/30 transition-colors duration-150 overflow-hidden"
-      >
-        {/* Thanh chỉ báo màu cam hổ phách phát sáng dính liền mép trái viên pill */}
-        <span
-          className="absolute left-1 top-2 bottom-2 w-1 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"
-        />
-      </div>
+        className="pointer-events-none absolute top-0 left-0 w-full h-full z-0 rounded-[14px] bg-[#141619] dark:bg-[#F4F4F6] shadow-[0_4px_16px_rgba(0,0,0,0.14)]"
+      />
 
       {chapter.lessons.map((lesson) => {
         const isActive = activeKey === lesson.id;
@@ -121,34 +122,44 @@ function ChapterLessonGroup({
               triggerWaterRipple(e, lesson.id);
               onSelectLesson(lesson.id, lesson.type);
             }}
-            className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-xl text-left cursor-pointer transition-colors duration-150 ${
+            className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
               isActive
-                ? "text-slate-950 dark:text-white font-bold"
-                : "text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
+                ? "text-white dark:text-[#141619] font-bold"
+                : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
             }`}
           >
-            {/* 🌊 Lan nước khi bấm */}
+            {/* 🌊 Hiệu ứng lan nước khi click (Water Ripple & Crest Ring) */}
             {ripples
               .filter((r) => r.key === lesson.id)
               .map((r) => (
-                <span
-                  key={r.id}
-                  className="animate-water-ripple"
-                  style={{
-                    left: r.x,
-                    top: r.y,
-                    width: "90px",
-                    height: "90px",
-                  }}
-                />
+                <React.Fragment key={r.id}>
+                  <span
+                    className="animate-water-ripple"
+                    style={{
+                      left: r.x,
+                      top: r.y,
+                      width: "300px",
+                      height: "300px",
+                    }}
+                  />
+                  <span
+                    className="animate-water-ring"
+                    style={{
+                      left: r.x,
+                      top: r.y,
+                      width: "240px",
+                      height: "240px",
+                    }}
+                  />
+                </React.Fragment>
               ))}
 
             <div className="flex items-center gap-2.5 min-w-0 pr-2 pl-0.5">
               {/* Step Type Icon */}
               <div
-                className={`p-1.5 rounded-lg shrink-0 transition-all duration-300 ${
+                className={`p-1.5 rounded-lg shrink-0 transition-all duration-200 ${
                   isActive
-                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-xs scale-105"
+                    ? "bg-white/20 dark:bg-black/15 text-white dark:text-[#141619]"
                     : lesson.status === "done"
                     ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600"
                     : "bg-slate-100 dark:bg-slate-800 text-slate-500"
@@ -165,17 +176,31 @@ function ChapterLessonGroup({
 
               <div className="min-w-0">
                 <span
-                  className={`text-sm leading-snug block truncate transition-colors duration-200 text-slate-900 dark:text-slate-100 ${
+                  className={`text-sm leading-snug block truncate transition-colors duration-150 ${
                     isActive
-                      ? "font-bold"
-                      : "font-semibold"
+                      ? "text-white dark:text-[#141619] font-bold"
+                      : "text-slate-900 dark:text-slate-100 font-semibold"
                   }`}
                 >
                   {lesson.id} · {lesson.title}
                 </span>
-                <div className="flex items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <div
+                  className={`flex items-center gap-2.5 text-xs mt-1 transition-colors duration-150 ${
+                    isActive
+                      ? "text-white/70 dark:text-slate-600"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
                   <span className="font-mono">{lesson.duration}</span>
-                  <span className="font-bold text-amber-600 dark:text-amber-400">+{lesson.xp} XP</span>
+                  <span
+                    className={`font-bold transition-colors duration-150 ${
+                      isActive
+                        ? "text-amber-300 dark:text-amber-700 font-mono"
+                        : "text-amber-600 dark:text-amber-400"
+                    }`}
+                  >
+                    +{lesson.xp} XP
+                  </span>
                 </div>
               </div>
             </div>
@@ -183,7 +208,14 @@ function ChapterLessonGroup({
             {/* Status Check / Icon */}
             <div className="shrink-0">
               {lesson.status === "done" ? (
-                <CheckCircle2 size={16} className="text-emerald-500" />
+                <CheckCircle2
+                  size={16}
+                  className={`transition-colors duration-150 ${
+                    isActive
+                      ? "text-emerald-300 dark:text-emerald-700"
+                      : "text-emerald-500"
+                  }`}
+                />
               ) : isActive ? (
                 <span className="relative flex h-3.5 w-3.5 items-center justify-center">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -204,10 +236,10 @@ function ChapterLessonGroup({
           triggerWaterRipple(e, `exercise-${chapter.id}`);
           onOpenExercise?.(chapter.id);
         }}
-        className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-xl text-left cursor-pointer transition-colors duration-150 ${
+        className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
           activeKey === `exercise-${chapter.id}`
-            ? "text-slate-950 dark:text-white font-bold"
-            : "text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
+            ? "text-white dark:text-[#141619] font-bold"
+            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
         }`}
       >
         {ripples
@@ -226,21 +258,43 @@ function ChapterLessonGroup({
           ))}
 
         <div className="flex items-center gap-2.5 min-w-0 pr-1 pl-0.5">
-          <div className="p-1.5 rounded-md shrink-0 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+          <div
+            className={`p-1.5 rounded-lg shrink-0 transition-colors duration-200 ${
+              activeKey === `exercise-${chapter.id}`
+                ? "bg-white/20 dark:bg-black/15 text-white dark:text-[#141619]"
+                : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400"
+            }`}
+          >
             <Code2 size={14} />
           </div>
           <div className="min-w-0">
-            <span className={`text-xs leading-tight block truncate text-slate-900 dark:text-slate-100 ${
-              activeKey === `exercise-${chapter.id}` ? "font-bold" : "font-semibold"
-            }`}>
+            <span
+              className={`text-xs leading-tight block truncate ${
+                activeKey === `exercise-${chapter.id}`
+                  ? "text-white dark:text-[#141619] font-bold"
+                  : "text-slate-900 dark:text-slate-100 font-semibold"
+              }`}
+            >
               Bài tập Thực hành Chương {chapter.number}
             </span>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block truncate mt-0.5">
+            <span
+              className={`text-[11px] font-medium block truncate mt-0.5 ${
+                activeKey === `exercise-${chapter.id}`
+                  ? "text-white/70 dark:text-slate-600"
+                  : "text-slate-500 dark:text-slate-400"
+              }`}
+            >
               Đề bài & Link nộp bài
             </span>
           </div>
         </div>
-        <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 shrink-0">
+        <span
+          className={`text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 ${
+            activeKey === `exercise-${chapter.id}`
+              ? "bg-[#EE8420] text-white"
+              : "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+          }`}
+        >
           +100 XP
         </span>
       </button>
@@ -252,13 +306,12 @@ function ChapterLessonGroup({
           triggerWaterRipple(e, `mindmap-${chapter.id}`);
           onOpenMindmap(chapter.id);
         }}
-        className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-xl text-left cursor-pointer transition-colors duration-150 ${
+        className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
           activeKey === `mindmap-${chapter.id}`
-            ? "text-slate-950 dark:text-white font-bold"
-            : "text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
+            ? "text-white dark:text-[#141619] font-bold"
+            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
         }`}
       >
-        {/* 🌊 Lan nước khi bấm */}
         {ripples
           .filter((r) => r.key === `mindmap-${chapter.id}`)
           .map((r) => (
@@ -275,22 +328,44 @@ function ChapterLessonGroup({
           ))}
 
         <div className="flex items-center gap-2.5 min-w-0 pr-1 pl-0.5">
-          <div className="p-1.5 rounded-md shrink-0 bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-300">
+          <div
+            className={`p-1.5 rounded-lg shrink-0 transition-colors duration-200 ${
+              activeKey === `mindmap-${chapter.id}`
+                ? "bg-white/20 dark:bg-black/15 text-white dark:text-[#141619]"
+                : "bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400"
+            }`}
+          >
             <GitBranch size={14} />
           </div>
           <div className="min-w-0">
-            <span className={`text-xs leading-tight block truncate text-slate-900 dark:text-slate-100 ${
-              activeKey === `mindmap-${chapter.id}` ? "font-bold" : "font-semibold"
-            }`}>
-              Sơ đồ Tư duy Chương {chapter.number}
+            <span
+              className={`text-xs leading-tight block truncate ${
+                activeKey === `mindmap-${chapter.id}`
+                  ? "text-white dark:text-[#141619] font-bold"
+                  : "text-slate-900 dark:text-slate-100 font-semibold"
+              }`}
+            >
+              Sơ đồ Tư duy (Mindmap Canvas)
             </span>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block truncate mt-0.5">
-              Tóm gọn kiến thức cốt lõi
+            <span
+              className={`text-[11px] font-medium block truncate mt-0.5 ${
+                activeKey === `mindmap-${chapter.id}`
+                  ? "text-white/70 dark:text-slate-600"
+                  : "text-slate-500 dark:text-slate-400"
+              }`}
+            >
+              Hệ thống hóa kiến thức Chương {chapter.number}
             </span>
           </div>
         </div>
-        <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 shrink-0">
-          +50 XP
+        <span
+          className={`text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 ${
+            activeKey === `mindmap-${chapter.id}`
+              ? "bg-[#EE8420] text-white"
+              : "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
+          }`}
+        >
+          Toàn chương
         </span>
       </button>
     </div>

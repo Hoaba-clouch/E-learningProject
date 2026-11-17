@@ -25,7 +25,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, startTransition } from "react";
 import gsap from "gsap";
 import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
 import MarloFocusTimer from "./MarloFocusTimer";
@@ -146,26 +146,7 @@ export default function Sidebar({
     y: number;
   } | null>(null);
 
-  const handleItemClick = (e: React.MouseEvent<HTMLButtonElement>, id: Screen) => {
-    try {
-      // 🏷️ Marlo Micro-Pop on Active Click (marlo-app/src/kit.jsx - function ho)
-      const icon = e.currentTarget.querySelector("svg");
-      if (icon) {
-        gsap.killTweensOf(icon);
-        gsap.fromTo(
-          icon,
-          { scale: 0.72 },
-          {
-            scale: 1,
-            duration: 0.45,
-            ease: "back.out(3)",
-            clearProps: "transform",
-          }
-        );
-      }
-    } catch {
-      // safe fallback
-    }
+  const handleItemClick = (_e: React.MouseEvent<HTMLButtonElement>, id: Screen) => {
     hideTip();
     onNavigate(id);
   };
@@ -221,13 +202,13 @@ export default function Sidebar({
   return (
     <aside
       className={`app-sidebar relative flex shrink-0 flex-col p-2 sm:p-2.5 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] select-none bg-transparent ${
-        collapsed ? "w-[76px]" : "w-[248px]"
+        collapsed ? "w-[92px]" : "w-[248px]"
       }`}
     >
       {/* ─── 🌟 BOX 1: TOP MAIN NAVIGATION CAPSULE (MARLO FLOATING CARD) ─── */}
-      <div className={`flex-1 min-h-0 flex flex-col rounded-[28px] sm:rounded-[32px] bg-white dark:bg-[#14161F] border border-black/[0.05] dark:border-white/[0.07] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)] overflow-hidden ${collapsed ? "items-center py-3.5" : ""}`}>
+      <div className={`flex-1 min-h-0 flex flex-col rounded-[28px] bg-white dark:bg-[#14161F] border border-black/[0.06] dark:border-white/[0.08] shadow-[0_1px_2px_rgba(20,22,26,0.04),0_14px_32px_-22px_rgba(20,22,26,0.28)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] overflow-hidden ${collapsed ? "w-[72px] items-center py-3.5 px-2" : "w-full"}`}>
         {/* Brand Header */}
-        <div className={`shrink-0 ${collapsed ? "flex flex-col items-center gap-2 px-1" : "px-4 pt-3.5 pb-2"}`}>
+        <div className={`shrink-0 ${collapsed ? "flex flex-col items-center px-1" : "px-4 pt-3.5 pb-2"}`}>
           <div className={`flex items-center ${collapsed ? "flex-col gap-2.5 justify-center" : "justify-between"}`}>
             {/* Logo & Brand title */}
             <div
@@ -235,8 +216,8 @@ export default function Sidebar({
               className="flex items-center gap-2.5 min-w-0 cursor-pointer group"
               title="CodeMind AI • Learning OS"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-[#F59E0B] via-[#EE8420] to-[#E07415] text-white shadow-2xs shrink-0 select-none group-hover:scale-105 transition-transform">
-                <Zap size={18} className="fill-white text-white drop-shadow-xs" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-gradient-to-br from-[#F8BD57] via-[#F29B23] to-[#EE8420] text-[#1C1304] shadow-xs shrink-0 select-none group-hover:scale-105 transition-transform">
+                <Zap size={20} className="fill-[#1C1304] text-[#1C1304]" />
               </div>
               {!collapsed && (
                 <div className="min-w-0 transition-opacity duration-200">
@@ -257,7 +238,7 @@ export default function Sidebar({
             <button
               type="button"
               onClick={() => setCollapsed(!collapsed)}
-              className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center text-[#62656B] dark:text-[#A0A3A9] hover:bg-black/5 dark:hover:bg-white/5 hover:text-[#161718] dark:hover:text-[#F0F0F1] transition cursor-pointer shrink-0"
+              className="w-9 h-9 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center text-[#62656B] dark:text-[#A0A3A9] hover:bg-black/5 dark:hover:bg-white/5 hover:text-[#161718] dark:hover:text-[#F0F0F1] transition cursor-pointer shrink-0"
               title={collapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
             >
               {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
@@ -266,13 +247,13 @@ export default function Sidebar({
         </div>
 
         {/* Divider in collapsed mode */}
-        {collapsed && <div className="h-px w-8 bg-black/10 dark:bg-white/10 my-1" />}
+        {collapsed && <div className="h-px w-8 bg-black/10 dark:bg-white/10 my-2.5 mx-auto shrink-0" />}
 
       {/* ─── 3. NAVIGATION LIST (MARLO PILL & RAIL ICONS) ─── */}
       <nav
         ref={navRef}
-        className={`relative flex flex-1 min-h-0 overflow-y-auto flex-col gap-0.5 px-2.5 py-1.5 ${
-          collapsed ? "items-center" : ""
+        className={`relative flex flex-1 min-h-0 overflow-y-auto flex-col [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+          collapsed ? "items-center px-1 py-1 gap-2.5" : "px-2.5 py-1.5 gap-0.5"
         }`}
       >
         {/* 🏷️ Marlo Liquid Rubberband Active Pill - EXACT 1:1 WITH MARLO */}
@@ -283,10 +264,10 @@ export default function Sidebar({
         />
 
         {visibleGroups.map((group, gIdx) => (
-          <div key={group.label} className="flex flex-col gap-0.5">
+          <div key={group.label} className={`flex flex-col ${collapsed ? "items-center gap-2" : "gap-0.5"}`}>
             {/* Section Header / Marlo Rail Divider */}
             {collapsed ? (
-              gIdx > 0 && <div className="h-px bg-black/5 dark:bg-white/5 my-2 mx-1.5" />
+              gIdx > 0 && <div className="h-px w-8 bg-black/10 dark:bg-white/10 my-2 mx-auto shrink-0" />
             ) : (
               <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#526071] dark:text-[#94A3B8] px-3.5 pt-3.5 pb-1 select-none">
                 {group.label}
@@ -305,17 +286,17 @@ export default function Sidebar({
                   onClick={(e) => handleItemClick(e, item.id)}
                   onMouseEnter={(e) => showTip(item.label, e, item.badge)}
                   onMouseLeave={hideTip}
-                  className={`sidebar-nav-item relative z-10 flex items-center cursor-pointer outline-none focus:outline-none select-none transition-colors duration-150 active:scale-[0.98] ${
+                  className={`sidebar-nav-item relative z-10 overflow-hidden flex items-center cursor-pointer outline-none focus:outline-none select-none transition-colors duration-200 active:scale-[0.98] ${
                     collapsed
-                      ? `h-10 w-10 justify-center p-0 rounded-[14px] mx-auto ${
+                      ? `h-[42px] w-[46px] justify-center p-0 rounded-[14px] mx-auto ${
                           active
                             ? "text-white dark:text-[#141619] font-bold"
-                            : "text-[#555E6D] dark:text-[#A4ACB9] font-semibold hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
+                            : "text-[#555E6D] dark:text-[#A4ACB9] font-semibold hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#141619] dark:hover:text-white"
                         }`
                       : `w-full h-[42px] px-3.5 rounded-[14px] border-0 justify-start text-left gap-3 ${
                           active
                             ? "text-white dark:text-[#141619] font-bold"
-                            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
+                            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#141619] dark:hover:text-white"
                         }`
                   }`}
                 >
@@ -345,7 +326,7 @@ export default function Sidebar({
                             <span
                               className={`min-w-[20px] h-[20px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-semibold font-sans transition-colors duration-150 leading-none ${
                                 active
-                                  ? "bg-[#EE8420] text-white font-bold shadow-2xs"
+                                  ? "bg-white/20 dark:bg-black/15 text-white dark:text-[#141619] font-bold"
                                   : "bg-[#E5E7EB] dark:bg-[#282B37] text-[#555E6D] dark:text-[#A4ACB9]"
                               }`}
                             >
@@ -364,7 +345,7 @@ export default function Sidebar({
 
                   {/* Collapsed notification badge dot */}
                   {collapsed && (item.badgeDot || item.badge) && (
-                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#EE8420] ring-2 ring-[#F5F5F6] dark:ring-[#1B1C1E] shadow-xs" />
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#EE8420] ring-2 ring-white dark:ring-[#14161F] shadow-2xs" />
                   )}
                 </button>
               );

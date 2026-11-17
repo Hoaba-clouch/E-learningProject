@@ -121,7 +121,7 @@ function MindmapCanvas({
   const { fitView } = useReactFlow();
 
   return (
-    <div className="h-[600px] xl:h-[660px] w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950 overflow-hidden relative shadow-2xs">
+    <div className="h-[600px] xl:h-[680px] w-full rounded-2xl border-2 border-slate-200/90 dark:border-slate-800 bg-radial from-slate-50 via-white to-slate-100/90 dark:from-[#181d2a] dark:via-[#131722] dark:to-[#0f121a] overflow-hidden relative shadow-sm">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -133,10 +133,10 @@ function MindmapCanvas({
         minZoom={0.25}
         maxZoom={1.6}
       >
-        <Background color="#cbd5e1" gap={18} size={1} />
+        <Background color="#94a3b8" gap={22} size={1.2} className="opacity-60 dark:opacity-40" />
         <Controls
           position="top-left"
-          className="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 !shadow-xs !rounded-xl overflow-hidden"
+          className="!bg-white/95 dark:!bg-slate-900/95 !border-slate-200 dark:!border-slate-700 !shadow-md !rounded-xl overflow-hidden backdrop-blur-sm"
         />
         {showMiniMap && (
           <MiniMap
@@ -275,12 +275,28 @@ export function LessonMindmapStudio({
       const hasChildren = children.length > 0;
       const isExpanded = expandedNodeIds.has(rawNode.id);
 
+      // Kế thừa Tone màu chủ đề từ cành cha nếu là leaf/subleaf
+      let effectiveTone = rawNode.data.tone;
+      if (!effectiveTone) {
+        let currId = rawNode.id;
+        while (parentMap.has(currId)) {
+          const pid = parentMap.get(currId)!;
+          const pNode = nodeMap.get(pid);
+          if (pNode?.data.tone) {
+            effectiveTone = pNode.data.tone;
+            break;
+          }
+          currId = pid;
+        }
+      }
+
       cNodes.push({
         id: rawNode.id,
         type: "compactTreeNode",
         position: pos,
         data: {
           ...rawNode.data,
+          tone: effectiveTone,
           hasChildren,
           isExpanded,
           childrenCount: children.length,
@@ -289,25 +305,33 @@ export function LessonMindmapStudio({
       });
     }
 
-    // 4. Xây dựng danh sách Edges ReactFlow
+    // 4. Xây dựng danh sách Edges ReactFlow (Clean Architectural Lines)
     const cEdges: Edge[] = [];
     for (const rawEdge of currentData.edges) {
       if (visibleIds.has(rawEdge.source) && visibleIds.has(rawEdge.target)) {
+        const targetNode = nodeMap.get(rawEdge.target);
+        const sourceNode = nodeMap.get(rawEdge.source);
+        const isFromRoot = rawEdge.source === rootNodeId;
+
+        // Đường nối đơn sắc chuẩn kiến trúc (clean architectural line)
+        const strokeColor = "#94a3b8";
+
         cEdges.push({
           id: rawEdge.id,
           source: rawEdge.source,
           target: rawEdge.target,
-          animated: true,
-          type: "smoothstep",
+          animated: false,
+          type: "default",
           style: {
-            stroke: "#64748b",
-            strokeWidth: 1.5,
+            stroke: strokeColor,
+            strokeWidth: isFromRoot ? 2 : 1.5,
+            strokeDasharray: "5 4",
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: "#64748b",
-            width: 10,
-            height: 10,
+            color: strokeColor,
+            width: 9,
+            height: 9,
           },
         });
       }
@@ -319,7 +343,7 @@ export function LessonMindmapStudio({
       visibleCount: cNodes.length,
       totalCount: currentData.nodes.length,
     };
-  }, [currentData, rootNodeId, childrenMap, nodeMap, expandedNodeIds, toggleNode]);
+  }, [currentData, rootNodeId, childrenMap, parentMap, nodeMap, expandedNodeIds, toggleNode]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(computedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
@@ -332,15 +356,14 @@ export function LessonMindmapStudio({
   return (
     <ReactFlowProvider>
       <div key={`mindmap-studio-${subjectId}`} className="space-y-3">
-        {/* Animated Bezier Pulse CSS */}
+        {/* Clean Architectural Lines CSS */}
         <style>{`
           .react-flow__edge-path {
             stroke-dasharray: 6 4 !important;
-            animation: treePulseFlow 1.4s linear infinite !important;
           }
-          @keyframes treePulseFlow {
-            0% { stroke-dashoffset: 20; }
-            100% { stroke-dashoffset: 0; }
+          .react-flow__edge:hover .react-flow__edge-path {
+            stroke-width: 2.2px !important;
+            stroke: #475569 !important;
           }
         `}</style>
 

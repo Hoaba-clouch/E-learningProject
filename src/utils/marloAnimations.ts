@@ -306,30 +306,32 @@ export function animateMarloPill(
   const crossAxes = isVertical ? (["l", "r"] as const) : (["t", "b"] as const);
 
   const updateClip = () => {
-    gsap.set(pillEl, { clipPath: getClipPath(p) });
+    if (pillEl) {
+      pillEl.style.clipPath = getClipPath(p);
+    }
   };
 
-  // 🚀 Leading edge travels smoothly to destination (0.36s, power3.out)
+  // 🚀 Liquid rubberband stretch: Mép đầu bay trước (0.34s, power3.out)
+  // Mép đuôi kéo theo mượt mà (0.46s, power3.inOut) tạo độ co giãn dẻo như dòng nước
   gsap.to(p, {
     [leadingEdge]: targetState[leadingEdge],
-    duration: 0.36,
+    duration: 0.34,
     ease: "power3.out",
     onUpdate: updateClip,
   });
 
-  // 🧲 Trailing edge follows with authentic elastic liquid drag (0.55s, power3.inOut)
   gsap.to(p, {
     [trailingEdge]: targetState[trailingEdge],
-    duration: 0.55,
+    duration: 0.46,
     ease: "power3.inOut",
     onUpdate: updateClip,
   });
 
-  // Cross axes align in sync (0.45s, power3.inOut)
+  // Cross axes align smoothly in sync (0.38s)
   gsap.to(p, {
     [crossAxes[0]]: targetState[crossAxes[0]],
     [crossAxes[1]]: targetState[crossAxes[1]],
-    duration: 0.45,
+    duration: 0.38,
     ease: "power3.inOut",
     onUpdate: updateClip,
   });
@@ -444,35 +446,35 @@ export function animateMarloElasticPill(
   };
 
   if (isMovingDown) {
-    // 🚀 Moving DOWN: Đáy phóng tới trước (0.24s, power2.out) -> Co giãn đàn hồi nhanh mượt
+    // 🚀 Moving DOWN: Đáy phóng tới trước (0.30s, power2.out)
     gsap.to(curState, {
       bottom: targetBottom,
-      duration: 0.24,
+      duration: 0.30,
       ease: "power2.out",
       onUpdate: update,
     });
 
-    // 🐢 Đỉnh kéo theo dứt khoát (0.28s, power3.out)
+    // 🌊 Đỉnh trượt theo êm ái (0.34s, power2.out)
     gsap.to(curState, {
       top: targetTop,
-      duration: 0.28,
-      ease: "power3.out",
+      duration: 0.34,
+      ease: "power2.out",
       onUpdate: update,
     });
   } else {
-    // 🚀 Moving UP: Đỉnh phóng lên trước (0.24s, power2.out)
+    // 🚀 Moving UP: Đỉnh phóng lên trước (0.30s, power2.out)
     gsap.to(curState, {
       top: targetTop,
-      duration: 0.24,
+      duration: 0.30,
       ease: "power2.out",
       onUpdate: update,
     });
 
-    // 🐢 Đáy kéo theo dứt khoát (0.28s, power3.out)
+    // 🌊 Đáy trượt theo êm ái (0.34s, power2.out)
     gsap.to(curState, {
       bottom: targetBottom,
-      duration: 0.28,
-      ease: "power3.out",
+      duration: 0.34,
+      ease: "power2.out",
       onUpdate: update,
     });
   }

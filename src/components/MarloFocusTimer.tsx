@@ -63,20 +63,20 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
 
   const todayHoursFormatted = (Math.round((todayTrackedMins / 60) * 10) / 10).toFixed(1);
 
-  // Collapsed Mode (fits inside collapsed rail - matches Image 2)
+  // Collapsed Mode (fits inside collapsed rail - matches Marlo .timer 1:1)
   if (collapsed) {
     return (
-      <div className="w-12 h-12 mx-auto rounded-[22px] bg-white dark:bg-[#14161F] border border-black/[0.05] dark:border-white/[0.07] shadow-xs flex items-center justify-center p-1 select-none">
+      <div className="w-[72px] h-[56px] rounded-[22px] bg-white dark:bg-[#14161F] border border-black/[0.06] dark:border-white/[0.08] shadow-[0_1px_2px_rgba(20,22,26,0.04),0_14px_32px_-22px_rgba(20,22,26,0.28)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] flex items-center justify-center p-2 select-none">
         <button
           onClick={togglePlay}
           title={isRunning ? `Đang học: ${formatClock(seconds)} (Click để tạm dừng)` : "Bắt đầu tính giờ học tập (Marlo Focus)"}
-          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-[0_1px_2px_rgba(20,22,26,0.08)] ${
             isRunning
               ? "bg-[#EE8420] text-white shadow-xs"
-              : "bg-[#F5F5F7] dark:bg-[#20222B] text-[#161718] dark:text-[#F0F0F1] hover:bg-[#EE8420] hover:text-white"
+              : "bg-white dark:bg-[#1B1C1E] text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
           }`}
         >
-          {isRunning ? <Pause size={15} /> : <Play size={15} className="ml-0.5" />}
+          {isRunning ? <Pause size={17} /> : <Play size={17} className="ml-0.5" strokeWidth={1.8} />}
         </button>
       </div>
     );
