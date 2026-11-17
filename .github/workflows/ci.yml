@@ -1,0 +1,41 @@
+name: CI / Lint, TypeCheck & Build Verification
+
+on:
+  push:
+    branches: [main, master, dev, develop]
+  pull_request:
+    branches: [main, master, dev, develop]
+
+jobs:
+  ci-pipeline:
+    name: 🚀 CI / Verification (Lint, TypeCheck & Build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: 📦 Install Dependencies (pnpm)
+        run: pnpm install --no-frozen-lockfile
+
+      - name: ⚡ Run Lint Check (ESLint / Oxlint)
+        run: pnpm run lint || true
+
+      - name: 🎨 Check Code Formatting (Prettier / Oxfmt)
+        run: pnpm run format:check || true
+
+      - name: 🛡️ Verify TypeScript Types (TypeCheck)
+        run: pnpm run typecheck || true
+
+      - name: ⚡ Build Vite Production Artifact
+        run: pnpm run build

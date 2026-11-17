@@ -1,5 +1,6 @@
 import { Bookmark, ChevronDown, ChevronUp, Heart, MessageCircle, Play, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { useMarloPageEntrance, animateMarloCards } from "../utils/marloAnimations";
 
 const reels = [
   {
@@ -32,7 +33,9 @@ const reels = [
 ];
 
 export default function TechReels() {
+  const reelsRef = useRef<HTMLDivElement>(null);
   const [current, setCurrent] = useState(0);
+
   const [missingVideos, setMissingVideos] = useState<Record<string, boolean>>({});
   const [focusMode, setFocusMode] = useState(false);
   const [likedReels, setLikedReels] = useState<Record<string, boolean>>({});
@@ -53,8 +56,19 @@ export default function TechReels() {
     window.setTimeout(() => setSharedReel(null), 650);
   };
 
+  useMarloPageEntrance(
+    reelsRef,
+    (el) => {
+      const cards = el.querySelectorAll(".marlo-card, section, aside");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { stagger: 0.06, y: 24 });
+      }
+    },
+    [current]
+  );
+
   return (
-    <div className="flex min-h-full items-center justify-center p-5">
+    <div ref={reelsRef} className="flex min-h-full items-center justify-center p-5">
       <div className={`grid gap-5 transition-all duration-300 ${focusMode ? "grid-cols-[390px]" : "grid-cols-[320px_190px]"}`}>
         <section
           className={`relative flex cursor-pointer overflow-hidden rounded-2xl bg-gradient-to-br ${reel.tone} shadow-lg shadow-slate-300 transition-all duration-300 ${

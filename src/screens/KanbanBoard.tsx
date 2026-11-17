@@ -1,4 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { initialProjectsData, type Project } from "../data/kanbanProjects";
+import { MarloProjectSlateModal, MarloNewProjectModal } from "../components/MarloProjectModals";
+import { createPortal } from "react-dom";
 import {
   BarChart3,
   BookOpen,
@@ -37,13 +40,29 @@ import {
   X,
   RotateCcw,
   CheckCheck,
+  Download,
+  ArrowUpRight,
+  Folder,
+  Eye,
 } from "lucide-react";
 import TaskCsvManagerModal from "../components/TaskCsvManagerModal";
+import MarloNewTaskModal from "../components/MarloNewTaskModal";
+import OdometerNumber from "../components/OdometerNumber";
+import MarloTitle from "../components/MarloTitle";
+import MarloNumber from "../components/MarloNumber";
+import MarloCapacityBar from "../components/MarloCapacityBar";
+import MarloToast from "../components/MarloToast";
+import MarloTaskDrawer from "../components/MarloTaskDrawer";
+import KanbanMyTasksView from "../components/KanbanMyTasksView";
+import KanbanTeamScrumView from "../components/KanbanTeamScrumView";
+import KanbanActivityStreamView from "../components/KanbanActivityStreamView";
+import MarloSegmentedControl from "../components/MarloSegmentedControl";
+import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 
 export type ColumnId = "backlog" | "ready" | "in-progress" | "done" | "verified" | "fail";
 export type Priority = "low" | "medium" | "high";
 export type MoscowPriority = "must" | "should" | "could" | "wont";
-export type TabView = "board" | "analytics" | "dependencies";
+export type TabView = "board" | "my-tasks" | "team" | "activity" | "dependencies" | "analytics";
 export type TechStackKey =
   | "ai"
   | "backend"
@@ -119,7 +138,7 @@ export interface KanbanTask {
   auditLogs?: TaskAuditLog[];
 }
 
-export const defaultDoD = (isDone = false): ChecklistItem[] => [
+const defaultDoD = (isDone = false): ChecklistItem[] => [
   { id: "dod-1", text: "Code vượt qua 100% test cases trong Docker sandbox độc lập", done: isDone },
   { id: "dod-2", text: "Tuân thủ Kiến trúc 3 tầng (Router -> Service -> Data Layer)", done: isDone },
   { id: "dod-3", text: "Không có lỗi Type/Lint, timestamp chuẩn ISO-8601 UTC (H4)", done: isDone },
@@ -127,10 +146,20 @@ export const defaultDoD = (isDone = false): ChecklistItem[] => [
 ];
 
 const initialMembers: TeamMember[] = [
-  { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-blue-600" },
-  { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev", color: "bg-emerald-600" },
-  { id: "m3", name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database", color: "bg-purple-600" },
+  { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-[#14161a] dark:bg-slate-700" },
+  { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev", color: "bg-amber-500" },
+  { id: "m3", name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database", color: "bg-slate-600 dark:bg-slate-500" },
 ];
+
+export const getAssigneeAvatarColor = (name: string, fallback?: string): string => {
+  if (name.includes("Hòa")) return "bg-[#14161a] dark:bg-slate-700";
+  if (name.includes("Huy")) return "bg-amber-500";
+  if (name.includes("Nghị")) return "bg-slate-600 dark:bg-slate-500";
+  if (fallback && !fallback.includes("blue") && !fallback.includes("emerald") && !fallback.includes("purple") && !fallback.includes("teal") && !fallback.includes("rose") && !fallback.includes("indigo") && !fallback.includes("cyan")) {
+    return fallback;
+  }
+  return "bg-amber-600";
+};
 
 const initialTasks: KanbanTask[] = [
   {
@@ -143,7 +172,7 @@ const initialTasks: KanbanTask[] = [
     moscow: "must",
     points: 5,
     assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
-    estimateHours: 4,
+    estimateHours: 6,
     dueDate: "05/11/2026",
     epic: "SRS & Specs",
     epicColor: "bg-blue-50 text-blue-700 border-blue-200",
@@ -174,7 +203,7 @@ const initialTasks: KanbanTask[] = [
     id: "task-2",
     code: "TE14F82",
     title: "Thiết kế CSDL quan hệ chuẩn hóa 3NF & ERD 8 bảng",
-    description: "Xác định khóa chính PK, khóa ngoại FK, loại bỏ toàn bộ phụ thuộc bắc cầu, bắt buộc timestamp UTC (H4) theo yêu cầu Thầy Phước.",
+    description: "Xác định khóa chính PK, khóa ngoại FK, loại bỏ toàn bộ phụ thuộc bắc cầu, bắt buộc timestamp UTC (H4) theo yêu cầu Hội đồng Phản biện.",
     column: "ready",
     priority: "high",
     moscow: "must",
@@ -237,13 +266,13 @@ const initialTasks: KanbanTask[] = [
     code: "TE35D77",
     title: "Nghiên cứu & Xây dựng Docker Image Sandbox cô lập (H2)",
     description: "Tạo Dockerfile Alpine Linux siêu nhẹ, chạy non-root user, cgroups RAM 128MB, 0.5 CPU và Watchdog 2.0s chống vô tận.",
-    column: "backlog",
+    column: "in-progress",
     priority: "high",
     moscow: "must",
     points: 5,
     assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
-    estimateHours: 5,
-    dueDate: "08/11/2026",
+    estimateHours: 2,
+    dueDate: "11/11/2026",
     epic: "Code Sandbox",
     epicColor: "bg-amber-50 text-amber-700 border-amber-200",
     dependsOn: "task-1",
@@ -321,7 +350,7 @@ const initialTasks: KanbanTask[] = [
     acceptanceCriteria: "Given đồ án đã hoàn thành các module cốt lõi\nWhen sinh viên bắt đầu phiên bảo vệ\nThen AI chất vấn xoay quanh Docker sandbox, 3NF và thuật toán Anti-Freerider",
     definitionOfDone: defaultDoD(false),
     checklist: [
-      { id: "c1", text: "Thu thập danh mục 20 câu hỏi Thầy Phước hay hỏi", done: false },
+      { id: "c1", text: "Thu thập danh mục 20 câu hỏi Hội đồng Phản biện hay hỏi", done: false },
       { id: "c2", text: "Tích hợp prompt Socratic phản biện", done: false },
     ],
     commentsCount: 1,
@@ -360,8 +389,8 @@ const initialTasks: KanbanTask[] = [
   {
     id: "task-8",
     code: "TE61C04",
-    title: "Tích hợp CodeRabbit AI Senior Reviewer (Nhánh 2.1)",
-    description: "Xây dựng giao diện Master-Detail Split Workspace: Walkthrough PR, Soi lỗi từng dòng, 1-Click Fix và Bộ câu hỏi Thầy Phước Q&A.",
+    title: "Tích hợp CodeMind AI Senior Reviewer & AST Security Scanner",
+    description: "Xây dựng hệ thống Code Review tự động: Soi lỗi logic, bảo mật AST và Bộ câu hỏi Hội đồng Phản biện Q&A.",
     column: "in-progress",
     priority: "high",
     moscow: "must",
@@ -378,7 +407,7 @@ const initialTasks: KanbanTask[] = [
       want: "bot AI tự động soi lỗi logic, bảo mật và gợi ý code chuẩn trước khi merge",
       benefit: "giảm tải công sức code review thủ công và chuẩn bị tốt cho buổi vấn đáp",
     },
-    acceptanceCriteria: "Given PR được mở trên GitHub\nWhen CodeRabbit quét qua AST\nThen hiển thị gợi ý 1-Click Fix và câu hỏi phản biện của Giảng viên",
+    acceptanceCriteria: "Given PR được mở trên GitHub\nWhen CodeMind AI quét qua AST\nThen hiển thị gợi ý 1-Click Fix và câu hỏi phản biện của Giảng viên",
     definitionOfDone: defaultDoD(true),
     checklist: [
       { id: "c1", text: "Giao diện Master-Detail 2 cột PR list và Review detail", done: true },
@@ -393,13 +422,13 @@ const initialTasks: KanbanTask[] = [
     code: "TE62D15",
     title: "Cây Phân Nhánh GitKraken với Chuyển động Động (Nhánh 2.2)",
     description: "Mô phỏng đồ thị phân nhánh SVG: Hiệu ứng vẽ nét mượt mà khi đổi tab, commit pop-in nảy mầm, các hạt xung ánh sáng dữ liệu.",
-    column: "backlog",
+    column: "ready",
     priority: "medium",
     moscow: "should",
     points: 5,
     assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
-    estimateHours: 4,
-    dueDate: "11/11/2026",
+    estimateHours: 2,
+    dueDate: "12/11/2026",
     epic: "Git Hub",
     epicColor: "bg-blue-50 text-blue-700 border-blue-200",
     submissionRequirement: "Link",
@@ -424,13 +453,13 @@ const initialTasks: KanbanTask[] = [
     code: "TE63E20",
     title: "Bản đồ Kiến trúc GitDiagram tương tác (Nhánh 2.3)",
     description: "Sơ đồ ReactFlow 5 phân tầng hệ thống và modal liên kết trực tiếp với GitHub Repository của nhóm.",
-    column: "verified",
+    column: "done",
     priority: "high",
     moscow: "must",
     points: 5,
     assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
-    estimateHours: 5,
-    dueDate: "11/11/2026",
+    estimateHours: 6,
+    dueDate: "06/11/2026",
     epic: "Architecture",
     epicColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
     submissionRequirement: "Link",
@@ -438,7 +467,7 @@ const initialTasks: KanbanTask[] = [
     userStory: {
       role: "Kiến trúc sư hệ thống",
       want: "bản đồ kiến trúc 5 phân tầng có thể zoom, pan và kết nối repo GitHub",
-      benefit: "giúp Thầy Phước thẩm định kiến trúc tổng thể của CodeMind Campus",
+      benefit: "giúp Hội đồng Phản biện thẩm định kiến trúc tổng thể của CodeMind Campus",
     },
     acceptanceCriteria: "Given người xem mở phân hệ Kiến trúc\nWhen tương tác trên canvas\nThen các node sáng lên và mở được link GitHub repo của nhóm",
     definitionOfDone: defaultDoD(true),
@@ -448,6 +477,66 @@ const initialTasks: KanbanTask[] = [
     ],
     commentsCount: 1,
     attachmentsCount: 1,
+  },
+  {
+    id: "task-11",
+    code: "TE71B88",
+    title: "Đặc tả giao thức WebSocket Realtime Code Lab & Huddle",
+    description: "Xây dựng kết nối hai chiều kênh WebSocket phân phối sự kiện con trỏ, terminal output và code sync.",
+    column: "ready",
+    priority: "high",
+    moscow: "must",
+    points: 3,
+    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    estimateHours: 2,
+    dueDate: "13/11/2026",
+    epic: "Realtime Lab",
+    epicColor: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  {
+    id: "task-12",
+    code: "TE89C04",
+    title: "Tích hợp SSO & Giám sát chi phí Quota AI Gateway",
+    description: "Đấu nối xác thực OAuth2 / SSO và bộ đếm Token streaming với fallback thông minh.",
+    column: "backlog",
+    priority: "medium",
+    moscow: "could",
+    points: 5,
+    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    estimateHours: 4,
+    dueDate: "28/11/2026",
+    epic: "AI Gateway",
+    epicColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  },
+  {
+    id: "task-13",
+    code: "TE93A12",
+    title: "Thiết lập môi trường CI/CD GitHub Actions & Lint Checker",
+    description: "Pipeline tự động chạy clang-format, cppcheck và build test cases khi có pull request mới.",
+    column: "done",
+    priority: "high",
+    moscow: "must",
+    points: 5,
+    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    estimateHours: 12,
+    dueDate: "04/11/2026",
+    epic: "DevOps & CI",
+    epicColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  {
+    id: "task-14",
+    code: "TE98D55",
+    title: "Kiểm thử tải đồng thời 500 sinh viên phòng thi AI Defense Room",
+    description: "Benchmark k6 kịch bản nộp bài cùng lúc, độ trễ p95 < 400ms và không rò rỉ bộ nhớ.",
+    column: "done",
+    priority: "medium",
+    moscow: "should",
+    points: 4,
+    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    estimateHours: 3,
+    dueDate: "03/11/2026",
+    epic: "Load Testing",
+    epicColor: "bg-slate-50 text-slate-700 border-slate-200",
   },
 ];
 
@@ -500,7 +589,7 @@ export function CustomSelect({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className={`flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-2xs transition hover:border-slate-300 hover:bg-slate-50/80 focus:outline-hidden ${buttonClassName}`}
+        className={`flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 shadow-2xs transition hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 focus:outline-hidden ${buttonClassName}`}
       >
         <div className="flex items-center gap-2 truncate">
           {selectedOption?.icon}
@@ -509,14 +598,14 @@ export function CustomSelect({
         <ChevronDown
           size={14}
           className={`shrink-0 text-slate-400 transition-transform duration-200 ${
-            open ? "rotate-180 text-blue-600" : ""
+            open ? "rotate-180 text-blue-600 dark:text-blue-400" : ""
           }`}
         />
       </button>
 
       {open && (
         <div
-          className={`absolute left-0 z-50 mt-1.5 ${menuClassName} origin-top-left rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-xl backdrop-blur-md transition-all animate-in fade-in zoom-in-95`}
+          className={`absolute left-0 z-50 mt-1.5 ${menuClassName} origin-top-left rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-1.5 shadow-xl backdrop-blur-md transition-all animate-in fade-in zoom-in-95`}
         >
           <div className="max-h-60 overflow-y-auto space-y-0.5 pr-0.5">
             {options.map((opt) => {
@@ -529,10 +618,10 @@ export function CustomSelect({
                     onChange(opt.value);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-xs font-medium transition text-left ${
+                  className={`flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-xs transition text-left cursor-pointer ${
                     isSelected
-                      ? "bg-blue-50 text-blue-700 font-semibold shadow-2xs"
-                      : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
+                      ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold shadow-2xs border border-slate-200 dark:border-slate-700"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white font-medium"
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
@@ -544,7 +633,7 @@ export function CustomSelect({
                       )}
                     </div>
                   </div>
-                  {isSelected && <Check size={14} className="text-blue-600 shrink-0" />}
+                  {isSelected && <Check size={14} className="text-slate-900 dark:text-white shrink-0" />}
                 </button>
               );
             })}
@@ -559,17 +648,21 @@ const columnsConfig: Array<{
   id: ColumnId;
   title: string;
   dotColor: string;
+  dotStyle?: React.CSSProperties;
   badgeBg: string;
   badgeText: string;
   borderTop: string;
+  cardBorderLeft: string;
+  accentBar: string;
+  accentStyle?: React.CSSProperties;
   maxWip?: number;
 }> = [
-  { id: "backlog", title: "Backlog", dotColor: "bg-slate-400", badgeBg: "bg-slate-100", badgeText: "text-slate-700", borderTop: "border-t-slate-400" },
-  { id: "ready", title: "Cần làm", dotColor: "bg-blue-600", badgeBg: "bg-blue-100", badgeText: "text-blue-700", borderTop: "border-t-blue-500" },
-  { id: "in-progress", title: "Đang làm", dotColor: "bg-amber-500", badgeBg: "bg-amber-100", badgeText: "text-amber-800", borderTop: "border-t-amber-500", maxWip: 4 },
-  { id: "done", title: "Hoàn thành", dotColor: "bg-purple-600", badgeBg: "bg-purple-100", badgeText: "text-purple-700", borderTop: "border-t-purple-500" },
-  { id: "verified", title: "Đã nghiệm thu", dotColor: "bg-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-800", borderTop: "border-t-emerald-500" },
-  { id: "fail", title: "Fail", dotColor: "bg-rose-600", badgeBg: "bg-rose-100", badgeText: "text-rose-700", borderTop: "border-t-rose-500" },
+  { id: "backlog", title: "Backlog", dotColor: "bg-slate-400 dark:bg-slate-500", badgeBg: "bg-slate-200/80 dark:bg-slate-800", badgeText: "text-slate-600 dark:text-slate-400", borderTop: "", cardBorderLeft: "border-l-slate-400 dark:border-l-slate-600", accentBar: "bg-slate-400 dark:bg-slate-600", accentStyle: { background: "#94a3b8" } },
+  { id: "ready", title: "Cần làm", dotColor: "bg-amber-400 dark:bg-amber-500", dotStyle: { backgroundColor: "#fbbf24" }, badgeBg: "bg-amber-100/70 dark:bg-amber-950/50", badgeText: "text-amber-800 dark:text-amber-300 font-bold", borderTop: "", cardBorderLeft: "border-l-amber-400 dark:border-l-amber-500", accentBar: "bg-[#fbbf24]", accentStyle: { background: "#fbbf24" } },
+  { id: "in-progress", title: "Đang làm", dotColor: "bg-amber-500", dotStyle: { backgroundColor: "#f59e0b" }, badgeBg: "bg-amber-100 dark:bg-amber-950/60", badgeText: "text-amber-800 dark:text-amber-300 font-bold", borderTop: "", cardBorderLeft: "border-l-amber-500", accentBar: "bg-[#f59e0b]", accentStyle: { background: "linear-gradient(to right, #f59e0b, #fbbf24)" }, maxWip: 4 },
+  { id: "done", title: "Hoàn thành", dotColor: "bg-slate-900 dark:bg-slate-200", dotStyle: { backgroundColor: "#14161a" }, badgeBg: "bg-slate-200/80 dark:bg-slate-800", badgeText: "text-slate-800 dark:text-slate-200 font-bold", borderTop: "", cardBorderLeft: "border-l-slate-900 dark:border-l-slate-300", accentBar: "bg-[#14161a] dark:bg-slate-200", accentStyle: { background: "#14161a" } },
+  { id: "verified", title: "Đã nghiệm thu", dotColor: "bg-slate-900 dark:bg-slate-200", dotStyle: { backgroundColor: "#14161a" }, badgeBg: "bg-slate-200/80 dark:bg-slate-800", badgeText: "text-slate-800 dark:text-slate-200 font-bold", borderTop: "", cardBorderLeft: "border-l-slate-900 dark:border-l-slate-300", accentBar: "bg-[#14161a] dark:bg-slate-200", accentStyle: { background: "#14161a" } },
+  { id: "fail", title: "Cần sửa lại", dotColor: "bg-amber-600", dotStyle: { backgroundColor: "#ea580c" }, badgeBg: "bg-amber-100 dark:bg-amber-950/60", badgeText: "text-amber-800 dark:text-amber-300 font-bold", borderTop: "", cardBorderLeft: "border-l-amber-600", accentBar: "bg-amber-600", accentStyle: { background: "linear-gradient(to right, #ea580c, #f59e0b)" } },
 ];
 
 const techStackOptions = [
@@ -594,7 +687,7 @@ const granularityOptions = [
 // ── Animated Number Counter Component ───────────────────────────────────────
 function AnimatedNumber({
   value,
-  duration = 900,
+  duration = 1800,
   trigger = true,
   decimals = 0,
   suffix = "",
@@ -619,7 +712,7 @@ function AnimatedNumber({
       if (!startTime) startTime = time;
       const progress = Math.min((time - startTime) / duration, 1);
       // easeOutCubic
-      const ease = 1 - Math.pow(1 - progress, 3);
+      const ease = 1 - Math.pow(1 - progress, 4);
       const current = ease * value;
       setDisplayValue(decimals > 0 ? parseFloat(current.toFixed(decimals)) : Math.round(current));
       if (progress < 1) {
@@ -651,9 +744,9 @@ function ContributionDonutChart({
   const circumference = 2 * Math.PI * r; // ~276.46
 
   const memberColors: Record<string, string> = {
-    "Nguyễn Bá Hòa": "#2563eb",   // Blue
-    "Võ Nhật Huy": "#10b981",    // Emerald
-    "Phan Đình Nghị": "#9333ea", // Purple
+    "Nguyễn Bá Hòa": "#14161a",   // Black / Slate
+    "Võ Nhật Huy": "#f59e0b",    // Amber
+    "Phan Đình Nghị": "#64748b", // Slate
   };
 
   let cumulativePercent = 0;
@@ -718,7 +811,7 @@ function ContributionDonutChart({
       <div className="flex-1 w-full space-y-2">
         {teamMembers.map((member) => {
           const stat = contribution[member.name];
-          const color = memberColors[member.name] || "#6366f1";
+          const color = memberColors[member.name] || "#f59e0b";
           const pct = stat ? stat.percent : 0;
           const done = stat ? stat.donePts : 0;
           const tasks = stat ? stat.tasksDone : 0;
@@ -750,7 +843,7 @@ function ContributionDonutChart({
 
               <div className="flex items-center justify-between mt-1 text-[10px]">
                 <span className="text-slate-400">{tasks} tasks đã Done</span>
-                <span className={pct >= 50 ? "text-blue-600 font-semibold" : "text-amber-600 font-medium"}>
+                <span className={pct >= 50 ? "text-slate-900 dark:text-white font-bold" : "text-amber-600 font-medium"}>
                   {pct >= 50 ? "Lead đóng góp (A+)" : pct > 0 ? "Đang tiến độ" : "Cần phân bổ task"}
                 </span>
               </div>
@@ -762,109 +855,583 @@ function ContributionDonutChart({
   );
 }
 
-export default function KanbanBoard() {
-  const [tasks, setTasks] = useState<KanbanTask[]>(initialTasks);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialMembers);
+export default function KanbanBoard({ initialProjectId }: { initialProjectId?: string } = {}) {
+  const [projects, setProjects] = useState<Project[]>(() => {
+    return initialProjectsData.map((proj) => {
+      if (proj.id === "prj-codemind") {
+        return {
+          ...proj,
+          tasks: initialTasks,
+          team: initialMembers,
+        };
+      }
+      return {
+        ...proj,
+        tasks: Array.isArray(proj.tasks) ? proj.tasks : [],
+        team: Array.isArray(proj.team) ? proj.team : [],
+      };
+    });
+  });
+  const [currentProjectId, setCurrentProjectId] = useState<string>(() => initialProjectId || "prj-codemind");
+
+  useEffect(() => {
+    if (initialProjectId) {
+      setCurrentProjectId(initialProjectId);
+    }
+  }, [initialProjectId]);
+
+  const [isProjectSlateOpen, setIsProjectSlateOpen] = useState(false);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  const projectDropdownRef = useRef<HTMLDivElement>(null);
+
+  const currentProject = useMemo(() => {
+    return (
+      projects.find((p) => p.id === currentProjectId) ||
+      projects[0] ||
+      initialProjectsData[0]
+    );
+  }, [projects, currentProjectId]);
+
+  const tasks = Array.isArray(currentProject?.tasks) ? currentProject.tasks : [];
+  const teamMembers = Array.isArray(currentProject?.team) ? currentProject.team : [];
+
+  const setTasks = (updater: KanbanTask[] | ((prev: KanbanTask[]) => KanbanTask[])) => {
+    setProjects((prevProjects) => {
+      return prevProjects.map((proj) => {
+        if (proj.id === currentProjectId) {
+          const prevTasks = Array.isArray(proj.tasks) ? proj.tasks : [];
+          const nextTasks = typeof updater === "function" ? updater(prevTasks) : updater;
+          return { ...proj, tasks: nextTasks };
+        }
+        return proj;
+      });
+    });
+  };
+
+  const setTeamMembers = (updater: TeamMember[] | ((prev: TeamMember[]) => TeamMember[])) => {
+    setProjects((prevProjects) => {
+      return prevProjects.map((proj) => {
+        if (proj.id === currentProjectId) {
+          const prevTeam = Array.isArray(proj.team) ? proj.team : [];
+          const nextTeam = typeof updater === "function" ? updater(prevTeam) : updater;
+          return { ...proj, team: nextTeam };
+        }
+        return proj;
+      });
+    });
+  };
+
+  const handleCreateProject = (newProjData: Omit<Project, "tasks" | "team">) => {
+    const newProj: Project = {
+      ...newProjData,
+      team: [
+        { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-[#14161a] dark:bg-slate-700" },
+        { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Developer", color: "bg-amber-500" },
+      ],
+      tasks: [
+        {
+          id: `task-${Date.now()}-1`,
+          code: `${newProjData.code}-01`,
+          title: "Khởi tạo kiến trúc dự án & Thiết lập Repo",
+          description: `Thiết lập cấu trúc thư mục, CI/CD pipeline và tài liệu SRS ban đầu cho ${newProjData.name}.`,
+          column: "ready",
+          priority: "high",
+          moscow: "must",
+          points: 5,
+          assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+          estimateHours: 4,
+          dueDate: newProjData.dueDate,
+          epic: "Khởi tạo",
+          epicColor: "bg-blue-50 text-blue-700 border-blue-200",
+          commentsCount: 0,
+          attachmentsCount: 0,
+        },
+      ],
+    };
+    setProjects((prev) => [newProj, ...prev]);
+    setCurrentProjectId(newProj.id);
+  };
+
+  const handleTogglePinProject = (projId: string) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projId ? { ...p, fav: !p.fav } : p))
+    );
+  };
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(e.target as Node)) {
+        setIsProjectDropdownOpen(false);
+      }
+    };
+    if (isProjectDropdownOpen) {
+      document.addEventListener("mousedown", handleOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [isProjectDropdownOpen]);
+
+  const kanbanRef = useRef<HTMLDivElement>(null);
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
   const [activeTab, setActiveTab] = useState<TabView>("board");
   const [kanbanAnimKey, setKanbanAnimKey] = useState<number>(0);
   const [analyticsAnimTrigger, setAnalyticsAnimTrigger] = useState(false);
+  const [justDroppedTaskId, setJustDroppedTaskId] = useState<string | null>(null);
+  const justDroppedTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [hasEnteredInitial, setHasEnteredInitial] = useState(false);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setHasEnteredInitial(true);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  
   // Floating Toast Notification with Undo Pill (solvik.mp4 t=10s, gustra.mp4 t=12s)
   const [undoToast, setUndoToast] = useState<{
     taskId: string;
     taskCode: string;
     taskTitle: string;
-    fromColTitle: string;
-    toColTitle: string;
-    fromCol: ColumnId;
-    toCol: ColumnId;
+    action?: "move" | "delete";
+    fromColTitle?: string;
+    toColTitle?: string;
+    fromCol?: ColumnId;
+    toCol?: ColumnId;
+    deletedTask?: KanbanTask;
+    deletedIndex?: number;
     undone?: boolean;
   } | null>(null);
+
+  const handleDeleteTask = (taskToDelete: KanbanTask) => {
+    const taskIndex = tasks.findIndex((t) => t.id === taskToDelete.id);
+    setTasks((prev) => prev.filter((t) => t.id !== taskToDelete.id));
+
+    if (selectedTask?.id === taskToDelete.id) {
+      setSelectedTask(null);
+    }
+
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast({
+      taskId: taskToDelete.id,
+      taskCode: taskToDelete.code,
+      taskTitle: taskToDelete.title,
+      action: "delete",
+      deletedTask: taskToDelete,
+      deletedIndex: taskIndex >= 0 ? taskIndex : 0,
+      undone: false,
+    });
+
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+    }, 6000);
+  };
   const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ── True Trello Drag & Drop Engine (Pointer-based, 100% Solid White Ghost, Tilted 3.5deg, Zero Native Glitch) ──
+  // ── True Trello Drag & Drop Engine (High Performance Ref-Based + Continuous Auto-Scroll) ──
   const [pointerDrag, setPointerDrag] = useState<{
     task: KanbanTask;
-    startX: number;
-    startY: number;
-    offsetX: number;
-    offsetY: number;
     width: number;
     isDragging: boolean;
     currentX: number;
     currentY: number;
+    offsetX: number;
+    offsetY: number;
     hoverColId: ColumnId | null;
+    hoverIndex: number;
   } | null>(null);
+
+  const dragTrackerRef = useRef<{
+    isDragging: boolean;
+    task: KanbanTask | null;
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    hoverColId: ColumnId | null;
+    hoverIndex: number;
+  }>({
+    isDragging: false,
+    task: null,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+    offsetX: 0,
+    offsetY: 0,
+    width: 0,
+    hoverColId: null,
+    hoverIndex: 0,
+  });
+
+  const floatingCardRef = useRef<HTMLDivElement>(null);
+
+  const detectHoverColumn = (clientX: number): ColumnId | null => {
+    for (const col of columnsConfig) {
+      const el = document.querySelector(`[data-column-id="${col.id}"]`) as HTMLElement | null;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (clientX >= rect.left && clientX <= rect.right) {
+          return col.id;
+        }
+      }
+    }
+    return null;
+  };
+
+  const detectHoverIndex = (colId: ColumnId, clientY: number): number => {
+    const colScroll = document.querySelector(`[data-column-scroll="${colId}"]`) as HTMLElement | null;
+    if (!colScroll) return 0;
+    const cardEls = Array.from(colScroll.querySelectorAll("[data-task-card-id]")) as HTMLElement[];
+    if (cardEls.length === 0) return 0;
+
+    const sRect = colScroll.getBoundingClientRect();
+    const lastCard = cardEls[cardEls.length - 1];
+    const lastRect = lastCard.getBoundingClientRect();
+
+    // If dragged at or past bottom card, or near/past bottom edge of scroll container
+    if (clientY >= lastRect.bottom || clientY >= sRect.bottom - 30) {
+      return cardEls.length;
+    }
+
+    const firstCard = cardEls[0];
+    const firstRect = firstCard.getBoundingClientRect();
+    // If dragged at or above first card, or near/above top edge of scroll container
+    if (clientY <= firstRect.top || clientY <= sRect.top + 30) {
+      return 0;
+    }
+
+    for (let i = 0; i < cardEls.length; i++) {
+      const r = cardEls[i].getBoundingClientRect();
+      const midY = r.top + r.height / 2;
+      if (clientY < midY) {
+        return i;
+      }
+    }
+    return cardEls.length;
+  };
 
   const handleCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, task: KanbanTask) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest("a") || target.closest("input")) return;
+    if (target.closest("button") || target.closest("a") || target.closest("input") || target.closest("textarea")) return;
 
     const card = e.currentTarget;
     const rect = card.getBoundingClientRect();
-    setPointerDrag({
+
+    dragTrackerRef.current = {
+      isDragging: false,
       task,
       startX: e.clientX,
       startY: e.clientY,
+      currentX: e.clientX,
+      currentY: e.clientY,
       offsetX: e.clientX - rect.left,
       offsetY: e.clientY - rect.top,
+      width: rect.width,
+      hoverColId: task.column,
+      hoverIndex: 0,
+    };
+
+    setPointerDrag({
+      task,
       width: rect.width,
       isDragging: false,
       currentX: e.clientX,
       currentY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
       hoverColId: task.column,
+      hoverIndex: 0,
     });
   };
 
+  const isDragActive = pointerDrag !== null;
+
   useEffect(() => {
-    if (!pointerDrag) return;
+    if (!isDragActive) return;
+
+    let movePending = false;
+    let animFrameId: number;
+
+    const processPointerMove = () => {
+      movePending = false;
+      const d = dragTrackerRef.current;
+      if (!d.task || !d.isDragging) return;
+
+      const hoverCol = detectHoverColumn(d.currentX) || d.hoverColId;
+      const hoverIdx = hoverCol ? detectHoverIndex(hoverCol, d.currentY) : 0;
+
+      // Only re-render React when hover column or hover index changes (prevents 99% of lag!)
+      if (hoverCol !== d.hoverColId || hoverIdx !== d.hoverIndex) {
+        d.hoverColId = hoverCol;
+        d.hoverIndex = hoverIdx;
+        setPointerDrag((prev) => prev ? {
+          ...prev,
+          hoverColId: hoverCol,
+          hoverIndex: hoverIdx,
+        } : null);
+      }
+    };
 
     const handlePointerMove = (e: PointerEvent) => {
-      const dx = e.clientX - pointerDrag.startX;
-      const dy = e.clientY - pointerDrag.startY;
-      const dist = Math.hypot(dx, dy);
+      const d = dragTrackerRef.current;
+      if (!d.task) return;
 
-      let hoverCol: ColumnId | null = pointerDrag.hoverColId;
-      const elements = document.elementsFromPoint(e.clientX, e.clientY);
-      for (const el of elements) {
-        const colAttr = el.getAttribute("data-column-id");
-        if (colAttr) {
-          hoverCol = colAttr as ColumnId;
-          break;
+      d.currentX = e.clientX;
+      d.currentY = e.clientY;
+
+      const dist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
+      if (!d.isDragging && dist > 4) {
+        d.isDragging = true;
+        setPointerDrag((prev) => prev ? { ...prev, isDragging: true } : null);
+      }
+
+      // 🚀 ZERO LATENCY DIRECT GPU TRANSFORM: Sticks to mouse with 0.0ms delay (True Trello feel)
+      if (floatingCardRef.current) {
+        const x = e.clientX - d.offsetX;
+        const y = e.clientY - d.offsetY;
+        floatingCardRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(1.8deg)`;
+        floatingCardRef.current.style.transformOrigin = `${d.offsetX}px ${d.offsetY}px`;
+      }
+
+      if (d.isDragging && !movePending) {
+        movePending = true;
+        requestAnimationFrame(processPointerMove);
+      }
+    };
+
+    // ── Continuous Auto-Scroll Engine (Trello Edge Auto-Scroll with Live Index Sync) ──
+    const autoScrollStep = () => {
+      const d = dragTrackerRef.current;
+      if (d.isDragging && d.hoverColId) {
+        // 1. Page vertical scroll when near top or bottom edge of viewport
+        const mainEl = document.querySelector('main');
+        if (mainEl) {
+          const threshold = 80;
+          if (d.currentY > window.innerHeight - threshold) {
+            const intensity = Math.min(1, Math.max(0, (d.currentY - (window.innerHeight - threshold)) / threshold));
+            mainEl.scrollTop += 6 + intensity * 16;
+            const newIdx = detectHoverIndex(d.hoverColId, d.currentY);
+            if (newIdx !== d.hoverIndex) {
+              d.hoverIndex = newIdx;
+              setPointerDrag((prev) => prev ? { ...prev, hoverIndex: newIdx } : null);
+            }
+          } else if (d.currentY < 120) {
+            const intensity = Math.min(1, Math.max(0, (120 - d.currentY) / 80));
+            mainEl.scrollTop -= 6 + intensity * 16;
+            const newIdx = detectHoverIndex(d.hoverColId, d.currentY);
+            if (newIdx !== d.hoverIndex) {
+              d.hoverIndex = newIdx;
+              setPointerDrag((prev) => prev ? { ...prev, hoverIndex: newIdx } : null);
+            }
+          }
+        }
+
+        // 2. Board horizontal scroll when near left or right edge
+        const boardEl = document.getElementById("kanban-board-scroll-area");
+        if (boardEl) {
+          const bRect = boardEl.getBoundingClientRect();
+          const horizThreshold = 80;
+          if (d.currentX > bRect.right - horizThreshold) {
+            boardEl.scrollLeft += 12;
+          } else if (d.currentX < bRect.left + horizThreshold) {
+            boardEl.scrollLeft -= 12;
+          }
         }
       }
 
-      setPointerDrag((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          isDragging: prev.isDragging || dist > 5,
-          currentX: e.clientX,
-          currentY: e.clientY,
-          hoverColId: hoverCol,
-        };
-      });
+      animFrameId = requestAnimationFrame(autoScrollStep);
     };
 
+    animFrameId = requestAnimationFrame(autoScrollStep);
+
     const handlePointerUp = () => {
-      if (pointerDrag.isDragging && pointerDrag.hoverColId && pointerDrag.hoverColId !== pointerDrag.task.column) {
-        moveTask(pointerDrag.task.id, pointerDrag.hoverColId);
-      } else if (!pointerDrag.isDragging) {
-        setSelectedTask(pointerDrag.task);
+      const d = dragTrackerRef.current;
+      if (d.isDragging && d.hoverColId && d.task) {
+        moveTaskToIndex(d.task.id, d.hoverColId, d.hoverIndex);
+      } else if (!d.isDragging && d.task) {
+        setSelectedTask(d.task);
       }
+      d.isDragging = false;
+      d.task = null;
       setPointerDrag(null);
     };
 
-    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("pointerup", handlePointerUp);
 
     return () => {
+      cancelAnimationFrame(animFrameId);
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [pointerDrag]);
+  }, [isDragActive]);
+
+  // ── TRELLO-STYLE BOARD CANVAS PANNING (DRAG HORIZONTALLY ON BOARD BACKGROUND) ──
+  const boardScrollRef = useRef<HTMLDivElement>(null);
+  const [isBoardPanning, setIsBoardPanning] = useState(false);
+  const hasJustPannedRef = useRef(false);
+  const panMomentumIdRef = useRef<number | null>(null);
+
+  const panTrackerRef = useRef<{
+    isPanning: boolean;
+    startX: number;
+    startY: number;
+    startScrollLeft: number;
+    hasDragged: boolean;
+    lastX: number;
+    lastTime: number;
+    velocity: number;
+  }>({
+    isPanning: false,
+    startX: 0,
+    startY: 0,
+    startScrollLeft: 0,
+    hasDragged: false,
+    lastX: 0,
+    lastTime: 0,
+    velocity: 0,
+  });
+
+  const handleBoardPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // If card is being dragged, do not pan
+    if (pointerDrag?.isDragging) return;
+
+    // Support both Left Click (0) and Middle Click (1)
+    if (e.button !== 0 && e.button !== 1) return;
+
+    // Ignore interactive targets (task cards, buttons, links, inputs)
+    const target = e.target as HTMLElement;
+    if (
+      target.closest("[data-task-card-id]") ||
+      target.closest("button") ||
+      target.closest("a") ||
+      target.closest("input") ||
+      target.closest("textarea") ||
+      target.closest("[data-no-pan]")
+    ) {
+      return;
+    }
+
+    const scrollEl = boardScrollRef.current;
+    if (!scrollEl) return;
+
+    // Stop ongoing momentum if any
+    if (panMomentumIdRef.current) {
+      cancelAnimationFrame(panMomentumIdRef.current);
+      panMomentumIdRef.current = null;
+    }
+
+    panTrackerRef.current = {
+      isPanning: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startScrollLeft: scrollEl.scrollLeft,
+      hasDragged: false,
+      lastX: e.clientX,
+      lastTime: performance.now(),
+      velocity: 0,
+    };
+  };
+
+  useEffect(() => {
+    const handleCaptureClick = (e: MouseEvent) => {
+      if (hasJustPannedRef.current) {
+        e.stopPropagation();
+        e.preventDefault();
+        hasJustPannedRef.current = false;
+      }
+    };
+    window.addEventListener("click", handleCaptureClick, true);
+    return () => window.removeEventListener("click", handleCaptureClick, true);
+  }, []);
+
+  useEffect(() => {
+    const handleWindowPointerMove = (e: PointerEvent) => {
+      const tracker = panTrackerRef.current;
+      if (!tracker.isPanning) return;
+
+      const scrollEl = boardScrollRef.current;
+      if (!scrollEl) return;
+
+      const deltaX = e.clientX - tracker.startX;
+      const deltaY = e.clientY - tracker.startY;
+
+      // Threshold to distinguish click from drag
+      if (!tracker.hasDragged && Math.hypot(deltaX, deltaY) > 5) {
+        tracker.hasDragged = true;
+        setIsBoardPanning(true);
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "grabbing";
+      }
+
+      if (tracker.hasDragged) {
+        // Direct scroll 1:1 with mouse movement (exact Trello feel)
+        scrollEl.scrollLeft = tracker.startScrollLeft - deltaX;
+
+        // Calculate velocity for smooth momentum release
+        const now = performance.now();
+        const dt = now - tracker.lastTime;
+        if (dt > 8) {
+          tracker.velocity = (e.clientX - tracker.lastX) / dt;
+          tracker.lastX = e.clientX;
+          tracker.lastTime = now;
+        }
+      }
+    };
+
+    const handleWindowPointerUp = () => {
+      const tracker = panTrackerRef.current;
+      if (tracker.isPanning) {
+        tracker.isPanning = false;
+        if (tracker.hasDragged) {
+          setIsBoardPanning(false);
+          document.body.style.userSelect = "";
+          document.body.style.cursor = "";
+
+          hasJustPannedRef.current = true;
+          setTimeout(() => {
+            hasJustPannedRef.current = false;
+          }, 80);
+
+          // Apply silky smooth momentum glide
+          const scrollEl = boardScrollRef.current;
+          if (scrollEl && Math.abs(tracker.velocity) > 0.15) {
+            let vel = tracker.velocity * 16; // pixels per frame
+            const momentumStep = () => {
+              if (Math.abs(vel) < 0.4) {
+                panMomentumIdRef.current = null;
+                return;
+              }
+              if (boardScrollRef.current) {
+                boardScrollRef.current.scrollLeft -= vel;
+                vel *= 0.92; // smooth friction
+                panMomentumIdRef.current = requestAnimationFrame(momentumStep);
+              }
+            };
+            panMomentumIdRef.current = requestAnimationFrame(momentumStep);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerUp);
+    window.addEventListener("pointercancel", handleWindowPointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", handleWindowPointerUp);
+      if (panMomentumIdRef.current) cancelAnimationFrame(panMomentumIdRef.current);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, []);
 
   const triggerUndoToast = (task: KanbanTask, fromCol: ColumnId, toCol: ColumnId) => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -889,10 +1456,26 @@ export default function KanbanBoard() {
 
   const handleUndo = () => {
     if (!undoToast || undoToast.undone) return;
-    const { taskId, fromCol } = undoToast;
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, column: fromCol } : t))
-    );
+    if (undoToast.action === "delete" && undoToast.deletedTask) {
+      const restoreTask = undoToast.deletedTask;
+      const restoreIndex = undoToast.deletedIndex ?? 0;
+      setTasks((prev) => {
+        const copy = [...prev];
+        copy.splice(Math.min(restoreIndex, copy.length), 0, restoreTask);
+        return copy;
+      });
+      setJustDroppedTaskId(restoreTask.id);
+    } else if (undoToast.fromCol) {
+      const { taskId, fromCol } = undoToast;
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, column: fromCol } : t))
+      );
+      setJustDroppedTaskId(taskId);
+    }
+    if (justDroppedTimerRef.current) clearTimeout(justDroppedTimerRef.current);
+    justDroppedTimerRef.current = setTimeout(() => {
+      setJustDroppedTaskId(null);
+    }, 450);
     setUndoToast((prev) => (prev ? { ...prev, undone: true } : null));
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     undoTimerRef.current = setTimeout(() => {
@@ -920,6 +1503,35 @@ export default function KanbanBoard() {
   // Dynamic Member Management Modal
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
+
+  // Export tasks as CSV matching Marlo Export
+  const handleExportTasks = () => {
+    const headers = ["ID", "Code", "Title", "Column", "Priority", "Points", "Assignee", "Role", "EstimateHours", "DueDate", "Project"];
+    const rows = tasks.map((t) => [
+      t.id,
+      t.code,
+      `"${(t.title || "").replace(/"/g, '""')}"`,
+      t.column,
+      t.priority,
+      t.points,
+      `"${(t.assignee?.name || "").replace(/"/g, '""')}"`,
+      `"${(t.assignee?.role || "").replace(/"/g, '""')}"`,
+      t.estimateHours || 0,
+      `"${t.dueDate || ""}"`,
+      `"${(t.epic || "").replace(/"/g, '""')}"`,
+    ]);
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `marlo-tasks-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const handleImportCsvTasks = (newTasks: KanbanTask[]) => {
     setTasks((prev) => [...prev, ...newTasks]);
@@ -933,6 +1545,23 @@ export default function KanbanBoard() {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"team" | "my">("team");
+
+  // Helper count for My Tasks tab badge
+  const myOpenTasksCount = useMemo(() => {
+    const currentName = teamMembers[0]?.name || "Nguyễn Bá Hòa";
+    return tasks.filter((t) => t.assignee.name === currentName && t.column !== "done").length;
+  }, [tasks, teamMembers]);
+
+  const handleToggleTaskComplete = (task: KanbanTask, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const newCol: ColumnId = task.column === "done" ? "in-progress" : "done";
+    moveTaskToIndex(task.id, newCol);
+  };
+
+  const handleFilterByMember = (memberName: string) => {
+    setFilterAssignee(memberName);
+    handleTabChange("board");
+  };
 
   const assigneeFilterOptions: CustomSelectOption[] = useMemo(() => [
     {
@@ -998,12 +1627,66 @@ export default function KanbanBoard() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreviewTasks, setAiPreviewTasks] = useState<KanbanTask[]>([]);
 
+  // Engineering & Agile Scrum Handbook Modal
+  const [handbookOpen, setHandbookOpen] = useState(false);
+
   // Quick Inline Add Task
   const [inlineAddingCol, setInlineAddingCol] = useState<ColumnId | null>(null);
   const [inlineTitle, setInlineTitle] = useState("");
 
-  // Engineering & Agile Scrum Handbook Modal
-  const [handbookOpen, setHandbookOpen] = useState(false);
+  const [isMemberModalClosing, setIsMemberModalClosing] = useState(false);
+  const [isH2ViolationClosing, setIsH2ViolationClosing] = useState(false);
+  const [isAiModalClosing, setIsAiModalClosing] = useState(false);
+  const [isHandbookClosing, setIsHandbookClosing] = useState(false);
+
+  const handleCloseMemberModal = () => {
+    if (isMemberModalClosing) return;
+    setIsMemberModalClosing(true);
+    setTimeout(() => {
+      setMemberModalOpen(false);
+      setIsMemberModalClosing(false);
+    }, 220);
+  };
+
+  const handleCloseH2Violation = () => {
+    if (isH2ViolationClosing) return;
+    setIsH2ViolationClosing(true);
+    setTimeout(() => {
+      setH2Violation(null);
+      setIsH2ViolationClosing(false);
+    }, 220);
+  };
+
+  const handleCloseAiModal = () => {
+    if (isAiModalClosing) return;
+    setIsAiModalClosing(true);
+    setTimeout(() => {
+      setAiModalOpen(false);
+      setIsAiModalClosing(false);
+    }, 220);
+  };
+
+  const handleCloseHandbook = () => {
+    if (isHandbookClosing) return;
+    setIsHandbookClosing(true);
+    setTimeout(() => {
+      setHandbookOpen(false);
+      setIsHandbookClosing(false);
+    }, 220);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (memberModalOpen) handleCloseMemberModal();
+        if (h2Violation) handleCloseH2Violation();
+        if (aiModalOpen) handleCloseAiModal();
+        if (handbookOpen) handleCloseHandbook();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [memberModalOpen, h2Violation, aiModalOpen, handbookOpen, isMemberModalClosing, isH2ViolationClosing, isAiModalClosing, isHandbookClosing]);
   const [handbookTab, setHandbookTab] = useState<"scrum" | "pttk">("scrum");
   const [taskDetailTab, setTaskDetailTab] = useState<"general" | "engineering">("general");
 
@@ -1045,10 +1728,10 @@ export default function KanbanBoard() {
     return memberStats;
   }, [tasks, teamMembers]);
 
-  // Execute Move Task (with Constraint H2 enforcement)
-  const moveTask = (taskId: string, targetCol: ColumnId) => {
+  // Execute Move Task to specific index (Trello-style positional insertion)
+  const moveTaskToIndex = (taskId: string, targetCol: ColumnId, targetIndex?: number) => {
     const task = getTaskById(taskId);
-    if (!task || task.column === targetCol) return;
+    if (!task) return;
 
     // Hard Constraint H2 Check
     if (targetCol === "done" && task.dependsOn) {
@@ -1060,11 +1743,38 @@ export default function KanbanBoard() {
     }
 
     const previousCol = task.column;
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, column: targetCol } : t))
-    );
 
-    triggerUndoToast(task, previousCol, targetCol);
+    setTasks((prev) => {
+      const existingTask = prev.find((t) => t.id === taskId);
+      if (!existingTask) return prev;
+      const updatedTask = { ...existingTask, column: targetCol };
+
+      const withoutTask = prev.filter((t) => t.id !== taskId);
+      const targetColTasks = withoutTask.filter((t) => t.column === targetCol);
+      const otherTasks = withoutTask.filter((t) => t.column !== targetCol);
+
+      const boundedIdx = targetIndex !== undefined
+        ? Math.max(0, Math.min(targetIndex, targetColTasks.length))
+        : targetColTasks.length;
+
+      targetColTasks.splice(boundedIdx, 0, updatedTask);
+
+      return [...otherTasks, ...targetColTasks];
+    });
+
+    setJustDroppedTaskId(taskId);
+    if (justDroppedTimerRef.current) clearTimeout(justDroppedTimerRef.current);
+    justDroppedTimerRef.current = setTimeout(() => {
+      setJustDroppedTaskId(null);
+    }, 450);
+
+    if (previousCol !== targetCol) {
+      triggerUndoToast(task, previousCol, targetCol);
+    }
+  };
+
+  const moveTask = (taskId: string, targetCol: ColumnId) => {
+    moveTaskToIndex(taskId, targetCol);
   };
 
   // Drag Handlers (Chuẩn Trello: Custom Drag Ghost nghiêng 3.5 độ, viền trắng đổ bóng 3D sắc nét)
@@ -1174,6 +1884,11 @@ export default function KanbanBoard() {
       attachmentsCount: 0,
     };
     setTasks((prev) => [...prev, newTask]);
+    setJustDroppedTaskId(newTask.id);
+    if (justDroppedTimerRef.current) clearTimeout(justDroppedTimerRef.current);
+    justDroppedTimerRef.current = setTimeout(() => {
+      setJustDroppedTaskId(null);
+    }, 450);
     setInlineTitle("");
     setInlineAddingCol(null);
   };
@@ -1189,7 +1904,7 @@ export default function KanbanBoard() {
       .join("")
       .toUpperCase();
     
-    const palette = ["bg-indigo-600", "bg-rose-600", "bg-purple-600", "bg-emerald-600", "bg-cyan-600"];
+    const palette = ["bg-[#14161a] dark:bg-slate-700", "bg-amber-500", "bg-slate-600 dark:bg-slate-500", "bg-amber-600", "bg-slate-800"];
     const randomColor = palette[teamMembers.length % palette.length];
 
     const newMember: TeamMember = {
@@ -1399,7 +2114,7 @@ export default function KanbanBoard() {
           id: `task-ai-${stamp}-5`,
           code: `DOC-${Math.floor(Math.random() * 90 + 10)}`,
           title: `Tài liệu Kỹ thuật & Slide Báo cáo: ${aiFeatureName.trim()}`,
-          description: `Cập nhật tài liệu SRS Master Blueprint, xuất file báo cáo tiến độ nộp Thầy Phước.`,
+          description: `Cập nhật tài liệu SRS Master Blueprint, xuất file báo cáo tiến độ nộp Hội đồng Phản biện.`,
           column: "backlog",
           priority: "low",
           moscow: "could",
@@ -1455,221 +2170,269 @@ export default function KanbanBoard() {
     });
   }, [tasks, viewMode, filterAssignee, filterPriority, searchQuery, teamMembers]);
 
+  useMarloPageEntrance(
+    kanbanRef,
+    (el) => {
+      const cards = el.querySelectorAll(".marlo-card, [data-column-id], .kanban-col, .mine__summary-card");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { stagger: 0.06, y: 26 });
+      }
+      const rows = el.querySelectorAll("[data-task-card-id], .marlo-row, .mine__row, .feed__row, .tcard");
+      if (rows.length > 0) {
+        animateMarloRows(rows, { y: 14, stagger: 0.025, delay: 0.22 });
+      }
+    },
+    []);
+
   return (
-    <div className="flex h-full flex-col bg-slate-50/60 p-6">
+    <div ref={kanbanRef} className="flex min-h-full flex-col p-6">
       {/* ── TOP CONTROL BAR (LINEAR / JIRA STYLE) ────────────────────────── */}
       <header className="mb-5 flex flex-col gap-4">
         {/* Row 1: Project Identity, Dynamic Team Roster & Primary Actions */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25">
-              <FolderKanban size={22} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-xl font-bold tracking-tight text-slate-900">
-                  Engineering Project Workspace
-                </h1>
-                <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
-                  <Flame size={12} className="text-amber-500" /> Sprint 1 (Tuần 1 - 4)
+
+            <div ref={projectDropdownRef} className="relative z-30">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {/* 🏷️ Marlo Project Switcher Trigger */}
+                <button
+                  type="button"
+                  onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
+                  className="group flex items-center gap-2 px-3 py-1.5 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition cursor-pointer"
+                  title="Bấm để đổi dự án hoặc xem danh sách"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-[#14161a] dark:bg-white text-white dark:text-slate-900 shadow-2xs shrink-0">
+                    <FolderKanban size={15} />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight">
+                        {currentProject.name}
+                      </span>
+                      <ChevronDown
+                        size={14}
+                        className={`text-slate-400 group-hover:text-amber-500 transition-transform duration-200 ${
+                          isProjectDropdownOpen ? "rotate-180 text-amber-500" : ""
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </button>
+
+                {/* Sprint Badge */}
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800/60 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                  <Flame size={12} className="text-amber-500" /> {currentProject.sprint}
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
-                CodeMind Campus • Nhóm {teamMembers.length} thành viên • Ràng buộc cứng H2 & Đo lường đóng góp Anti-Freerider
+
+              <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-1">
+                {currentProject.course} • #{currentProject.code} • Nhóm {teamMembers.length} thành viên • Ràng buộc cứng H2 & Anti-Freerider
               </p>
+
+              {/* 🏷️ Floating Project Quick-Switcher Menu */}
+              {isProjectDropdownOpen && (
+                <div className="absolute left-0 top-full mt-2 w-80 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#12141a] shadow-xl p-2 z-50 animate-fade-in select-none">
+                  <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 mb-1">
+                    <span>Chọn dự án làm việc ({projects.length})</span>
+                    <button
+                      onClick={() => {
+                        setIsProjectDropdownOpen(false);
+                        setIsProjectSlateOpen(true);
+                      }}
+                      className="text-amber-600 dark:text-amber-400 hover:underline cursor-pointer lowercase"
+                    >
+                      xem tất cả
+                    </button>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-1 pr-0.5">
+                    {projects.map((proj) => {
+                      const isSel = proj.id === currentProjectId;
+                      const pTasks = Array.isArray(proj.tasks) ? proj.tasks : [];
+                      const doneCount = pTasks.filter((t) => t.column === "done" || t.column === "verified").length;
+                      return (
+                        <div
+                          key={proj.id}
+                          onClick={() => {
+                            setCurrentProjectId(proj.id);
+                            setIsProjectDropdownOpen(false);
+                          }}
+                          className={`flex items-center justify-between p-2 rounded-xl transition cursor-pointer ${
+                            isSel
+                              ? "bg-slate-100 dark:bg-slate-800/80 border border-slate-300/80 dark:border-slate-700 shadow-2xs"
+                              : "hover:bg-slate-100/70 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-200"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 pr-2">
+                            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{proj.name}</div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{proj.course}</div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-[11px] font-mono font-bold text-slate-800 dark:text-slate-200">
+                              {doneCount}/{pTasks.length}
+                            </div>
+                            <div className="text-[9px] text-slate-400 font-mono">
+                              #{proj.code}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProjectDropdownOpen(false);
+                        setIsNewProjectModalOpen(true);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 transition shadow-2xs cursor-pointer active:scale-97"
+                    >
+                      <Plus size={13} />
+                      <span>Tạo dự án mới</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProjectDropdownOpen(false);
+                        setIsProjectSlateOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                    >
+                      Lưới dự án
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {/* View Switcher: Board vs Dependencies vs Analytics */}
-            <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-2xs">
-              <button
-                onClick={() => handleTabChange("board")}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  activeTab === "board"
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Columns3 size={14} />
-                Bảng Kanban
-              </button>
-              <button
-                onClick={() => handleTabChange("dependencies")}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  activeTab === "dependencies"
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Link2 size={14} />
-                Cây Phụ thuộc (H2)
-              </button>
-              <button
-                onClick={() => handleTabChange("analytics")}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  activeTab === "analytics"
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <BarChart3 size={14} />
-                Báo cáo Đóng góp
-              </button>
-            </div>
+          {/* Unified, Perfectly Proportioned Marlo Pill Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* 🏷️ Marlo Projects Slate Button */}
+            <button
+              onClick={() => setIsProjectSlateOpen(true)}
+              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+              title="Xem danh sách tất cả dự án dạng lưới Marlo Slate"
+            >
+              <FolderKanban size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
+              <span>Dự án ({projects.length})</span>
+            </button>
 
             {/* Manage Team Members Button */}
             <button
               onClick={() => setMemberModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
               title="Quản lý thành viên trong nhóm"
             >
-              <Users size={14} className="text-blue-600" />
+              <Users size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
               <span>Đội ngũ ({teamMembers.length})</span>
             </button>
 
             {/* Engineering & Agile Scrum Handbook Button */}
             <button
               onClick={() => setHandbookOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-2xs hover:bg-indigo-100 transition"
+              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
               title="Cẩm nang quy chuẩn Kỹ nghệ phần mềm & Agile/Scrum"
             >
-              <BookOpen size={14} className="text-indigo-600" />
+              <BookOpen size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
               <span>Cẩm nang Kỹ nghệ</span>
-            </button>
-
-            {/* AI WBS Generator */}
-            <button
-              onClick={() => {
-                setAiModalOpen(true);
-                setAiStage("input");
-              }}
-              className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 px-3.5 py-2 text-xs font-semibold text-purple-700 shadow-xs transition hover:border-purple-300 hover:shadow-sm"
-            >
-              <Sparkles size={15} className="text-purple-600 animate-pulse" />
-              <span>AI Phân rã WBS</span>
             </button>
 
             {/* Teacher CSV Format Button */}
             <button
               onClick={() => setCsvModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2 text-xs font-semibold text-emerald-800 shadow-2xs hover:bg-emerald-100/80 transition"
-              title="Nhập / Xuất task chuẩn định dạng 8 cột của Thầy Phước"
+              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+              title="Nhập / Xuất task chuẩn định dạng 8 cột của Hội đồng Phản biện"
             >
-              <FileSpreadsheet size={15} className="text-emerald-700" />
-              <span>CSV Thầy Phước</span>
+              <FileSpreadsheet size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
+              <span>CSV Mẫu Task</span>
             </button>
+
+            {/* AI WBS Generator - Authentic Marlo Golden Primary Pill */}
+            <button
+              onClick={() => {
+                setAiModalOpen(true);
+                setAiStage("input");
+              }}
+              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+              title="Khởi tạo cây phân rã công việc tự động bằng AI Socratic"
+            >
+              <Sparkles size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
+              <span>AI Phân rã WBS</span>
+            </button>
+
+            {/* ── Marlo Action Pill Group: [ ↓ Export ] & [ + New task ] (100% Authentic Marlo) ── */}
+            <div className="flex items-center gap-2 pl-1 border-l border-slate-200 dark:border-slate-800">
+              {/* Export Button */}
+              <button
+                type="button"
+                onClick={handleExportTasks}
+                className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-[#1a1f2c] hover:bg-slate-800 dark:hover:bg-[#252c3e] text-white border border-transparent dark:border-slate-700/60 font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition active:scale-97 cursor-pointer"
+                title="Xuất danh sách công việc sang file CSV"
+              >
+                <Download size={14} className="stroke-[2.5]" />
+                <span>Export</span>
+              </button>
+
+              {/* + New task Button */}
+              <button
+                type="button"
+                onClick={() => setIsNewTaskModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-97 transition cursor-pointer"
+                title="Tạo công việc mới (Marlo Task) có checklist"
+              >
+                <Plus size={15} className="stroke-[2.5]" />
+                <span>New task</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Row 2: Sprint Progress & Dynamic Anti-Freerider Contribution Ribbon */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-          {/* Sprint Points & Burndown Progress (5 cols) */}
-          <div className="lg:col-span-5 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100 pb-3 lg:pb-0 lg:pr-5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                <TrendingUp size={14} className="text-blue-600" />
-                Tiến độ Sprint 1:
-              </span>
-              <span className="text-xs font-mono font-bold text-slate-800">
-                <AnimatedNumber value={sprintStats.donePoints} trigger={analyticsAnimTrigger || activeTab === "analytics"} /> / {sprintStats.totalPoints} Story Points (<AnimatedNumber value={sprintStats.percentDone} trigger={analyticsAnimTrigger || activeTab === "analytics"} suffix="%" />)
-              </span>
-            </div>
-            {/* Progress Bar with smooth animation */}
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 flex">
-              <div
-                style={{ width: (analyticsAnimTrigger || activeTab === "analytics") ? `${sprintStats.percentDone}%` : "0%" }}
-                className="bg-emerald-500 transition-all duration-1000 ease-out"
-                title={`Đã hoàn thành: ${sprintStats.donePoints} pts`}
-              />
-              <div
-                style={{
-                  width: (analyticsAnimTrigger || activeTab === "analytics") ? `${Math.round(
-                    (sprintStats.inProgPoints / (sprintStats.totalPoints || 1)) * 100
-                  )}%` : "0%",
-                }}
-                className="bg-amber-400 transition-all duration-1000 ease-out"
-                title={`Đang thực hiện: ${sprintStats.inProgPoints} pts`}
-              />
-            </div>
-            <div className="flex items-center justify-between mt-2 text-[11px] text-slate-400 font-medium">
-              <span>Bắt đầu: 25/10</span>
-              <span className="text-blue-600 font-semibold">Còn lại: 12 ngày</span>
-              <span>Hạn nộp: 15/11</span>
-            </div>
-          </div>
-
-          {/* Dynamic Anti-Freerider Team Contribution Bar (7 cols) */}
-          <div className="lg:col-span-7 flex flex-col justify-between pl-0 lg:pl-2">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                  <Flame size={11} />
-                </span>
-                <span className="text-xs font-bold text-slate-800">
-                  Đo lường Đóng góp Thực tế ({teamMembers.length} thành viên):
-                </span>
-              </div>
-              <span className="text-[11px] text-slate-500">Thuật toán Anti-Freerider</span>
-            </div>
-
-            {/* Segmented Team Bar dynamically rendered for all members */}
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 flex">
-              {teamMembers.map((member) => {
-                const stat = contribution[member.name];
-                return (
-                  <div
-                    key={member.id}
-                    style={{ width: `${stat?.percent || 0}%` }}
-                    className={`${member.color} transition-all duration-500`}
-                    title={`${member.name} (${member.role}): ${stat?.percent || 0}%`}
-                  />
-                );
-              })}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px]">
-              {teamMembers.map((member) => {
-                const stat = contribution[member.name];
-                return (
-                  <span key={member.id} className="flex items-center gap-1.5 font-medium text-slate-700">
-                    <span className={`h-2 w-2 rounded-full ${member.color}`} />
-                    {member.name} (<AnimatedNumber value={stat?.percent || 0} suffix="%" key={`mem-pct-${member.id}-${kanbanAnimKey}`} /> • <AnimatedNumber value={stat?.tasksDone || 0} key={`mem-td-${member.id}-${kanbanAnimKey}`} /> tasks)
-                  </span>
-                );
-              })}
-            </div>
-          </div>
+        {/* Row 2: View Switcher (Full Width breathing room for 5 Marlo tabs) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+          <MarloSegmentedControl
+            value={activeTab}
+            options={[
+              { id: "board", label: "Bảng Kanban", icon: <Columns3 size={14} /> },
+              {
+                id: "my-tasks",
+                label: "Của mình",
+                icon: <UserCheck size={14} />,
+                badge: myOpenTasksCount > 0 ? myOpenTasksCount : undefined,
+              },
+              {
+                id: "team",
+                label: `Phân vai & Team (${teamMembers.length})`,
+                icon: <Users size={14} />,
+              },
+              {
+                id: "activity",
+                label: "Nhật ký & Git Stream",
+                icon: <Activity size={14} />,
+              },
+              { id: "dependencies", label: "Cây Phụ thuộc (H2)", icon: <Link2 size={14} /> },
+            ]}
+            onChange={(val) => handleTabChange(val as TabView)}
+            tone="dark"
+          />
         </div>
 
         {/* Row 3: Filter & Search Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            {/* View Mode: Team vs My */}
-            <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
-              <button
-                onClick={() => setViewMode("team")}
-                className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition ${
-                  viewMode === "team"
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Users size={13} />
-                Toàn nhóm ({teamMembers.length})
-              </button>
-              <button
-                onClick={() => setViewMode("my")}
-                className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition ${
-                  viewMode === "my"
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <UserCheck size={13} />
-                Task của tôi
-              </button>
-            </div>
+            {/* View Mode: Team vs My with Marlo Liquid Segmented Pill */}
+            <MarloSegmentedControl
+              value={viewMode}
+              options={[
+                { id: "team", label: `Toàn nhóm (${teamMembers.length})`, icon: <Users size={13} /> },
+                { id: "my", label: "Task của tôi", icon: <UserCheck size={13} /> },
+              ]}
+              onChange={(val) => setViewMode(val as "team" | "my")}
+              size="sm"
+              tone="dark"
+            />
 
             {/* Modern Custom Assignee Filter */}
             <CustomSelect
@@ -1698,7 +2461,7 @@ export default function KanbanBoard() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Tìm mã task, tiêu đề..."
-                className="w-56 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder-slate-400 shadow-2xs focus:border-blue-500 focus:outline-hidden"
+                className="w-56 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 py-1.5 pl-8 pr-3 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 shadow-2xs focus:border-[#EE8420] focus:outline-hidden transition"
               />
             </div>
             <span className="text-xs text-slate-400">
@@ -1708,9 +2471,32 @@ export default function KanbanBoard() {
         </div>
       </header>
 
+      {/* 📊 Marlo Stacked Capacity Bar for Sprint Workload (chỉ hiện ở góc nhìn Bảng Kanban) */}
+      {activeTab === "board" && (
+        <div className="mb-4">
+          <MarloCapacityBar
+          title="Năng lực Sprint & Phân bổ Story Points"
+          subtitle="Tỷ lệ tải công việc phân rã từ Sprint Backlog theo chuẩn Scrum"
+          items={[
+            { id: "done", label: "Đã nghiệm thu", count: tasks.filter(t => t.column === "done" || t.column === "verified").reduce((s, t) => s + t.points, 0), color: "#14161a" },
+            { id: "prog", label: "Đang làm", count: tasks.filter(t => t.column === "in-progress").reduce((s, t) => s + t.points, 0), color: "#f59e0b" },
+            { id: "ready", label: "Sẵn sàng", count: tasks.filter(t => t.column === "ready").reduce((s, t) => s + t.points, 0), color: "#fbbf24" },
+            { id: "backlog", label: "Tồn đọng", count: tasks.filter(t => t.column === "backlog").reduce((s, t) => s + t.points, 0), color: "#94a3b8" },
+          ]}
+        />
+      </div>
+      )}
+
       {/* ── TAB 1: KANBAN BOARD WITH REAL DRAG AND DROP (WITH STAGGERED WATERFALL CASCADE) ─ */}
       {activeTab === "board" && (
-        <div key={`board-view-${kanbanAnimKey}`} className="flex gap-4 items-start overflow-x-auto pb-8 min-w-full">
+        <div
+          id="kanban-board-scroll-area"
+          ref={boardScrollRef}
+          onPointerDown={handleBoardPointerDown}
+          key={`board-view-${kanbanAnimKey}`}
+          className={`animate-screen-enter flex gap-4 items-start overflow-x-auto pb-8 min-w-full ${
+            isBoardPanning ? "cursor-grabbing select-none" : "cursor-grab"
+          }`}>
           {columnsConfig.map((col, colIdx) => {
             const colTasks = filteredTasks.filter((t) => t.column === col.id);
             const isDraggingOver = dragOverCol === col.id;
@@ -1724,98 +2510,126 @@ export default function KanbanBoard() {
                 onDragOver={(e) => handleDragOver(e, col.id)}
                 onDragLeave={(e) => handleDragLeave(e, col.id)}
                 onDrop={(e) => handleDrop(e, col.id)}
-                style={{
-                  animation: `item-cascade-down 0.45s cubic-bezier(0.16, 1, 0.3, 1) ${0.05 + colIdx * 0.08}s both`,
-                }}
-                className={`flex flex-col rounded-2xl border border-slate-200/90 bg-slate-100/70 p-2.5 shadow-xs transition-all w-[310px] min-w-[300px] shrink-0 max-h-[calc(100vh-210px)] ${
-                  col.borderTop
-                } border-t-4 ${
+
+                className={`flex flex-col rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-slate-100/75 dark:bg-slate-900/80 p-2.5 shadow-2xs transition-all w-[310px] min-w-[300px] shrink-0 ${
                   isColHovered ? "kanban-col-droptarget" : ""
                 }`}
               >
+                {/* Column Top Accent Line */}
+                <div
+                  className={`h-1 w-full rounded-full mb-2 ${col.accentBar} opacity-85`}
+                  style={col.accentStyle}
+                />
+
                 {/* Column Header */}
-                <div className="mb-2.5 flex items-center justify-between px-1">
+                <div className="mb-2 flex items-center justify-between px-1.5 pt-0.5">
                   <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full ${col.dotColor}`} />
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${col.dotColor}`}
+                      style={col.dotStyle}
+                    />
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
                       {col.title}
                     </h2>
                     <span
-                      className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${col.badgeBg} ${col.badgeText}`}
+                      className={`flex h-4 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-bold font-mono ${col.badgeBg} ${col.badgeText}`}
                     >
                       {colTasks.length}
                     </span>
                   </div>
 
-                  <span className="text-[11px] font-mono text-slate-400 font-medium">
-                    {colPoints} pts
+                  <span className="text-[10px] font-mono text-slate-600 dark:text-slate-300 font-bold bg-white/80 dark:bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-200/60">
+                    <OdometerNumber value={colPoints} suffix=" pts" />
                   </span>
                 </div>
 
                 {/* Tasks Container */}
-                <div data-column-id={col.id} onDragOver={(e) => handleDragOver(e, col.id)} onDrop={(e) => handleDrop(e, col.id)} className="flex flex-col gap-2 overflow-y-auto pr-0.5 min-h-[80px]">
-                  {pointerDrag?.isDragging && pointerDrag.hoverColId === col.id && pointerDrag.task.column !== col.id && (
-                    <div className="rounded-xl border border-slate-300/70 bg-slate-200/70 min-h-[90px] transition-all flex items-center justify-center text-slate-400 text-xs font-medium">
-                      <span>Thả thẻ vào {col.title}</span>
-                    </div>
+                <div data-column-id={col.id} data-column-scroll={col.id} className="flex flex-col gap-2 pt-3 px-1.5 pb-6 min-h-[80px]">
+                  {/* Target Column Empty Slot */}
+                  {pointerDrag?.isDragging && pointerDrag.hoverColId === col.id && colTasks.filter(t => t.id !== pointerDrag.task.id).length === 0 && (
+                    <div
+                      key="trello-slot-empty"
+                      className="trello-slot-unfurl rounded-xl border border-slate-300/80 dark:border-slate-700/80 bg-slate-200/75 dark:bg-slate-800/60 shadow-none pointer-events-none select-none min-h-[84px]"
+                    />
                   )}
 
                   {colTasks.map((task, taskIdx) => {
+                    // If this is the card currently being dragged
+                    if (pointerDrag?.isDragging && task.id === pointerDrag.task.id) {
+                      // If hovering another column, keep the ghost placeholder at this card's exact original slot!
+                      if (pointerDrag.hoverColId !== col.id) {
+                        return (
+                          <div
+                            key={`trello-slot-origin-${task.id}`}
+                            className="trello-slot-origin rounded-xl border border-slate-300/80 dark:border-slate-700/80 bg-slate-200/60 dark:bg-slate-800/50 shadow-none pointer-events-none select-none min-h-[84px]"
+                          />
+                        );
+                      }
+                      return null;
+                    }
+
+                    const otherTasks = colTasks.filter((t) => t.id !== pointerDrag?.task.id);
+                    const otherIdx = otherTasks.findIndex((t) => t.id === task.id);
+                    const isTargetCol = pointerDrag?.isDragging && pointerDrag.hoverColId === col.id;
+                    const isSlotHere = isTargetCol && pointerDrag.hoverIndex === otherIdx;
+                    const isLastCard = otherIdx === otherTasks.length - 1;
+                    const isSlotAfterLast = isTargetCol && isLastCard && pointerDrag.hoverIndex >= otherTasks.length;
                     const parentTask = task.dependsOn ? getTaskById(task.dependsOn) : null;
                     const isParentDone = parentTask ? parentTask.column === "done" : true;
                     const isLocked = !isParentDone;
-                    const isDragging = draggingTaskId === task.id;
+                    const isJustDropped = justDroppedTaskId === task.id;
 
-                    const doneChecklist = task.checklist.filter((c) => c.done).length;
-                    const totalChecklist = task.checklist.length;
+                    const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+                    const doneChecklist = checklist.filter((c) => c.done).length;
+                    const totalChecklist = checklist.length;
+
+                    const dod = Array.isArray(task.definitionOfDone) ? task.definitionOfDone : [];
+                    const doneDodCount = dod.filter((d) => d.done).length;
+                    const totalDodCount = dod.length;
 
                     // Match assignee color from dynamic team
                     const memberMeta = teamMembers.find((m) => m.name === task.assignee.name);
-                    const avatarColor = memberMeta?.color || "bg-blue-600";
+                    const avatarColor = getAssigneeAvatarColor(task.assignee.name, memberMeta?.color);
 
-                    const isPointerDraggingThis = pointerDrag?.isDragging && pointerDrag.task.id === task.id;
-
-                    if (isPointerDraggingThis) {
-                      return (
-                        <div
-                          key={task.id}
-                          style={{ minHeight: "105px" }}
-                          className="rounded-xl border border-slate-300/80 bg-slate-200/75 p-3.5 opacity-60 shadow-none pointer-events-none select-none transition-all flex flex-col justify-between"
-                        >
-                          <div className="flex items-center gap-2 mb-2 opacity-40">
-                            <span className="font-mono text-[10px] font-bold text-slate-500">#{task.code}</span>
-                            <span className="text-[9px] bg-slate-300 px-1.5 py-0.5 rounded text-slate-600 truncate max-w-[120px]">{task.epic}</span>
-                          </div>
-                          <p className="text-xs font-semibold text-slate-400 line-clamp-2">{task.title}</p>
-                          <div className="flex items-center justify-between text-[11px] text-slate-400 opacity-40 pt-2 border-t border-slate-300/40">
-                            <span>{task.assignee.name}</span>
-                            <span>{task.points}p</span>
-                          </div>
-                        </div>
-                      );
-                    }
+                    const taskGlobalIdx = filteredTasks.findIndex((t) => t.id === task.id);
+                    const taskDelay = Math.max(0, taskGlobalIdx) * 32;
 
                     return (
                       <div
-                        key={task.id}
-                        onPointerDown={(e) => handleCardPointerDown(e, task)}
-                        style={{
-                          animation: `item-cascade-down 0.48s cubic-bezier(0.16, 1, 0.3, 1) ${0.06 + colIdx * 0.07 + Math.min(taskIdx, 8) * 0.05}s both`,
-                        }}
-                        className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl p-3.5 transition-all select-none ${
-                          isLocked
-                            ? "border border-slate-200 bg-slate-50/80"
-                            : "border border-slate-200 bg-white hover:border-blue-300 hover:-translate-y-0.5 hover:shadow-md shadow-xs"
-                        }`}
+                        key={`${task.id}-${viewMode}-${filterAssignee}`}
+                        className={`flex flex-col gap-2 ${!hasEnteredInitial ? "animate-kanban-card" : ""}`}
+                        style={!hasEnteredInitial ? { animationDelay: `${taskDelay}ms` } : undefined}
                       >
+                        {/* Expanding slot unfurls down between cards if hovered here */}
+                        {isSlotHere && (
+                          <div
+                            key={`trello-slot-before-${task.id}`}
+                            className="trello-slot-unfurl rounded-xl border border-slate-300/80 dark:border-slate-700/80 bg-slate-200/75 dark:bg-slate-800/60 shadow-none pointer-events-none select-none"
+                          />
+                        )}
+
+
+                            <div
+                              data-task-card-id={task.id}
+                              onPointerDown={(e) => handleCardPointerDown(e, task)}
+                              style={isJustDropped ? {
+                                animation: "card-drop-settle 0.46s cubic-bezier(0.2, 0.85, 0.3, 1.2) forwards",
+                              } : undefined}
+                              className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl p-3.5 transition-all select-none border border-slate-200/90 dark:border-slate-700/70 bg-white dark:bg-[#181d29] border-l-[3.5px] ${col.cardBorderLeft} ${
+                                isJustDropped
+                                  ? "border-amber-400 bg-white dark:bg-[#181d29] shadow-md z-20 ring-1 ring-amber-400/40"
+                                  : "shadow-[0_1.5px_4px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] hover:border-slate-300 dark:hover:border-slate-600 hover:-translate-y-1 hover:shadow-[0_8px_20px_-4px_rgba(0,0,0,0.12),0_4px_8px_-2px_rgba(0,0,0,0.06)]"
+                              }`}
+                            >
+                              
                         {/* Drag Handle & Epic Tag */}
                         <div className="mb-2 flex items-center justify-between gap-1 text-[11px]">
-                          <div className="flex items-center gap-1.5 min-w-0 max-w-[62%]">
+                          <div className="flex items-center gap-1.5 min-w-0">
                             <GripVertical
                               size={13}
                               className="text-slate-300 group-hover:text-slate-500 shrink-0"
                             />
-                            <span className="font-mono text-[10px] font-bold text-slate-700 flex items-center gap-1 shrink-0">
+                            <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-0.5 shrink-0 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200/60">
                               #{task.code}
                               <button
                                 type="button"
@@ -1824,82 +2638,66 @@ export default function KanbanBoard() {
                                   navigator.clipboard.writeText(task.code);
                                 }}
                                 title="Sao chép mã task"
-                                className="opacity-0 group-hover:opacity-100 hover:text-blue-600 transition cursor-pointer p-0.5"
+                                className="opacity-0 group-hover:opacity-100 hover:text-[#EE8420] transition cursor-pointer p-0.5"
                               >
                                 <Copy size={10} />
                               </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTask(task);
+                                }}
+                                title="Xóa thẻ này"
+                                className="opacity-0 group-hover:opacity-100 hover:text-rose-600 transition cursor-pointer p-0.5 rounded hover:bg-rose-50"
+                              >
+                                <Trash2 size={10} />
+                              </button>
                               {isLocked && parentTask && (
-                                <span title={`Ràng buộc H2: Chờ #${parentTask.code} (${parentTask.assignee.name}) hoàn thành`} className="inline-flex text-rose-500 shrink-0">
+                                <span title={`Ràng buộc H2: Chờ #${parentTask.code} (${parentTask.assignee.name}) hoàn thành`} className="inline-flex text-rose-500 shrink-0 ml-0.5">
                                   <Lock size={11} />
                                 </span>
                               )}
                             </span>
-                            <span
-                              className={`rounded-md border px-1.5 py-0.5 text-[9px] font-semibold truncate ${task.epicColor}`}
-                              title={task.epic}
-                            >
-                              {task.epic}
-                            </span>
+
                           </div>
 
-                          <div className="flex items-center gap-1 shrink-0">
-                            {/* Submission Requirement Badge (Cần link / Cần file) */}
-                            {task.submissionRequirement && task.submissionRequirement !== "Không" && (
-                              <span className="rounded bg-amber-50 border border-amber-200 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold">
-                                Cần {task.submissionRequirement.toLowerCase()}
-                              </span>
-                            )}
-                            {/* MoSCoW / Bonus Badge */}
-                            {task.isBonus && (
-                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 border border-emerald-200 uppercase">
-                                Bonus
-                              </span>
-                            )}
+                          <div className="flex items-center gap-1.5 shrink-0">
                             {/* Story Points */}
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-600">
+                            <span className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60">
                               {task.points}p
-                            </span>
-                            {/* Priority Badge */}
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                                task.priority === "high"
-                                  ? "bg-rose-100 text-rose-700"
-                                  : task.priority === "medium"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {task.priority === "high" ? "P0" : task.priority === "medium" ? "P1" : "P2"}
                             </span>
                           </div>
                         </div>
 
-                        {/* Title */}
-                        <h3 className="mb-2 text-xs font-bold leading-snug text-slate-900 group-hover:text-blue-600">
+                        {/* Title - Giữ chuẩn màu chữ gốc text-slate-900 dark:text-white, không đổi màu khi hover */}
+                        <h3 className="mb-2 text-[12px] font-semibold leading-snug text-slate-900 dark:text-white line-clamp-2">
                           {task.title}
                         </h3>
 
-                        {/* Clean Minimalist Footer */}
-                        <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
-                          {/* Assignee - Full space without truncation overlap */}
+                        {/* Clean Boxy Footer */}
+                        <div className="mt-auto flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-2.5 text-[11px]">
+                          {/* Assignee Avatar & Name */}
                           <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
                             <span
-                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black text-white shadow-xs ${avatarColor}`}
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ${avatarColor} shadow-2xs`}
                               title={`${task.assignee.name} (${task.assignee.role})`}
                             >
                               {task.assignee.avatar}
                             </span>
-                            <span className="truncate font-medium text-slate-700 text-[11px]" title={task.assignee.name}>
+                            <span className="truncate font-semibold text-slate-700 dark:text-slate-300 text-[11px]" title={task.assignee.name}>
                               {task.assignee.name}
                             </span>
                           </div>
 
                           {/* Subtle micro badges: Checklist, DoD, Due Date */}
-                          <div className="flex items-center gap-2 text-slate-400 text-[10px] shrink-0">
+                          <div className="flex items-center gap-1.5 text-slate-500 text-[10px] shrink-0">
                             {totalChecklist > 0 && (
                               <span
-                                className={`flex items-center gap-0.5 font-medium ${
-                                  doneChecklist === totalChecklist ? "text-emerald-600 font-bold" : "text-slate-400"
+                                className={`flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-[10.5px] border-0 transition-colors ${
+                                  doneChecklist === totalChecklist
+                                    ? "bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold"
+                                    : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
                                 }`}
                                 title={`Checklist: ${doneChecklist}/${totalChecklist}`}
                               >
@@ -1908,22 +2706,22 @@ export default function KanbanBoard() {
                               </span>
                             )}
 
-                            {task.definitionOfDone && task.definitionOfDone.length > 0 && (
+                            {totalDodCount > 0 && (
                               <span
-                                className={`flex items-center gap-0.5 font-medium ${
-                                  task.definitionOfDone.filter((d) => d.done).length === task.definitionOfDone.length
-                                    ? "text-emerald-600 font-bold"
-                                    : "text-slate-400"
+                                className={`flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-[10.5px] border-0 transition-colors ${
+                                  doneDodCount === totalDodCount
+                                    ? "bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold"
+                                    : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
                                 }`}
-                                title={`DoD: ${task.definitionOfDone.filter((d) => d.done).length}/${task.definitionOfDone.length} tiêu chuẩn`}
+                                title={`DoD: ${doneDodCount}/${totalDodCount} tiêu chuẩn`}
                               >
                                 <ShieldCheck size={11} />
-                                <span>{task.definitionOfDone.filter((d) => d.done).length}/${task.definitionOfDone.length}</span>
+                                <span>{doneDodCount}/{totalDodCount}</span>
                               </span>
                             )}
 
                             <span
-                              className="flex items-center gap-1 text-slate-400"
+                              className="flex items-center gap-1 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10.5px] font-medium border-0"
                               title={`Hạn hoàn thành: ${task.dueDate}`}
                             >
                               <Calendar size={11} />
@@ -1932,13 +2730,23 @@ export default function KanbanBoard() {
                           </div>
                         </div>
                       </div>
+
+
+                        {/* If hovering below the last card, render slot after last card */}
+                        {isSlotAfterLast && (
+                          <div
+                            key="trello-slot-after-last"
+                            className="trello-slot-unfurl rounded-xl border border-slate-300/80 dark:border-slate-700/80 bg-slate-200/75 dark:bg-slate-800/60 shadow-none pointer-events-none select-none min-h-[84px]"
+                          />
+                        )}
+                      </div>
                     );
                   })}
                 </div>
 
                 {/* Inline Quick Add Card - Trello Style */}
                 {inlineAddingCol === col.id ? (
-                  <div className="mt-1.5 rounded-xl border border-blue-400/80 bg-white p-2 shadow-xs">
+                  <div className="mt-1.5 rounded-xl border border-amber-400/80 bg-white dark:bg-slate-800 p-2 shadow-xs">
                     <textarea
                       autoFocus
                       value={inlineTitle}
@@ -1952,12 +2760,12 @@ export default function KanbanBoard() {
                       }}
                       rows={2}
                       placeholder="Nhập tiêu đề cho thẻ này..."
-                      className="w-full resize-none border-none text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
+                      className="w-full resize-none border-none text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden bg-transparent"
                     />
                     <div className="flex items-center gap-1.5 pt-1">
                       <button
                         onClick={() => handleInlineAdd(col.id)}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs"
+                        className="rounded-lg bg-[#14161a] dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-slate-950 hover:bg-slate-800 dark:hover:bg-slate-100 shadow-xs"
                       >
                         Thêm thẻ
                       </button>
@@ -1975,7 +2783,7 @@ export default function KanbanBoard() {
                       setInlineAddingCol(col.id);
                       setInlineTitle("");
                     }}
-                    className="mt-1 flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900"
+                    className="mt-1 flex w-full items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 transition hover:bg-slate-200/70 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer"
                   >
                     <Plus size={15} />
                     <span>Thêm thẻ</span>
@@ -1987,85 +2795,132 @@ export default function KanbanBoard() {
         </div>
       )}
 
+      {/* ── TAB: MY TASKS (VIỆC CỦA TÔI) ─────────────────────────────────── */}
+      {activeTab === "my-tasks" && (
+        <KanbanMyTasksView
+          tasks={tasks}
+          currentUser={teamMembers[0]}
+          onSelectTask={(task) => setSelectedTask(task)}
+          onToggleComplete={handleToggleTaskComplete}
+          onOpenAddTask={() => setIsNewTaskModalOpen(true)}
+        />
+      )}
+
+      {/* ── TAB: TEAM & SCRUM ROLES (PHÂN VAI & ĐÓNG GÓP SCRUM) ───────────── */}
+      {activeTab === "team" && (
+        <KanbanTeamScrumView
+          teamMembers={teamMembers}
+          tasks={tasks}
+          sprintStats={sprintStats}
+          onManageMembers={() => setMemberModalOpen(true)}
+          onFilterByMember={handleFilterByMember}
+        />
+      )}
+
+      {/* ── TAB: ACTIVITY LOG & GIT STREAM (NHẬT KÝ HOẠT ĐỘNG) ─────────────── */}
+      {activeTab === "activity" && (
+        <KanbanActivityStreamView
+          tasks={tasks}
+          teamMembers={teamMembers}
+          onSelectTask={(task) => setSelectedTask(task)}
+        />
+      )}
+
       {/* ── TAB 2: DEPENDENCIES & CONSTRAINT H2 GRAPH ────────────────────── */}
       {activeTab === "dependencies" && (
-        <div key={`deps-view-${kanbanAnimKey}`} className="flex-1 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs overflow-y-auto animate-tab-slide-down">
-          <div className="mb-6 flex items-center justify-between animate-cascade-1">
+        <div key={`deps-view-${kanbanAnimKey}`} className="animate-screen-enter flex-1 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f1219] p-6 shadow-xs overflow-y-auto">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
                 Sơ đồ Ràng buộc Phụ thuộc Nhiệm vụ (Hard Constraint H2)
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Quy định thứ tự bàn giao: Task con chỉ được phép chuyển sang cột Done khi task tiền đề đã hoàn tất.
               </p>
             </div>
-            <span className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-700">
-              Kiểm soát tự động bởi Backend Rule Engine
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-[#f97316]" />
+                Kiểm soát tự động bởi Backend Rule Engine
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-4 max-w-3xl">
+          <div className="space-y-3.5 max-w-4xl">
             {tasks
               .filter((t) => t.dependsOn)
-              .map((task, idx) => {
+              .map((task) => {
                 const parent = getTaskById(task.dependsOn!);
                 const isParentDone = parent?.column === "done";
                 return (
                   <div
                     key={task.id}
-                    style={{
-                      animation: `item-cascade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${0.05 + idx * 0.06}s both`,
-                    }}
-                    className="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4"
+                    className="flex flex-col md:flex-row items-stretch md:items-center gap-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-[#141824] p-4 transition-all hover:border-slate-300 dark:hover:border-slate-700"
                   >
-                    {/* Parent Task */}
-                    <div className="flex-1 rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
-                      <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span className="font-mono font-bold text-slate-600">#{parent?.code}</span>
+                    {/* Thẻ tiền đề (Prerequisite) */}
+                    <div
+                      onClick={() => parent && setSelectedTask(parent)}
+                      className="flex-1 rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-[#1a202e] p-3.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between text-[11px] mb-1.5">
+                        <span className="font-mono font-bold text-slate-500 dark:text-slate-400">#{parent?.code}</span>
                         <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                            isParentDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"
+                          className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase ${
+                            isParentDone
+                              ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                           }`}
                         >
-                          {parent?.column}
+                          {parent?.column === "done" ? "Hoàn thành" : parent?.column === "in-progress" ? "Đang làm" : parent?.column || "Backlog"}
                         </span>
                       </div>
-                      <p className="text-xs font-bold text-slate-800">{parent?.title}</p>
-                      <p className="text-[11px] text-slate-500 mt-1">Phụ trách: {parent?.assignee.name}</p>
+                      <p className="text-xs font-semibold text-slate-900 dark:text-white line-clamp-2 leading-snug">{parent?.title}</p>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                        <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center text-[9px] font-bold shrink-0">
+                          {parent?.assignee.avatar || parent?.assignee.name.charAt(0) || "U"}
+                        </div>
+                        <span className="truncate">{parent?.assignee.name}</span>
+                      </div>
                     </div>
 
-                    {/* Arrow with Lock/Unlock */}
-                    <div className="flex flex-col items-center">
-                      <span
-                        className={`flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm ${
-                          isParentDone ? "bg-emerald-500" : "bg-rose-500"
+                    {/* Clean Connector Pill */}
+                    <div className="flex md:flex-col items-center justify-center gap-1 shrink-0 px-1 py-1">
+                      <div
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shadow-2xs ${
+                          isParentDone
+                            ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                            : "bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
                         }`}
                       >
-                        {isParentDone ? <Unlock size={16} /> : <Lock size={16} />}
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 mt-1">H2</span>
+                        {isParentDone ? <Unlock size={12} className="stroke-[2.5]" /> : <Lock size={12} className="stroke-[2.5]" />}
+                        <span>{isParentDone ? "Đã mở khóa" : "Chặn bởi H2"}</span>
+                      </div>
                     </div>
 
-                    {/* Dependent Task */}
+                    {/* Thẻ phụ thuộc (Dependent) */}
                     <div
-                      className={`flex-1 rounded-lg border p-3 shadow-2xs ${
-                        isParentDone
-                          ? "border-emerald-200 bg-emerald-50/40"
-                          : "border-rose-200 bg-rose-50/40"
-                      }`}
+                      onClick={() => setSelectedTask(task)}
+                      className="flex-1 rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-[#1a202e] p-3.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
                     >
-                      <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span className="font-mono font-bold text-slate-600">#{task.code}</span>
+                      <div className="flex items-center justify-between text-[11px] mb-1.5">
+                        <span className="font-mono font-bold text-slate-500 dark:text-slate-400">#{task.code}</span>
                         <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                            task.column === "done" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"
+                          className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase ${
+                            task.column === "done"
+                              ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                           }`}
                         >
-                          {task.column}
+                          {task.column === "done" ? "Hoàn thành" : task.column === "in-progress" ? "Đang làm" : task.column}
                         </span>
                       </div>
-                      <p className="text-xs font-bold text-slate-800">{task.title}</p>
-                      <p className="text-[11px] text-slate-500 mt-1">Phụ trách: {task.assignee.name}</p>
+                      <p className="text-xs font-semibold text-slate-900 dark:text-white line-clamp-2 leading-snug">{task.title}</p>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                        <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center text-[9px] font-bold shrink-0">
+                          {task.assignee.avatar || task.assignee.name.charAt(0) || "U"}
+                        </div>
+                        <span className="truncate">{task.assignee.name}</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -2076,9 +2931,9 @@ export default function KanbanBoard() {
 
       {/* ── TAB 3: PROJECT OVERVIEW, BURNDOWN CHART & ANTI-FREERIDER DASHBOARD ──────────────────────── */}
       {activeTab === "analytics" && (
-        <div key={`analytics-view-${kanbanAnimKey}`} className="flex-1 space-y-5 overflow-y-auto pr-1 animate-tab-slide-down">
+        <div key={`analytics-view-${kanbanAnimKey}`} className="animate-screen-enter flex-1 space-y-5 overflow-y-auto pr-1">
           {/* Header & Quick Action */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs animate-cascade-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs ">
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900">
@@ -2166,7 +3021,7 @@ export default function KanbanBoard() {
           </div>
 
           {/* Main Visuals Grid: Burndown Chart with Red Line + Velocity Chart */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 animate-cascade-6">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 ">
             {/* 1. SPRINT BURNDOWN CHART (7 cols) - REFINED CLASSIC */}
             <div className="lg:col-span-7 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs flex flex-col justify-between">
               {/* Header: Exact Classic Structure as requested */}
@@ -2478,8 +3333,10 @@ export default function KanbanBoard() {
 
       {/* ── MANAGE TEAM MEMBERS MODAL ────────────────────────────────────── */}
       {memberModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div onClick={handleCloseMemberModal} className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 ${isMemberModalClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl ${isMemberModalClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+            
+          
             <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
@@ -2490,7 +3347,7 @@ export default function KanbanBoard() {
                   <p className="text-xs text-slate-500">Thêm hoặc bớt thành viên để AI phân rã chuẩn</p>
                 </div>
               </div>
-              <button onClick={() => setMemberModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={handleCloseMemberModal} className="text-slate-400 hover:text-slate-600">
                 <X size={18} />
               </button>
             </div>
@@ -2525,9 +3382,9 @@ export default function KanbanBoard() {
             </div>
 
             {/* Add New Member Input */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 mb-5">
-              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <UserPlus size={14} className="text-blue-600" /> Thêm thành viên mới:
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3.5 space-y-2.5 mb-5">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <UserPlus size={14} className="text-amber-500" /> Thêm thành viên mới:
               </span>
               <div className="space-y-2">
                 <input
@@ -2535,20 +3392,20 @@ export default function KanbanBoard() {
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
                   placeholder="Họ và tên (ví dụ: Nguyễn Văn Nam)"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-amber-500 focus:outline-hidden"
                 />
                 <input
                   type="text"
                   value={newMemberRole}
                   onChange={(e) => setNewMemberRole(e.target.value)}
                   placeholder="Vai trò (ví dụ: DevOps / UI Designer)"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-amber-500 focus:outline-hidden"
                 />
               </div>
               <button
                 onClick={handleAddMember}
                 disabled={!newMemberName.trim()}
-                className="w-full rounded-xl bg-blue-600 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50"
+                className="w-full rounded-xl bg-[#14161a] dark:bg-white py-1.5 text-xs font-semibold text-white dark:text-slate-950 shadow-xs hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
               >
                 + Thêm vào Nhóm
               </button>
@@ -2556,7 +3413,7 @@ export default function KanbanBoard() {
 
             <div className="flex justify-end">
               <button
-                onClick={() => setMemberModalOpen(false)}
+                onClick={handleCloseMemberModal}
                 className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
               >
                 Hoàn tất
@@ -2568,8 +3425,10 @@ export default function KanbanBoard() {
 
       {/* ── HARD CONSTRAINT H2 VIOLATION ALERT MODAL ──────────────────────── */}
       {h2Violation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-md rounded-3xl border border-rose-200 bg-white p-6 shadow-2xl">
+        <div onClick={handleCloseH2Violation} className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 ${isH2ViolationClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl border border-rose-200 bg-white p-6 shadow-2xl ${isH2ViolationClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+            
+          
             <div className="mb-4 flex items-center gap-3.5">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-sm">
                 <ShieldAlert size={28} />
@@ -2609,7 +3468,7 @@ export default function KanbanBoard() {
 
             <div className="flex justify-end">
               <button
-                onClick={() => setH2Violation(null)}
+                onClick={handleCloseH2Violation}
                 className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
               >
                 Đã hiểu, tôi sẽ hoàn thành task tiền đề trước
@@ -2621,19 +3480,19 @@ export default function KanbanBoard() {
 
       {/* ── UPGRADED AI WBS STUDIO (DYNAMIC TEAM & EXPANDED STACKS) ──────── */}
       {aiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-2xl rounded-3xl border border-purple-200 bg-white p-6 shadow-2xl max-h-[90vh] flex flex-col">
+        <div onClick={handleCloseAiModal} className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 ${isAiModalClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-2xl rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#181d29] p-6 shadow-2xl max-h-[90vh] flex flex-col ${isAiModalClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+            
+          
             {/* Header */}
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-purple-500 to-indigo-600 text-white shadow-sm shadow-purple-500/20">
-                  <Sparkles size={20} />
-                </span>
+
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     AI Task Decomposition Studio (WBS Generator)
                   </h3>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     {aiStage === "input"
                       ? "Cung cấp đủ ngữ cảnh kỹ thuật & phân bổ thành viên linh hoạt"
                       : "Xem trước, tùy chỉnh người phụ trách và xác nhận trước khi nạp vào Backlog"}
@@ -2645,7 +3504,7 @@ export default function KanbanBoard() {
                   setAiModalOpen(false);
                   setAiStage("input");
                 }}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X size={18} />
               </button>
@@ -2656,7 +3515,7 @@ export default function KanbanBoard() {
               <div className="flex-1 overflow-y-auto pr-1 space-y-4">
                 {/* 1-Click Presets */}
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Chọn nhanh mẫu đồ án thực tế (1-Click Presets):
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -2672,17 +3531,17 @@ export default function KanbanBoard() {
                         }}
                         className={`rounded-xl border p-2.5 text-left transition ${
                           aiFeatureName === preset.name
-                            ? "border-purple-400 bg-purple-50/70 shadow-xs"
-                            : "border-slate-200 bg-slate-50/50 hover:border-purple-200 hover:bg-purple-50/30"
+                            ? "border-slate-900 bg-slate-100/90 dark:border-slate-300 dark:bg-slate-800 shadow-2xs font-semibold"
+                            : "border-slate-200/90 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-100/50 dark:border-slate-800 dark:bg-slate-900/50"
                         }`}
                       >
-                        <div className="flex items-center justify-between text-xs font-bold text-slate-800 mb-0.5">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200 mb-0.5">
                           <span>{preset.name}</span>
-                          <span className="text-[10px] uppercase font-mono font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
+                          <span className="text-[10px] uppercase font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-200/80 dark:bg-slate-700 px-1.5 py-0.5 rounded">
                             {preset.stack}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 line-clamp-1">{preset.desc}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">{preset.desc}</p>
                       </button>
                     ))}
                   </div>
@@ -2690,7 +3549,7 @@ export default function KanbanBoard() {
 
                 {/* Feature Name */}
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Tên Tính năng / Module nghiệp vụ: <span className="text-rose-500">*</span>
                   </label>
                   <input
@@ -2698,14 +3557,14 @@ export default function KanbanBoard() {
                     value={aiFeatureName}
                     onChange={(e) => setAiFeatureName(e.target.value)}
                     placeholder="Ví dụ: Docker Sandbox Code Runner, Socratic AI Tutor, AI Defense Room..."
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-slate-900 dark:focus:border-slate-300 focus:outline-hidden bg-white dark:bg-slate-800"
                   />
                 </div>
 
                 {/* Dynamic Team Members Selection */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold text-slate-700">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Thành viên tham gia thực hiện ({aiSelectedMemberIds.length}/{teamMembers.length} người):
                     </label>
                     <div className="flex items-center gap-2">
@@ -2718,15 +3577,15 @@ export default function KanbanBoard() {
                             setAiSelectedMemberIds(teamMembers.map((m) => m.id));
                           }
                         }}
-                        className="text-[11px] font-semibold text-purple-600 hover:underline"
+                        className="text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
                       >
                         {aiSelectedMemberIds.length === teamMembers.length ? "Bỏ chọn hết" : "Chọn tất cả"}
                       </button>
-                      <span className="text-slate-300">|</span>
+                      <span className="text-slate-300 dark:text-slate-600">|</span>
                       <button
                         type="button"
                         onClick={() => setMemberModalOpen(true)}
-                        className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                        className="text-[11px] font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
                       >
                         <UserPlus size={12} /> Quản lý danh sách
                       </button>
@@ -2744,15 +3603,15 @@ export default function KanbanBoard() {
                               isSelected ? prev.filter((id) => id !== m.id) : [...prev, m.id]
                             );
                           }}
-                          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+                          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
                             isSelected
-                              ? "border-purple-300 bg-purple-50 text-purple-900 shadow-2xs font-semibold"
-                              : "border-slate-200 bg-slate-50 text-slate-500 opacity-60"
+                              ? "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs font-semibold ring-1 ring-slate-900/10 dark:ring-white/10"
+                              : "border-slate-200/80 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 hover:border-slate-300"
                           }`}
                         >
-                          <span className={`h-2 w-2 rounded-full ${m.color}`} />
+                          <span className={`h-2.5 w-2.5 rounded-full ${m.color} shrink-0`} />
                           <span>{m.name}</span>
-                          <span className="text-[10px] text-slate-400">({m.role})</span>
+                          <span className="text-[10.5px] text-slate-500 dark:text-slate-400 font-normal">({m.role})</span>
                         </button>
                       );
                     })}
@@ -2769,14 +3628,14 @@ export default function KanbanBoard() {
                     onChange={(e) => setAiDescription(e.target.value)}
                     rows={2}
                     placeholder="Mô tả cụ thể: input/output, giới hạn thời gian (timeout 2s), các trường hợp ngoại lệ..."
-                    className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-slate-900 dark:focus:border-slate-300 focus:outline-hidden bg-white dark:bg-slate-800"
                   />
                 </div>
 
                 {/* Tech Stack & Granularity */}
                 <div className="grid grid-cols-2 gap-3.5">
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Tầng kiến trúc & Công nghệ:
                     </label>
                     <CustomSelect
@@ -2795,7 +3654,7 @@ export default function KanbanBoard() {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Độ chi tiết phân rã:
                     </label>
                     <CustomSelect
@@ -2816,44 +3675,44 @@ export default function KanbanBoard() {
                 {/* Custom Tech Stack Input if selected "custom" */}
                 {aiStack === "custom" && (
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-purple-800">
-                      Nhập công nghệ tùy chỉnh của Huynh:
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Nhập công nghệ tùy chỉnh:
                     </label>
                     <input
                       type="text"
                       value={aiCustomTech}
                       onChange={(e) => setAiCustomTech(e.target.value)}
                       placeholder="Ví dụ: FastAPI + Docker Sandbox + WebSocket + PostgreSQL..."
-                      className="w-full rounded-xl border border-purple-300 bg-purple-50/30 px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-500 focus:outline-hidden"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-slate-900 dark:focus:border-slate-300 focus:outline-hidden"
                     />
                   </div>
                 )}
 
                 {/* Constraints Checklist */}
-                <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-3 text-xs">
-                  <span className="font-bold text-purple-900 block mb-1.5">
+                <div className="rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 text-xs">
+                  <span className="font-bold text-slate-900 dark:text-white block mb-2">
                     Các quy tắc kỹ nghệ tự động áp dụng:
                   </span>
-                  <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
                     <label className="flex items-center gap-1.5 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={aiIncludeH2}
                         onChange={(e) => setAiIncludeH2(e.target.checked)}
-                        className="rounded border-slate-300 text-purple-600"
+                        className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
                       />
                       <span>Tự động liên kết Ràng buộc cứng H2</span>
                     </label>
                     <label className="flex items-center gap-1.5">
-                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-purple-600" />
+                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-slate-900" />
                       <span>Chia đều cho các thành viên được chọn</span>
                     </label>
                     <label className="flex items-center gap-1.5">
-                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-purple-600" />
+                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-slate-900" />
                       <span>Ước lượng thời gian nguyên tử (2 - 5 giờ)</span>
                     </label>
                     <label className="flex items-center gap-1.5">
-                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-purple-600" />
+                      <input type="checkbox" checked readOnly className="rounded border-slate-300 text-slate-900" />
                       <span>Cho phép xem lại trước khi chốt nạp</span>
                     </label>
                   </div>
@@ -2864,12 +3723,12 @@ export default function KanbanBoard() {
             {/* STAGE 2: PREVIEW & CUSTOMIZE BEFORE CONFIRMING */}
             {aiStage === "preview" && (
               <div className="flex-1 overflow-y-auto pr-1 space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-600 bg-purple-50/70 p-2.5 rounded-xl border border-purple-200">
-                  <span className="font-semibold text-purple-900">
+                <div className="flex items-center justify-between text-xs text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-700">
+                  <span className="font-semibold text-slate-900 dark:text-white">
                     AI đã phân rã thành công {aiPreviewTasks.length} task nguyên tử:
                   </span>
-                  <span className="text-[11px] text-slate-500">
-                    Huynh có thể đổi người làm hoặc số giờ trước khi nạp
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Bạn có thể đổi người làm hoặc số giờ trước khi nạp
                   </span>
                 </div>
 
@@ -2881,7 +3740,7 @@ export default function KanbanBoard() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-1">
-                          <span className="font-mono text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                          <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200/80 dark:border-slate-700">
                             #{pt.code}
                           </span>
                           <input
@@ -2892,7 +3751,7 @@ export default function KanbanBoard() {
                               updated[idx].title = e.target.value;
                               setAiPreviewTasks(updated);
                             }}
-                            className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 focus:border-purple-500 focus:outline-hidden"
+                            className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 focus:border-slate-900 focus:outline-hidden"
                           />
                         </div>
                         {pt.dependsOn && (
@@ -2921,7 +3780,7 @@ export default function KanbanBoard() {
                               value: m.name,
                               label: `${m.name} (${m.role})`,
                               icon: (
-                                <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ${m.color}`}>
+                                <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ${getAssigneeAvatarColor(m.name, m.color)}`}>
                                   {m.avatar}
                                 </span>
                               ),
@@ -2996,15 +3855,15 @@ export default function KanbanBoard() {
               ) : (
                 <>
                   <button
-                    onClick={() => setAiModalOpen(false)}
-                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    onClick={handleCloseAiModal}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 cursor-pointer"
                   >
                     Đóng
                   </button>
                   <button
                     disabled={aiGenerating || !aiFeatureName.trim() || aiSelectedMemberIds.length === 0}
                     onClick={handleGenerateWbs}
-                    className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 text-xs font-semibold shadow-xs hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-50 cursor-pointer transition-colors"
                   >
                     {aiGenerating ? (
                       <>
@@ -3025,365 +3884,29 @@ export default function KanbanBoard() {
         </div>
       )}
 
-      {/* ── TASK DETAIL MODAL (LINEAR / JIRA STYLE WITH SCRUM & SE SPECS) ────────────────────────── */}
-      {selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl overflow-hidden relative">
-            {/* Rubber Stamp Slam for Completed Task (solvik.mp4 t=30s) */}
-            {(selectedTask.column === "done" || selectedTask.column === "verified") && (
-              <div className="absolute right-6 top-16 pointer-events-none rubber-stamp-slam z-20">
-                <div className="border-3 border-emerald-600 text-emerald-700 font-black font-mono tracking-widest text-xs px-3 py-1 rounded-lg bg-emerald-50/95 shadow-md backdrop-blur-xs flex items-center gap-1.5 uppercase -rotate-6">
-                  <CheckCheck size={14} className="stroke-[3]" />
-                  <span>ĐÃ NGHIỆM THU • DoD 100%</span>
-                </div>
-              </div>
-            )}
-            {/* Header */}
-            <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                  #{selectedTask.code}
-                </span>
-                <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${selectedTask.epicColor}`}>
-                  {selectedTask.epic}
-                </span>
-                {selectedTask.moscow && (
-                  <span
-                    className={`rounded px-2 py-0.5 text-xs font-bold uppercase ${
-                      selectedTask.moscow === "must"
-                        ? "bg-rose-100 text-rose-700 border border-rose-200"
-                        : selectedTask.moscow === "should"
-                        ? "bg-amber-100 text-amber-800 border border-amber-200"
-                        : selectedTask.moscow === "could"
-                        ? "bg-sky-100 text-sky-800 border border-sky-200"
-                        : "bg-slate-100 text-slate-700 border border-slate-200"
-                    }`}
-                  >
-                    MoSCoW: {selectedTask.moscow.toUpperCase()}
-                  </span>
-                )}
-                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono font-bold text-slate-700">
-                  {selectedTask.points} Story Points
-                </span>
-                {selectedTask.isBonus && (
-                  <span className="rounded bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-xs font-bold uppercase">
-                    Bonus
-                  </span>
-                )}
-              </div>
-              <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Tab Switcher inside Modal */}
-            <div className="mb-3 flex border-b border-slate-100">
-              <button
-                onClick={() => setTaskDetailTab("general")}
-                className={`pb-2 text-xs font-semibold transition border-b-2 mr-4 ${
-                  taskDetailTab === "general"
-                    ? "border-blue-600 text-blue-600 font-bold"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Tổng quan & Checklist
-              </button>
-              <button
-                onClick={() => setTaskDetailTab("engineering")}
-                className={`pb-2 text-xs font-semibold transition border-b-2 flex items-center gap-1.5 ${
-                  taskDetailTab === "engineering"
-                    ? "border-indigo-600 text-indigo-600 font-bold"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <GraduationCap size={14} />
-                Quy chuẩn Kỹ nghệ Scrum (User Story, AC Gherkin, DoD)
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto pr-1 space-y-4">
-              {taskDetailTab === "general" ? (
-                <>
-                  {/* Title & Description */}
-                  <div>
-                    <h2 className="mb-1 text-base font-bold text-slate-900">{selectedTask.title}</h2>
-                    <p className="text-xs leading-relaxed text-slate-600">{selectedTask.description}</p>
-                  </div>
-
-                  {/* Details Grid */}
-                  <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3.5 text-xs">
-                    <div>
-                      <span className="text-slate-400 block mb-0.5">Người phụ trách:</span>
-                      <span className="font-semibold text-slate-800">
-                        {selectedTask.assignee.name} ({selectedTask.assignee.role})
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block mb-0.5">Thời lượng ước tính:</span>
-                      <span className="font-semibold text-slate-800">{selectedTask.estimateHours} giờ làm việc</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block mb-0.5">Trạng thái cột:</span>
-                      <span className="font-bold uppercase text-blue-700">{selectedTask.column}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block mb-0.5">Hạn chót (Deadline):</span>
-                      <span className="font-semibold text-slate-800">{selectedTask.dueDate}</span>
-                    </div>
-                  </div>
-
-                  {/* GitHub Integration Box (Chuẩn Thầy Phước) */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                        <Link2 size={13} className="text-blue-600" />
-                        GitHub Integration
-                      </span>
-                      {selectedTask.submissionRequirement && (
-                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                          Yêu cầu nộp: {selectedTask.submissionRequirement}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500">Mã task:</span>
-                      <span className="font-mono text-xs font-bold bg-white text-blue-700 px-2 py-0.5 rounded border border-slate-200">
-                        {selectedTask.code}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(selectedTask.code);
-                          setCopiedTaskCode(true);
-                          setTimeout(() => setCopiedTaskCode(false), 2000);
-                        }}
-                        className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
-                      >
-                        {copiedTaskCode ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
-                        {copiedTaskCode ? "Đã sao chép" : "Sao chép"}
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Ghi mã vào commit message (vd <code className="text-slate-800 font-bold">{selectedTask.code}: thêm form đăng nhập</code>), tên nhánh (vd <code className="text-slate-800 font-bold">feature/{selectedTask.code.toLowerCase()}-ten-ngan</code>) hoặc tiêu đề PR để commit và PR tự gắn vào task.
-                    </p>
-
-                    {/* Minh Chứng */}
-                    {selectedTask.submissionUrl && (
-                      <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
-                        <span className="text-slate-500 font-medium">Minh chứng:</span>
-                        <a
-                          href={selectedTask.submissionUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-blue-600 hover:underline flex items-center gap-1 truncate max-w-[320px]"
-                        >
-                          <Link2 size={12} className="shrink-0" />
-                          {selectedTask.submissionUrl}
-                        </a>
-                      </div>
-                    )}
-
-                    {/* Lịch Sử Chuyển Trạng Thái (Audit History) */}
-                    {selectedTask.auditLogs && selectedTask.auditLogs.length > 0 && (
-                      <div className="pt-2 border-t border-slate-200/60 space-y-1">
-                        <span className="text-[11px] font-bold text-slate-700 block">Lịch sử di chuyển:</span>
-                        {selectedTask.auditLogs.map((log, idx) => (
-                          <div key={idx} className="text-[10px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200/60 flex items-center justify-between">
-                            <span>{log.user} • {log.fromColumn} → {log.toColumn}</span>
-                            <span className="text-slate-400">{log.timestamp}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Checklist */}
-                  {selectedTask.checklist.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
-                        <ListChecks size={14} className="text-blue-600" />
-                        Danh sách việc cần làm (Checklist):
-                      </h4>
-                      <div className="space-y-1.5 rounded-xl border border-slate-200 p-2.5 bg-slate-50/50">
-                        {selectedTask.checklist.map((item) => (
-                          <label
-                            key={item.id}
-                            className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={item.done}
-                              onChange={() => {
-                                const updated = selectedTask.checklist.map((c) =>
-                                  c.id === item.id ? { ...c, done: !c.done } : c
-                                );
-                                setSelectedTask({ ...selectedTask, checklist: updated });
-                                setTasks((prev) =>
-                                  prev.map((t) =>
-                                    t.id === selectedTask.id ? { ...t, checklist: updated } : t
-                                  )
-                                );
-                              }}
-                              className="rounded border-slate-300 text-blue-600"
-                            />
-                            <span className={item.done ? "line-through text-slate-400" : ""}>{item.text}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Move Column Selector */}
-                  <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                    <span className="text-xs font-semibold text-slate-700">Chuyển sang cột:</span>
-                    <div className="flex gap-1.5">
-                      {columnsConfig.map((c) => (
-                        <button
-                          key={c.id}
-                          onClick={() => {
-                            moveTask(selectedTask.id, c.id);
-                            setSelectedTask((prev) => (prev ? { ...prev, column: c.id } : null));
-                          }}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                            selectedTask.column === c.id
-                              ? "bg-slate-900 text-white"
-                              : "border border-slate-200 bg-white text-slate-600 hover:border-blue-400"
-                          }`}
-                        >
-                          {c.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-3.5">
-                  {/* User Story (INVEST Framework) */}
-                  <div className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                        <FileText size={14} className="text-blue-600" />
-                        Cấu trúc User Story (Chuẩn INVEST - Rikkei SS03):
-                      </span>
-                      <span className="text-[10px] font-mono uppercase bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">
-                        Agile SS03
-                      </span>
-                    </div>
-                    {selectedTask.userStory ? (
-                      <div className="space-y-1 text-xs leading-relaxed text-slate-700">
-                        <p>
-                          <span className="font-bold text-slate-900">Là (Role): </span>
-                          <span className="text-blue-700 font-semibold">{selectedTask.userStory.role}</span>
-                        </p>
-                        <p>
-                          <span className="font-bold text-slate-900">Tôi muốn (Goal): </span>
-                          <span>{selectedTask.userStory.want}</span>
-                        </p>
-                        <p>
-                          <span className="font-bold text-slate-900">Để mang lại lợi ích (Benefit): </span>
-                          <span className="text-emerald-700 font-medium">{selectedTask.userStory.benefit}</span>
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500 italic">Chưa có User Story chi tiết.</p>
-                    )}
-                  </div>
-
-                  {/* Acceptance Criteria (Gherkin Syntax) */}
-                  <div className="rounded-2xl border border-purple-200 bg-purple-50/40 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                        <ListChecks size={14} className="text-purple-600" />
-                        Tiêu chí Nghiệm thu (Acceptance Criteria - Cú pháp Gherkin):
-                      </span>
-                      <span className="text-[10px] font-mono uppercase bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-semibold">
-                        Agile SS05
-                      </span>
-                    </div>
-                    {selectedTask.acceptanceCriteria ? (
-                      <div className="rounded-xl border border-purple-100 bg-white p-3 font-mono text-[11px] leading-relaxed text-slate-800">
-                        {selectedTask.acceptanceCriteria.split("\n").map((line, idx) => {
-                          const isGiven = line.startsWith("Given");
-                          const isWhen = line.startsWith("When");
-                          const isThen = line.startsWith("Then");
-                          return (
-                            <div key={idx} className="py-0.5">
-                              {isGiven && <span className="font-bold text-blue-600">GIVEN </span>}
-                              {isWhen && <span className="font-bold text-amber-600">WHEN </span>}
-                              {isThen && <span className="font-bold text-emerald-600">THEN </span>}
-                              {!isGiven && !isWhen && !isThen && <span>{line}</span>}
-                              {(isGiven || isWhen || isThen) && (
-                                <span>{line.replace(/^(Given|When|Then)\s*/i, "")}</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500 italic">Chưa thiết lập cú pháp Gherkin.</p>
-                    )}
-                  </div>
-
-                  {/* Definition of Done (DoD) Checklist */}
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                        <ShieldCheck size={14} className="text-emerald-600" />
-                        Tiêu chuẩn Hoàn thành Chung (Definition of Done - DoD):
-                      </span>
-                      <span className="text-[10px] font-mono uppercase bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-semibold">
-                        4 Tiêu chuẩn Công nghiệp
-                      </span>
-                    </div>
-                    <div className="space-y-2 rounded-xl border border-emerald-100 bg-white p-3">
-                      {(selectedTask.definitionOfDone || defaultDoD(false)).map((item) => (
-                        <label
-                          key={item.id}
-                          className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={item.done}
-                            onChange={() => {
-                              const currentDoD = selectedTask.definitionOfDone || defaultDoD(false);
-                              const updated = currentDoD.map((d) =>
-                                d.id === item.id ? { ...d, done: !d.done } : d
-                              );
-                              setSelectedTask({ ...selectedTask, definitionOfDone: updated });
-                              setTasks((prev) =>
-                                prev.map((t) =>
-                                  t.id === selectedTask.id ? { ...t, definitionOfDone: updated } : t
-                                )
-                              );
-                            }}
-                            className="rounded border-slate-300 text-emerald-600"
-                          />
-                          <span className={item.done ? "font-semibold text-emerald-800 line-through opacity-80" : "text-slate-700"}>
-                            {item.text}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-              <span className="text-[11px] text-slate-400">
-                Tuân thủ quy chuẩn IEEE 830, Rikkei Education & Ràng buộc H1-H4
-              </span>
-              <button
-                onClick={() => setSelectedTask(null)}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── TASK DETAIL DRAWER (AUTHENTIC MARLO 3-ZONE FLOATING DRAWER) ────────────────── */}
+      <MarloTaskDrawer
+        task={selectedTask}
+        teamMembers={teamMembers}
+        onClose={() => setSelectedTask(null)}
+        onUpdateTask={(updated) => {
+          setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+          setSelectedTask(updated);
+        }}
+        onDeleteTask={(taskToDelete) => {
+          handleDeleteTask(taskToDelete);
+          setSelectedTask(null);
+        }}
+        onMoveColumn={(taskId, col) => {
+          const task = tasks.find((t) => t.id === taskId);
+          const previousCol = task?.column;
+          moveTask(taskId, col);
+          setSelectedTask((prev) => (prev ? { ...prev, column: col } : null));
+          if (task && previousCol && previousCol !== col) {
+            triggerUndoToast(task, previousCol, col);
+          }
+        }}
+      />
 
       {/* Teacher Standard CSV Manager Modal */}
       <TaskCsvManagerModal
@@ -3394,48 +3917,64 @@ export default function KanbanBoard() {
         onImportTasks={handleImportCsvTasks}
       />
 
+      {/* ── Marlo Authentic New Task Modal (With Integrated Checklist) ── */}
+      <MarloNewTaskModal
+        isOpen={isNewTaskModalOpen}
+        onClose={() => setIsNewTaskModalOpen(false)}
+        onAddTask={(newTask) => {
+          setTasks((prev) => [newTask, ...prev]);
+          setSelectedTask(newTask); // Open drawer so user can inspect their newly created task immediately!
+          setJustDroppedTaskId(newTask.id);
+          if (justDroppedTimerRef.current) clearTimeout(justDroppedTimerRef.current);
+          justDroppedTimerRef.current = setTimeout(() => {
+            setJustDroppedTaskId(null);
+          }, 600);
+        }}
+        teamMembers={teamMembers}
+        currentProjectName={currentProject?.name}
+        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+      />
+
       {/* ── ENGINEERING & AGILE SCRUM HANDBOOK MODAL (RIKKEI EDUCATION SYLLABUS) ────────── */}
       {handbookOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl overflow-hidden">
+        <div onClick={handleCloseHandbook} className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 ${isHandbookClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-3xl max-h-[90vh] flex flex-col rounded-[28px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#11141c] p-6 shadow-2xl overflow-hidden ${isHandbookClosing ? "marlo-modal-out" : "marlo-modal"}`}>
             {/* Header */}
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700 shadow-xs">
-                  <GraduationCap size={22} />
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Cẩm nang Kỹ nghệ Phần mềm & Agile Scrum
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Đúc kết bộ bài giảng Phân tích thiết kế hệ thống & Scrum (Rikkei Education) cho Đề án CodeMind
-                  </p>
-                </div>
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Cẩm nang Kỹ nghệ Phần mềm & Agile Scrum
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Đúc kết bộ bài giảng Phân tích thiết kế hệ thống & Scrum (Rikkei Education) cho Đề án CodeMind
+                </p>
               </div>
-              <button onClick={() => setHandbookOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={20} />
+              <button
+                onClick={handleCloseHandbook}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X size={18} />
               </button>
             </div>
 
             {/* Tab Switcher */}
-            <div className="mb-4 flex rounded-2xl border border-slate-200 bg-slate-100/70 p-1">
+            <div className="mb-4 flex rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-100 dark:bg-[#171c28] p-1">
               <button
                 onClick={() => setHandbookTab("scrum")}
-                className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
+                className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
                   handbookTab === "scrum"
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-white dark:bg-[#232a3c] text-slate-900 dark:text-white shadow-2xs font-bold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 1. Quy trình Agile / Scrum (SS02 - SS09)
               </button>
               <button
                 onClick={() => setHandbookTab("pttk")}
-                className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
+                className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
                   handbookTab === "pttk"
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-white dark:bg-[#232a3c] text-slate-900 dark:text-white shadow-2xs font-bold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 2. Phân tích Thiết kế Hệ thống & UML (SS01 - SS17)
@@ -3443,53 +3982,53 @@ export default function KanbanBoard() {
             </div>
 
             {/* Handbook Content Body */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-4 text-xs text-slate-700">
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4 text-xs text-slate-700 dark:text-slate-300">
               {handbookTab === "scrum" ? (
                 <>
                   {/* Pillar 1: 3 Trụ cột & 3 Vai trò */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">1</span>
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-[#141824] p-4 space-y-3">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">1</span>
                       3 Trụ cột Scrum & 3 Vai trò Cốt lõi (Session 02)
                     </h4>
-                    <div className="grid grid-cols-3 gap-2.5 mb-2">
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60 shadow-2xs">
-                        <p className="font-bold text-blue-700">Minh bạch (Transparency)</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Mọi task, blocker H2 và story points đều hiển thị công khai trên Kanban.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white">Minh bạch (Transparency)</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Mọi task, blocker H2 và story points đều hiển thị công khai trên Kanban.</p>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60 shadow-2xs">
-                        <p className="font-bold text-amber-700">Thanh tra (Inspection)</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Thường xuyên kiểm tra tiến độ, burn-down velocity và chất lượng mã nguồn.</p>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white">Thanh tra (Inspection)</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Thường xuyên kiểm tra tiến độ, burn-down velocity và chất lượng mã nguồn.</p>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60 shadow-2xs">
-                        <p className="font-bold text-emerald-700">Thích nghi (Adaptation)</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Sẵn sàng điều chỉnh kế hoạch Sprint khi có góp ý từ Thầy Phước.</p>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white">Thích nghi (Adaptation)</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Sẵn sàng điều chỉnh kế hoạch Sprint khi có góp ý từ Hội đồng Phản biện.</p>
                       </div>
                     </div>
-                    <p className="text-[11px] text-slate-600">
-                      <strong>3 Vai trò:</strong> Product Owner (Định hướng sản phẩm), Scrum Master (Điều phối, gỡ bỏ blocker), Developers (Đội ngũ kỹ thuật).
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <strong className="text-slate-700 dark:text-slate-300">3 Vai trò:</strong> Product Owner (Định hướng sản phẩm), Scrum Master (Điều phối, gỡ bỏ blocker), Developers (Đội ngũ kỹ thuật).
                     </p>
                   </div>
 
                   {/* Pillar 2: D.E.E.P Backlog & INVEST User Story */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-purple-700 font-bold text-[10px]">2</span>
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-[#141824] p-4 space-y-3">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">2</span>
                       Tiêu chuẩn D.E.E.P cho Product Backlog & INVEST cho User Story (Session 03)
                     </h4>
-                    <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
-                        <p className="font-bold text-purple-700 mb-1">Tiêu chuẩn D.E.E.P Backlog:</p>
-                        <ul className="space-y-0.5 text-[11px] list-disc list-inside text-slate-600">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white mb-1.5">Tiêu chuẩn D.E.E.P Backlog:</p>
+                        <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                           <li><strong>D</strong>etailed appropriately: Task đỉnh chi tiết, đáy là Epic</li>
                           <li><strong>E</strong>stimated: Toàn bộ thẻ đều có điểm Fibonacci</li>
                           <li><strong>E</strong>mergent: Backlog liên tục tiến hóa theo Sprint</li>
                           <li><strong>P</strong>rioritized: Luôn ưu tiên theo mức độ quan trọng</li>
                         </ul>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
-                        <p className="font-bold text-indigo-700 mb-1">Tiêu chuẩn INVEST User Story:</p>
-                        <ul className="space-y-0.5 text-[11px] list-disc list-inside text-slate-600">
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white mb-1.5">Tiêu chuẩn INVEST User Story:</p>
+                        <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                           <li><strong>I</strong>ndependent: Độc lập tối đa giữa các Story</li>
                           <li><strong>N</strong>egotiable: Có thể thương lượng phạm vi</li>
                           <li><strong>V</strong>aluable: Mang lại giá trị cho người dùng cuối</li>
@@ -3502,43 +4041,63 @@ export default function KanbanBoard() {
                   </div>
 
                   {/* Pillar 3: MoSCoW & Gherkin vs DoD */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-700 font-bold text-[10px]">3</span>
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-[#141824] p-4 space-y-3">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">3</span>
                       Phân loại MoSCoW & Cú pháp Gherkin vs Definition of Done (Session 05)
                     </h4>
-                    <div className="grid grid-cols-4 gap-2 mb-2 text-center text-[11px]">
-                      <div className="rounded-xl bg-rose-50 border border-rose-200 p-2 text-rose-800 font-bold">
-                        M - Must Have<br/><span className="text-[10px] font-normal text-rose-600">Bắt buộc hoàn thành</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] border border-slate-200/80 dark:border-slate-700/60 p-2.5 shadow-2xs">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                          <span className="w-2 h-2 rounded-full bg-rose-500" />
+                          <span>M · Must Have</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Bắt buộc hoàn thành</p>
                       </div>
-                      <div className="rounded-xl bg-amber-50 border border-amber-200 p-2 text-amber-800 font-bold">
-                        S - Should Have<br/><span className="text-[10px] font-normal text-amber-600">Nên có trong bản MVP</span>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] border border-slate-200/80 dark:border-slate-700/60 p-2.5 shadow-2xs">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                          <span>S · Should Have</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Nên có trong bản MVP</p>
                       </div>
-                      <div className="rounded-xl bg-sky-50 border border-sky-200 p-2 text-sky-800 font-bold">
-                        C - Could Have<br/><span className="text-[10px] font-normal text-sky-600">Gia tăng trải nghiệm</span>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] border border-slate-200/80 dark:border-slate-700/60 p-2.5 shadow-2xs">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                          <span className="w-2 h-2 rounded-full bg-sky-500" />
+                          <span>C · Could Have</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Gia tăng trải nghiệm</p>
                       </div>
-                      <div className="rounded-xl bg-slate-100 border border-slate-200 p-2 text-slate-700 font-bold">
-                        W - Won't Have<br/><span className="text-[10px] font-normal text-slate-500">Dời sang giai đoạn sau</span>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] border border-slate-200/80 dark:border-slate-700/60 p-2.5 shadow-2xs">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                          <span className="w-2 h-2 rounded-full bg-slate-400" />
+                          <span>W · Won't Have</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Dời sang giai đoạn sau</p>
                       </div>
                     </div>
-                    <div className="rounded-xl bg-white p-2.5 border border-slate-200/60 text-[11px]">
-                      <span className="font-bold text-slate-800">Phân biệt AC và DoD: </span>
-                      <strong>AC (Acceptance Criteria)</strong> là tiêu chí nghiệm thu riêng cho từng Story (Given - When - Then). Còn <strong>DoD (Definition of Done)</strong> là tiêu chuẩn kỹ thuật chung bắt buộc cho MỌI task (100% test pass, Clean 3 tầng, Lint pass, Review PR).
+                    <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 text-[11px] leading-relaxed shadow-2xs">
+                      <span className="font-bold text-slate-900 dark:text-white">Phân biệt AC và DoD: </span>
+                      <span className="text-slate-600 dark:text-slate-300">
+                        <strong>AC (Acceptance Criteria)</strong> là tiêu chí nghiệm thu riêng cho từng Story (Given - When - Then). Còn <strong>DoD (Definition of Done)</strong> là tiêu chuẩn kỹ thuật chung bắt buộc cho MỌI task (100% test pass, Clean 3 tầng, Lint pass, Review PR).
+                      </span>
                     </div>
                   </div>
 
                   {/* Pillar 4: Fibonacci & Retro 5 Bước */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">4</span>
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-[#141824] p-4 space-y-3">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">4</span>
                       Dãy Fibonacci (1, 2, 3, 5, 8) & Quy trình 5 Bước Retrospective (Session 07, 09)
                     </h4>
-                    <p className="text-[11px] text-slate-600 mb-2">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       Dãy số Fibonacci phản ánh độ bất định tăng phi tuyến tính. Task trên 8 Story Points bắt buộc phải chẻ nhỏ (WBS) để kiểm soát rủi ro.
                     </p>
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-[11px] text-emerald-900">
-                      <strong>5 Bước Retrospective (Văn hóa "No Blame Culture"):</strong>
-                      <ol className="list-decimal list-inside space-y-0.5 mt-1">
+                    <div className="rounded-xl bg-white dark:bg-[#1a202e] border border-slate-200/80 dark:border-slate-700/60 p-3.5 text-[11px] text-slate-700 dark:text-slate-300 shadow-2xs">
+                      <div className="font-bold text-slate-900 dark:text-white mb-2">
+                        5 Bước Retrospective (Văn hóa "No Blame Culture"):
+                      </div>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-300">
                         <li><strong>Set the Stage:</strong> Khởi động, tạo môi trường cởi mở, tin tưởng</li>
                         <li><strong>Gather Data:</strong> Thu thập số liệu Velocity, Burndown, task Done/Fail</li>
                         <li><strong>Generate Insights:</strong> Phân tích nguyên nhân gốc rễ (Root Cause)</li>
@@ -3551,92 +4110,92 @@ export default function KanbanBoard() {
               ) : (
                 <>
                   {/* PTTK 1: Problem Solver vs Thợ gõ code */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px]">1</span>
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-[#141824] p-4 space-y-3">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">1</span>
                       Tư duy Problem Solver vs Thợ gõ code (Fred Brooks - Session 01)
                     </h4>
-                    <blockquote className="border-l-4 border-indigo-500 pl-3 italic text-[11px] text-indigo-950 mb-2">
+                    <blockquote className="border-l-2 border-[#f97316] pl-3 italic text-[11px] text-slate-700 dark:text-slate-300">
                       "Phần khó nhất của việc xây dựng phần mềm là quyết định chính xác những gì cần phải xây dựng. Công nghệ chỉ là công cụ. Giá trị thực sự nằm ở việc giải quyết đúng bài toán trước khi viết dòng code đầu tiên."
                     </blockquote>
-                    <p className="text-[11px] text-slate-600">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       CodeMind Campus áp dụng triệt để nguyên lý này: Socratic AI Tutor không đưa code sẵn mà hướng dẫn sinh viên tìm nguyên nhân gốc rễ (Root Cause) của lỗi thuật toán.
                     </p>
                   </div>
 
                   {/* PTTK 2: Ma trận FR vs NFR */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">2</span>
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-[#141824] p-4 space-y-3">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">2</span>
                       Phân định Yêu cầu Chức năng (FR) & Phi chức năng (NFR - Session 03)
                     </h4>
-                    <div className="grid grid-cols-2 gap-3 text-[11px]">
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
-                        <p className="font-bold text-blue-700 mb-1">Functional Requirements (FR):</p>
-                        <ul className="space-y-0.5 list-disc list-inside text-slate-600">
-                          <li>LMS Lập trình & nộp bài qua Git / kéo thả</li>
-                          <li>Sandbox chấm tự động 5 test cases Deque</li>
-                          <li>Socratic AI Tutor gợi ý theo 3 nấc (Hint Ladder)</li>
-                          <li>Bảng Kanban Ràng buộc H2 & Anti-Freerider</li>
-                          <li>AI Defense Simulator giả lập Hội đồng phản biện</li>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white mb-1.5">Functional Requirements (FR):</p>
+                        <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+                          <li>• LMS Lập trình & nộp bài qua Git / kéo thả</li>
+                          <li>• Sandbox chấm tự động 5 test cases Deque</li>
+                          <li>• Socratic AI Tutor gợi ý theo 3 nấc (Hint Ladder)</li>
+                          <li>• Bảng Kanban Ràng buộc H2 & Anti-Freerider</li>
+                          <li>• AI Defense Simulator giả lập Hội đồng phản biện</li>
                         </ul>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
-                        <p className="font-bold text-purple-700 mb-1">Non-Functional Requirements (NFR):</p>
-                        <ul className="space-y-0.5 list-disc list-inside text-slate-600">
-                          <li><strong>Hiệu năng:</strong> Sandbox timeout &lt; 2000ms, API &lt; 300ms</li>
-                          <li><strong>Bảo mật:</strong> Docker isolated process chống memory leak</li>
-                          <li><strong>Chuẩn hóa dữ liệu:</strong> Timestamp chuẩn ISO-8601 UTC (H4)</li>
-                          <li><strong>Độ sẵn sàng:</strong> Kiến trúc Layered độc lập chịu tải cao</li>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white mb-1.5">Non-Functional Requirements (NFR):</p>
+                        <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+                          <li>• <strong>Hiệu năng:</strong> Sandbox timeout &lt; 2000ms, API &lt; 300ms</li>
+                          <li>• <strong>Bảo mật:</strong> Docker isolated process chống memory leak</li>
+                          <li>• <strong>Chuẩn hóa dữ liệu:</strong> Timestamp chuẩn ISO-8601 UTC (H4)</li>
+                          <li>• <strong>Độ sẵn sàng:</strong> Kiến trúc Layered độc lập chịu tải cao</li>
                         </ul>
                       </div>
                     </div>
                   </div>
 
                   {/* PTTK 3: 4 Biểu đồ UML Cốt lõi */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-bold text-[10px]">3</span>
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-[#141824] p-4 space-y-3">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">3</span>
                       4 Biểu đồ UML Cốt lõi trong Thiết kế Hệ thống (Session 05, 07, 09)
                     </h4>
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <div className="rounded-xl bg-white p-2 border border-slate-200/60">
-                        <p className="font-bold text-slate-800">1. Use Case Diagram (SS05)</p>
-                        <p className="text-slate-500 mt-0.5">Mô hình hóa Actors (Sinh viên, Giảng viên, AI Mentor) cùng quan hệ &lt;&lt;include&gt;&gt; (Chấm bài include Sandbox) và &lt;&lt;extend&gt;&gt; (Hint AI).</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px]">
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white">1. Use Case Diagram (SS05)</p>
+                        <p className="text-slate-500 dark:text-slate-400 mt-1">Mô hình hóa Actors (Sinh viên, Giảng viên, AI Mentor) cùng quan hệ &lt;&lt;include&gt;&gt; (Chấm bài include Sandbox) và &lt;&lt;extend&gt;&gt; (Hint AI).</p>
                       </div>
-                      <div className="rounded-xl bg-white p-2 border border-slate-200/60">
-                        <p className="font-bold text-slate-800">2. Activity Diagram (SS05)</p>
-                        <p className="text-slate-500 mt-0.5">Biểu diễn luồng công việc chấm code, rẽ nhánh điều kiện Pass 5/5 sinh hash SHA-256 vs Fail mở Hint 1-3.</p>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white">2. Activity Diagram (SS05)</p>
+                        <p className="text-slate-500 dark:text-slate-400 mt-1">Biểu diễn luồng công việc chấm code, rẽ nhánh điều kiện Pass 5/5 sinh hash SHA-256 vs Fail mở Hint 1-3.</p>
                       </div>
-                      <div className="rounded-xl bg-white p-2 border border-slate-200/60">
-                        <p className="font-bold text-slate-800">3. Class Diagram (SS07)</p>
-                        <p className="text-slate-500 mt-0.5">Cấu trúc OOP với thuộc tính, phương thức, Access Modifiers (+, -, #) và quan hệ Association / Composition giữa các Entity.</p>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white">3. Class Diagram (SS07)</p>
+                        <p className="text-slate-500 dark:text-slate-400 mt-1">Cấu trúc OOP với thuộc tính, phương thức, Access Modifiers (+, -, #) và quan hệ Association / Composition giữa các Entity.</p>
                       </div>
-                      <div className="rounded-xl bg-white p-2 border border-slate-200/60">
-                        <p className="font-bold text-slate-800">4. Sequence Diagram (SS09)</p>
-                        <p className="text-slate-500 mt-0.5">Trực quan hóa thông điệp đồng bộ/bất đồng bộ theo trục thời gian giữa React UI, FastAPI Router, Service, Docker và Database.</p>
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white">4. Sequence Diagram (SS09)</p>
+                        <p className="text-slate-500 dark:text-slate-400 mt-1">Trực quan hóa thông điệp đồng bộ/bất đồng bộ theo trục thời gian giữa React UI, FastAPI Router, Service, Docker và Database.</p>
                       </div>
                     </div>
                   </div>
 
                   {/* PTTK 4: Chuẩn hóa 3NF & Kiến trúc 3 Tầng */}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">4</span>
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-[#141824] p-4 space-y-3">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">4</span>
                       Chuẩn hóa CSDL 3NF & Kiến trúc 3 Tầng Phân Tách (Session 15, 17)
                     </h4>
-                    <div className="space-y-2 text-[11px]">
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
-                        <p className="font-bold text-emerald-800 mb-1">3 Cấp độ Chuẩn hóa CSDL (3NF):</p>
-                        <p className="text-slate-600">
+                    <div className="space-y-2.5 text-[11px]">
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white mb-1.5">3 Cấp độ Chuẩn hóa CSDL (3NF):</p>
+                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
                           <strong>1NF:</strong> Mọi thuộc tính đều là giá trị nguyên tử (Atomic).<br/>
                           <strong>2NF:</strong> Đạt 1NF và loại bỏ phụ thuộc một phần vào khóa chính phức hợp.<br/>
                           <strong>3NF:</strong> Đạt 2NF và loại bỏ toàn bộ phụ thuộc bắc cầu (Transitive dependency) giữa Users, Submissions và TestCases.
                         </p>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 border border-slate-200/60">
-                        <p className="font-bold text-indigo-800 mb-1">Mô hình Kiến trúc 3 Tầng (3-Tier Clean Architecture):</p>
-                        <p className="text-slate-600">
+                      <div className="rounded-xl bg-white dark:bg-[#1a202e] p-3 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                        <p className="font-bold text-slate-900 dark:text-white mb-1.5">Mô hình Kiến trúc 3 Tầng (3-Tier Clean Architecture):</p>
+                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
                           • <strong>Presentation Layer:</strong> React 19 UI & FastAPI Router (Validation, Response JSON).<br/>
                           • <strong>Business Logic Layer:</strong> Services (Socratic Tutor, Sandbox Runner, Anti-freerider Engine).<br/>
                           • <strong>Data Access Layer:</strong> SQLAlchemy Models, Migrations & SQLite/PostgreSQL (UTC ISO-8601 H4).
@@ -3649,13 +4208,13 @@ export default function KanbanBoard() {
             </div>
 
             {/* Modal Footer */}
-            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-              <span className="text-[11px] text-slate-400">
-                Chương trình chuẩn Rikkei Education • Thầy Nguyễn Phước hướng dẫn
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-3.5">
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                Chương trình chuẩn Rikkei Education • Hội đồng Đồ án hướng dẫn
               </span>
               <button
-                onClick={() => setHandbookOpen(false)}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                onClick={handleCloseHandbook}
+                className="rounded-xl bg-slate-900 dark:bg-white px-4 py-2 text-xs font-semibold text-white dark:text-slate-900 shadow-sm hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Đã hiểu quy chuẩn
               </button>
@@ -3664,101 +4223,160 @@ export default function KanbanBoard() {
         </div>
       )}
 
-            {/* ── REAL TRELLO TILTED DRAG CARD PREVIEW (100% Solid White, Tilted 3.5deg, Zero Native Ghost) ── */}
-      {pointerDrag?.isDragging && pointerDrag.task && (
-        <div
-          style={{
-            position: "fixed",
-            left: pointerDrag.currentX - pointerDrag.offsetX,
-            top: pointerDrag.currentY - pointerDrag.offsetY,
-            width: pointerDrag.width,
-            transform: "rotate(3.5deg) scale(1.025)",
-            transformOrigin: "center center",
-            boxShadow: "0 22px 35px -5px rgba(15, 23, 42, 0.28), 0 8px 16px rgba(15, 23, 42, 0.12)",
-            backgroundColor: "#ffffff",
-            borderRadius: "12px",
-            border: "1px solid #cbd5e1",
-            zIndex: 99999,
-            pointerEvents: "none",
-          }}
-          className="flex flex-col p-3.5 select-none"
-        >
-          <div className="mb-2 flex items-center justify-between gap-1 text-[11px]">
-            <div className="flex items-center gap-1.5 min-w-0 max-w-[62%]">
-              <GripVertical size={13} className="text-slate-400 shrink-0" />
-              <span className="font-mono text-[10px] font-bold text-slate-700 shrink-0">
-                #{pointerDrag.task.code}
-              </span>
-              <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-semibold truncate ${pointerDrag.task.epicColor}`}>
-                {pointerDrag.task.epic}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-600">
-                {pointerDrag.task.points}p
-              </span>
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                pointerDrag.task.priority === "high" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"
-              }`}>
-                {pointerDrag.task.priority === "high" ? "P0" : "P1"}
-              </span>
-            </div>
-          </div>
-          <h3 className="mb-2 text-xs font-bold leading-snug text-slate-900 line-clamp-2">
-            {pointerDrag.task.title}
-          </h3>
-          <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black text-white bg-blue-600">
-                {pointerDrag.task.assignee.avatar}
-              </span>
-              <span className="truncate font-medium text-slate-700 text-[11px]">
-                {pointerDrag.task.assignee.name}
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono font-medium">
-              {pointerDrag.task.dueDate}
-            </span>
-          </div>
-        </div>
-      )}
+      {/* ── REAL TRELLO DRAG CARD PREVIEW (Đồng bộ 100% kích thước chữ, badge, border y hệt thẻ gốc) ── */}
+      {pointerDrag?.isDragging && pointerDrag.task && typeof document !== 'undefined' && (() => {
+        const dragTask = pointerDrag.task;
+        const dragCol = columnsConfig.find((c) => c.id === dragTask.column);
+        const dragMember = teamMembers.find((m) => m.name === dragTask.assignee.name);
+        const dragAvatarColor = getAssigneeAvatarColor(dragTask.assignee.name, dragMember?.color);
+        const dragChecklist = Array.isArray(dragTask.checklist) ? dragTask.checklist : [];
+        const dragDoneChecklist = dragChecklist.filter((c) => c.done).length;
+        const dragTotalChecklist = dragChecklist.length;
+        const dragDod = Array.isArray(dragTask.definitionOfDone) ? dragTask.definitionOfDone : [];
+        const dragDoneDodCount = dragDod.filter((d) => d.done).length;
+        const dragTotalDodCount = dragDod.length;
+        const dragParent = dragTask.dependsOn ? getTaskById(dragTask.dependsOn) : null;
+        const dragIsLocked = dragParent ? dragParent.column !== "done" : false;
 
-      {/* ── FLOATING TOAST NOTIFICATION WITH UNDO PILL (From solvik t=10s & gustra t=12s) ── */}
-      {undoToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 toast-slide-up pointer-events-auto">
-          <div className="flex items-center gap-3 bg-slate-900/95 text-white px-4 py-2.5 rounded-full shadow-2xl border border-slate-700/80 backdrop-blur-md text-xs sm:text-sm">
-            <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold shrink-0">
-              <Check size={13} className="stroke-[3]" />
-            </div>
-            {undoToast.undone ? (
-              <span className="text-slate-200 font-medium">
-                Đã hoàn tác thẻ <strong className="font-mono text-emerald-400">#{undoToast.taskCode}</strong> về cột <span className="text-white font-semibold">{undoToast.fromColTitle}</span>.
-              </span>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-slate-200">
-                  Đã chuyển <strong className="font-mono text-blue-300">#{undoToast.taskCode}</strong> sang <span className="text-white font-bold">{undoToast.toColTitle}</span>
+        return createPortal(
+          <div
+            ref={floatingCardRef}
+            style={{
+              position: "fixed",
+              left: 0,
+              top: 0,
+              width: pointerDrag.width,
+              transform: `translate3d(${dragTrackerRef.current.currentX - dragTrackerRef.current.offsetX}px, ${dragTrackerRef.current.currentY - dragTrackerRef.current.offsetY}px, 0) rotate(1.8deg)`,
+              transformOrigin: `${dragTrackerRef.current.offsetX}px ${dragTrackerRef.current.offsetY}px`,
+              zIndex: 99999,
+              pointerEvents: "none",
+              willChange: "transform",
+            }}
+            className={`flex flex-col p-3.5 select-none rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-[#181d29] border-l-[3.5px] ${dragCol?.cardBorderLeft || "border-l-blue-500"} shadow-[0_20px_40px_-8px_rgba(0,0,0,0.22),0_10px_20px_rgba(0,0,0,0.12)] dark:shadow-[0_22px_35px_-5px_rgba(0,0,0,0.7),0_8px_16px_rgba(0,0,0,0.5)]`}
+          >
+            {/* Drag Handle & Epic Tag */}
+            <div className="mb-2 flex items-center justify-between gap-1 text-[11px]">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <GripVertical size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
+                <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-0.5 shrink-0 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200/60">
+                  #{dragTask.code}
+                  {dragIsLocked && dragParent && (
+                    <span title={`Ràng buộc H2: Chờ #${dragParent.code} hoàn thành`} className="inline-flex text-rose-500 shrink-0 ml-0.5">
+                      <Lock size={11} />
+                    </span>
+                  )}
                 </span>
-                <button
-                  type="button"
-                  onClick={handleUndo}
-                  className="ml-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs shadow-sm transition active:scale-95 cursor-pointer"
-                >
-                  <RotateCcw size={11} className="stroke-[2.5]" />
-                  <span>Hoàn tác</span>
-                </button>
               </div>
-            )}
-            <button
-              type="button"
-              onClick={() => setUndoToast(null)}
-              className="ml-1 text-slate-400 hover:text-white transition p-1 cursor-pointer"
-              title="Đóng thông báo"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="rounded bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300">
+                  {dragTask.points}p
+                </span>
+              </div>
+            </div>
+
+            {/* Title - ĐỒNG BỘ 100% CỠ CHỮ [12px] font-semibold vừa vặn */}
+            <h3 className="mb-2 text-[12px] font-semibold leading-snug text-slate-900 dark:text-white line-clamp-2">
+              {dragTask.title}
+            </h3>
+
+            {/* Footer đầy đủ Assignee, Checklist, DoD, Hạn nộp dạng badge */}
+            <div className="mt-auto flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-2.5 text-[11px]">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ${dragAvatarColor} shadow-2xs`}
+                >
+                  {dragTask.assignee.avatar}
+                </span>
+                <span className="truncate font-semibold text-slate-700 dark:text-slate-300 text-[11px]">
+                  {dragTask.assignee.name}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-slate-500 text-[10px] shrink-0">
+                {dragTotalChecklist > 0 && (
+                  <span
+                    className={`flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-[10.5px] border-0 transition-colors ${
+                      dragDoneChecklist === dragTotalChecklist
+                        ? "bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
+                    <ListChecks size={11} />
+                    <span>{dragDoneChecklist}/{dragTotalChecklist}</span>
+                  </span>
+                )}
+
+                {dragTotalDodCount > 0 && (
+                  <span
+                    className={`flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-[10.5px] border-0 transition-colors ${
+                      dragDoneDodCount === dragTotalDodCount
+                        ? "bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
+                    <ShieldCheck size={11} />
+                    <span>{dragDoneDodCount}/{dragTotalDodCount}</span>
+                  </span>
+                )}
+
+                {dragTask.dueDate && (
+                  <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10.5px] font-medium border-0">
+                    <Calendar size={11} />
+                    <span>{dragTask.dueDate.length > 5 ? dragTask.dueDate.slice(0, 5) : dragTask.dueDate}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
+
+      {/* ── 🏷️ MARLO PROJECTS SLATE GRID MODAL ── */}
+      <MarloProjectSlateModal
+        isOpen={isProjectSlateOpen}
+        onClose={() => setIsProjectSlateOpen(false)}
+        projects={projects}
+        currentProjectId={currentProjectId}
+        onSelectProject={(id) => setCurrentProjectId(id)}
+        onOpenNewProjectModal={() => setIsNewProjectModalOpen(true)}
+        onTogglePinProject={handleTogglePinProject}
+      />
+
+      {/* ── 🏷️ CREATE NEW PROJECT MODAL ── */}
+      <MarloNewProjectModal
+        isOpen={isNewProjectModalOpen}
+        onClose={() => setIsNewProjectModalOpen(false)}
+        onCreateProject={handleCreateProject}
+      />
+
+      {/* ── FLOATING TOAST NOTIFICATION WITH UNDO PILL (Exact Marlo Design from user images) ── */}
+      {undoToast && (
+        <MarloToast
+          showUndo={!undoToast.undone}
+          onUndo={handleUndo}
+          message={
+            undoToast.undone ? (
+              undoToast.action === "delete" ? (
+                <>“{undoToast.taskTitle}” restored.</>
+              ) : (
+                <>“{undoToast.taskTitle}” → {undoToast.fromColTitle}</>
+              )
+            ) : undoToast.customMessage ? (
+              <span>{undoToast.customMessage}</span>
+            ) : undoToast.action === "delete" ? (
+              <>“{undoToast.taskTitle}” deleted.</>
+            ) : (
+              <>
+                <span className="font-semibold text-slate-900 dark:text-white">“{undoToast.taskTitle}”</span>
+                <span className="text-slate-400 dark:text-slate-500 mx-1.5 font-normal">→</span>
+                <span className="text-slate-700 dark:text-slate-300 font-medium">
+                  {undoToast.toCol === "in-progress" ? "In progress" : undoToast.toCol === "done" ? "Done" : undoToast.toColTitle}
+                </span>
+              </>
+            )
+          }
+        />
       )}
     </div>
   );

@@ -1,4 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useLayoutEffect } from "react";
+import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
+import MarloTitle from "../components/MarloTitle";
+import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import {
   AlertTriangle,
   BookOpen,
@@ -206,15 +209,15 @@ const initialClasses: CourseClass[] = [
           }
         ],
         mindmapEdges: [
-          { id: "e1-2", source: "node-1", target: "node-2", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "e1-3", source: "node-1", target: "node-3", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "e2-4", source: "node-2", target: "node-4", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "e3-4", source: "node-3", target: "node-4", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "e2-5", source: "node-2", target: "node-5", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "e3-5", source: "node-3", target: "node-5", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "e4-6", source: "node-4", target: "node-6", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "e5-6", source: "node-5", target: "node-6", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "e6-7", source: "node-6", target: "node-7", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } }
+          { id: "e1-2", source: "node-1", target: "node-2", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "e1-3", source: "node-1", target: "node-3", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "e2-4", source: "node-2", target: "node-4", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "e3-4", source: "node-3", target: "node-4", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "e2-5", source: "node-2", target: "node-5", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "e3-5", source: "node-3", target: "node-5", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "e4-6", source: "node-4", target: "node-6", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "e5-6", source: "node-5", target: "node-6", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "e6-7", source: "node-6", target: "node-7", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } }
         ],
         lessons: [
           {
@@ -358,10 +361,10 @@ const initialClasses: CourseClass[] = [
           }
         ],
         mindmapEdges: [
-          { id: "dsa-e1", source: "dsa-node-1", target: "dsa-node-2", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "dsa-e2", source: "dsa-node-1", target: "dsa-node-3", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "dsa-e3", source: "dsa-node-2", target: "dsa-node-4", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-          { id: "dsa-e4", source: "dsa-node-3", target: "dsa-node-5", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } }
+          { id: "dsa-e1", source: "dsa-node-1", target: "dsa-node-2", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "dsa-e2", source: "dsa-node-1", target: "dsa-node-3", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "dsa-e3", source: "dsa-node-2", target: "dsa-node-4", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+          { id: "dsa-e4", source: "dsa-node-3", target: "dsa-node-5", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } }
         ],
         lessons: [
           {
@@ -423,7 +426,10 @@ const mockSubmissions = [
 ];
 
 export default function InstructorPanel() {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [classes, setClasses] = useState<CourseClass[]>(initialClasses);
+
   const [selectedClassId, setSelectedClassId] = useState<string>("class-oop");
   const [tab, setTab] = useState<Tab>("syllabus");
 
@@ -466,6 +472,37 @@ export default function InstructorPanel() {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [selectedAssignmentChapterId, setSelectedAssignmentChapterId] = useState<string>("");
   const [assignmentDrawerOpen, setAssignmentDrawerOpen] = useState(false);
+  const [isLessonDrawerClosing, setIsLessonDrawerClosing] = useState(false);
+  const [isAssignmentDrawerClosing, setIsAssignmentDrawerClosing] = useState(false);
+
+  const handleCloseLessonDrawer = () => {
+    if (isLessonDrawerClosing) return;
+    setIsLessonDrawerClosing(true);
+    setTimeout(() => {
+      setLessonDrawerOpen(false);
+      setIsLessonDrawerClosing(false);
+    }, 220);
+  };
+
+  const handleCloseAssignmentDrawer = () => {
+    if (isAssignmentDrawerClosing) return;
+    setIsAssignmentDrawerClosing(true);
+    setTimeout(() => {
+      setAssignmentDrawerOpen(false);
+      setIsAssignmentDrawerClosing(false);
+    }, 220);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (lessonDrawerOpen) handleCloseLessonDrawer();
+        if (assignmentDrawerOpen) handleCloseAssignmentDrawer();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lessonDrawerOpen, assignmentDrawerOpen, isLessonDrawerClosing, isAssignmentDrawerClosing]);
   const [isNewAssignment, setIsNewAssignment] = useState(false);
 
   // Form states for assignment
@@ -913,7 +950,7 @@ export default function InstructorPanel() {
         addEdge(
           {
             ...params,
-            type: "bezier",
+            type: "default",
             markerEnd: { type: MarkerType.ArrowClosed },
             style: { strokeWidth: 2.2, stroke: "#64748b" },
           },
@@ -1070,11 +1107,11 @@ export default function InstructorPanel() {
                 }
               ];
               genEdges = [
-                { id: "ch2-e1", source: "ch2-n1", target: "ch2-n2", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-                { id: "ch2-e2", source: "ch2-n1", target: "ch2-n3", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-                { id: "ch2-e3", source: "ch2-n2", target: "ch2-n4", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-                { id: "ch2-e4", source: "ch2-n3", target: "ch2-n4", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
-                { id: "ch2-e5", source: "ch2-n4", target: "ch2-n5", type: "bezier", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } }
+                { id: "ch2-e1", source: "ch2-n1", target: "ch2-n2", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+                { id: "ch2-e2", source: "ch2-n1", target: "ch2-n3", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+                { id: "ch2-e3", source: "ch2-n2", target: "ch2-n4", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+                { id: "ch2-e4", source: "ch2-n3", target: "ch2-n4", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } },
+                { id: "ch2-e5", source: "ch2-n4", target: "ch2-n5", type: "default", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2.2, stroke: "#64748b" } }
               ];
             } else {
               // DSA Sorting Chapter
@@ -1371,8 +1408,21 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
     }, 1200);
   };
 
+  // 🌟 Chuyển tab / lớp: Chỉ animate nội dung tab được chọn, Header và Tab bar ĐỨNG YÊN HOÀN TOÀN!
+  useLayoutEffect(() => {
+    if (!contentRef.current) return;
+    const cards = contentRef.current.querySelectorAll(".marlo-card, .instructor-card, .class-card");
+    if (cards.length > 0) {
+      animateMarloCards(cards, { stagger: 0.05, y: 20 });
+    }
+    const rows = contentRef.current.querySelectorAll(".marlo-row, tr, .student-row");
+    if (rows.length > 0) {
+      animateMarloRows(rows, { y: 12, stagger: 0.02, delay: 0.15 });
+    }
+  }, [tab, selectedClassId]);
+
   return (
-    <div className="min-h-full p-5 relative">
+    <div ref={panelRef} className="min-h-full max-w-[1720px] mx-auto p-4 sm:p-6 space-y-4 lg:space-y-5 relative">
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-2xl transition-all duration-300 animate-slide-in ${
@@ -1383,8 +1433,8 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
         </div>
       )}
 
-      {/* HEADER SECTION */}
-      <header className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* ── CARD 1: SEPARATE HEADER ── */}
+      <header className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none">
         <div>
           {/* Class Select Dropdown */}
           <div className="relative inline-block text-left mb-1.5">
@@ -1393,7 +1443,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
               <select
                 value={selectedClassId}
                 onChange={(e) => handleClassChange(e.target.value)}
-                className="bg-white dark:bg-slate-800 border border-slate-202 dark:border-slate-700 text-slate-800 dark:text-slate-101 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5 font-bold outline-none cursor-pointer pr-8 appearance-none relative"
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5 font-bold outline-none cursor-pointer pr-8 appearance-none relative shadow-2xs"
                 style={{ backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.5rem center', backgroundSize: '1.25rem', backgroundRepeat: 'no-repeat' }}
               >
                 {classes.map((c) => (
@@ -1404,48 +1454,47 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
               </select>
             </div>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Bảng điều khiển giảng viên</h1>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Soạn thảo giáo trình, kích hoạt AI tạo kịch bản học liệu và thiết kế Mindmap chuẩn của chương.</p>
+          <MarloTitle text="Bảng điều khiển giảng viên" className="text-xl font-bold tracking-tight text-slate-900 dark:text-white" />
+          <p className="mt-1 text-xs text-[#62656b] dark:text-[#a0a3a9]">Soạn thảo giáo trình, kích hoạt AI tạo kịch bản học liệu và thiết kế Mindmap chuẩn của chương.</p>
         </div>
 
         <div className="flex items-center gap-2.5">
           <span className="bg-slate-200/60 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold px-3 py-1 rounded-full text-xs">
             Học kỳ 1 / 2026
           </span>
-          <span className="bg-blue-550/10 text-blue-700 dark:text-blue-404 font-bold px-3 py-1 rounded-full text-xs flex items-center gap-1.5 border border-blue-100 dark:border-blue-900/40">
+          <span className="bg-blue-500/10 text-blue-700 dark:text-blue-400 font-bold px-3 py-1 rounded-full text-xs flex items-center gap-1.5 border border-blue-100 dark:border-blue-900/40">
             <Sparkles size={12} className="text-blue-500 fill-blue-500 dark:text-blue-400 dark:fill-blue-400" />
             AI Co-Pilot Active
           </span>
         </div>
       </header>
 
-      {/* TABS SELECTOR */}
-      <div className="mb-5 flex gap-1 border-b border-slate-200 dark:border-slate-800">
-        {[
-          ["syllabus", "Cấu trúc khóa học", <BookOpen size={15} />],
-          ["github-review", "Chấm bài GitHub", <GitFork size={15} />],
-          ["mindmap", "Sơ đồ tư duy chương", <Network size={15} />],
-          ["analytics", "Thống kê AI", <Sparkles size={15} className="text-purple-500" />],
-        ].map(([id, label, icon]) => (
-          <button
-            key={id as string}
-            onClick={() => setTab(id as Tab)}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
-              tab === id ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            {icon}
-            {label}
-          </button>
-        ))}
+      {/* ── CARD 2: STANDALONE FLOATING TAB BAR WITH LIQUID RUBBERBAND PILL ── */}
+      <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-1.5 sm:p-2 shadow-xs flex items-center justify-between flex-wrap gap-2">
+        <MarloSegmentedControl
+          value={tab}
+          onChange={(val) => setTab(val as Tab)}
+          options={[
+            { id: "syllabus", label: "Cấu trúc khóa học", icon: <BookOpen size={15} /> },
+            { id: "github-review", label: "Chấm bài GitHub", icon: <GitFork size={15} /> },
+            { id: "mindmap", label: "Sơ đồ tư duy chương", icon: <Network size={15} /> },
+            { id: "analytics", label: "Thống kê AI", icon: <Sparkles size={15} className="text-purple-500" /> },
+          ]}
+        />
+        <div className="flex items-center gap-2 px-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Hệ thống chấm điểm tự động sẵn sàng</span>
+        </div>
       </div>
 
+      {/* ── TAB CONTENT: WRAPPED WITH CONTENT REF FOR ZERO-HEADER-JITTER ANIMATIONS ── */}
+      <div ref={contentRef} key={tab} className="space-y-4 lg:space-y-5">
       {/* SYLLABUS TAB CONTENT */}
       {tab === "syllabus" && (
-        <div className="space-y-4">
+        <div key="inst-syllabus" className="animate-screen-enter space-y-4">
           {/* Chapter cards */}
           {activeClass.chapters.map((chapter) => (
-            <div key={chapter.id} className="surface overflow-hidden rounded-xl border border-slate-200 dark:border-slate-855 bg-white dark:bg-slate-900 shadow-sm">
+            <div key={chapter.id} className="marlo-card overflow-hidden rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs mb-4">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-955/20">
                 <div className="flex items-center gap-3">
                   <div>
@@ -1543,7 +1592,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
                       </div>
                     ) : (
                       chapter.lessons.map((lesson) => (
-                        <div key={lesson.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-202 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition duration-150 gap-2.5">
+                        <div key={lesson.id} className="marlo-row flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition duration-150 gap-2.5">
                           <div className="flex items-start gap-2.5">
                             <button
                               onClick={() => toggleLessonStatus(chapter.id, lesson.id)}
@@ -1706,8 +1755,8 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
 
       {/* GITHUB REVIEW TAB CONTENT */}
       {tab === "github-review" && (
-        <div className={`grid gap-4 ${selectedSubIndex !== null ? "grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"} transition-all duration-300`}>
-          <div className="surface overflow-hidden rounded-xl border border-slate-202 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <div key="inst-github" className={`animate-screen-enter grid gap-4 ${selectedSubIndex !== null ? "grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"} transition-all duration-300`}>
+          <div className="marlo-card overflow-hidden rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs">
             <div className="flex items-center justify-between border-b border-slate-202 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-955/20">
               <h2 className="text-base font-semibold text-slate-900 dark:text-white">Bài nộp chương 1</h2>
               <span className="rounded-full bg-red-50 dark:bg-red-955/30 px-3 py-1 text-xs font-semibold text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30 flex items-center gap-1.5 animate-pulse">
@@ -1833,8 +1882,8 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
 
       {/* CHAPTER MINDMAP EDITOR TAB (REACT FLOW) */}
       {tab === "mindmap" && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-905 p-3.5 rounded-xl border border-slate-202 dark:border-slate-800 shadow-sm">
+        <div key="inst-mindmap" className="animate-screen-enter space-y-4">
+          <div className="marlo-card flex flex-wrap items-center justify-between gap-3 bg-white/95 dark:bg-slate-900/95 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">Chọn chương học:</span>
               <select
@@ -1957,7 +2006,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
                 minZoom={0.5}
                 maxZoom={1.5}
                 defaultEdgeOptions={{
-                  type: "bezier",
+                  type: "default",
                   markerEnd: { type: MarkerType.ArrowClosed },
                   style: { strokeWidth: 2.2, stroke: "#64748b" },
                 }}
@@ -2073,10 +2122,10 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
 
       {/* AI ANALYTICS TAB CONTENT */}
       {tab === "analytics" && (
-        <div className="space-y-5 animate-fade-in">
+        <div key="inst-analytics" className="animate-screen-enter space-y-5">
           {/* STATS ROW */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 shadow-sm flex items-center gap-3.5">
+            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 bg-white/95 dark:bg-slate-900/95 shadow-xs flex items-center gap-3.5 hover:border-slate-300 transition">
               <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0">
                 <GraduationCap size={22} className="lucide" />
               </div>
@@ -2087,7 +2136,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 shadow-sm flex items-center gap-3.5">
+            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 bg-white/95 dark:bg-slate-900/95 shadow-xs flex items-center gap-3.5">
               <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 shrink-0">
                 <CheckCircle2 size={22} />
               </div>
@@ -2098,7 +2147,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 shadow-sm flex items-center gap-3.5">
+            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 bg-white/95 dark:bg-slate-900/95 shadow-xs flex items-center gap-3.5">
               <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shrink-0">
                 <GitFork size={22} />
               </div>
@@ -2211,10 +2260,14 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
         </div>
       )}
 
+      </div>
+
       {/* --- LESSON EDIT MODAL (AIGC Modal) --- */}
       {lessonDrawerOpen && selectedLesson && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in p-4">
-          <div className="w-full max-w-2xl max-h-[85vh] shadow-2xl flex flex-col justify-between animate-scale-in drawer-container rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div onClick={handleCloseLessonDrawer} className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 ${isLessonDrawerClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-2xl max-h-[85vh] shadow-2xl flex flex-col justify-between drawer-container rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${isLessonDrawerClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+            
+          
             {/* Drawer Header */}
             <div className="p-4 flex items-center justify-between drawer-header-custom">
               <div>
@@ -2222,7 +2275,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
                 <h2 className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{selectedLesson.title}</h2>
               </div>
               <button
-                onClick={() => setLessonDrawerOpen(false)}
+                onClick={handleCloseLessonDrawer}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 bg-white dark:bg-slate-805 border border-slate-202 dark:border-slate-700 rounded-full transition"
               >
                 <X size={16} />
@@ -2625,7 +2678,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
             {/* Drawer Footer Actions */}
             <div className="p-4 flex items-center justify-end gap-2 shrink-0 drawer-footer-custom">
               <button
-                onClick={() => setLessonDrawerOpen(false)}
+                onClick={handleCloseLessonDrawer}
                 className="rounded-lg border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-800 hover:bg-slate-55 dark:hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-650 dark:text-slate-350 transition cursor-pointer"
               >
                 Hủy
@@ -2643,8 +2696,10 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
 
       {/* --- ASSIGNMENT EDIT MODAL --- */}
       {assignmentDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in p-4">
-          <div className="w-full max-w-md max-h-[85vh] shadow-2xl flex flex-col justify-between animate-scale-in drawer-container rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div onClick={handleCloseAssignmentDrawer} className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 ${isAssignmentDrawerClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md max-h-[85vh] shadow-2xl flex flex-col justify-between drawer-container rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${isAssignmentDrawerClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+            {/* Drawer Header */}
+          
             {/* Drawer Header */}
             <div className="p-4 flex items-center justify-between drawer-header-custom">
               <div>
@@ -2656,7 +2711,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
                 </h2>
               </div>
               <button
-                onClick={() => setAssignmentDrawerOpen(false)}
+                onClick={handleCloseAssignmentDrawer}
                 className="text-slate-405 hover:text-slate-605 dark:hover:text-slate-200 p-1 bg-white dark:bg-slate-805 border border-slate-202 dark:border-slate-700 rounded-full transition"
               >
                 <X size={16} />
@@ -2741,7 +2796,7 @@ Thầy/cô muốn triển khai nội dung nào trước?`;
             {/* Drawer Footer Actions */}
             <div className="p-4 flex items-center justify-end gap-2 shrink-0 drawer-footer-custom">
               <button
-                onClick={() => setAssignmentDrawerOpen(false)}
+                onClick={handleCloseAssignmentDrawer}
                 className="rounded-lg border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-655 dark:text-slate-355 transition cursor-pointer"
               >
                 Hủy

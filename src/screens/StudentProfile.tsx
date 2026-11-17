@@ -1,5 +1,10 @@
+import { useRef } from "react";
+import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import { Award, Check, Flame, Star, Trophy, UserRound, GitFork, ShieldCheck, Code, Brain, Zap } from "lucide-react";
 import type { AvatarStyle, BadgeFrame } from "../App";
+import MarloTitle from "../components/MarloTitle";
+import MarloNumber from "../components/MarloNumber";
+import MarloActivityHeatmap from "../components/MarloActivityHeatmap";
 
 interface Props {
   avatarStyle: AvatarStyle;
@@ -72,6 +77,22 @@ const getAchievementStyle = (id: string, unlocked: boolean) => {
 };
 
 export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar, onApplyBadge }: Props) {
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useMarloPageEntrance(
+    profileRef,
+    (el) => {
+      const cards = el.querySelectorAll(".marlo-card, .profile-hero, .marlo-card-1, .marlo-card-2, .marlo-card-3");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { stagger: 0.06, y: 26 });
+      }
+      const rows = el.querySelectorAll(".marlo-row, tr, .badge-item");
+      if (rows.length > 0) {
+        animateMarloRows(rows, { y: 14, stagger: 0.025, delay: 0.22 });
+      }
+    },
+    [avatarStyle, badgeFrame]
+  );
   const activeBadge = badges.find((badge) => badge.id === badgeFrame)!;
 
   // Mock data for GitHub Contributions Grid (12 weeks x 7 days)
@@ -103,9 +124,9 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
   const radarPoints = scores.map((score, i) => getCoordinates(i, score)).join(" ");
 
   return (
-    <div className="min-h-full p-5 space-y-6 animate-fade-in text-slate-800 dark:text-slate-200">
+    <div ref={profileRef} className="min-h-full p-5 space-y-6 text-slate-800 dark:text-slate-200">
       {/* PROFILE HERO HEADER */}
-      <header className="profile-hero bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+      <header className="marlo-card-1 profile-hero bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden">
         {/* Decorative corner glow */}
         <div className="absolute right-0 top-0 w-64 h-64 bg-blue-500/10 rounded-full filter blur-2xl pointer-events-none" />
 
@@ -119,8 +140,8 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
                 <UserRound size={12} />
                 Hồ sơ học viên
               </div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Nguyễn Văn A</h1>
-              <p className="text-xs text-slate-550 dark:text-slate-400 mt-1 font-medium">OOP - Nhóm 01 · Visual/Kinesthetic learner</p>
+              <MarloTitle text="Nguyễn Văn A" className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mt-1" />
+              <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-1 font-medium">OOP - Nhóm 01 · Visual/Kinesthetic learner</p>
               
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="rounded-full border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-955/20 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-450">
@@ -136,11 +157,11 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
           {/* Quick metrics */}
           <div className="grid grid-cols-3 gap-2.5 shrink-0 self-start md:self-auto">
             {[
-              [<Star size={16} />, "3,240", "XP"],
-              [<Flame size={16} />, "14", "streak"],
+              [<Star size={16} />, <MarloNumber value={3240} durationMs={1200} />, "XP"],
+              [<Flame size={16} />, <MarloNumber value={14} durationMs={1000} />, "streak"],
               [<Trophy size={16} />, "Bạc", "league"],
             ].map(([icon, value, label], idx) => (
-              <div key={idx} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-2.5 text-center min-w-[75px] shadow-inner">
+              <div key={idx} style={{ animationDelay: `${idx * 40}ms` }} className="marlo-row rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-2.5 text-center min-w-[75px] shadow-inner">
                 <div className="mx-auto mb-1 flex justify-center text-blue-600 dark:text-blue-400">{icon}</div>
                 <div className="text-sm font-black text-slate-950 dark:text-white">{value}</div>
                 <div className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">{label}</div>
@@ -154,7 +175,7 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         
         {/* LEFT COLUMN (9 cols): Skill analysis, GitHub commits, Achievements */}
-        <section className="lg:col-span-8 space-y-5">
+        <section className="marlo-card-2 lg:col-span-8 space-y-5">
           
           {/* SKILL RADAR CHART & PROFILE INFO */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -223,29 +244,12 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
                 </div>
               </div>
 
-              {/* Mini Contribution Matrix Chart */}
+              {/* Marlo 16-Week Heatmap Matrix */}
               <div className="pt-2">
-                <div className="flex justify-between text-[9px] text-slate-400 font-bold mb-1.5 uppercase">
-                  <span>Commit Calendar (14 tuần qua)</span>
-                  <span>45 đóng góp</span>
-                </div>
-                <div className="flex gap-1 overflow-x-auto pb-1">
-                  {githubWeeks.map((week, wIdx) => (
-                    <div key={wIdx} className="flex flex-col gap-1 shrink-0">
-                      {week.map((val, dIdx) => (
-                        <div
-                          key={dIdx}
-                          className="h-2 w-2 rounded-sm"
-                          style={{
-                            backgroundColor:
-                              val === 3 ? "#15803d" : val === 2 ? "#22c55e" : val === 1 ? "#86efac" : "rgba(148, 163, 184, 0.15)"
-                          }}
-                          title={`${val} commits`}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                <MarloActivityHeatmap
+                  title="Chu kỳ Hoạt động & Commit (16 tuần qua)"
+                  subtitle="Tần suất làm đồ án, hoàn thành bài tập & code review"
+                />
               </div>
             </div>
           </div>
@@ -303,7 +307,7 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
         </section>
 
         {/* RIGHT COLUMN (4 cols): Profile Settings, Customize skin */}
-        <section className="lg:col-span-4 space-y-4">
+        <section className="marlo-card-3 lg:col-span-4 space-y-4">
           {/* PROFILE EDIT SKIN */}
           <div className="bg-white dark:bg-slate-900 border border-slate-202 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
             <div>

@@ -1,4 +1,9 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, useLayoutEffect } from "react";
+import MarloSegmentedControl from "../components/MarloSegmentedControl";
+import { useMarloPageEntrance, animateMarloCards, animateMarloRows, animateMarloPill } from "../utils/marloAnimations";
+import OdometerNumber from "../components/OdometerNumber";
+import MarloTitle from "../components/MarloTitle";
+import MarloNumber from "../components/MarloNumber";
 import {
   ReactFlow,
   Background,
@@ -46,6 +51,7 @@ import {
   Activity,
   Database,
   Zap,
+  X,
 } from "lucide-react";
 
 // ─── Staggered Animation Timing Delays (Simulating organic branch tree growth) ──
@@ -572,7 +578,7 @@ const INITIAL_ARCH_NODES: Node[] = [
       containerColor: "#16a34a",
       filePath: "src/screens/KanbanBoard.tsx",
       tech: "Kanban Engine",
-      description: "Bảng quản lý 72 tasks 4 Sprints, khóa phụ thuộc task cha-con và tính điểm chuẩn Thầy Phước.",
+      description: "Bảng quản lý 72 tasks 4 Sprints, khóa phụ thuộc task cha-con và tính điểm chuẩn Hội đồng Phản biện.",
       badge: "Sprint Matrix",
       upstream: "App shell [App.tsx]",
       downstream: "Task CSV manager",
@@ -590,7 +596,7 @@ const INITIAL_ARCH_NODES: Node[] = [
       containerColor: "#16a34a",
       filePath: "src/components/TaskCsvManagerModal.tsx",
       tech: "CSV Parser",
-      description: "Trình import/export dữ liệu task chuẩn 8 cột theo mẫu file Excel của Thầy Phước.",
+      description: "Trình import/export dữ liệu task chuẩn 8 cột theo mẫu file Excel của Hội đồng Phản biện.",
       badge: "CSV Tool",
       upstream: "Kanban board",
       downstream: "None",
@@ -740,7 +746,7 @@ const INITIAL_ARCH_NODES: Node[] = [
       badge: "Crypto Service",
       upstream: "Auth dependencies [deps.py]",
       downstream: "None (Leaf)",
-      defenseQA: "Tại sao dùng datetime.now(timezone.utc)? Đáp: Chuẩn H4 Thầy Phước, tránh lỗi naive datetime lệch giờ.",
+      defenseQA: "Tại sao dùng datetime.now(timezone.utc)? Đáp: Chuẩn H4 Hội đồng Phản biện, tránh lỗi naive datetime lệch giờ.",
     },
   },
 
@@ -832,7 +838,7 @@ const INITIAL_ARCH_NODES: Node[] = [
       badge: "Analytics Engine",
       upstream: "AI tutor APIs",
       downstream: "SQLite database",
-      defenseQA: "Dữ liệu analytics phục vụ điều gì? Đáp: Cung cấp bằng chứng học tập cho Thầy Phước.",
+      defenseQA: "Dữ liệu analytics phục vụ điều gì? Đáp: Cung cấp bằng chứng học tập cho Hội đồng Phản biện.",
     },
   },
 
@@ -951,7 +957,7 @@ export interface GitCommitItem {
     avatar: string;
     color: string;
   };
-  branch: "main" | "develop" | "feature/erd" | "feature/auth" | "feature/evaluator";
+  branch: string;
   branchLabel: string;
   branchColor: string;
   message: string;
@@ -977,10 +983,10 @@ const GIT_COMMITS: GitCommitItem[] = [
     branchColor: "#2563eb",
     message: "TE9CA72: Khởi tạo repo cấu trúc 3-tier, Dockerfile & branching model",
     date: "28/10/2026 09:15",
-    timeAgo: "7 ngày trước",
+    timeAgo: "10 ngày trước",
     stats: { additions: 240, deletions: 0, files: 3 },
     filesChanged: ["backend/app/main.py", "docker-compose.yml", "README.md"],
-    cx: 80,
+    cx: 70,
     cy: 45,
   },
   {
@@ -989,49 +995,44 @@ const GIT_COMMITS: GitCommitItem[] = [
     author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "develop",
     branchLabel: "develop",
-    branchColor: "#9333ea",
+    branchColor: "#6366f1",
     message: "TE9CA72: Tách nhánh develop từ main, cấu hình CI/CD và môi trường staging",
     date: "29/10/2026 10:30",
-    timeAgo: "6 ngày trước",
+    timeAgo: "9 ngày trước",
     stats: { additions: 110, deletions: 5, files: 2 },
     filesChanged: [".github/workflows/ci.yml", "package.json"],
-    cx: 200,
-    cy: 110,
+    cx: 170,
+    cy: 225,
   },
   {
     id: "c-3",
     sha: "b579f87",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "feature/erd",
-    branchLabel: "feature/erd",
-    branchColor: "#16a34a",
-    message: "TE14F82: Thiết kế ERD 8 bảng quan hệ 3NF và SQLAlchemy migration models",
-    date: "31/10/2026 14:20",
-    timeAgo: "4 ngày trước",
-    stats: { additions: 342, deletions: 12, files: 4 },
-    filesChanged: [
-      "backend/app/models/user.py",
-      "backend/app/models/course.py",
-      "backend/app/models/submission.py",
-      "backend/app/core/database.py",
-    ],
-    cx: 320,
-    cy: 175,
+    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
+    branch: "feature/auth",
+    branchLabel: "feature/auth",
+    branchColor: "#f59e0b",
+    message: "TE22C19: Khởi tạo module Auth, schemas User và bảng cơ sở dữ liệu users",
+    date: "30/10/2026 14:20",
+    timeAgo: "8 ngày trước",
+    stats: { additions: 185, deletions: 4, files: 3 },
+    filesChanged: ["backend/app/models/user.py", "backend/app/schemas/auth.py", "backend/app/core/security.py"],
+    cx: 260,
+    cy: 285,
   },
   {
     id: "c-4",
-    sha: "c8e41a9",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "develop",
-    branchLabel: "develop",
-    branchColor: "#9333ea",
-    message: "TE14F82: Merge branch 'feature/erd' vào develop (PR #04 hoàn thành Sprint 1)",
-    date: "01/11/2026 16:45",
-    timeAgo: "3 ngày trước",
-    stats: { additions: 85, deletions: 2, files: 2 },
-    filesChanged: ["backend/app/api/v1/router.py", "backend/app/core/database.py"],
-    cx: 440,
-    cy: 110,
+    sha: "89f3a12",
+    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
+    branch: "feature/evaluator",
+    branchLabel: "feature/evaluator",
+    branchColor: "#10b981",
+    message: "TE35D77: Xây dựng sandbox Docker isolated runner cho C++ và Python",
+    date: "31/10/2026 11:00",
+    timeAgo: "7 ngày trước",
+    stats: { additions: 230, deletions: 12, files: 4 },
+    filesChanged: ["backend/app/services/evaluator.py", "docker/sandbox.Dockerfile", "backend/app/core/config.py"],
+    cx: 340,
+    cy: 345,
   },
   {
     id: "c-5",
@@ -1039,490 +1040,185 @@ const GIT_COMMITS: GitCommitItem[] = [
     author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
     branch: "feature/auth",
     branchLabel: "feature/auth",
-    branchColor: "#d97706",
+    branchColor: "#f59e0b",
     message: "TE22C19: Xây dựng JWT authentication, hash Passlib Bcrypt 12 rounds và endpoint /login",
-    date: "02/11/2026 11:10",
-    timeAgo: "2 ngày trước",
+    date: "01/11/2026 16:40",
+    timeAgo: "6 ngày trước",
     stats: { additions: 295, deletions: 8, files: 5 },
-    filesChanged: [
-      "backend/app/api/v1/endpoints/auth.py",
-      "backend/app/core/security.py",
-      "backend/app/api/deps.py",
-      "src/screens/LoginScreen.tsx",
-      "src/api.ts",
-    ],
-    cx: 560,
-    cy: 240,
+    filesChanged: ["backend/app/api/v1/endpoints/auth.py", "backend/app/core/security.py", "src/screens/LoginScreen.tsx"],
+    cx: 420,
+    cy: 285,
   },
   {
     id: "c-6",
-    sha: "d4bdc7d",
-    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
+    sha: "9c23b81",
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "develop",
     branchLabel: "develop",
-    branchColor: "#9333ea",
-    message: "TE22C19: Merge branch 'feature/auth' vào develop (PR #07 hoàn thành Sprint 2)",
-    date: "02/11/2026 17:30",
-    timeAgo: "2 ngày trước",
-    stats: { additions: 65, deletions: 4, files: 3 },
-    filesChanged: ["src/api.ts", "backend/app/api/deps.py", "src/App.tsx"],
-    cx: 680,
-    cy: 110,
+    branchColor: "#6366f1",
+    message: "TE14F82: Cấu hình Redis Cache connection pool và Logger middleware trên develop",
+    date: "02/11/2026 09:30",
+    timeAgo: "5 ngày trước",
+    stats: { additions: 74, deletions: 3, files: 2 },
+    filesChanged: ["backend/app/core/redis.py", "backend/app/middlewares/logging.py"],
+    cx: 490,
+    cy: 225,
   },
   {
     id: "c-7",
+    sha: "3a78c10",
+    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
+    branch: "feature/evaluator",
+    branchLabel: "feature/evaluator",
+    branchColor: "#10b981",
+    message: "TE35D77: Thiết lập giới hạn cgroups v2 (RAM 256MB, CPU 1 core) và 5 test cases ẩn",
+    date: "02/11/2026 15:15",
+    timeAgo: "5 ngày trước",
+    stats: { additions: 145, deletions: 6, files: 3 },
+    filesChanged: ["backend/app/services/evaluator.py", "backend/app/models/testcases.py"],
+    cx: 560,
+    cy: 345,
+  },
+  {
+    id: "c-8",
+    sha: "c8e41a9",
+    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
+    branch: "develop",
+    branchLabel: "develop",
+    branchColor: "#6366f1",
+    message: "TE22C19: Merge PR #04 'feature/auth' vào develop sau khi vượt qua CI audit",
+    date: "03/11/2026 11:20",
+    timeAgo: "4 ngày trước",
+    stats: { additions: 85, deletions: 2, files: 2 },
+    filesChanged: ["backend/app/api/v1/router.py", "backend/app/core/database.py"],
+    cx: 640,
+    cy: 225,
+  },
+  {
+    id: "c-9",
+    sha: "d4bdc7d",
+    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
+    branch: "develop",
+    branchLabel: "develop",
+    branchColor: "#6366f1",
+    message: "TE35D77: Merge PR #05 'feature/evaluator' vào develop (Đạt 100% test coverage)",
+    date: "03/11/2026 18:00",
+    timeAgo: "4 ngày trước",
+    stats: { additions: 92, deletions: 5, files: 3 },
+    filesChanged: ["backend/app/api/v1/router.py", "backend/app/services/analytics.py"],
+    cx: 720,
+    cy: 225,
+  },
+  {
+    id: "c-10",
     sha: "77817ef",
     author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "main",
     branchLabel: "main",
     branchColor: "#2563eb",
-    message: "TE9CA72: Release v1.0: nghiệm thu Sprint 2 và triển khai lên Production",
-    date: "03/11/2026 09:00",
-    timeAgo: "1 ngày trước",
-    stats: { additions: 54, deletions: 10, files: 2 },
-    filesChanged: ["dist/index.html", "vercel.json"],
-    cx: 800,
+    message: "TE9CA72: Release v1.0.0: Nghiệm thu Sprint 1 & 2 lên Production Staging",
+    date: "04/11/2026 09:00",
+    timeAgo: "3 ngày trước",
+    stats: { additions: 140, deletions: 10, files: 4 },
+    filesChanged: ["dist/index.html", "vercel.json", "docker-compose.prod.yml"],
+    cx: 810,
     cy: 45,
   },
   {
-    id: "c-8",
-    sha: "2103bbf",
-    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "feature/evaluator",
-    branchLabel: "feature/evaluator",
-    branchColor: "#0891b2",
-    message: "TE35D77: Xây dựng sandbox Code Evaluator biên dịch C++ g++ và 5 test case ẩn",
-    date: "03/11/2026 15:40",
-    timeAgo: "1 ngày trước",
-    stats: { additions: 215, deletions: 6, files: 3 },
-    filesChanged: [
-      "backend/app/services/code_evaluator.py",
-      "backend/app/api/v1/endpoints/submissions.py",
-      "backend/app/services/analytics.py",
-    ],
-    cx: 920,
-    cy: 175,
+    id: "c-11",
+    sha: "a41b782",
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
+    branch: "hotfix/cve",
+    branchLabel: "hotfix/cve",
+    branchColor: "#f43f5e",
+    message: "HOTFIX-01: Vá lỗ hổng bảo mật CVE-2026-8812 SQL parameter escape tại tầng repository",
+    date: "04/11/2026 14:15",
+    timeAgo: "3 ngày trước",
+    stats: { additions: 28, deletions: 6, files: 2 },
+    filesChanged: ["backend/app/core/database.py", "backend/app/api/deps.py"],
+    cx: 890,
+    cy: 105,
   },
   {
-    id: "c-9",
-    sha: "7323c97",
-    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
+    id: "c-12",
+    sha: "e812d33",
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
     branch: "main",
     branchLabel: "main",
     branchColor: "#2563eb",
-    message: "TE61A04: Release v1.2: chốt sơ đồ GitDiagram và triển khai toàn diện hệ thống",
-    date: "04/11/2026 13:45",
-    timeAgo: "Vừa xong",
-    stats: { additions: 310, deletions: 15, files: 3 },
-    filesChanged: ["src/screens/GitProjectHub.tsx", "src/App.tsx", "src/components/ErrorBoundary.tsx"],
-    cx: 1040,
+    message: "HOTFIX-01: Merge hotfix/cve vào main (Đóng gói phát hành khẩn cấp Tag v1.0.1)",
+    date: "04/11/2026 16:30",
+    timeAgo: "3 ngày trước",
+    stats: { additions: 35, deletions: 4, files: 2 },
+    filesChanged: ["CHANGELOG.md", "backend/app/core/database.py"],
+    cx: 970,
+    cy: 45,
+  },
+  {
+    id: "c-13",
+    sha: "3d91cf4",
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
+    branch: "develop",
+    branchLabel: "develop",
+    branchColor: "#6366f1",
+    message: "HOTFIX-01: Đồng bộ bản vá CVE từ hotfix/cve về develop (Gitflow dual-merge)",
+    date: "04/11/2026 17:00",
+    timeAgo: "3 ngày trước",
+    stats: { additions: 22, deletions: 2, files: 2 },
+    filesChanged: ["backend/app/core/database.py", "tests/test_sql_injection.py"],
+    cx: 1030,
+    cy: 225,
+  },
+  {
+    id: "c-14",
+    sha: "2103bbf",
+    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
+    branch: "release/v1.2",
+    branchLabel: "release/v1.2",
+    branchColor: "#a855f7",
+    message: "TE61A04: Cắt nhánh release/v1.2 từ develop: chuẩn bị đóng gói nghiệm thu Sprint 3",
+    date: "05/11/2026 10:45",
+    timeAgo: "2 ngày trước",
+    stats: { additions: 180, deletions: 14, files: 5 },
+    filesChanged: ["backend/app/version.py", "package.json", "docs/release_notes.md"],
+    cx: 1110,
+    cy: 165,
+  },
+  {
+    id: "c-15",
+    sha: "62e08ab",
+    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
+    branch: "release/v1.2",
+    branchLabel: "release/v1.2",
+    branchColor: "#a855f7",
+    message: "TE61A04: Tinh chỉnh UI, cập nhật manifest và chạy trọn bộ 48 ca kiểm thử E2E Cypress",
+    date: "05/11/2026 16:30",
+    timeAgo: "2 ngày trước",
+    stats: { additions: 115, deletions: 8, files: 4 },
+    filesChanged: ["cypress/e2e/auth.cy.ts", "cypress/e2e/editor.cy.ts", "src/App.tsx"],
+    cx: 1200,
+    cy: 165,
+  },
+  {
+    id: "c-16",
+    sha: "7323c97",
+    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
+    branch: "main",
+    branchLabel: "main",
+    branchColor: "#2563eb",
+    message: "TE61A04: Release v1.2.0: Nghiệm thu toàn diện đồ án và bàn giao Production",
+    date: "06/11/2026 14:00",
+    timeAgo: "Hôm qua",
+    stats: { additions: 310, deletions: 15, files: 6 },
+    filesChanged: ["src/screens/GitProjectHub.tsx", "src/App.tsx", "backend/app/version.py"],
+    cx: 1300,
     cy: 45,
   },
 ];
 
-// ─── CodeRabbit PR & AI Review Models (Nhánh 2.1) ───────────────────────────
-export interface DiffLine {
-  type: "context" | "addition" | "deletion";
-  oldLineNumber?: number;
-  newLineNumber?: number;
-  content: string;
-}
-
-export interface AiComment {
-  id: string;
-  type: "warning" | "security" | "suggestion";
-  line: number;
-  title: string;
-  message: string;
-  suggestedFix: string;
-  explanation: string;
-}
-
-export interface PRFile {
-  filename: string;
-  status: "modified" | "added";
-  additions: number;
-  deletions: number;
-  lines: DiffLine[];
-  aiComment?: AiComment;
-}
-
-export interface PullRequestItem {
-  id: string;
-  prNumber: number;
-  title: string;
-  author: { name: string; role: string; avatar: string; color: string };
-  sourceBranch: string;
-  targetBranch: string;
-  status: "open" | "approved" | "merged";
-  createdAt: string;
-  summary: {
-    overview: string;
-    keyPoints: string[];
-    riskLevel: "low" | "medium" | "high";
-    estimatedReviewTime: string;
-    totalAdditions: number;
-    totalDeletions: number;
-    filesCount: number;
-  };
-  defenseQA: {
-    question: string;
-    expectedAnswer: string;
-    rubricHint: string;
-  }[];
-  files: PRFile[];
-}
-
-export const MOCK_PULL_REQUESTS: PullRequestItem[] = [
-  {
-    id: "pr-04",
-    prNumber: 4,
-    title: "feat(#TE14F82): Thiết kế CSDL 8 bảng 3NF & Ràng buộc Khóa ngoại SQLAlchemy",
-    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "ĐN", color: "#9333ea" },
-    sourceBranch: "feature/erd",
-    targetBranch: "develop",
-    status: "open",
-    createdAt: "04/11/2026 10:20",
-    summary: {
-      overview: "PR khởi tạo toàn bộ cấu trúc 8 bảng quan hệ chuẩn 3NF (Users, Tasks, Sprints, Submissions) và thiết lập quan hệ cascade delete giữa các thực thể cốt lõi.",
-      keyPoints: [
-        "Định nghĩa bảng Submissions với liên kết ForeignKey tới Users và Lessons.",
-        "Thiết lập enum trạng thái bài nộp (PENDING, PASSED, FAILED).",
-        "CodeRabbit phát hiện 1 cảnh báo hiệu năng & bảo mật truy vấn CSDL.",
-      ],
-      riskLevel: "medium",
-      estimatedReviewTime: "3 phút",
-      totalAdditions: 245,
-      totalDeletions: 12,
-      filesCount: 3,
-    },
-    defenseQA: [
-      {
-        question: "Tại sao cột user_id trong bảng Submissions bắt buộc phải có index=True?",
-        expectedAnswer: "Vì các truy vấn thống kê lịch sử nộp bài của sinh viên và tính điểm Sprint của Thầy Phước luôn lọc theo user_id. Có index giúp truy vấn đạt O(log N) thay vì full-table scan O(N).",
-        rubricHint: "Kiểm tra kiến thức tối ưu hóa truy vấn CSDL quan hệ.",
-      },
-      {
-        question: "Khi xóa một tài khoản sinh viên thử nghiệm, các bài nộp cũ xử lý ra sao?",
-        expectedAnswer: "Nhờ cấu hình ondelete='CASCADE', SQLAlchemy và SQLite sẽ tự động dọn dẹp các bản ghi con mồ côi, tránh vi phạm ràng buộc toàn vẹn dữ liệu.",
-        rubricHint: "Kiểm tra kiến thức ràng buộc khóa ngoại (Referential Integrity).",
-      },
-    ],
-    files: [
-      {
-        filename: "backend/app/models/submission.py",
-        status: "modified",
-        additions: 45,
-        deletions: 4,
-        lines: [
-          { type: "context", oldLineNumber: 34, newLineNumber: 34, content: '    __tablename__ = "submissions"' },
-          { type: "context", oldLineNumber: 35, newLineNumber: 35, content: "    id = Column(Integer, primary_key=True, index=True)" },
-          { type: "deletion", oldLineNumber: 36, content: '    # Bản cũ: Không index, không ràng buộc ondelete' },
-          { type: "deletion", oldLineNumber: 37, content: '    user_id = Column(Integer, ForeignKey("users.id"))' },
-          { type: "addition", newLineNumber: 36, content: '    # Cảnh báo CodeRabbit: Thiếu Index & ondelete' },
-          { type: "addition", newLineNumber: 37, content: '    user_id = Column(Integer, ForeignKey("users.id"))' },
-          { type: "context", oldLineNumber: 38, newLineNumber: 38, content: "    lesson_id = Column(Integer, ForeignKey('lessons.id'))" },
-          { type: "context", oldLineNumber: 39, newLineNumber: 39, content: "    code = Column(Text, nullable=False)" },
-          { type: "context", oldLineNumber: 40, newLineNumber: 40, content: "    status = Column(String(20), default='PENDING')" },
-        ],
-        aiComment: {
-          id: "cr-fix-pr4",
-          type: "warning",
-          line: 37,
-          title: "Thiếu Index trên Foreign Key & Nguy cơ Treo Truy Vấn Khi Nộp Bài Đông",
-          message: "Trường user_id là khóa ngoại thường xuyên được JOIN và WHERE trong báo cáo tiến độ Sprint của Giảng viên nhưng chưa được bật `index=True`. Ngoài ra thiếu `ondelete='CASCADE'` sẽ tạo bản ghi mồ côi khi sinh viên test bị xóa.",
-          suggestedFix: 'user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)',
-          explanation: "Bổ sung `index=True` giảm độ trễ truy vấn lọc theo sinh viên từ O(N) xuống O(log N) và `ondelete='CASCADE'` đảm bảo tính toàn vẹn 3NF.",
-        },
-      },
-    ],
-  },
-  {
-    id: "pr-07",
-    prNumber: 7,
-    title: "feat(#TE22C19): Tích hợp JWT Access Token, Bcrypt Hashing & Phân Quyền Giảng Viên",
-    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "VH", color: "#16a34a" },
-    sourceBranch: "feature/auth",
-    targetBranch: "develop",
-    status: "approved",
-    createdAt: "04/11/2026 11:40",
-    summary: {
-      overview: "Triển khai cơ chế xác thực người dùng không trạng thái (Stateless Auth) sử dụng JSON Web Token với thuật toán mã hóa mật khẩu Bcrypt 12 rounds.",
-      keyPoints: [
-        "Hàm create_access_token tạo JWT kèm thời gian hết hạn ACCESS_TOKEN_EXPIRE_MINUTES.",
-        "Middleware phân quyền kiểm tra role ('student' | 'instructor' | 'admin').",
-        "CodeRabbit phát hiện 1 lỗ hổng bảo mật nghiêm trọng (Hardcoded Secret Key).",
-      ],
-      riskLevel: "high",
-      estimatedReviewTime: "5 phút",
-      totalAdditions: 185,
-      totalDeletions: 8,
-      filesCount: 2,
-    },
-    defenseQA: [
-      {
-        question: "Tại sao không nên lưu SECRET_KEY trực tiếp trong mã nguồn đẩy lên GitHub?",
-        expectedAnswer: "Bất kỳ ai đọc được repo công khai đều có thể dùng SECRET_KEY để tự tạo token giả mạo danh tính Giảng viên hoặc Admin nhằm thay đổi điểm số.",
-        rubricHint: "Đánh giá hiểu biết về bảo mật OWASP A02:2021 - Cryptographic Failures.",
-      },
-      {
-        question: "Cơ chế bảo vệ JWT trước việc bị đánh cắp trong mạng trường học là gì?",
-        expectedAnswer: "Luôn truyền qua kênh HTTPS, thiết lập thời gian hết hạn ngắn (60 phút), lưu token an toàn trong HttpOnly Cookie hoặc State bộ nhớ của Client.",
-        rubricHint: "Kiểm tra kiến thức Stateless Session & XSS/CSRF Prevention.",
-      },
-    ],
-    files: [
-      {
-        filename: "backend/app/core/security.py",
-        status: "modified",
-        additions: 60,
-        deletions: 6,
-        lines: [
-          { type: "context", oldLineNumber: 48, newLineNumber: 48, content: "from datetime import datetime, timedelta" },
-          { type: "context", oldLineNumber: 49, newLineNumber: 49, content: "from jose import jwt" },
-          { type: "deletion", oldLineNumber: 50, content: '# Nguy hiểm: Hardcoded secret key' },
-          { type: "deletion", oldLineNumber: 51, content: 'SECRET_KEY = "codemind-super-secret-key-12345"' },
-          { type: "addition", newLineNumber: 50, content: '# Cảnh báo CodeRabbit: Nguy cơ lộ chữ ký JWT' },
-          { type: "addition", newLineNumber: 51, content: 'SECRET_KEY = "codemind-super-secret-key-12345"' },
-          { type: "context", oldLineNumber: 52, newLineNumber: 52, content: 'ALGORITHM = "HS256"' },
-          { type: "context", oldLineNumber: 53, newLineNumber: 53, content: "ACCESS_TOKEN_EXPIRE_MINUTES = 60" },
-        ],
-        aiComment: {
-          id: "cr-fix-pr7",
-          type: "security",
-          line: 51,
-          title: "Lỗ Hổng Bảo Mật: Hardcoded SECRET_KEY Trong Mã Nguồn",
-          message: "SECRET_KEY đang được gán cứng chuỗi text trực tiếp trong file. Khi đẩy lên GitHub công khai, kẻ tấn công có thể giả mạo chữ ký JWT để leo quyền Admin hoặc Instructor mà không cần mật khẩu.",
-          suggestedFix: 'SECRET_KEY = os.getenv("JWT_SECRET_KEY") or secrets.token_hex(32)',
-          explanation: "Đọc khóa bảo mật từ biến môi trường .env và tự động sinh chuỗi cryptographic 256-bit an toàn làm fallback.",
-        },
-      },
-    ],
-  },
-  {
-    id: "pr-12",
-    prNumber: 12,
-    title: "feat(#TE9CA72): Bộ Chấm Điểm Mã Nguồn Cách Ly Sandbox Docker & Giới Hạn Tài Nguyên",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "BH", color: "#2563eb" },
-    sourceBranch: "feature/sandbox",
-    targetBranch: "develop",
-    status: "merged",
-    createdAt: "04/11/2026 12:15",
-    summary: {
-      overview: "Xây dựng micro-service khởi tạo container Docker cách ly để chạy code sinh viên nộp, áp dụng cgroup giới hạn RAM 128MB, CPU 0.5 core và timeout 3.0s.",
-      keyPoints: [
-        "Container dùng 1 lần (ephemeral) tự hủy ngay sau khi trả kết quả.",
-        "Khóa toàn bộ Network access ra ngoài Internet trong lúc chạy code test.",
-        "CodeRabbit gợi ý 1 giải pháp bọc Context Manager ngăn rò rỉ bộ nhớ host.",
-      ],
-      riskLevel: "low",
-      estimatedReviewTime: "4 phút",
-      totalAdditions: 320,
-      totalDeletions: 45,
-      filesCount: 4,
-    },
-    defenseQA: [
-      {
-        question: "Làm thế nào để ngăn sinh viên viết mã độc fork-bomb làm sập máy chủ chấm bài?",
-        expectedAnswer: "Sử dụng cgroup của Docker giới hạn tối đa 64 tiến trình (pids-limit=64) kết hợp CPU quota và timeout cứng 3.0 giây tiêu diệt tiến trình.",
-        rubricHint: "Đánh giá độ am hiểu về an toàn thực thi mã không tin cậy (Untrusted Code Execution).",
-      },
-    ],
-    files: [
-      {
-        filename: "backend/app/services/code_evaluator.py",
-        status: "modified",
-        additions: 80,
-        deletions: 12,
-        lines: [
-          { type: "context", oldLineNumber: 70, newLineNumber: 70, content: "def execute_in_sandbox(user_code: str, test_cases: list):" },
-          { type: "context", oldLineNumber: 71, newLineNumber: 71, content: "    container = client.containers.create(image='python:3.11-slim', mem_limit='128m')" },
-          { type: "deletion", oldLineNumber: 72, content: "    container.start()" },
-          { type: "deletion", oldLineNumber: 73, content: "    result = run_tests(container, test_cases)" },
-          { type: "deletion", oldLineNumber: 74, content: "    container.remove(force=True)" },
-          { type: "addition", newLineNumber: 72, content: "    container.start()" },
-          { type: "addition", newLineNumber: 73, content: "    result = run_tests(container, test_cases)" },
-          { type: "addition", newLineNumber: 74, content: "    container.remove(force=True)" },
-          { type: "context", oldLineNumber: 75, newLineNumber: 75, content: "    return result" },
-        ],
-        aiComment: {
-          id: "cr-fix-pr12",
-          type: "suggestion",
-          line: 74,
-          title: "Đảm Bảo Thu Hồi Container Bằng Khối try...finally",
-          message: "Lệnh `container.remove(force=True)` nằm ở cuối hàm có thể bị bỏ qua nếu `run_tests` ném ra ngoại lệ (ví dụ: TimeoutError hoặc OOMKilled), dẫn đến rò rỉ hàng trăm container zombie trên server.",
-          suggestedFix: "try:\n        container.start()\n        return run_tests(container, test_cases)\n    finally:\n        container.remove(force=True)",
-          explanation: "Khối finally đảm bảo container luôn được dọn dẹp sạch sẽ trong mọi kịch bản lỗi, giữ cho máy chủ luôn ổn định.",
-        },
-      },
-    ],
-  },
-  {
-    id: "pr-15",
-    prNumber: 15,
-    title: "feat(#TE48B10): Giao Diện Tech Reels Video Bài Giảng Ngắn & Tiến Trình Xem",
-    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "VH", color: "#16a34a" },
-    sourceBranch: "feature/reels",
-    targetBranch: "develop",
-    status: "open",
-    createdAt: "04/11/2026 14:10",
-    summary: {
-      overview: "Màn hình lướt video ngắn Tech Reels dạng dọc với bộ đếm thời gian xem thực tế và tự động tích lũy điểm XP khi hoàn thành trên 80% thời lượng.",
-      keyPoints: [
-        "Tích hợp HTML5 Video API với cơ chế preload metadata tiết kiệm mạng.",
-        "Gửi heartbeat tracking tiến độ xem về Learning Analytics Engine.",
-        "CodeRabbit phát hiện nguy cơ rò rỉ bộ nhớ khi chuyển đổi video liên tục.",
-      ],
-      riskLevel: "low",
-      estimatedReviewTime: "3 phút",
-      totalAdditions: 210,
-      totalDeletions: 15,
-      filesCount: 2,
-    },
-    defenseQA: [
-      {
-        question: "Tại sao cần cleanup event listener timeupdate trong useEffect của React khi xem video?",
-        expectedAnswer: "Tránh retain reference của DOM node trong closures, ngăn ngừa rò rỉ bộ nhớ (memory leak) khi người dùng lướt qua hàng chục video liên tục.",
-        rubricHint: "Đánh giá hiểu biết về React Lifecycle & Resource Cleanup.",
-      },
-    ],
-    files: [
-      {
-        filename: "src/screens/TechReels.tsx",
-        status: "modified",
-        additions: 55,
-        deletions: 5,
-        lines: [
-          { type: "context", oldLineNumber: 40, newLineNumber: 40, content: "useEffect(() => {" },
-          { type: "context", oldLineNumber: 41, newLineNumber: 41, content: "  const video = videoRef.current;" },
-          { type: "deletion", oldLineNumber: 42, content: "  if (video) video.addEventListener('timeupdate', handleTimeUpdate);" },
-          { type: "addition", newLineNumber: 42, content: "  if (video) video.addEventListener('timeupdate', handleTimeUpdate);" },
-          { type: "context", oldLineNumber: 43, newLineNumber: 43, content: "}, [currentVideoIndex]);" },
-        ],
-        aiComment: {
-          id: "cr-fix-pr15",
-          type: "warning",
-          line: 42,
-          title: "Thiếu Hàm Cleanup Trong useEffect (Nguy cơ Memory Leak)",
-          message: "Lắng nghe sự kiện 'timeupdate' được thêm vào video element nhưng không có hàm return cleanup trong useEffect. Khi sinh viên cuộn video nhanh, hàng chục listeners cũ sẽ tích tụ trong bộ nhớ.",
-          suggestedFix: "return () => {\n    if (video) video.removeEventListener('timeupdate', handleTimeUpdate);\n  };",
-          explanation: "Trả về hàm dọn dẹp để gỡ bỏ listener ngay khi component unmount hoặc dependency thay đổi.",
-        },
-      },
-    ],
-  },
-  {
-    id: "pr-18",
-    prNumber: 18,
-    title: "feat(#TE56E05): Cửa Hàng Đổi Thưởng XP Shop & Kiểm Soát Giao Dịch Điểm",
-    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "ĐN", color: "#9333ea" },
-    sourceBranch: "feature/gamification",
-    targetBranch: "develop",
-    status: "open",
-    createdAt: "04/11/2026 15:30",
-    summary: {
-      overview: "API cho phép sinh viên dùng điểm kinh nghiệm (XP) đổi lấy các vật phẩm huy hiệu, khung avatar và mascot đồng hành trong hệ thống.",
-      keyPoints: [
-        "Kiểm tra số dư XP hiện tại của người dùng trước khi duyệt giao dịch.",
-        "Ghi log vào bảng AuditLog phục vụ kiểm định minh bạch điểm thưởng.",
-        "CodeRabbit phát hiện 1 nguy cơ Race Condition (Double-Spending XP).",
-      ],
-      riskLevel: "medium",
-      estimatedReviewTime: "4 phút",
-      totalAdditions: 175,
-      totalDeletions: 20,
-      filesCount: 3,
-    },
-    defenseQA: [
-      {
-        question: "Làm thế nào để ngăn chặn gian lận điểm thưởng khi sinh viên spam click nút đổi quà?",
-        expectedAnswer: "Sử dụng Pessimistic Locking với query with_for_update() hoặc cập nhật có điều kiện atomic: UPDATE users SET xp = xp - cost WHERE xp >= cost.",
-        rubricHint: "Kiểm tra kiến thức Transaction Concurrency & Race Condition Prevention.",
-      },
-    ],
-    files: [
-      {
-        filename: "backend/app/api/v1/endpoints/shop.py",
-        status: "modified",
-        additions: 40,
-        deletions: 6,
-        lines: [
-          { type: "context", oldLineNumber: 62, newLineNumber: 62, content: "def purchase_item(user_id: int, item_id: int, db: Session):" },
-          { type: "deletion", oldLineNumber: 63, content: "    user = db.query(User).filter(User.id == user_id).first()" },
-          { type: "addition", newLineNumber: 63, content: "    user = db.query(User).filter(User.id == user_id).first()" },
-          { type: "context", oldLineNumber: 64, newLineNumber: 64, content: "    if user.xp < item.price: raise HTTPException(400, 'Không đủ điểm')" },
-          { type: "context", oldLineNumber: 65, newLineNumber: 65, content: "    user.xp -= item.price" },
-        ],
-        aiComment: {
-          id: "cr-fix-pr18",
-          type: "security",
-          line: 63,
-          title: "Lỗ Hổng Race Condition: Thiếu Khóa Bi Quan (Double-Spending)",
-          message: "Truy vấn đọc điểm không sử dụng khóa bi quan. Nếu sinh viên gửi 2 request song song trong vài mili-giây, cả 2 request đều thấy đủ điểm và trừ song song dẫn tới âm điểm hoặc mua đồ miễn phí.",
-          suggestedFix: "user = db.query(User).filter(User.id == user_id).with_for_update().first()",
-          explanation: "Khóa dòng người dùng với SELECT FOR UPDATE đảm bảo chỉ 1 giao dịch được thực hiện tại một thời điểm.",
-        },
-      },
-    ],
-  },
-  {
-    id: "pr-21",
-    prNumber: 21,
-    title: "fix(#TE62F11): Khắc Phục Lỗi Cache Lịch Sử Hội Thoại Gia Sư AI Khi Đổi Bài Học",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "BH", color: "#2563eb" },
-    sourceBranch: "feature/ai-tutor",
-    targetBranch: "develop",
-    status: "approved",
-    createdAt: "04/11/2026 16:00",
-    summary: {
-      overview: "Sửa lỗi panel gia sư AI giữ nguyên các tin nhắn của bài học trước khi học viên chuyển sang bài thực hành mới trên sơ đồ kỹ năng.",
-      keyPoints: [
-        "Khởi tạo lại trạng thái chat theo `lessonId` hiện hành.",
-        "Bổ sung cache invalidation cho các đoạn mã gợi ý Socratic.",
-      ],
-      riskLevel: "low",
-      estimatedReviewTime: "2 phút",
-      totalAdditions: 35,
-      totalDeletions: 5,
-      filesCount: 1,
-    },
-    defenseQA: [
-      {
-        question: "Cách tối ưu nhất trong React để reset sạch sẽ state của component con khi ID thay đổi là gì?",
-        expectedAnswer: "Sử dụng thuộc tính key={lesson.id} trên component con để React tự động unmount instance cũ và tạo mới một cách tự nhiên.",
-        rubricHint: "Đánh giá sự hiểu biết về Reconciliation và Key Prop của React.",
-      },
-    ],
-    files: [
-      {
-        filename: "src/screens/LearningWorkspace.tsx",
-        status: "modified",
-        additions: 15,
-        deletions: 2,
-        lines: [
-          { type: "context", oldLineNumber: 110, newLineNumber: 110, content: "return (" },
-          { type: "deletion", oldLineNumber: 111, content: "  <SocraticTutorChat lesson={activeLesson} />" },
-          { type: "addition", newLineNumber: 111, content: "  <SocraticTutorChat key={activeLesson.id} lesson={activeLesson} />" },
-          { type: "context", oldLineNumber: 112, newLineNumber: 112, content: ");" },
-        ],
-        aiComment: {
-          id: "cr-fix-pr21",
-          type: "suggestion",
-          line: 111,
-          title: "Sử Dụng key Prop Để Tự Động Re-mount Component",
-          message: "Code đã áp dụng đúng chuẩn React Declarative: thêm key={activeLesson.id} giúp React tự động khởi tạo lại toàn bộ state của khung chat mà không cần viết các hàm useEffect xóa state thủ công.",
-          suggestedFix: "<SocraticTutorChat key={activeLesson.id} lesson={activeLesson} />",
-          explanation: "Tận dụng cơ chế Reconciliation của React để cô lập hoàn toàn state giữa các bài học khác nhau.",
-        },
-      },
-    ],
-  },
-];
-
-// ─── Animated Number Counter Component (Smooth GSAP / Easing Style) ─────────
 function AnimatedNumber({
   value,
-  duration = 850,
+  duration = 1800,
   trigger = true,
   decimals = 0,
   suffix = "",
@@ -1560,86 +1256,112 @@ function AnimatedNumber({
     return () => cancelAnimationFrame(animId);
   }, [value, duration, trigger, decimals]);
 
-  return <>{decimals > 0 ? displayValue.toFixed(decimals) : displayValue.toLocaleString()}{suffix}</>;
+  return <span className="marlo-num font-mono">{decimals > 0 ? displayValue.toFixed(decimals) : displayValue.toLocaleString()}{suffix}</span>;
 }
 
 export default function GitProjectHub() {
-  const [viewMode, setViewMode] = useState<"coderabbit" | "topology" | "gitdiagram" | "analytics" | "gitflow">("coderabbit");
+  const gitHubRef = useRef<HTMLDivElement>(null);
+  const [viewMode, setViewMode] = useState<"topology" | "gitdiagram" | "analytics" | "gitflow">("topology");
+
+  // 🏷️ Marlo Horizontal Liquid Rubberband Active Pill State
+  const tabTrackRef = useRef<HTMLDivElement>(null);
+  const tabPillRef = useRef<HTMLSpanElement>(null);
+  const isFirstTabRender = useRef(true);
+
+  useLayoutEffect(() => {
+    const activeBtn = tabTrackRef.current?.querySelector<HTMLElement>(
+      `[data-tab-id="${viewMode}"]`
+    );
+    animateMarloPill(tabPillRef.current, activeBtn, {
+      animate: !isFirstTabRender.current,
+      radius: 8,
+    });
+    isFirstTabRender.current = false;
+  }, [viewMode]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const activeBtn = tabTrackRef.current?.querySelector<HTMLElement>(
+        `[data-tab-id="${viewMode}"]`
+      );
+      animateMarloPill(tabPillRef.current, activeBtn, {
+        animate: false,
+        radius: 8,
+      });
+    };
+    const ro = new ResizeObserver(handleResize);
+    if (tabTrackRef.current) ro.observe(tabTrackRef.current);
+    return () => ro.disconnect();
+  }, [viewMode]);
+
   const [selectedNodeId, setSelectedNodeId] = useState<string>("learning-ws");
+  const [archDrawerOpen, setArchDrawerOpen] = useState(false);
+  const [isArchDrawerClosing, setIsArchDrawerClosing] = useState(false);
+  const [drawerToast, setDrawerToast] = useState<string | null>(null);
   const [copiedMermaid, setCopiedMermaid] = useState<boolean>(false);
 
   // GitHub Repo Connection State
   const [showRepoModal, setShowRepoModal] = useState<boolean>(false);
+  const [isRepoModalClosing, setIsRepoModalClosing] = useState(false);
+
+  const handleCloseArchDrawer = () => {
+    if (isArchDrawerClosing) return;
+    setIsArchDrawerClosing(true);
+    setTimeout(() => {
+      setArchDrawerOpen(false);
+      setIsArchDrawerClosing(false);
+    }, 280);
+  };
+
+  const handleCloseRepoModal = () => {
+    if (isRepoModalClosing) return;
+    setIsRepoModalClosing(true);
+    setTimeout(() => {
+      setShowRepoModal(false);
+      setIsRepoModalClosing(false);
+    }, 220);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (archDrawerOpen) handleCloseArchDrawer();
+        if (showRepoModal) handleCloseRepoModal();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [archDrawerOpen, showRepoModal, isArchDrawerClosing, isRepoModalClosing]);
   const [repoUrl, setRepoUrl] = useState<string>("https://github.com/Hoaba-clouch/E-learningProject");
   const [targetBranch, setTargetBranch] = useState<string>("main");
-
-  // CodeRabbit Interactive State (Nhánh 2.1)
-  const [selectedPrId, setSelectedPrId] = useState<string>("pr-04");
-  const [prSubTab, setPrSubTab] = useState<"walkthrough" | "diff" | "defense">("diff");
-  const [appliedFixes, setAppliedFixes] = useState<Record<string, boolean>>({});
-  const [prStatusFilter, setPrStatusFilter] = useState<"all" | "open" | "approved" | "merged">("open");
-  const [prMemberFilter, setPrMemberFilter] = useState<string>("all");
-  const [prSearchQuery, setPrSearchQuery] = useState<string>("");
-
-  // CodeRabbit 2.0 - 4 Pillars States (Review, Prioritize, Impact, Security)
-  const [crPillar, setCrPillar] = useState<"review" | "prioritize" | "impact" | "security">("review");
+  const [topoAnimKey, setTopoAnimKey] = useState<number>(0);
   const [statAnimKey, setStatAnimKey] = useState<number>(0);
 
-  const handleSetViewMode = (mode: "coderabbit" | "topology" | "gitdiagram" | "analytics" | "gitflow") => {
+  const handleSetViewMode = (mode: "topology" | "gitdiagram" | "analytics" | "gitflow") => {
     setViewMode(mode);
     setStatAnimKey((k) => k + 1);
     if (mode === "topology") setTopoAnimKey((k) => k + 1);
     if (mode === "gitdiagram") setDiagramAnimKey((k) => k + 1);
   };
 
-  const handleSetCrPillar = (pillar: "review" | "prioritize" | "impact" | "security") => {
-    setCrPillar(pillar);
-    setStatAnimKey((k) => k + 1);
-  };
-  const [selectedImpactTab, setSelectedImpactTab] = useState<"overview" | "security" | "architecture" | "verify">("architecture");
-  const [impactViewMode, setImpactViewMode] = useState<"layers" | "files">("layers");
-  const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(1);
-  const [fixedVulns, setFixedVulns] = useState<Record<string, boolean>>({});
-  const [selectedVulnDot, setSelectedVulnDot] = useState<number>(42);
-  const [committableSuggestionApplied, setCommittableSuggestionApplied] = useState<boolean>(false);
-
-  const filteredPRs = useMemo(() => {
-    return MOCK_PULL_REQUESTS.filter((pr) => {
-      const matchStatus = prStatusFilter === "all" || pr.status === prStatusFilter;
-      const matchMember = prMemberFilter === "all" || pr.author.name === prMemberFilter;
-      const q = prSearchQuery.toLowerCase().trim();
-      const matchQuery =
-        !q ||
-        pr.title.toLowerCase().includes(q) ||
-        pr.author.name.toLowerCase().includes(q) ||
-        pr.sourceBranch.toLowerCase().includes(q) ||
-        `pr #${pr.prNumber}`.includes(q);
-      return matchStatus && matchMember && matchQuery;
-    });
-  }, [prStatusFilter, prMemberFilter, prSearchQuery]);
-
-  const selectedPR = useMemo(() => {
-    const foundInFiltered = filteredPRs.find((pr) => pr.id === selectedPrId);
-    if (foundInFiltered) return foundInFiltered;
-    if (filteredPRs.length > 0) return filteredPRs[0];
-    return MOCK_PULL_REQUESTS.find((pr) => pr.id === selectedPrId) || MOCK_PULL_REQUESTS[0];
-  }, [selectedPrId, filteredPRs]);
-
-  const handleApplyFix = (commentId: string) => {
-    setAppliedFixes((prev) => ({ ...prev, [commentId]: true }));
-  };
-
   // Topology Interactive State
-  const [selectedCommit, setSelectedCommit] = useState<GitCommitItem>(GIT_COMMITS[8]);
+  const [selectedCommit, setSelectedCommit] = useState<GitCommitItem>(GIT_COMMITS[8] || GIT_COMMITS[0]);
   const [hoveredCommit, setHoveredCommit] = useState<GitCommitItem | null>(null);
   const [memberFilter, setMemberFilter] = useState<string>("all");
   const [branchFilter, setBranchFilter] = useState<string>("all");
-  const [topoAnimKey, setTopoAnimKey] = useState<number>(0);
 
   const filteredCommits = useMemo(() => {
     return GIT_COMMITS.filter((c) => {
       const matchMember = memberFilter === "all" || c.author.name === memberFilter;
-      const matchBranch = branchFilter === "all" || (branchFilter === "feature" ? c.branch.startsWith("feature") : c.branch === branchFilter);
+      const matchBranch =
+        branchFilter === "all" ||
+        (branchFilter === "feature"
+          ? c.branch.startsWith("feature")
+          : branchFilter === "hotfix"
+          ? c.branch.startsWith("hotfix")
+          : branchFilter === "release"
+          ? c.branch.startsWith("release")
+          : c.branch === branchFilter);
       return matchMember && matchBranch;
     });
   }, [memberFilter, branchFilter]);
@@ -1738,6 +1460,7 @@ export default function GitProjectHub() {
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.type === "containerBox") return;
     setSelectedNodeId(node.id);
+    setArchDrawerOpen(true);
   }, []);
 
   const copyMermaidCode = () => {
@@ -1799,22 +1522,31 @@ export default function GitProjectHub() {
     }
   };
 
+  useMarloPageEntrance(
+    gitHubRef,
+    (el) => {
+      const cards = el.querySelectorAll(".marlo-card");
+      if (cards.length > 0) animateMarloCards(cards, { stagger: 0.05, y: 20 });
+      const rows = el.querySelectorAll(".marlo-row");
+      if (rows.length > 0) animateMarloRows(rows, { y: 10, stagger: 0.03, delay: 0.2 });
+    },
+    [viewMode]
+  );
+
   return (
-    <div className="min-h-full p-4 lg:p-6 space-y-5 bg-slate-50/60 text-slate-800">
+    <div ref={gitHubRef} className="min-h-full p-4 lg:p-6 space-y-5 text-slate-900 dark:text-slate-100">
       {/* Top Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/90 dark:border-slate-800 pb-5 animate-cascade-1">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 font-mono">
+            <span className="pill pill--info font-mono text-[11px] font-bold">
               <Network size={13} />
               Phân hệ 2 • Sơ đồ Kiến trúc Chuẩn GitDiagram & Understand Anything
             </span>
-            <span className="text-xs text-slate-500 font-medium">hoaba-clouch/e-learningproject</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">hoaba-clouch/e-learningproject</span>
           </div>
-          <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            Sơ đồ Kiến trúc Hệ thống (GitDiagram) & Git Hub
-          </h1>
-          <p className="mt-1 text-sm text-slate-600 max-w-4xl">
+          <MarloTitle text="Sơ đồ Kiến trúc Hệ thống (GitDiagram) & Git Hub" className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 dark:text-white" />
+          <p className="mt-1 text-sm text-[#62656b] dark:text-[#a0a3a9] max-w-4xl">
             Cấu trúc phân tầng chuẩn 100% từ GitDiagram: Campus App (Frontend), API Platform (FastAPI), Project Workspace, Learning Services và SQLite Database.
           </p>
         </div>
@@ -1824,147 +1556,101 @@ export default function GitProjectHub() {
             href={repoUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-xs"
+            className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
           >
-            <FolderGit2 size={14} className="text-slate-600" />
-            Mở Repo GitHub
+            <FolderGit2 size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
+            <span>Mở Repo GitHub</span>
           </a>
           <button
             onClick={() => setShowRepoModal(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition shadow-xs cursor-pointer"
+            className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5"
           >
-            <GitFork size={14} />
-            Liên Kết & Đồng Bộ Repo
+            <GitFork size={15} className="text-[#1c1304] shrink-0" />
+            <span>Liên Kết & Đồng Bộ Repo</span>
           </button>
         </div>
       </header>
 
       {/* 4 Metric Summary Cards with Staggered Cascade & Animated Numbers */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div key={`m1-${statAnimKey}`} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm animate-cascade-1 hover:shadow-md transition">
-          <div className="flex items-center justify-between text-xs text-slate-500">
+        <div key="metric-git-score" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Điểm Văn hóa Git</span>
-            <ShieldCheck size={16} className="text-blue-600" />
+            <ShieldCheck size={16} className="text-blue-600 dark:text-blue-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
               <AnimatedNumber value={94.8} decimals={1} key={`score-${statAnimKey}`} />
             </span>
-            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+            <span className="pill pill--info pill--plain text-[10.5px] font-bold">
               Hạng A+ (Chuẩn)
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">100% commit có mã Task và format feat/fix.</p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">100% commit có mã Task và format feat/fix.</p>
         </div>
 
-        <div key={`m2-${statAnimKey}`} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm animate-cascade-2 hover:shadow-md transition">
-          <div className="flex items-center justify-between text-xs text-slate-500">
+        <div key="metric-ai-integrity" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Kiểm định Liêm chính AI</span>
-            <CheckCircle2 size={16} className="text-emerald-600" />
+            <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-700 font-mono">
+            <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
               <AnimatedNumber value={100} suffix="%" key={`integ-${statAnimKey}`} />
             </span>
-            <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+            <span className="pill pill--good pill--plain text-[10.5px] font-bold">
               Bình thường
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">Không phát hiện hành vi dump code AI gian lận.</p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Không phát hiện hành vi dump code AI gian lận.</p>
         </div>
 
-        <div key={`m3-${statAnimKey}`} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm animate-cascade-3 hover:shadow-md transition">
-          <div className="flex items-center justify-between text-xs text-slate-500">
+        <div key="metric-team-split" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Phân bổ Nhóm 3 người</span>
-            <UserCheck size={16} className="text-purple-600" />
+            <UserCheck size={16} className="text-purple-600 dark:text-purple-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-purple-700 font-mono">
+            <span className="text-2xl font-bold text-purple-600 dark:text-purple-400 font-mono">
               <AnimatedNumber value={36} key={`h-${statAnimKey}`} /> : <AnimatedNumber value={34} key={`v-${statAnimKey}`} /> : <AnimatedNumber value={30} key={`n-${statAnimKey}`} />
             </span>
-            <span className="text-xs font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+            <span className="pill pill--plain text-[10.5px] font-bold">
               Cân bằng
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">Nguyễn Bá Hòa (36%), Võ Nhật Huy (34%), Phan Đình Nghị (30%).</p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Nguyễn Bá Hòa (36%), Võ Nhật Huy (34%), Phan Đình Nghị (30%).</p>
         </div>
 
-        <div key={`m4-${statAnimKey}`} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm animate-cascade-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between text-xs text-slate-500">
+        <div key="metric-diagram" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Cấu trúc GitDiagram</span>
-            <Boxes size={16} className="text-amber-600" />
+            <Boxes size={16} className="text-amber-600 dark:text-amber-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-700 font-mono">
+            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">
               <AnimatedNumber value={22} key={`diag-${statAnimKey}`} />
             </span>
-            <span className="text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+            <span className="pill pill--warn pill--plain text-[10.5px] font-bold">
               5 Phân tầng
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">Khớp 100% sơ đồ gitdiagram.com repo của nhóm.</p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Khớp 100% sơ đồ gitdiagram.com repo của nhóm.</p>
         </div>
       </section>
 
-      {/* Main Mode Navigation Bar */}
-      <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-1.5 shadow-sm overflow-x-auto">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => handleSetViewMode("coderabbit")}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
-              viewMode === "coderabbit"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }`}
-          >
-            <Bot size={15} />
-            Nhánh 2.1 • AI Review (CodeRabbit PR)
-          </button>
-          <button
-            onClick={() => handleSetViewMode("topology")}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
-              viewMode === "topology"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }`}
-          >
-            <Network size={15} />
-            Nhánh 2.2 • Cây Phân Nhánh (GitKraken)
-          </button>
-          <button
-            onClick={() => handleSetViewMode("gitdiagram")}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
-              viewMode === "gitdiagram"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }`}
-          >
-            <Boxes size={15} />
-            Nhánh 2.3 • Sơ đồ Kiến trúc (GitDiagram)
-          </button>
-          <button
-            onClick={() => handleSetViewMode("analytics")}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
-              viewMode === "analytics"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }`}
-          >
-            <BarChart3 size={15} />
-            Thống kê Nhóm
-          </button>
-          <button
-            onClick={() => handleSetViewMode("gitflow")}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
-              viewMode === "gitflow"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }`}
-          >
-            <Layers size={15} />
-            Chu trình Git Flow
-          </button>
-        </div>
+      {/* Main Mode Navigation Bar with Marlo Liquid Elastic Pill */}
+      <div className="flex items-center justify-between bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1.5 shadow-sm overflow-x-auto animate-cascade-6">
+        <MarloSegmentedControl
+          value={viewMode}
+          options={[
+            { id: "topology", label: "Git Graph", icon: <Network size={15} /> },
+            { id: "gitdiagram", label: "Architecture Diagram", icon: <Boxes size={15} /> },
+            { id: "analytics", label: "Team Analytics", icon: <BarChart3 size={15} /> },
+            { id: "gitflow", label: "Git Flow", icon: <Layers size={15} /> },
+          ]}
+          onChange={(val) => handleSetViewMode(val as any)}
+          tone="dark"
+        />
 
         <div className="hidden lg:flex items-center gap-3 text-xs text-slate-500 pr-3 font-mono shrink-0">
           <button
@@ -1977,1321 +1663,276 @@ export default function GitProjectHub() {
         </div>
       </div>
 
-      {/* MODE 0: CODERABBIT 2.0 AI CODE REVIEW & PR PORTAL (NHÁNH 2.1) - TRỌN BỘ 4 TÍNH NĂNG */}
-      {viewMode === "coderabbit" && (
-        <div key={`mode-coderabbit-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
-          {/* ── CODERABBIT 2.0 PILLARS NAVIGATION BAR (Khớp 4 Trụ Cột) ───────── */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900 text-white rounded-2xl p-3 border border-slate-800 shadow-md">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-2 bg-[#ff5722]/15 border border-[#ff5722]/30 px-3 py-1.5 rounded-xl">
-                <span className="text-base">🐰</span>
-                <div>
-                  <span className="font-bold text-xs text-white tracking-wide">CodeRabbit 2.0</span>
-                  <span className="hidden sm:inline-block text-[10px] text-[#ff8a65] font-mono ml-2">PR Intelligence</span>
-                </div>
-              </div>
-
-              {/* 4 Pillar Segmented Buttons */}
-              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold gap-1 flex-wrap">
-                <button
-                  onClick={() => handleSetCrPillar("review")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                    crPillar === "review"
-                      ? "bg-[#ff5722] text-white font-bold shadow-xs"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                  }`}
-                >
-                  <span className="font-mono text-[10px] opacity-80">01</span>
-                  <span>Review Tự Động</span>
-                </button>
-
-                <button
-                  onClick={() => handleSetCrPillar("prioritize")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                    crPillar === "prioritize"
-                      ? "bg-[#ff5722] text-white font-bold shadow-xs"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                  }`}
-                >
-                  <span className="font-mono text-[10px] opacity-80">02</span>
-                  <span>Prioritize (Now/Next)</span>
-                </button>
-
-                <button
-                  onClick={() => handleSetCrPillar("impact")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                    crPillar === "impact"
-                      ? "bg-[#ff5722] text-white font-bold shadow-xs"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                  }`}
-                >
-                  <span className="font-mono text-[10px] opacity-80">03</span>
-                  <span>Tác Động (Layers & Blast)</span>
-                </button>
-
-                <button
-                  onClick={() => handleSetCrPillar("security")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                    crPillar === "security"
-                      ? "bg-[#ff5722] text-white font-bold shadow-xs"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                  }`}
-                >
-                  <span className="font-mono text-[10px] opacity-80">04</span>
-                  <span>An Ninh (Health & Matrix)</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 pulse-radar-dot" />
-              <span className="text-[11px] text-slate-300">Scanning PRs in real-time</span>
+      {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS (FULL-WIDTH 100% EXPANSIVE VIEW) */}
+      {viewMode === "gitdiagram" && (
+        <div key={`mode-gitdiagram-${diagramAnimKey}`} className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 space-y-4 flex flex-col relative animate-fade-in">
+          {/* Ultra-compact Top Toolbar: Header + Replay Animation Button */}
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <Boxes size={18} className="text-blue-600 dark:text-blue-400 shrink-0" />
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Sơ đồ Kiến trúc Phân tầng Hệ thống (GitDiagram ReactFlow Canvas 100% Rộng Toàn Diện)
+              </h2>
+              <span className="hidden md:inline-block text-[11px] text-slate-400 dark:text-slate-500 font-normal">
+                (22 Components & 4 Subsystems - Nhấp vào bất kỳ component nào để mở bảng điều khiển chi tiết)
+              </span>
             </div>
           </div>
 
-          {/* ══════════════════════════════════════════════════════════════════════ */}
-          {/* PILLAR 01: REVIEW EVERY PR AUTOMATICALLY (Khớp Ảnh 1 & Master-Detail)  */}
-          {crPillar === "review" && (
-            <div key={`pillar-review-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
-              {/* Highlight Banner: Exact Image 1 Committable Review Card with Staggered Cascading Elements */}
-              <div className="bg-[#0f141c] text-white rounded-2xl border border-slate-700/80 p-5 space-y-4 shadow-xl relative overflow-hidden">
-                {/* Rubber Stamp Slam (solvik.mp4 t=30s) */}
-                {committableSuggestionApplied && (
-                  <div className="absolute right-4 sm:right-6 top-14 pointer-events-none rubber-stamp-slam z-20">
-                    <div className="border-2 sm:border-3 border-emerald-400 text-emerald-300 font-black font-mono tracking-wider text-xs sm:text-sm px-3.5 py-1.5 rounded-lg bg-emerald-950/90 shadow-2xl backdrop-blur-xs flex items-center gap-1.5 uppercase shadow-emerald-900/40">
-                      <CheckCheck size={16} className="stroke-[3] text-emerald-400" />
-                      <span>COMMITTED • 881A4FC</span>
-                    </div>
-                  </div>
-                )}
-                {/* 1. Header Row (Bot Avatar & Review Change Stack button) */}
-                <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3 animate-cascade-1">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-[#ff5722] text-white flex items-center justify-center font-bold text-sm shadow-sm animate-cascade-2">
-                      🐰
-                    </div>
-                    <div className="flex items-center gap-2 animate-cascade-2">
-                      <span className="font-bold text-slate-100">coderabbitai</span>
-                      <span className="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[10px] font-mono">bot</span>
-                      <span className="text-slate-400 text-[11px]">commented 2 minutes ago</span>
-                    </div>
-                  </div>
+          {/* ReactFlow Canvas Window (FULL 100% WIDTH - KHÔNG GIAN RỘNG TỐI ĐA) */}
+          <div className="w-full h-[760px] rounded-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden relative bg-slate-50/50 dark:bg-slate-950/70 shadow-inner">
+            <ReactFlow
+              key={`rf-canvas-${diagramAnimKey}-${activeArchFlow}`}
+              nodes={displayNodes}
+              edges={displayEdges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeClick={onNodeClick}
+              fitView
+              fitViewOptions={{ padding: 0.15 }}
+              minZoom={0.2}
+              maxZoom={1.6}
+            >
+              <Background color="#cbd5e1" className="dark:opacity-20" gap={20} size={1} />
+              <Controls showInteractive={false} className="!bg-white dark:!bg-slate-800 !shadow-sm !border !border-slate-200 dark:!border-slate-700 dark:!text-slate-200" />
+              <MiniMap
+                nodeColor={(n) => {
+                  if (n.type === "containerBox") return "#f1f5f9";
+                  if (n.id === "user") return "#3b82f6";
+                  if (n.id === "sqlite-db") return "#2563eb";
+                  return "#64748b";
+                }}
+                className="!border !border-slate-200 dark:!border-slate-700 !rounded-lg dark:!bg-slate-800"
+                zoomable
+                pannable
+              />
+            </ReactFlow>
 
-                  <button
-                    onClick={() => handleSetCrPillar("impact")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ff5722]/15 hover:bg-[#ff5722]/25 text-[#ff5722] text-xs font-bold transition border border-[#ff5722]/30 cursor-pointer animate-cascade-2"
-                  >
-                    <span>Review Change Stack</span>
-                    <ArrowRight size={13} />
-                  </button>
-                </div>
-
-                {/* 2. Warning Alert & Detailed Explanation */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs animate-cascade-3">
-                    <span className="inline-flex items-center gap-1 text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                      <AlertTriangle size={13} />
-                      Potential issue
-                    </span>
-                    <span className="text-slate-600">|</span>
-                    <span className="inline-flex items-center gap-1 text-rose-400 font-bold">
-                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping inline-block" />
-                      Major
-                    </span>
-                  </div>
-
-                  <h3 className="text-sm font-bold text-white tracking-tight animate-cascade-4">
-                    Reject expired refresh tokens before issuing a session.
-                  </h3>
-                  <p className="text-xs text-slate-300 leading-relaxed animate-cascade-5">
-                    Check the token expiry before creating a new authenticated session to prevent session replay attacks.
-                  </p>
-                </div>
-
-                {/* 3. Code Diff Box with Granular Cascading Lines (Chuẩn 100% Ảnh 1) */}
-                <div className="rounded-xl overflow-hidden border border-slate-800 font-mono text-xs bg-[#0b0f14] diff-scan-shimmer animate-cascade-6">
-                  <div className="bg-slate-900/90 px-3 py-1.5 text-[11px] text-slate-400 border-b border-slate-800 flex items-center justify-between">
-                    <span>@@ -42,2 +42,3 @@ export async function createSession</span>
-                    <span className="text-[10px] text-slate-500 font-sans">src/server/auth/session.ts</span>
-                  </div>
-                  <div className="p-3 space-y-1">
-                    <div className="bg-rose-950/40 text-rose-300 px-2 py-1 rounded flex items-center gap-2 animate-cascade-7">
-                      <span className="select-none text-rose-500 font-bold">-</span>
-                      <span>return issueSession(payload.userId);</span>
-                    </div>
-                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded flex items-center gap-2 animate-cascade-8">
-                      <span className="select-none text-emerald-500 font-bold">+</span>
-                      <span>if (payload.expiresAt &lt;= Date.now()) return null;</span>
-                    </div>
-                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded flex items-center gap-2 animate-cascade-9">
-                      <span className="select-none text-emerald-500 font-bold">+</span>
-                      <span>return issueSession(payload.userId);</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Committable Action Button & Subtext */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 animate-cascade-10">
-                  <button
-                    onClick={() => setCommittableSuggestionApplied(true)}
-                    disabled={committableSuggestionApplied}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer ${
-                      committableSuggestionApplied
-                        ? "bg-emerald-600 text-white"
-                        : "bg-[#ff5722] hover:bg-[#f4511e] text-white"
-                    }`}
-                  >
-                    {committableSuggestionApplied ? (
-                      <>
-                        <CheckCheck size={15} />
-                        <span>✓ Đã tự động commit bản sửa vào PR #{selectedPR.prNumber}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>▶</span>
-                        <span>Committable suggestion (1-Click Commit vào Repo)</span>
-                      </>
-                    )}
-                  </button>
-                  <span className="text-[11px] text-slate-400 font-mono animate-cascade-11">
-                    {committableSuggestionApplied
-                      ? "Commit sha: 881a4fc • Áp dụng trực tiếp vào GitHub repo"
-                      : "Tự động sinh commit message chuẩn Conventional Commits"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Master-Detail PR Viewer */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                {/* CỘT TRÁI (4 COLS): DANH SÁCH PULL REQUESTS */}
-                <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3.5">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <GitPullRequest size={17} className="text-blue-600" />
-                      <h3 className="text-sm font-bold text-slate-900">Danh Sách PRs</h3>
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
-                        {filteredPRs.length}/{MOCK_PULL_REQUESTS.length}
-                      </span>
-                    </div>
-
-                    <select
-                      value={prMemberFilter}
-                      onChange={(e) => setPrMemberFilter(e.target.value)}
-                      className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-medium text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="all">Tất cả tác giả</option>
-                      <option value="Nguyễn Bá Hòa">Nguyễn Bá Hòa</option>
-                      <option value="Võ Nhật Huy">Võ Nhật Huy</option>
-                      <option value="Phan Đình Nghị">Phan Đình Nghị</option>
-                    </select>
-                  </div>
-
-                  <div className="relative">
-                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Tìm mã task, PR, từ khóa..."
-                      value={prSearchQuery}
-                      onChange={(e) => setPrSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/60"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-lg text-[11px] font-semibold text-slate-600">
-                    <button
-                      onClick={() => setPrStatusFilter("open")}
-                      className={`flex-1 py-1 rounded-md transition text-center ${
-                        prStatusFilter === "open" ? "bg-white text-amber-800 font-bold shadow-xs" : "hover:text-slate-900"
-                      }`}
-                    >
-                      Cần Duyệt ({MOCK_PULL_REQUESTS.filter((p) => p.status === "open").length})
-                    </button>
-                    <button
-                      onClick={() => setPrStatusFilter("approved")}
-                      className={`flex-1 py-1 rounded-md transition text-center ${
-                        prStatusFilter === "approved" ? "bg-white text-emerald-800 font-bold shadow-xs" : "hover:text-slate-900"
-                      }`}
-                    >
-                      Đã Duyệt ({MOCK_PULL_REQUESTS.filter((p) => p.status === "approved").length})
-                    </button>
-                    <button
-                      onClick={() => setPrStatusFilter("merged")}
-                      className={`flex-1 py-1 rounded-md transition text-center ${
-                        prStatusFilter === "merged" ? "bg-white text-purple-800 font-bold shadow-xs" : "hover:text-slate-900"
-                      }`}
-                    >
-                      Đã Merge ({MOCK_PULL_REQUESTS.filter((p) => p.status === "merged").length})
-                    </button>
-                  </div>
-
-                  <div className="space-y-2 max-h-[580px] overflow-y-auto pr-1">
-                    {filteredPRs.map((pr, prIdx) => {
-                      const isSelected = pr.id === selectedPR.id;
-                      return (
-                        <button
-                          key={pr.id}
-                          onClick={() => setSelectedPrId(pr.id)}
-                          style={{ animationDelay: `${Math.min(prIdx, 8) * 45}ms` }}
-                          className={`w-full text-left p-3 rounded-xl border transition-all relative flex flex-col gap-2 animate-cascade-item ${
-                            isSelected
-                              ? "bg-blue-50/70 border-blue-500 shadow-xs ring-1 ring-blue-500/30 border-l-4 border-l-blue-600"
-                              : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-mono font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.2 rounded text-[11px]">
-                              #{pr.prNumber} • {pr.sourceBranch}
-                            </span>
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                                pr.status === "merged"
-                                  ? "bg-purple-100 text-purple-700"
-                                  : pr.status === "approved"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-amber-100 text-amber-800"
-                              }`}
-                            >
-                              {pr.status}
-                            </span>
-                          </div>
-                          <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-relaxed">
-                            {pr.title}
-                          </h4>
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                            <span className="font-medium text-slate-700">{pr.author.name}</span>
-                            <span className="font-mono text-[10px] text-emerald-600 font-bold">+{pr.summary.totalAdditions} -{pr.summary.totalDeletions}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* CỘT PHẢI (8 COLS): WORKSPACE CHI TIẾT REVIEW */}
-                <div key={`pr-detail-${selectedPR.id}`} className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col animate-tab-slide-down">
-                  <div className="p-5 border-b border-slate-200 bg-gradient-to-b from-slate-50/80 to-white space-y-3.5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono font-bold bg-orange-100/70 text-orange-800">
-                          <Bot size={13} className="text-orange-600" />
-                          CodeRabbit Reviewer
-                        </span>
-                        <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                          {selectedPR.sourceBranch} → {selectedPR.targetBranch}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs font-mono">
-                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold">
-                          <AnimatedNumber value={selectedPR.summary.filesCount} key={`pfc-${selectedPR.id}`} /> files
-                        </span>
-                        <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">
-                          +<AnimatedNumber value={selectedPR.summary.totalAdditions} key={`pta-${selectedPR.id}`} />
-                        </span>
-                        <span className="bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-bold">
-                          -<AnimatedNumber value={selectedPR.summary.totalDeletions} key={`ptd-${selectedPR.id}`} />
-                        </span>
-                      </div>
-                    </div>
-
-                    <h2 className="text-base font-bold text-slate-900 tracking-tight leading-snug flex items-start gap-2">
-                      <GitPullRequest size={18} className="text-blue-600 shrink-0 mt-0.5" />
-                      <span>PR #{selectedPR.prNumber}: {selectedPR.title}</span>
-                    </h2>
-
-                    <div className="pt-2 border-t border-slate-200">
-                      <div className="grid grid-cols-3 gap-2 bg-slate-100/90 p-1.5 rounded-xl border border-slate-200/60">
-                        <button
-                          onClick={() => setPrSubTab("diff")}
-                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
-                            prSubTab === "diff" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          <Code2 size={14} />
-                          <span>Soi Lỗi & 1-Click Fix</span>
-                        </button>
-                        <button
-                          onClick={() => setPrSubTab("walkthrough")}
-                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
-                            prSubTab === "walkthrough" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          <FileText size={14} />
-                          <span>Tóm Tắt Walkthrough</span>
-                        </button>
-                        <button
-                          onClick={() => setPrSubTab("defense")}
-                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
-                            prSubTab === "defense" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          <HelpCircle size={14} />
-                          <span>Vấn Đáp Thầy Phước</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Diff Content */}
-                  {prSubTab === "diff" && (
-                    <div key="subtab-diff" className="p-5 space-y-4 animate-tab-slide-down">
-                      {selectedPR.files.map((file, fileIdx) => {
-                        const comment = file.aiComment;
-                        const isApplied = comment ? !!appliedFixes[comment.id] : false;
-                        return (
-                          <div key={fileIdx} className="rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-                            <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between text-xs font-mono font-bold text-slate-800">
-                              <span>{file.filename}</span>
-                              <span className="text-emerald-600">+{file.additions} -{file.deletions}</span>
-                            </div>
-                            <div className="font-mono text-xs overflow-x-auto bg-[#0d1117] text-slate-200 p-2 space-y-0.5">
-                              {file.lines.map((line, lineIdx) => (
-                                <div key={lineIdx} className={`flex items-stretch px-2 py-0.5 ${line.type === "addition" ? "bg-emerald-950/30 text-emerald-300" : line.type === "deletion" ? "bg-rose-950/40 text-rose-300" : ""}`}>
-                                  <span className="w-8 select-none opacity-40 text-right mr-3">{line.newLineNumber || line.oldLineNumber}</span>
-                                  <span className="w-4 select-none font-bold">{line.type === "addition" ? "+" : line.type === "deletion" ? "-" : " "}</span>
-                                  <span className="whitespace-pre">{line.content}</span>
-                                </div>
-                              ))}
-                            </div>
-                            {comment && (
-                              <div className="p-3.5 bg-orange-50/90 border-t border-orange-200 flex items-start justify-between gap-3 text-xs">
-                                <div className="space-y-1 flex-1">
-                                  <div className="flex items-center gap-1.5 font-bold text-orange-900">
-                                    <Sparkles size={14} className="text-orange-600" />
-                                    <span>CodeRabbit: {comment.title}</span>
-                                  </div>
-                                  <p className="text-orange-800 leading-relaxed">{comment.message}</p>
-                                </div>
-                                <button
-                                  onClick={() => handleApplyFix(comment.id)}
-                                  className="shrink-0 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold transition text-xs shadow-xs"
-                                >
-                                  {isApplied ? "✓ Đã áp dụng" : "1-Click Fix"}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {prSubTab === "walkthrough" && (
-                    <div key="subtab-walkthrough" className="p-6 space-y-4 text-xs text-slate-700 leading-relaxed animate-tab-slide-down">
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                        <h4 className="font-bold text-sm text-slate-900">Mục đích PR #{selectedPR.prNumber}</h4>
-                        <p>{selectedPR.summary.overview}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <h4 className="font-bold text-slate-900">Các thay đổi chính:</h4>
-                        <ul className="list-disc list-inside space-y-1 text-slate-600">
-                          {selectedPR.summary.keyPoints.map((c: string, i: number) => (
-                            <li key={i}>{c}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-
-                  {prSubTab === "defense" && (
-                    <div key="subtab-defense" className="p-6 space-y-4 animate-tab-slide-down">
-                      {selectedPR.defenseQA.map((qa, idx) => (
-                        <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 text-xs">
-                          <h4 className="font-bold text-slate-900">Q{idx+1}: {qa.question}</h4>
-                          <p className="text-emerald-800 bg-emerald-50 p-2.5 rounded-lg"><strong>Đáp án kỳ vọng:</strong> {qa.expectedAnswer}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+            {/* Watermark badge on canvas */}
+            <div className="absolute top-3 left-3 z-10 flex items-center gap-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs text-xs font-mono text-slate-600 dark:text-slate-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>gitdiagram.com/hoaba-clouch/e-learningproject</span>
             </div>
-          )}
 
-          {/* ══════════════════════════════════════════════════════════════════════ */}
-          {/* PILLAR 02: PRIORITIZE ACROSS ALL PRS (Khớp Chuẩn 100% Ảnh 2)           */}
-          {/* ══════════════════════════════════════════════════════════════════════ */}
-          {crPillar === "prioritize" && (
-            <div key={`pillar-prioritize-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
-              <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <span className="font-mono text-[#ff5722]">02</span>
-                    <span>Prioritize across all PRs</span>
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1">
-                    AI tự động ước lượng khối lượng review trong ngày (Daily Capacity), gắn nhãn P0/P1/P2 kèm lý do kiến trúc.
-                  </p>
-                </div>
-                <div className="hidden sm:flex items-center gap-2 text-xs">
-                  <span className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">P0: Cực kỳ cấp thiết</span>
-                  <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">P1: Tiêu chuẩn</span>
-                  <span className="px-2.5 py-1 rounded-lg bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-bold">P2: Tạm hoãn</span>
-                </div>
-              </div>
-
-              {/* 2-Column Triage Board (Now vs Next) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-                {/* CỘT 1: NOW (Trong giới hạn công suất ngày) */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900">Now</h4>
-                      <p className="text-[11px] text-slate-500">Within each person's daily capacity</p>
-                    </div>
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white"><AnimatedNumber value={14} key={`now-cnt-${statAnimKey}`} /></span>
-                  </div>
-
-                  {/* Card 1: P0 */}
-                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                        P0
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">lop #21102</span>
-                    </div>
-
-                    <h5 className="text-xs font-bold text-slate-100">
-                      Skip bot-authored comment review tasks
-                    </h5>
-
-                    {/* AI Reasoning Box (Pink Border) */}
-                    <div className="p-2.5 rounded-lg border border-rose-400/40 bg-rose-500/10 text-rose-200 text-[11px] leading-relaxed">
-                      Review this early because it can resolve assumptions that may affect nearby PRs and reduce rework.
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Low security risk</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Maintenance</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Deep review</span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-blue-600 text-[9px] font-bold text-white flex items-center justify-center">E</span>
-                        <span>@ezrapike[bot]</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500">2h ago</span>
-                    </div>
-                  </div>
-
-                  {/* Card 2: P0 (Team's Auth PR) */}
-                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                        P0 (Cốt lõi Nhóm 4)
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">CodeMind #07</span>
-                    </div>
-
-                    <h5 className="text-xs font-bold text-slate-100">
-                      feat(#TE22C19): Tích hợp JWT Access Token, Bcrypt Hashing & Phân Quyền
-                    </h5>
-
-                    {/* AI Reasoning Box */}
-                    <div className="p-2.5 rounded-lg border border-rose-400/40 bg-rose-500/10 text-rose-200 text-[11px] leading-relaxed">
-                      Phải review gấp vì module Auth là tiền đề cứng H2 cho các phân hệ Code Lab, AI Socratic và Phòng phản biện.
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">High security impact</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Auth & RBAC</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Deep review</span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-[9px] font-bold text-white flex items-center justify-center">VH</span>
-                        <span>Võ Nhật Huy</span>
-                      </div>
-                      <span className="text-[10px] text-emerald-400">Ready to Merge</span>
-                    </div>
-                  </div>
-
-                  {/* Card 3: P1 */}
-                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                        P1
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">rex #21194</span>
-                    </div>
-
-                    <h5 className="text-xs font-bold text-slate-100">
-                      feat(agents): extend per-run prompt_cache_key to cbe/context
-                    </h5>
-
-                    <div className="p-2.5 rounded-lg border border-amber-400/40 bg-amber-500/10 text-amber-200 text-[11px] leading-relaxed">
-                      Review this early because it can resolve assumptions that may affect nearby PRs and reduce rework.
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Low security risk</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Feature</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Deep review</span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-purple-600 text-[9px] font-bold text-white flex items-center justify-center">A</span>
-                        <span>@arlopike</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500">4h ago</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CỘT 2: NEXT (All remaining reviews) */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900">Next</h4>
-                      <p className="text-[11px] text-slate-500">All remaining reviews</p>
-                    </div>
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700"><AnimatedNumber value={66} key={`next-cnt-${statAnimKey}`} /></span>
-                  </div>
-
-                  {/* Card 1: P1 Next */}
-                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                        P1
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">havana #21189</span>
-                    </div>
-
-                    <h5 className="text-xs font-bold text-slate-100">
-                      fix(dashboard): scope PR details authors by org
-                    </h5>
-
-                    <div className="p-2.5 rounded-lg border border-amber-400/40 bg-amber-500/10 text-amber-200 text-[11px] leading-relaxed">
-                      Keep this visible for async review because it is useful work without an immediate interruption signal.
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Low security risk</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Bug fix</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Standard review</span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-indigo-600 text-[9px] font-bold text-white flex items-center justify-center">E</span>
-                        <span>@ezrapike[bot]</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500">Yesterday</span>
-                    </div>
-                  </div>
-
-                  {/* Card 2: P2 Next (Draft / Conflict) */}
-                  <div className="p-4 rounded-xl border border-slate-200 bg-[#0f141c] text-white space-y-3 hover:border-slate-600 transition shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
-                        P2
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">silver #21153</span>
-                    </div>
-
-                    <h5 className="text-xs font-bold text-slate-100">
-                      [codex] Lean path instruction metrics insert
-                    </h5>
-
-                    <div className="p-2.5 rounded-lg border border-yellow-400/40 bg-yellow-500/10 text-yellow-200 text-[11px] leading-relaxed">
-                      Hold this behind refresh work because draft, conflict, or drift signals would make reviewer attention premature.
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Needs author action</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Low security risk</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-yellow-400">Draft</span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-rose-600 text-[9px] font-bold text-white flex items-center justify-center">M</span>
-                        <span>@miravale</span>
-                      </div>
-                      <span className="text-[10px] text-yellow-400 font-bold">Chờ Tác Giả</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {/* Helper hint pill floating on bottom-right of canvas */}
+            <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 bg-slate-900/80 dark:bg-slate-800/90 text-white backdrop-blur-xs px-3 py-1.5 rounded-lg text-xs font-medium shadow-md pointer-events-none">
+              <Eye size={13} className="text-blue-400" />
+              <span>Nhấp vào 1 component để xem mã nguồn & vấn đáp</span>
             </div>
-          )}
+          </div>
 
-          {/* ══════════════════════════════════════════════════════════════════════ */}
-          {/* PILLAR 03: UNDERSTAND EACH PR'S IMPACT (Khớp Chuẩn 100% Ảnh 3)         */}
-          {/* ══════════════════════════════════════════════════════════════════════ */}
-          {crPillar === "impact" && (
-            <div key={`pillar-impact-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
-              <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div>
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                      <span className="font-mono text-[#ff5722]">03</span>
-                      <span>Understand each PR's impact</span>
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Bóc tách PR theo tầng nghiệp vụ (Stacks & Layers) và đo bán kính ảnh hưởng an ninh thay vì xem file phẳng lộn xộn.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-mono">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                      Open
-                    </span>
-                    <span className="text-slate-300 font-bold">Add teammate invitations with roles</span>
-                    <span className="text-slate-500">| acme/web-app #482 · 9 files · Stacks</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Main Split Inspector: Layers Sidebar + File Diff Viewer */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                {/* CỘT TRÁI (4 COLS): LAYERS & BLAST RADIUS NAVIGATOR */}
-                <div className="lg:col-span-4 bg-[#0f141c] text-white rounded-2xl border border-slate-800 p-4 space-y-4 shadow-md">
-                  {/* Mode Switch: Layers vs Files */}
-                  <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
-                    <button
-                      onClick={() => setImpactViewMode("layers")}
-                      className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                        impactViewMode === "layers" ? "bg-slate-800 text-white font-bold shadow-xs" : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <Layers size={14} />
-                      <span>Layers</span>
-                    </button>
-                    <button
-                      onClick={() => setImpactViewMode("files")}
-                      className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                        impactViewMode === "files" ? "bg-slate-800 text-white font-bold shadow-xs" : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <FileText size={14} />
-                      <span>Files</span>
-                    </button>
-                  </div>
-
-                  {/* Sub-Inspectors Navigation */}
-                  <div className="space-y-1 text-xs">
-                    <button
-                      onClick={() => setSelectedImpactTab("overview")}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
-                        selectedImpactTab === "overview" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Eye size={14} />
-                        <span>Overview</span>
-                      </span>
-                      <span className="text-[10px] text-emerald-400 font-mono">Open</span>
-                    </button>
-
-                    <button
-                      onClick={() => setSelectedImpactTab("security")}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
-                        selectedImpactTab === "security" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Activity size={14} className="text-amber-400" />
-                        <span>Security blast radius</span>
-                      </span>
-                      <span className="text-[10px] text-amber-400 font-mono">3 services</span>
-                    </button>
-
-                    <button
-                      onClick={() => setSelectedImpactTab("architecture")}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
-                        selectedImpactTab === "architecture" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Boxes size={14} className="text-blue-400" />
-                        <span>Architecture impact</span>
-                      </span>
-                      <span className="text-[10px] text-blue-400 font-mono">3-Tier OK</span>
-                    </button>
-
-                    <button
-                      onClick={() => setSelectedImpactTab("verify")}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
-                        selectedImpactTab === "verify" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <ShieldCheck size={14} className="text-emerald-400" />
-                        <span>CodeRabbit Verify</span>
-                      </span>
-                      <span className="text-[10px] text-emerald-400 font-mono">Passed</span>
-                    </button>
-                  </div>
-
-                  {/* Stacks Layered Steps */}
-                  <div className="pt-2 border-t border-slate-800 space-y-2">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Các tầng nghiệp vụ (Stacks):
-                    </span>
-
-                    <button
-                      onClick={() => setSelectedLayerIndex(0)}
-                      className={`w-full text-left p-3 rounded-xl border transition ${
-                        selectedLayerIndex === 0
-                          ? "bg-slate-800 border-[#ff5722] text-white"
-                          : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 font-bold text-xs text-white">
-                        <span className="w-5 h-5 rounded-full bg-slate-700 text-white text-[10px] flex items-center justify-center font-mono">1</span>
-                        <span>Add the invitation data model</span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 ml-7 block mt-0.5">2 files touched</span>
-                    </button>
-
-                    <button
-                      onClick={() => setSelectedLayerIndex(1)}
-                      className={`w-full text-left p-3 rounded-xl border transition ${
-                        selectedLayerIndex === 1
-                          ? "bg-slate-800 border-[#ff5722] text-white"
-                          : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 font-bold text-xs text-white">
-                        <span className="w-5 h-5 rounded-full bg-[#ff5722] text-white text-[10px] flex items-center justify-center font-mono">2</span>
-                        <span>Add the invitation API and emails</span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 ml-7 block mt-0.5">3 files touched</span>
-                    </button>
-
-                    <button
-                      onClick={() => setSelectedLayerIndex(2)}
-                      className={`w-full text-left p-3 rounded-xl border transition ${
-                        selectedLayerIndex === 2
-                          ? "bg-slate-800 border-[#ff5722] text-white"
-                          : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 font-bold text-xs text-white">
-                        <span className="w-5 h-5 rounded-full bg-slate-700 text-white text-[10px] flex items-center justify-center font-mono">3</span>
-                        <span>Add UI invitation modal & guards</span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 ml-7 block mt-0.5">4 files touched</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* CỘT PHẢI (8 COLS): FILE DIFF VIEWER (Chuẩn 100% Ảnh 3) */}
-                <div key={`impact-panel-${selectedLayerIndex}-${selectedImpactTab}`} className="lg:col-span-8 bg-[#0f141c] text-white rounded-2xl border border-slate-800 overflow-hidden shadow-md space-y-4 p-5 animate-tab-slide-down">
-                  <div className="border-b border-slate-800 pb-3">
-                    <h4 className="text-sm font-bold text-white">
-                      Add the invitation API and emails
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Endpoints to create, list invitations; token generation; the invitation email; and the admin-only permissions.
-                    </p>
-                  </div>
-
-                  {/* File Path Header */}
-                  <div className="flex items-center justify-between text-xs bg-slate-900 p-2.5 rounded-xl border border-slate-800 font-mono">
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-bold">TS</span>
-                      <span>src/server/auth/permissions.ts</span>
-                    </div>
-                    <span className="text-emerald-400 font-bold">+12 -3</span>
-                  </div>
-
-                  {/* Code Diff Display (Exact lines from image 3) */}
-                  <div className="rounded-xl overflow-hidden border border-slate-800 font-mono text-xs bg-[#0b0f14] p-3 space-y-1">
-                    <div className="text-slate-500 text-[11px] py-0.5">20 unmodified lines</div>
-                    <div className="text-slate-400 px-2 py-0.5">
-                      <span className="text-slate-600 mr-4">21</span>
-                      <span className="text-purple-400">return</span> member.role === <span className="text-emerald-300">"ADMIN"</span>
-                    </div>
-                    <div className="text-slate-400 px-2 py-0.5">
-                      <span className="text-slate-600 mr-4">22</span>
-                      <span>{"}"}</span>
-                    </div>
-                    <div className="text-slate-400 px-2 py-0.5">
-                      <span className="text-slate-600 mr-4">23</span>
-                    </div>
-                    <div className="bg-rose-950/40 text-rose-300 px-2 py-0.5 rounded">
-                      <span className="text-rose-500 mr-4 font-bold">- 24</span>
-                      <span className="text-purple-400">export function</span> <span className="text-blue-300">canRemoveMember</span>(member) {"{"}
-                    </div>
-                    <div className="bg-rose-950/40 text-rose-300 px-2 py-0.5 rounded">
-                      <span className="text-rose-500 mr-4 font-bold">- 25</span>
-                      <span className="text-purple-400">  return</span> member.role === <span className="text-emerald-300">"ADMIN"</span>
-                    </div>
-                    <div className="bg-rose-950/40 text-rose-300 px-2 py-0.5 rounded">
-                      <span className="text-rose-500 mr-4 font-bold">- 26</span>
-                      <span>{"}"}</span>
-                    </div>
-                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded">
-                      <span className="text-emerald-500 mr-4 font-bold">+ 24</span>
-                      <span className="text-purple-400">export function</span> <span className="text-blue-300">canRemoveMember</span>(member, target) {"{"}
-                    </div>
-                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded">
-                      <span className="text-emerald-500 mr-4 font-bold">+ 25</span>
-                      <span className="text-purple-400">  if</span> (target.isOwner) <span className="text-purple-400">return</span> <span className="text-amber-300">false</span>;
-                    </div>
-                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded">
-                      <span className="text-emerald-500 mr-4 font-bold">+ 26</span>
-                      <span className="text-purple-400">  return</span> member.role === <span className="text-emerald-300">"ADMIN"</span>;
-                    </div>
-                    <div className="bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded">
-                      <span className="text-emerald-500 mr-4 font-bold">+ 27</span>
-                      <span>{"}"}</span>
-                    </div>
-                  </div>
-
-                  {/* Impact Insight Card */}
-                  <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
-                    <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Activity size={13} />
-                      Security Blast Radius Insight:
-                    </span>
-                    <p className="text-slate-300 leading-relaxed">
-                      Thay đổi trong hàm <code className="text-emerald-400 font-mono">canRemoveMember</code> ngăn chặn hành vi Admin xóa Owner của Workspace. Không làm ảnh hưởng tới các router ngoài auth. Bán kính ảnh hưởng bảo mật an toàn (Low Risk).
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════════ */}
-          {/* PILLAR 04: SECURE YOUR CODEBASE CONTINUALLY (Khớp Chuẩn 100% Ảnh 4)    */}
-          {/* ══════════════════════════════════════════════════════════════════════ */}
-          {crPillar === "security" && (
-            <div key={`pillar-security-${statAnimKey}`} className="space-y-4 animate-tab-slide-down">
-              {/* Real-Time Health Header Card */}
-              <div className="bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase font-mono">
-                      REAL-TIME CODEBASE HEALTH
-                    </span>
-                    <h3 className="text-xl font-bold text-white mt-1">
-                      Mostly healthy
-                    </h3>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
-                    <span className="flex items-center gap-1.5 text-emerald-400">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 pulse-radar-dot" />
-                      Scanning every PR
-                    </span>
-                    <span>Last scan now</span>
-                    <span className="text-slate-300 font-bold">0 critical</span>
-                  </div>
-                </div>
-
-                {/* Tri-color Health Bar (Green 46% | Amber 12% | Gray 40%) */}
-                <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden flex">
-                  <div className="bg-emerald-500 h-full w-[46%]" title="Healthy: 46%" />
-                  <div className="bg-amber-400 h-full w-[12%]" title="High: 12%" />
-                  <div className="bg-rose-500 h-full w-[2%]" title="Critical: 2%" />
-                  <div className="bg-slate-700 h-full w-[40%]" title="Unscanned: 40%" />
-                </div>
-              </div>
-
-              {/* Main Grid: Interactive Dot Heatmap + Severity Donut Chart */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                {/* CỘT TRÁI (8 COLS): MA TRẬN ĐIỂM SÁNG (HEATMAP DOT MATRIX) */}
-                <div className="lg:col-span-8 bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md space-y-4 relative">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white">
-                        Codebase Vulnerability Heatmap (Ma Trận Điểm Sáng)
-                      </h4>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Mỗi điểm sáng đại diện cho 1 gói thư viện / module. Nhấp vào điểm vàng để xem chi tiết lỗ hổng CVE.
-                      </p>
-                    </div>
-                    <span className="text-xs font-mono text-slate-400">224 modules</span>
-                  </div>
-
-                  {/* 8 Rows x 28 Cols Dot Matrix */}
-                  <div className="bg-[#0b0f14] p-4 rounded-xl border border-slate-800/80 overflow-x-auto">
-                    <div className="grid grid-cols-28 gap-2 min-w-[500px]">
-                      {Array.from({ length: 196 }).map((_, idx) => {
-                        const isAxiosDot = idx === 42;
-                        const isPyjwtDot = idx === 88;
-                        const isCriticalDot = idx === 150;
-                        const isFixed = isAxiosDot ? !!fixedVulns["axios"] : isPyjwtDot ? !!fixedVulns["pyjwt"] : false;
-
-                        let colorClass = "bg-emerald-500/80 hover:bg-emerald-400";
-                        if (isAxiosDot || isPyjwtDot) {
-                          colorClass = isFixed ? "bg-emerald-500/80" : "bg-amber-400 ring-2 ring-amber-400/50 animate-pulse";
-                        } else if (isCriticalDot) {
-                          colorClass = "bg-rose-500 ring-2 ring-rose-500/50";
-                        } else if (idx % 7 === 0) {
-                          colorClass = "bg-slate-700/60";
-                        }
-
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() => setSelectedVulnDot(idx)}
-                            className={`w-2.5 h-2.5 rounded-full transition-all cursor-pointer ${colorClass} ${
-                              selectedVulnDot === idx ? "scale-150 ring-2 ring-white" : ""
-                            }`}
-                            title={`Module #${idx+1}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Interactive Vulnerability Tooltip Card (Chuẩn 100% Ảnh 4) */}
-                  <div className="bg-[#141b24] p-4 rounded-xl border border-amber-500/30 space-y-3 shadow-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
-                        <span className="text-xs font-bold text-white">Dependency vulnerability</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                          High
-                        </span>
-                      </div>
-                      <span className="text-xs font-mono text-slate-400">Detected on PR #482</span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-mono text-sm font-bold text-white">
-                          axios • GHSA-4w2v-q235-vp99
-                        </span>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Cross-Site Request Forgery (CSRF) header leakage during redirects.
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => setFixedVulns((prev) => ({ ...prev, axios: true }))}
-                        disabled={fixedVulns["axios"]}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs ${
-                          fixedVulns["axios"]
-                            ? "bg-emerald-600 text-white"
-                            : "bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/40"
-                        }`}
-                      >
-                        {fixedVulns["axios"] ? "✓ Fix ready (axios@1.7.9)" : "Fix ready (1-Click Patch)"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CỘT PHẢI (4 COLS): SEVERITY DISTRIBUTION DONUT (Chuẩn 100% Ảnh 4) */}
-                <div className="lg:col-span-4 bg-[#0f141c] text-white p-5 rounded-2xl border border-slate-800 shadow-md space-y-4">
-                  <div>
-                    <h4 className="text-sm font-bold text-white">
-                      Severity distribution
-                    </h4>
-                    <p className="text-[11px] text-slate-400">
-                      AI Deep Scan and Dependencies
-                    </p>
-                  </div>
-
-                  {/* Donut Chart SVG */}
-                  <div className="flex flex-col items-center justify-center py-4">
-                    <div className="relative w-44 h-44 flex items-center justify-center">
-                      <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                        {/* Circle circumference = 2 * PI * 38 = ~238.76 */}
-                        {/* Unscanned: 40% (stroke-dasharray="95.5 238.76") */}
-                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#334155" strokeWidth="12" strokeDasharray="95.5 238.76" strokeDashoffset="0" />
-                        {/* Healthy: 46% (stroke-dasharray="109.8 238.76") */}
-                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#10b981" strokeWidth="12" strokeDasharray="109.8 238.76" strokeDashoffset="-95.5" />
-                        {/* High: 12% (stroke-dasharray="28.6 238.76") */}
-                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#fbbf24" strokeWidth="12" strokeDasharray="28.6 238.76" strokeDashoffset="-205.3" />
-                        {/* Critical: 2% (stroke-dasharray="4.8 238.76") */}
-                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#ef4444" strokeWidth="12" strokeDasharray="4.8 238.76" strokeDashoffset="-233.9" />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-xl font-bold font-mono text-white">
-                          <AnimatedNumber value={1999} key={`findings-${statAnimKey}`} />
-                        </span>
-                        <span className="text-[10px] text-slate-400 uppercase font-mono">findings</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Legend matching Image 4 with Animated Numbers */}
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-2 border-t border-slate-800">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-rose-500" />
-                      <span className="text-slate-400">Critical</span>
-                      <span className="text-white font-bold ml-auto"><AnimatedNumber value={2} suffix="%" key={`c-${statAnimKey}`} /></span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-400" />
-                      <span className="text-slate-400">High</span>
-                      <span className="text-white font-bold ml-auto"><AnimatedNumber value={12} suffix="%" key={`h-${statAnimKey}`} /></span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-slate-500" />
-                      <span className="text-slate-400">Unscanned</span>
-                      <span className="text-white font-bold ml-auto"><AnimatedNumber value={40} suffix="%" key={`u-${statAnimKey}`} /></span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span className="text-slate-400">Healthy</span>
-                      <span className="text-white font-bold ml-auto"><AnimatedNumber value={46} suffix="%" key={`hl-${statAnimKey}`} /></span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS (WITH BRANCH-TREE FLOW ANIMATIONS) */}
-      {viewMode === "gitdiagram" && (
-        <div key={`mode-gitdiagram-${diagramAnimKey}`} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start animate-tab-slide-down">
-          {/* ReactFlow Interactive Graph Canvas (8 Cols) */}
-          <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 flex flex-col">
-            {/* Top Toolbar: Header + Replay Animation Button */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Boxes size={18} className="text-blue-600" />
-                  Sơ đồ Kiến trúc Phân tầng (GitDiagram ReactFlow Canvas)
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Mô phỏng hiệu ứng phân nhánh sống động: đường ống tự vẽ, node nảy đàn hồi và xung năng lượng truyền dữ liệu.
-                </p>
-              </div>
-
-              {/* Replay Branch Animation & Subsystem Badges */}
-              <div className="flex flex-wrap items-center gap-2">
+          {/* Interactive Architecture Flow Selector (Branch Filters - Placed below canvas) */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/90 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-2 flex items-center gap-1 font-mono">
+              <Network size={12} className="text-blue-600 dark:text-blue-400" />
+              Mô phỏng luồng:
+            </span>
+            {ARCH_FLOWS.map((flow) => {
+              const isActive = activeArchFlow === flow.id;
+              return (
                 <button
-                  onClick={() => setDiagramAnimKey((k) => k + 1)}
-                  title="Kích hoạt lại chuyển động vẽ nhánh sơ đồ kiến trúc"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition shadow-2xs cursor-pointer"
-                >
-                  <RotateCw size={13} className="text-slate-600" />
-                  Phát Lại Mô Phỏng Luồng
-                </button>
-
-                <div className="hidden sm:flex items-center gap-1.5">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold">
-                    Campus App
-                  </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold">
-                    Project WS
-                  </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-semibold">
-                    API Platform
-                  </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold">
-                    Learning
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Interactive Architecture Flow Selector (Branch Filters) */}
-            <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-xl">
-              <span className="text-[11px] font-bold text-slate-500 px-2 flex items-center gap-1 font-mono">
-                <Network size={12} className="text-blue-600" />
-                Mô phỏng luồng:
-              </span>
-              {ARCH_FLOWS.map((flow) => {
-                const isActive = activeArchFlow === flow.id;
-                return (
-                  <button
-                    key={flow.id}
-                    onClick={() => {
-                      setActiveArchFlow(flow.id);
-                      setDiagramAnimKey((k) => k + 1);
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      isActive
-                        ? "bg-white text-slate-900 shadow-xs font-bold ring-1 ring-slate-200"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-                    }`}
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: flow.color }}
-                    />
-                    {flow.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Active Flow Explanation Banner */}
-            {activeArchFlow !== "all" && (
-              <div className="flex items-center justify-between p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 text-xs text-blue-950 animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <Zap size={15} className="text-blue-600 shrink-0 animate-pulse" />
-                  <span className="font-semibold">{currentFlow.label}:</span>
-                  <span className="text-blue-800">{currentFlow.summary}</span>
-                </div>
-                <button
+                  key={flow.id}
                   onClick={() => {
-                    setActiveArchFlow("all");
+                    setActiveArchFlow(flow.id);
                     setDiagramAnimKey((k) => k + 1);
                   }}
-                  className="text-xs font-bold text-blue-700 hover:underline shrink-0 ml-3 cursor-pointer"
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isActive
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-bold ring-1 ring-slate-200 dark:ring-slate-600"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-700/50"
+                  }`}
                 >
-                  Xem tất cả luồng →
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: flow.color }}
+                  />
+                  {flow.label}
                 </button>
-              </div>
-            )}
-
-            {/* ReactFlow Canvas Window */}
-            <div className="w-full h-[740px] rounded-xl border border-slate-200 overflow-hidden relative bg-slate-50/50">
-              <ReactFlow
-                key={`rf-canvas-${diagramAnimKey}-${activeArchFlow}`}
-                nodes={displayNodes}
-                edges={displayEdges}
-                nodeTypes={nodeTypes}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onNodeClick={onNodeClick}
-                fitView
-                fitViewOptions={{ padding: 0.15 }}
-                minZoom={0.2}
-                maxZoom={1.6}
-              >
-                <Background color="#cbd5e1" gap={20} size={1} />
-                <Controls showInteractive={false} className="!bg-white !shadow-sm !border !border-slate-200" />
-                <MiniMap
-                  nodeColor={(n) => {
-                    if (n.type === "containerBox") return "#f1f5f9";
-                    if (n.id === "user") return "#3b82f6";
-                    if (n.id === "sqlite-db") return "#2563eb";
-                    return "#64748b";
-                  }}
-                  className="!border !border-slate-200 !rounded-lg"
-                  zoomable
-                  pannable
-                />
-              </ReactFlow>
-
-              {/* Watermark badge on canvas */}
-              <div className="absolute top-3 left-3 z-10 flex items-center gap-2 bg-white/90 backdrop-blur-xs px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs text-xs font-mono text-slate-600">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>gitdiagram.com/hoaba-clouch/e-learningproject</span>
-              </div>
-            </div>
-
-            {/* Bottom Guide Bar */}
-            <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-100 font-mono">
-              <span>Đầy đủ 22 components và 4 subsystem container được định vị chính xác theo cấu trúc GitDiagram.</span>
-              <a
-                href="https://gitdiagram.com/hoaba-clouch/e-learningproject"
-                target="_blank"
-                rel="noreferrer"
-                className="text-blue-600 hover:underline font-semibold flex items-center gap-1"
-              >
-                gitdiagram.com/hoaba-clouch/e-learningproject
-                <ExternalLink size={12} />
-              </a>
-            </div>
+              );
+            })}
           </div>
 
-          {/* Right Inspector Panel (4 Cols) */}
-          <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-            <div className="border-b border-slate-100 pb-3">
-              <div className="flex items-center justify-between">
-                <span
-                  className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border"
-                  style={{
-                    backgroundColor: `${(selectedNode.data as Record<string, string>).containerColor || "#2563eb"}15`,
-                    borderColor: `${(selectedNode.data as Record<string, string>).containerColor || "#2563eb"}40`,
-                    color: (selectedNode.data as Record<string, string>).containerColor || "#2563eb",
-                  }}
-                >
-                  {(selectedNode.data as Record<string, string>).container || "Component"}
-                </span>
-                <span className="text-xs font-mono text-slate-400">
-                  {(selectedNode.data as Record<string, string>).tech}
-                </span>
+          {/* Active Flow Explanation Banner */}
+          {activeArchFlow !== "all" && (
+            <div className="flex items-center justify-between p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/40 text-xs text-blue-950 dark:text-blue-200 animate-fade-in">
+              <div className="flex items-center gap-2">
+                <Zap size={15} className="text-blue-600 dark:text-blue-400 shrink-0 animate-pulse" />
+                <span className="font-semibold">{currentFlow.label}:</span>
+                <span className="text-blue-800 dark:text-blue-300">{currentFlow.summary}</span>
               </div>
-
-              <h3 className="mt-2 text-base font-bold text-slate-900 leading-snug">
-                {(selectedNode.data as Record<string, string>).label} {(selectedNode.data as Record<string, string>).subLabel || ""}
-              </h3>
-              <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                {(selectedNode.data as Record<string, string>).description}
-              </p>
+              <button
+                onClick={() => {
+                  setActiveArchFlow("all");
+                  setDiagramAnimKey((k) => k + 1);
+                }}
+                className="text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline shrink-0 ml-3 cursor-pointer"
+              >
+                Xem tất cả luồng →
+              </button>
             </div>
+          )}
 
-            {/* File Path Card */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                Đường dẫn tệp tin mã nguồn:
-              </div>
-              <div className="font-mono text-xs font-bold text-blue-700 truncate">
-                {(selectedNode.data as Record<string, string>).filePath}
-              </div>
+          {/* Bottom Subsystems Badges & Guide Bar */}
+          <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 font-mono gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mr-1">Phân tầng:</span>
+              <span className="pill pill--info pill--plain text-[10px] font-mono font-semibold">Campus App</span>
+              <span className="pill pill--good pill--plain text-[10px] font-mono font-semibold">Project WS</span>
+              <span className="pill pill--bad pill--plain text-[10px] font-mono font-semibold">API Platform</span>
+              <span className="pill pill--warn pill--plain text-[10px] font-mono font-semibold">Learning</span>
             </div>
-
-            {/* Upstream & Downstream Dependencies */}
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between font-semibold text-slate-700">
-                <span>Luồng gọi đến (Upstream):</span>
-                <span className="font-mono text-[11px] text-slate-500 truncate max-w-[190px]">
-                  {(selectedNode.data as Record<string, string>).upstream}
-                </span>
-              </div>
-              <div className="flex items-center justify-between font-semibold text-slate-700">
-                <span>Luồng gọi đi (Downstream):</span>
-                <span className="font-mono text-[11px] text-slate-500 truncate max-w-[190px]">
-                  {(selectedNode.data as Record<string, string>).downstream}
-                </span>
-              </div>
-            </div>
-
-            {/* Understand Anything Q&A Box */}
-            <div className="p-3.5 bg-purple-50/70 rounded-lg space-y-2 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-purple-900">
-                <Sparkles size={14} className="text-purple-600" />
-                Vấn đáp Thầy Phước (Understand Anything)
-              </div>
-              <p className="text-purple-950 leading-relaxed">
-                {(selectedNode.data as Record<string, string>).defenseQA}
-              </p>
-            </div>
-
-            {/* Mermaid Preview Box */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                <span>Mã Mermaid.js (Sao chép cho Báo cáo):</span>
-                <button
-                  onClick={copyMermaidCode}
-                  className="text-[11px] text-blue-600 hover:underline flex items-center gap-1"
-                >
-                  <Copy size={11} />
-                  Copy
-                </button>
-              </div>
-              <div className="rounded-lg bg-slate-950 p-2.5 font-mono text-[10px] text-slate-300 overflow-x-auto max-h-[120px] leading-relaxed border border-slate-800">
-                <pre>{`${selectedNode.id}["${(selectedNode.data as Record<string, string>).label}"]`}</pre>
-              </div>
-            </div>
+            <a
+              href="https://gitdiagram.com/hoaba-clouch/e-learningproject"
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1 shrink-0"
+            >
+              gitdiagram.com/hoaba-clouch/e-learningproject
+              <ExternalLink size={12} />
+            </a>
           </div>
+
+          {/* 🌟 SLIDE-OVER DRAWER (GUSTRA STYLE) - CHỈ XUẤT HIỆN KHI NHẤP VÀO COMPONENT 🌟 */}
+          {archDrawerOpen && selectedNode && (
+            <div className={`fixed inset-0 z-50 flex justify-end bg-slate-950/40 backdrop-blur-xs ${isArchDrawerClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+              <div className="flex-1" onClick={handleCloseArchDrawer} />
+              {/* Click backdrop to close */}
+              
+
+              {/* Drawer Sliding from Right */}
+              <div className={`w-full max-w-md h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col overflow-y-auto p-6 space-y-5 relative ${isArchDrawerClosing ? "marlo-drawer-out" : "marlo-drawer"}`}>
+                {/* Header with Subsystem Badge and Close Button */}
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border font-mono"
+                      style={{
+                        backgroundColor: `${(selectedNode.data as Record<string, string>).containerColor || "#2563eb"}15`,
+                        borderColor: `${(selectedNode.data as Record<string, string>).containerColor || "#2563eb"}40`,
+                        color: (selectedNode.data as Record<string, string>).containerColor || "#2563eb",
+                      }}
+                    >
+                      {(selectedNode.data as Record<string, string>).container || "Component"}
+                    </span>
+                    <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+                      {(selectedNode.data as Record<string, string>).tech}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={handleCloseArchDrawer}
+
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                    title="Đóng bảng điều khiển"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Title & Description */}
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
+                    {(selectedNode.data as Record<string, string>).label} {(selectedNode.data as Record<string, string>).subLabel || ""}
+                  </h3>
+                  <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {(selectedNode.data as Record<string, string>).description}
+                  </p>
+                </div>
+
+                {/* Source File Path Card with Copy Button */}
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 rounded-xl space-y-1">
+                  <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider font-mono">
+                    Đường dẫn tệp tin mã nguồn:
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold text-blue-700 dark:text-blue-400 truncate">
+                      {(selectedNode.data as Record<string, string>).filePath}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText((selectedNode.data as Record<string, string>).filePath || "");
+                        setDrawerToast("Đã sao chép đường dẫn file!");
+                        setTimeout(() => setDrawerToast(null), 2000);
+                      }}
+                      className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition shrink-0 cursor-pointer"
+                      title="Sao chép đường dẫn file"
+                    >
+                      <Copy size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Upstream & Downstream Dependencies */}
+                <div className="space-y-2.5 text-xs bg-slate-50/70 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/70">
+                  <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
+                    <span>Luồng gọi đến (Upstream):</span>
+                    <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                      {(selectedNode.data as Record<string, string>).upstream}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
+                    <span>Luồng gọi đi (Downstream):</span>
+                    <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                      {(selectedNode.data as Record<string, string>).downstream}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Defense Q&A Box (Understand Anything) */}
+                <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-purple-900 text-[11px] uppercase tracking-wider font-mono">
+                    <Sparkles size={14} className="text-purple-600" />
+                    Vấn Đáp Phản Biện (Understand Anything)
+                  </div>
+                  <p className="text-purple-950 leading-relaxed font-sans text-xs">
+                    {(selectedNode.data as Record<string, string>).defenseQA}
+                  </p>
+                </div>
+
+                {/* Mermaid Preview Box */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <span>Mã Mermaid.js (Sao chép cho Báo cáo):</span>
+                    <button
+                      onClick={() => {
+                        copyMermaidCode();
+                        setDrawerToast("Đã sao chép mã Mermaid!");
+                        setTimeout(() => setDrawerToast(null), 2000);
+                      }}
+                      className="text-xs text-blue-600 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                    >
+                      <Copy size={12} />
+                      {copiedMermaid ? "Đã copy!" : "Copy Mermaid"}
+                    </button>
+                  </div>
+                  <div className="rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-[140px] leading-relaxed border border-slate-800 shadow-inner">
+                    <pre>{`${selectedNode.id}["${(selectedNode.data as Record<string, string>).label}"]`}</pre>
+                  </div>
+                </div>
+
+                {drawerToast && (
+                  <div className="p-2.5 bg-emerald-600 text-white text-xs font-bold rounded-lg text-center animate-fade-in shadow-sm">
+                    ✓ {drawerToast}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* MODE 2: VISUAL GIT BRANCH GRAPH (TOPOLOGY & COMMIT INSPECTOR) */}
       {viewMode === "topology" && (
-        <div key={`topo-${topoAnimKey}`} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6 animate-tab-slide-down">
+        <div key={`topo-${topoAnimKey}`} className="animate-screen-enter bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 space-y-6">
           {/* Header & Filter Controls */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <GitBranch size={18} className="text-blue-600" />
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <GitBranch size={18} className="text-blue-600 dark:text-blue-400" />
                 Cây Phân Nhánh Git & Giám Sát Commit Trực Quan (GitKraken / Git Graph)
               </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Rê chuột (hover) vào từng điểm commit để xem ai commit, commit nội dung gì và số dòng code thay đổi.
               </p>
             </div>
@@ -3318,7 +1959,7 @@ export default function GitProjectHub() {
                     memberFilter === "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Tất cả (9)
+                  Tất cả (16)
                 </button>
                 <button
                   onClick={() => setMemberFilter("Nguyễn Bá Hòa")}
@@ -3326,7 +1967,7 @@ export default function GitProjectHub() {
                     memberFilter === "Nguyễn Bá Hòa" ? "bg-blue-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Nguyễn Bá Hòa (4)
+                  Nguyễn Bá Hòa (7)
                 </button>
                 <button
                   onClick={() => setMemberFilter("Võ Nhật Huy")}
@@ -3334,7 +1975,7 @@ export default function GitProjectHub() {
                     memberFilter === "Võ Nhật Huy" ? "bg-emerald-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Võ Nhật Huy (2)
+                  Võ Nhật Huy (4)
                 </button>
                 <button
                   onClick={() => setMemberFilter("Phan Đình Nghị")}
@@ -3342,7 +1983,7 @@ export default function GitProjectHub() {
                     memberFilter === "Phan Đình Nghị" ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Phan Đình Nghị (3)
+                  Phan Đình Nghị (5)
                 </button>
               </div>
 
@@ -3368,9 +2009,25 @@ export default function GitProjectHub() {
                   main
                 </button>
                 <button
+                  onClick={() => setBranchFilter("hotfix")}
+                  className={`px-2 py-1 rounded-md transition text-xs ${
+                    branchFilter === "hotfix" ? "bg-rose-100 text-rose-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  hotfix/*
+                </button>
+                <button
+                  onClick={() => setBranchFilter("release")}
+                  className={`px-2 py-1 rounded-md transition text-xs ${
+                    branchFilter === "release" ? "bg-purple-100 text-purple-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  release/*
+                </button>
+                <button
                   onClick={() => setBranchFilter("develop")}
                   className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "develop" ? "bg-purple-100 text-purple-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                    branchFilter === "develop" ? "bg-indigo-100 text-indigo-800 font-bold" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   develop
@@ -3389,7 +2046,7 @@ export default function GitProjectHub() {
 
           {/* Interactive SVG Visual Git Graph with Floating Popover */}
           <div className="relative overflow-x-auto p-4 bg-slate-50/70 rounded-xl border border-slate-200">
-            <svg className="w-[1100px] h-[300px]" viewBox="0 0 1100 300">
+            <svg className="w-[1420px] h-[390px]" viewBox="0 0 1420 390">
               <defs>
                 <filter id="topoGlow" x="-50%" y="-50%" width="200%" height="200%">
                   <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
@@ -3402,7 +2059,7 @@ export default function GitProjectHub() {
 
               <style>{`
                 @keyframes topoDrawPath {
-                  0% { stroke-dashoffset: 1400; opacity: 0.3; }
+                  0% { stroke-dashoffset: 1600; opacity: 0.3; }
                   20% { opacity: 1; }
                   100% { stroke-dashoffset: 0; opacity: 1; }
                 }
@@ -3416,143 +2073,180 @@ export default function GitProjectHub() {
                   100% { opacity: 1; transform: translateY(0); }
                 }
                 .topo-path-main {
-                  stroke-dasharray: 1400;
-                  stroke-dashoffset: 1400;
+                  stroke-dasharray: 1600;
+                  stroke-dashoffset: 1600;
                   animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
                 }
                 .topo-path-develop1 {
-                  stroke-dasharray: 1400;
-                  stroke-dashoffset: 1400;
+                  stroke-dasharray: 1600;
+                  stroke-dashoffset: 1600;
                   animation: topoDrawPath 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;
                 }
                 .topo-path-develop2 {
-                  stroke-dasharray: 1400;
-                  stroke-dashoffset: 1400;
+                  stroke-dasharray: 1600;
+                  stroke-dashoffset: 1600;
                   animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.75s forwards;
                 }
-                .topo-path-erd {
-                  stroke-dasharray: 1400;
-                  stroke-dashoffset: 1400;
-                  animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
-                }
                 .topo-path-auth {
-                  stroke-dasharray: 1400;
-                  stroke-dashoffset: 1400;
-                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.5s forwards;
+                  stroke-dasharray: 1600;
+                  stroke-dashoffset: 1600;
+                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
                 }
                 .topo-path-evaluator {
-                  stroke-dasharray: 1400;
-                  stroke-dashoffset: 1400;
+                  stroke-dasharray: 1600;
+                  stroke-dashoffset: 1600;
+                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.4s forwards;
+                }
+                .topo-path-hotfix {
+                  stroke-dasharray: 1600;
+                  stroke-dashoffset: 1600;
+                  animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.6s forwards;
+                }
+                .topo-path-hotfix-dev {
+                  stroke-dasharray: 1600;
+                  stroke-dashoffset: 1600;
                   animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.7s forwards;
+                }
+                .topo-path-release {
+                  stroke-dasharray: 1600;
+                  stroke-dashoffset: 1600;
+                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.8s forwards;
                 }
               `}</style>
 
-              {/* Lane guides & Labels */}
-              <line x1="50" y1="45" x2="1080" y2="45" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="15" y="49" fill="#2563eb" fontSize="11" fontFamily="monospace" fontWeight="bold">main</text>
+              {/* 6 Lane Guides & Branch Labels */}
+              <line x1="50" y1="45" x2="1380" y2="45" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="10" y="49" fill="#2563eb" fontSize="11" fontFamily="monospace" fontWeight="bold">main</text>
 
-              <line x1="50" y1="110" x2="1080" y2="110" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="15" y="114" fill="#9333ea" fontSize="11" fontFamily="monospace" fontWeight="bold">develop</text>
+              <line x1="50" y1="105" x2="1380" y2="105" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="10" y="109" fill="#f43f5e" fontSize="11" fontFamily="monospace" fontWeight="bold">hotfix/cve</text>
 
-              <line x1="50" y1="175" x2="1080" y2="175" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="15" y="179" fill="#16a34a" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/erd</text>
+              <line x1="50" y1="165" x2="1380" y2="165" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="10" y="169" fill="#a855f7" fontSize="11" fontFamily="monospace" fontWeight="bold">release/v1.2</text>
 
-              <line x1="50" y1="240" x2="1080" y2="240" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="15" y="244" fill="#d97706" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/auth</text>
+              <line x1="50" y1="225" x2="1380" y2="225" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="10" y="229" fill="#6366f1" fontSize="11" fontFamily="monospace" fontWeight="bold">develop</text>
 
-              {/* Branch connecting lines (Smooth Bézier curves with drawing animations) */}
-              {/* main trunk */}
+              <line x1="50" y1="285" x2="1380" y2="285" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="10" y="289" fill="#f59e0b" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/auth</text>
+
+              <line x1="50" y1="345" x2="1380" y2="345" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <text x="10" y="349" fill="#10b981" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/evaluator</text>
+
+              {/* Branch Connecting Lines (Smooth Bézier curves with drawing animations) */}
+              {/* 1. Main trunk */}
               <path
                 id="topo-main-path"
                 className="topo-path-main"
-                d="M 50 45 L 800 45 L 1080 45"
+                d="M 50 45 L 1380 45"
                 fill="none"
                 stroke="#2563eb"
                 strokeWidth="3"
               />
 
-              {/* develop branch split from main (001a4fc) & merge back into v1.0 */}
+              {/* 2. Develop branch split from main (c-1 @ 70,45 -> c-2 @ 170,225) & merge back into v1.0.0 (c-10 @ 810,45) */}
               <path
                 id="topo-dev1-path"
                 className="topo-path-develop1"
-                d="M 80 45 C 130 45, 150 110, 200 110 L 680 110 C 730 110, 750 45, 800 45"
+                d="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45"
                 fill="none"
-                stroke="#9333ea"
+                stroke="#6366f1"
                 strokeWidth="3"
               />
 
-              {/* develop continuation to v1.2 merge */}
+              {/* 3. Develop continuation past v1.0.0 to v1.2 release */}
               <path
                 id="topo-dev2-path"
                 className="topo-path-develop2"
-                d="M 680 110 L 960 110 C 1000 110, 1010 45, 1040 45"
+                d="M 720 225 L 1050 225"
                 fill="none"
-                stroke="#9333ea"
+                stroke="#6366f1"
                 strokeWidth="3"
               />
 
-              {/* feature/erd branch split from develop & merge back */}
-              <path
-                id="topo-erd-path"
-                className="topo-path-erd"
-                d="M 200 110 C 250 110, 270 175, 320 175 C 370 175, 390 110, 440 110"
-                fill="none"
-                stroke="#16a34a"
-                strokeWidth="3"
-              />
-
-              {/* feature/auth branch split from develop & merge back */}
+              {/* 4. feature/auth split from develop (c-2 @ 170,225 -> c-3 @ 260,285) & merge back at c-8 (640,225) */}
               <path
                 id="topo-auth-path"
                 className="topo-path-auth"
-                d="M 440 110 C 490 110, 510 240, 560 240 C 610 240, 630 110, 680 110"
+                d="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225"
                 fill="none"
-                stroke="#d97706"
+                stroke="#f59e0b"
                 strokeWidth="3"
               />
 
-              {/* feature/evaluator branch split from develop & merge back */}
+              {/* 5. feature/evaluator concurrent split from develop (170,225 -> 340,345) & merge back at c-9 (720,225) */}
               <path
                 id="topo-eval-path"
                 className="topo-path-evaluator"
-                d="M 680 110 C 730 110, 750 175, 920 175 C 960 175, 980 110, 960 110"
+                d="M 170 225 C 230 225, 280 345, 340 345 L 560 345 C 630 345, 680 345, 690 345 C 705 345, 715 225, 720 225"
                 fill="none"
-                stroke="#0891b2"
+                stroke="#10b981"
                 strokeWidth="3"
               />
 
-              {/* Living Data Pulses (Traveling along Git paths) */}
-              <circle r="4" fill="#60a5fa" filter="url(#topoGlow)">
-                <animateMotion
-                  path="M 50 45 L 800 45 L 1080 45"
-                  dur="3.8s"
-                  repeatCount="indefinite"
-                  begin="1s"
-                />
+              {/* 6. hotfix/cve split from main (810,45 -> 890,105) & merge to main (970,45) */}
+              <path
+                id="topo-hotfix-path"
+                className="topo-path-hotfix"
+                d="M 810 45 C 840 45, 860 105, 890 105 C 920 105, 940 45, 970 45"
+                fill="none"
+                stroke="#f43f5e"
+                strokeWidth="3"
+              />
+
+              {/* 7. hotfix/cve dual-merge back to develop (890,105 -> 1030,225) */}
+              <path
+                id="topo-hotfix-dev-path"
+                className="topo-path-hotfix-dev"
+                d="M 890 105 C 930 105, 980 225, 1030 225"
+                fill="none"
+                stroke="#f43f5e"
+                strokeWidth="2.5"
+                strokeDasharray="4 3"
+              />
+
+              {/* 8. release/v1.2 split from develop (1030,225 -> 1110,165) & merge to main (1300,45) */}
+              <path
+                id="topo-release-path"
+                className="topo-path-release"
+                d="M 1030 225 C 1060 225, 1080 165, 1110 165 L 1200 165 C 1240 165, 1270 45, 1300 45"
+                fill="none"
+                stroke="#a855f7"
+                strokeWidth="3"
+              />
+
+              {/* Living Data Pulses (Traveling along Git paths with Glowing Halos) */}
+              <circle r="6" fill="#38bdf8" filter="url(#topoGlow)">
+                <animateMotion path="M 50 45 L 1380 45" dur="3.8s" repeatCount="indefinite" begin="0.3s" />
               </circle>
-              <circle r="3.5" fill="#c084fc" filter="url(#topoGlow)">
-                <animateMotion
-                  path="M 80 45 C 130 45, 150 110, 200 110 L 680 110 C 730 110, 750 45, 800 45"
-                  dur="4.2s"
-                  repeatCount="indefinite"
-                  begin="1.2s"
-                />
+              <circle r="12" fill="#38bdf8" opacity="0.25" filter="url(#topoGlow)">
+                <animateMotion path="M 50 45 L 1380 45" dur="3.8s" repeatCount="indefinite" begin="0.3s" />
               </circle>
-              <circle r="3.5" fill="#4ade80" filter="url(#topoGlow)">
-                <animateMotion
-                  path="M 200 110 C 250 110, 270 175, 320 175 C 370 175, 390 110, 440 110"
-                  dur="3s"
-                  repeatCount="indefinite"
-                  begin="1.5s"
-                />
+
+              <circle r="5.5" fill="#a855f7" filter="url(#topoGlow)">
+                <animateMotion path="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45" dur="4.2s" repeatCount="indefinite" begin="0.6s" />
               </circle>
-              <circle r="3.5" fill="#fbbf24" filter="url(#topoGlow)">
-                <animateMotion
-                  path="M 440 110 C 490 110, 510 240, 560 240 C 610 240, 630 110, 680 110"
-                  dur="3.4s"
-                  repeatCount="indefinite"
-                  begin="1.8s"
-                />
+              <circle r="10" fill="#a855f7" opacity="0.25" filter="url(#topoGlow)">
+                <animateMotion path="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45" dur="4.2s" repeatCount="indefinite" begin="0.6s" />
+              </circle>
+
+              <circle r="5.5" fill="#f59e0b" filter="url(#topoGlow)">
+                <animateMotion path="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225" dur="3.5s" repeatCount="indefinite" begin="1.0s" />
+              </circle>
+              <circle r="10" fill="#f59e0b" opacity="0.25" filter="url(#topoGlow)">
+                <animateMotion path="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225" dur="3.5s" repeatCount="indefinite" begin="1.0s" />
+              </circle>
+
+              <circle r="5.5" fill="#10b981" filter="url(#topoGlow)">
+                <animateMotion path="M 170 225 C 230 225, 280 345, 340 345 L 560 345 C 630 345, 680 345, 690 345 C 705 345, 715 225, 720 225" dur="4s" repeatCount="indefinite" begin="1.3s" />
+              </circle>
+
+              <circle r="5.5" fill="#f43f5e" filter="url(#topoGlow)">
+                <animateMotion path="M 810 45 C 840 45, 860 105, 890 105 C 920 105, 940 45, 970 45" dur="2.8s" repeatCount="indefinite" begin="1.6s" />
+              </circle>
+
+              <circle r="5.5" fill="#c084fc" filter="url(#topoGlow)">
+                <animateMotion path="M 1030 225 C 1060 225, 1080 165, 1110 165 L 1200 165 C 1240 165, 1270 45, 1300 45" dur="3.6s" repeatCount="indefinite" begin="1.9s" />
               </circle>
 
               {/* Interactive Commit Dots */}
@@ -3624,12 +2318,20 @@ export default function GitProjectHub() {
             {/* Interactive Floating Hover Popover Tooltip */}
             {hoveredCommit && (
               <div
-                className="absolute z-30 pointer-events-none bg-slate-950/95 text-white backdrop-blur-md p-3.5 rounded-xl shadow-2xl border border-slate-700 w-[320px] text-xs space-y-2.5 animate-fade-in"
+                key={`commit-popover-${hoveredCommit.id}`}
+                className="absolute z-30 pointer-events-none bg-slate-950/95 text-white backdrop-blur-md p-3.5 rounded-xl shadow-2xl border border-slate-700 w-[320px] text-xs space-y-2.5 animate-commit-popover ring-1 ring-white/10"
                 style={{
                   left: Math.min(Math.max(hoveredCommit.cx - 150, 15), 760),
                   top: Math.min(hoveredCommit.cy + 20, 170),
                 }}
               >
+                {/* Pointer caret arrow pointing up to the commit node */}
+                <div
+                  className="absolute -top-1.5 w-3 h-3 bg-slate-950 border-t border-l border-slate-700 rotate-45 pointer-events-none"
+                  style={{
+                    left: Math.max(16, Math.min(290, hoveredCommit.cx - Math.min(Math.max(hoveredCommit.cx - 150, 15), 760) - 6)),
+                  }}
+                />
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <div className="flex items-center gap-2">
                     <span
@@ -3670,7 +2372,7 @@ export default function GitProjectHub() {
 
           {/* Selected Commit Detail Inspector Card */}
           {selectedCommit && (
-            <div key={`commit-card-${selectedCommit.id}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 animate-tab-slide-down">
+            <div key={`commit-card-${selectedCommit.id}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 ">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
                 <div className="flex items-center gap-3">
                   <span
@@ -3723,7 +2425,7 @@ export default function GitProjectHub() {
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
-                  {selectedCommit.filesChanged.map((file, idx) => (
+                  {selectedCommit.filesChanged.map((file: string, idx: number) => (
                     <div key={idx} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 text-slate-700">
                       <GitCommit size={13} className="text-blue-600 shrink-0" />
                       <span className="truncate">{file}</span>
@@ -3741,13 +2443,14 @@ export default function GitProjectHub() {
               Nhật Ký Commit Theo Dòng Thời Gian (Nhấp chuột để xem vị trí trên cây)
             </h3>
             <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 overflow-hidden text-xs">
-              {filteredCommits.map((c) => {
+              {filteredCommits.map((c, cIdx) => {
                 const isSelected = selectedCommit?.id === c.id;
                 return (
                   <div
                     key={c.id}
+                    style={{ animationDelay: `${0.05 + Math.min(cIdx, 8) * 0.04}s` }}
                     onClick={() => setSelectedCommit(c)}
-                    className={`p-3 flex items-center justify-between transition cursor-pointer ${
+                    className={`animate-cascade-item p-3 flex items-center justify-between transition cursor-pointer ${
                       isSelected ? "bg-blue-50/70 border-l-4 border-l-blue-600" : "bg-white hover:bg-slate-50"
                     }`}
                   >
@@ -3788,89 +2491,89 @@ export default function GitProjectHub() {
 
       {/* MODE 3: MEMBER CONTRIBUTION ANALYTICS (Khớp Chuẩn 100% Ảnh 2 với Hiệu Ứng Thác Nước & Nhảy Số) */}
       {viewMode === "analytics" && (
-        <div key={`mode-analytics-${statAnimKey}`} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6 animate-tab-slide-down">
+        <div key={`mode-analytics-${statAnimKey}`} className="animate-screen-enter bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 space-y-6">
           {/* Header Title & Subtitle */}
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 animate-cascade-1">
-              <BarChart3 size={18} className="text-blue-600" />
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-4 animate-box-stagger-1">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <BarChart3 size={18} className="text-blue-600 dark:text-blue-400" />
               Thống kê Đóng góp Nhóm & Tính Liêm chính Mã Nguồn
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5 animate-cascade-2">
-              Phân bổ số lượng commit, số dòng code đóng góp và kiểm định tính nguyên bản của 3 thành viên theo chuẩn Thầy Nguyễn Phước.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Phân bổ số lượng commit, số dòng code đóng góp và kiểm định tính nguyên bản của 3 thành viên theo chuẩn Hội đồng Đồ án.
             </p>
           </div>
 
           {/* 3 Member Contribution Cards (Xuất hiện lần lượt từng card từ trái qua phải) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Card 1: Nguyễn Bá Hòa (Leader) */}
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 animate-cascade-3 shadow-xs hover:shadow-md transition-all hover:bg-white">
+            <div className="p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 animate-box-stagger-2 shadow-xs hover:shadow-md transition-all hover:bg-white dark:hover:bg-slate-800/70">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">Nguyễn Bá Hòa (Leader)</span>
-                <span className="text-xs font-bold font-mono text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
-                  <AnimatedNumber value={36} suffix="%" key={`hoa-pct-${statAnimKey}`} />
+                <span className="text-xs font-bold text-slate-900 dark:text-white">Nguyễn Bá Hòa (Leader)</span>
+                <span className="pill pill--info pill--plain text-xs font-bold font-mono">
+                  <OdometerNumber value={36} suffix="%" />
                 </span>
               </div>
-              <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                 <div className="bg-blue-600 h-full rounded-full animate-bar-grow" style={{ width: "36%" }} />
               </div>
-              <div className="text-[11px] text-slate-500 space-y-1 font-mono">
-                <div>Commits: <span className="font-bold text-slate-700"><AnimatedNumber value={28} key={`hoa-c-${statAnimKey}`} /></span> commits</div>
-                <div>Thêm dòng: <span className="font-bold text-emerald-600">+<AnimatedNumber value={3420} key={`hoa-l-${statAnimKey}`} /></span> dòng</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 font-mono">
+                <div>Commits: <span className="font-bold text-slate-700 dark:text-slate-200"><OdometerNumber value={28} /></span> commits</div>
+                <div>Thêm dòng: <span className="font-bold text-emerald-600 dark:text-emerald-400">+<OdometerNumber value={3420} /></span> dòng</div>
                 <div>Nhiệm vụ: Cấu trúc ERD, Router FastAPI, Quản lý Sprint</div>
               </div>
             </div>
 
             {/* Card 2: Võ Nhật Huy (Frontend/AI) */}
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 animate-cascade-4 shadow-xs hover:shadow-md transition-all hover:bg-white">
+            <div className="p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 animate-box-stagger-3 shadow-xs hover:shadow-md transition-all hover:bg-white dark:hover:bg-slate-800/70">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">Võ Nhật Huy (Frontend/AI)</span>
-                <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                  <AnimatedNumber value={34} suffix="%" key={`huy-pct-${statAnimKey}`} />
+                <span className="text-xs font-bold text-slate-900 dark:text-white">Võ Nhật Huy (Frontend/AI)</span>
+                <span className="pill pill--good pill--plain text-xs font-bold font-mono">
+                  <OdometerNumber value={34} suffix="%" />
                 </span>
               </div>
-              <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                 <div className="bg-emerald-600 h-full rounded-full animate-bar-grow" style={{ width: "34%" }} />
               </div>
-              <div className="text-[11px] text-slate-500 space-y-1 font-mono">
-                <div>Commits: <span className="font-bold text-slate-700"><AnimatedNumber value={26} key={`huy-c-${statAnimKey}`} /></span> commits</div>
-                <div>Thêm dòng: <span className="font-bold text-emerald-600">+<AnimatedNumber value={3180} key={`huy-l-${statAnimKey}`} /></span> dòng</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 font-mono">
+                <div>Commits: <span className="font-bold text-slate-700 dark:text-slate-200"><OdometerNumber value={26} /></span> commits</div>
+                <div>Thêm dòng: <span className="font-bold text-emerald-600 dark:text-emerald-400">+<OdometerNumber value={3180} /></span> dòng</div>
                 <div>Nhiệm vụ: Giao diện ReactFlow, Authentication, UI Theme</div>
               </div>
             </div>
 
             {/* Card 3: Phan Đình Nghị (Backend/DB) */}
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 animate-cascade-5 shadow-xs hover:shadow-md transition-all hover:bg-white">
+            <div className="p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 animate-box-stagger-4 shadow-xs hover:shadow-md transition-all hover:bg-white dark:hover:bg-slate-800/70">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">Phan Đình Nghị (Backend/DB)</span>
-                <span className="text-xs font-bold font-mono text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
-                  <AnimatedNumber value={30} suffix="%" key={`nghi-pct-${statAnimKey}`} />
+                <span className="text-xs font-bold text-slate-900 dark:text-white">Phan Đình Nghị (Backend/DB)</span>
+                <span className="pill pill--plain text-xs font-bold font-mono">
+                  <OdometerNumber value={30} suffix="%" />
                 </span>
               </div>
-              <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                 <div className="bg-purple-600 h-full rounded-full animate-bar-grow" style={{ width: "30%" }} />
               </div>
-              <div className="text-[11px] text-slate-500 space-y-1 font-mono">
-                <div>Commits: <span className="font-bold text-slate-700"><AnimatedNumber value={23} key={`nghi-c-${statAnimKey}`} /></span> commits</div>
-                <div>Thêm dòng: <span className="font-bold text-emerald-600">+<AnimatedNumber value={2850} key={`nghi-l-${statAnimKey}`} /></span> dòng</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 font-mono">
+                <div>Commits: <span className="font-bold text-slate-700 dark:text-slate-200"><OdometerNumber value={23} /></span> commits</div>
+                <div>Thêm dòng: <span className="font-bold text-emerald-600 dark:text-emerald-400">+<OdometerNumber value={2850} /></span> dòng</div>
                 <div>Nhiệm vụ: Code Evaluator Sandbox, Unit Tests, Analytics</div>
               </div>
             </div>
           </div>
 
           {/* AI Anti-Cheating Banner (Xuất hiện sau cùng với các số liệu nhảy thống kê) */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-emerald-50/80 border border-emerald-300/80 space-y-2 animate-cascade-6 shadow-sm relative overflow-hidden">
+          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-emerald-50/80 dark:from-emerald-950/40 dark:via-teal-950/20 dark:to-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800/60 space-y-2 animate-box-stagger-5 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm animate-cascade-7">
-                <ShieldCheck size={18} className="text-emerald-600" />
+              <div className="flex items-center gap-2 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
+                <ShieldCheck size={18} className="text-emerald-600 dark:text-emerald-400" />
                 <span>Báo cáo Xác thực Liêm chính & Chống Gian lận AI (AI Anti-Cheating)</span>
               </div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-300 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-radar-dot" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-emerald-300 dark:border-emerald-700 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 CADENCE ACTIVE
               </span>
             </div>
-            <p className="text-xs text-emerald-950 leading-relaxed animate-cascade-8">
-              Toàn bộ <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={77} key={`c77-${statAnimKey}`} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={4.8} decimals={1} suffix="h" key={`cv-${statAnimKey}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-800"><AnimatedNumber value={100} suffix="%" key={`cr-${statAnimKey}`} /></span>.
+            <p className="text-xs text-emerald-950 dark:text-emerald-200 leading-relaxed">
+              Toàn bộ <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><OdometerNumber value={77} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><AnimatedNumber value={4.8} decimals={1} suffix="h" key={`cv-${statAnimKey}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><AnimatedNumber value={100} suffix="%" key={`cr-${statAnimKey}`} /></span>.
             </p>
           </div>
         </div>
@@ -3878,76 +2581,389 @@ export default function GitProjectHub() {
 
       {/* MODE 4: GIT FLOW & REPO SUBMISSION STANDARDS */}
       {viewMode === "gitflow" && (
-        <div key="mode-gitflow" className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-6 animate-tab-slide-down">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Layers size={18} className="text-blue-600" />
-              Quy chuẩn Chu trình Vận hành Git Flow & Nộp Bài
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Chu trình 6 bước khép kín từ nhận task Kanban đến khi sinh viên nộp bài qua URL GitHub cho Giảng viên review.
-            </p>
+        <div key="mode-gitflow" className="animate-screen-enter bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-6 space-y-8">
+          {/* Header Title with Enterprise Status Badges */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                  <Layers size={20} />
+                </span>
+                <MarloTitle
+                  text="Quy Chuẩn Chu Trình Vận Hành Git Flow & Thẩm Định Nộp Bài"
+                  as="h2"
+                  className="text-lg font-bold text-slate-900 dark:text-white"
+                />
+              </div>
+              <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-1 max-w-3xl leading-relaxed">
+                Chu trình 6 bước khép kín từ nhận task Kanban, tách nhánh chuẩn hóa, commit có mã task, kiểm thử sandbox tự động, quy trình Review 2 lớp (AI Bot + Peer Review), chiến lược Squash Merge, đến nghiệm thu thẩm định liêm chính.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">1</span>
-                Nhận Task trên Kanban
+          {/* SƠ ĐỒ ĐƯỜNG NHÁNH METRO GIT FLOW TRỰC QUAN (VISUAL METRO PIPELINE) */}
+          <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-5 space-y-4 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <GitBranch size={16} className="text-slate-700 dark:text-slate-300" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  Sơ Đồ Phân Nhánh Metro Git Flow (Branch Lifecycle Architecture)
+                </h3>
               </div>
-              <p className="text-xs text-slate-600">
-                Sinh viên chọn task từ cột To Do, kiểm tra task cha đã Done để mở khóa phụ thuộc.
-              </p>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Strict Model (No Direct Push to main/develop)</span>
             </div>
 
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">2</span>
-                Tạo Nhánh feature/*
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+              {/* Lane 1: main */}
+              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-purple-500" />
+                    main (Production)
+                  </span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">LOCKED</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Nhánh chính thức dùng để bảo vệ và demo đồ án. Chỉ nhận merge từ nhánh <code className="text-purple-600 dark:text-purple-400 font-mono font-medium">release/*</code> khi kết thúc Sprint. Gắn thẻ Git Tag <code className="text-emerald-600 dark:text-emerald-400 font-mono font-medium">v1.0.0</code>.
+                </p>
               </div>
-              <p className="text-xs text-slate-600">
-                Tách nhánh từ develop theo cú pháp: <code className="bg-slate-200 px-1 rounded">feature/TASK-ID_ten-task</code>.
-              </p>
+
+              {/* Lane 2: develop */}
+              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    develop (Integration)
+                  </span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">PR ONLY</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Trục tích hợp trung tâm của cả nhóm trong Sprint. Mọi tính năng hoàn thành đều phải mở PR hợp nhất vào đây qua cơ chế <strong className="text-slate-800 dark:text-slate-200 font-semibold">Squash and Merge</strong>.
+                </p>
+              </div>
+
+              {/* Lane 3: feature/* */}
+              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    feature/* (Developer)
+                  </span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">ACTIVE</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Nhánh làm việc cá nhân của từng sinh viên, tách ra từ <code className="text-blue-600 dark:text-blue-400 font-mono font-medium">develop</code>. Đặt tên chuẩn: <code className="text-emerald-600 dark:text-emerald-400 font-mono font-medium">feature/TASK-ID_ten-task</code>. Tự do commit và test.
+                </p>
+              </div>
+
+              {/* Lane 4: hotfix/* */}
+              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    hotfix/* (Urgent Patch)
+                  </span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">EMERGENCY</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Tách trực tiếp từ <code className="text-purple-600 dark:text-purple-400 font-mono font-medium">main</code> khi phát hiện lỗ hổng bảo mật nghiêm trọng (P0) cần vá ngay. Sau khi fix xong, merge đồng thời vào cả <code className="text-purple-600 dark:text-purple-400 font-mono font-medium">main</code> và <code className="text-blue-600 dark:text-blue-400 font-mono font-medium">develop</code>.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* CHI TIẾT 6 BƯỚC KHÉP KÍN TOÀN DIỆN */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-600" />
+                Quy Trình 6 Bước Thực Thi Chi Tiết (Actionable SOP)
+              </h3>
+              <span className="text-xs text-slate-400 font-mono">Tuân thủ nghiêm ngặt chuẩn DoD (Definition of Done)</span>
             </div>
 
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">3</span>
-                Commit Kèm Mã Task
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {/* Bước 1 */}
+              <div
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200 bg-white shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                style={{ animationDelay: "0.14s" }}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                      1
+                    </span>
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                      Planning & Lock
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Nhận Task & Thẩm Định Tiên Quyết H2
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Sinh viên nhận task trên Kanban. Kiểm tra nghiêm ngặt <strong className="text-slate-800">Ràng buộc Tiên quyết H2</strong>: Task cha phụ thuộc bắt buộc phải ở trạng thái <strong className="text-emerald-600">ĐÃ XONG (Done)</strong> mới được kéo sang cột <strong className="text-blue-600">ĐANG LÀM</strong>.
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-700 space-y-1">
+                  <div className="text-slate-400 text-[10px] uppercase font-bold">Quy tắc bắt buộc:</div>
+                  <div className="text-slate-600">• Ghi nhận đúng mã Task ID duy nhất (Ví dụ: <span className="font-bold text-blue-600">#TE35D77</span>).</div>
+                  <div className="text-slate-600">• Không nhận cùng lúc quá 2 task đang làm.</div>
+                </div>
               </div>
-              <p className="text-xs text-slate-600">
-                Mỗi commit tuân thủ định dạng: <code className="bg-slate-200 px-1 rounded">feat(#TASK-XX): mo ta chi tiet</code>.
-              </p>
+
+              {/* Bước 2 */}
+              <div
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200 bg-white shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                style={{ animationDelay: "0.19s" }}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                      2
+                    </span>
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                      Branching
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Tách Nhánh Feature Từ Develop
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Cập nhật code mới nhất từ <code className="text-blue-600 font-mono">develop</code> rồi tách nhánh làm việc cá nhân. Tên nhánh bắt buộc phải chứa đúng mã Task ID để hệ thống tự động liên kết thẻ Kanban.
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-900 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner">
+                  <div className="text-slate-400 text-[10px] uppercase font-bold">Lệnh Terminal mẫu:</div>
+                  <div className="text-emerald-400 font-semibold">$ git checkout develop</div>
+                  <div className="text-emerald-400 font-semibold">$ git pull origin develop</div>
+                  <div className="text-amber-300 font-semibold">$ git checkout -b feature/TE35D77_docker-sandbox</div>
+                </div>
+              </div>
+
+              {/* Bước 3 */}
+              <div
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200 bg-white shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                style={{ animationDelay: "0.24s" }}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                      3
+                    </span>
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                      Commit Standard
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Lập Trình & Commit Kèm Mã Task
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Tuân thủ quy chuẩn <strong className="text-slate-800">Conventional Commits</strong>. Mỗi commit đều phải mang tiền tố rõ ràng (<code className="text-slate-700">feat</code>, <code className="text-slate-700">fix</code>, <code className="text-slate-700">test</code>) kèm mã task trong ngoặc đơn để liên kết lịch sử.
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-900 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner">
+                  <div className="text-slate-400 text-[10px] uppercase font-bold">Cú pháp Commit mẫu:</div>
+                  <div className="text-emerald-400 font-semibold">$ git add .</div>
+                  <div className="text-amber-300 font-semibold">$ git commit -m "feat(#TE35D77): build docker alpine cgroups limit"</div>
+                  <div className="text-slate-400 text-[10px] mt-1">• Cam kết khoảng cách tự nhiên (Variance ~4.8h)</div>
+                </div>
+              </div>
+
+              {/* Bước 4 */}
+              <div
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200 bg-white shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                style={{ animationDelay: "0.29s" }}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                      4
+                    </span>
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      CI & Test
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Kiểm Thử Nội Bộ & Docker Sandbox
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Chạy toàn bộ unit test local và kiểm thử trên môi trường giả lập Docker Sandbox. Hệ thống kiểm tra 5 test cases ẩn đảm bảo không có lỗi rò rỉ bộ nhớ, timeout hay crash runtime trước khi đẩy code lên remote.
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-900 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner">
+                  <div className="text-slate-400 text-[10px] uppercase font-bold">Lệnh Push nhánh lên GitHub:</div>
+                  <div className="text-emerald-400 font-semibold">$ npm test (hoặc pytest tests/)</div>
+                  <div className="text-amber-300 font-semibold">$ git push -u origin feature/TE35D77_docker-sandbox</div>
+                  <div className="text-slate-400 text-[10px]">• Tiêu chí: Memory &lt;= 128MB, TLE &lt; 2.0s</div>
+                </div>
+              </div>
+
+              {/* Bước 5 */}
+              <div
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-blue-300 bg-blue-50/30 shadow-xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                style={{ animationDelay: "0.34s" }}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                      5
+                    </span>
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                      2-Tier Review & Merge
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Mở Pull Request, Review 2 Lớp & Squash Merge
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Mở PR từ nhánh feature vào <code className="text-blue-600 font-mono font-bold">develop</code>. Kích hoạt chu trình duyệt mã 2 tầng bảo mật nghiêm ngặt trước khi hợp nhất.
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-white border border-blue-200 text-[11px] font-mono text-slate-700 space-y-1.5 shadow-2xs">
+                  <div className="text-blue-900 font-bold text-[10px] uppercase">Quy trình Review & Merge chi tiết:</div>
+                  <div className="text-slate-600">• <strong className="text-slate-800">Lớp 1 (CodeMind AI Bot):</strong> Tự động quét CVE lỗ hổng, AST complexity, AST blast radius.</div>
+                  <div className="text-slate-600">• <strong className="text-slate-800">Lớp 2 (Peer Review chéo):</strong> Tối thiểu 1 thành viên khác (Hòa / Huy / Nghị) duyệt diff và Approve. Bắt buộc resolve 100% comment.</div>
+                  <div className="text-slate-600">• <strong className="text-purple-700 font-bold">Chiến lược Merge:</strong> Chọn <span className="bg-purple-100 text-purple-800 px-1 rounded font-bold">Squash and Merge</span> để gộp thành 1 commit duy nhất trên develop.</div>
+                </div>
+              </div>
+
+              {/* Bước 6 */}
+              <div
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-emerald-300 bg-emerald-50/30 shadow-xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                style={{ animationDelay: "0.39s" }}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                      6
+                    </span>
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      Submission & DoD
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Nộp Bài, Thẩm Định Liêm Chính & Vấn Đáp AI
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Dán URL PR đã merge vào hệ thống CodeMind Campus. Hệ thống phân tích đối chiếu commit cadence, băm mã SHA-256 xác thực và tự động đóng dấu nghiệm thu hoàn thành.
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-white border border-emerald-200 text-[11px] font-mono text-emerald-950 space-y-1 shadow-2xs">
+                  <div className="text-emerald-900 font-bold text-[10px] uppercase">Kết quả thẩm định:</div>
+                  <div className="text-emerald-800 font-bold">✓ Đóng dấu [ ĐÃ NGHIỆM THU - DoD 100% ]</div>
+                  <div className="text-slate-600">• Tự động cộng Story Points vào Sprint Burndown.</div>
+                  <div className="text-slate-600">• Sinh 20 câu hỏi vấn đáp phản biện phục vụ buổi bảo vệ.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* BẢNG SO SÁNH CHIẾN LƯỢC MERGE & GIẢI QUYẾT XUNG ĐỘT (MERGE STRATEGY & CONFLICT RESOLUTION) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2">
+            {/* Cột trái: So sánh Chiến lược Merge (7 cols) */}
+            <div
+              className="marlo-card lg:col-span-7 rounded-2xl border border-slate-200 p-5 space-y-3 bg-slate-50/40"
+              style={{ animationDelay: "0.43s" }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <GitCommit size={16} className="text-purple-600" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-mono">
+                    Ma Trận Lựa Chọn Chiến Lược Merge (Merge Policy)
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-mono">RECOMMENDED</span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                {/* Option 1: Squash and Merge (Khuyên dùng) */}
+                <div
+                  className="marlo-row marlo-item-interactive p-3 rounded-xl bg-white border border-emerald-300 shadow-2xs space-y-1 hover:border-emerald-500 transition-all duration-200"
+                  style={{ animationDelay: "0.46s" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      1. Squash and Merge (Chuẩn đồ án Sprint)
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-700 font-bold">ƯU TIÊN SỐ 1</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Gộp tất cả 5-10 commit thử nghiệm vụn vặt trên nhánh feature thành <strong>đúng 1 commit duy nhất</strong> khi merge vào <code className="text-blue-600 font-mono">develop</code>. Tiêu đề commit gộp chứa đúng mã task: <code className="text-purple-700 font-mono font-bold">feat(#TE35D77): hoàn thiện docker sandbox (#PR-42)</code>. Lịch sử Git sạch sẽ, chuyên nghiệp, dễ rollback.
+                  </p>
+                </div>
+
+                {/* Option 2: Rebase and Merge */}
+                <div
+                  className="marlo-row marlo-item-interactive p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1 opacity-80 hover:opacity-100 hover:border-blue-400 transition-all duration-200"
+                  style={{ animationDelay: "0.49s" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      2. Rebase and Merge (Lịch sử tuyến tính)
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">Tùy chọn</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Dời gốc commit của feature lên đầu nhánh develop, tạo lịch sử thẳng tắp không có commit rẽ nhánh. Phù hợp với những PR lớn có nhiều commit logic độc lập.
+                  </p>
+                </div>
+
+                {/* Option 3: Merge Commit */}
+                <div
+                  className="marlo-row marlo-item-interactive p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1 opacity-80 hover:opacity-100 hover:border-purple-400 transition-all duration-200"
+                  style={{ animationDelay: "0.52s" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" />
+                      3. Merge Commit (--no-ff)
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">Dùng cho Release</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Tạo 1 commit merge chuyên biệt giữ nguyên cấu trúc phân nhánh. Chỉ sử dụng khi chốt Sprint đóng gói từ <code className="text-blue-600 font-mono">develop</code> vào <code className="text-purple-600 font-mono">main</code>.
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">4</span>
-                Chạy Kiểm thử Tự động
+            {/* Cột phải: Hướng dẫn Xử lý Merge Conflict (5 cols) */}
+            <div
+              className="marlo-card lg:col-span-5 rounded-2xl border border-slate-700/60 p-5 space-y-3 bg-slate-900 text-white shadow-md flex flex-col justify-between"
+              style={{ animationDelay: "0.47s" }}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-amber-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200 font-mono">
+                    Quy Trình Xử Lý Xung Đột (Merge Conflict)
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Khi 2 thành viên cùng sửa chung 1 file và PR báo xung đột (<strong className="text-rose-400">Can't automatically merge</strong>), sinh viên bắt buộc xử lý tại local theo 4 bước chuẩn:
+                </p>
               </div>
-              <p className="text-xs text-slate-600">
-                Code Evaluator Sandbox chạy 5 test cases ẩn và kiểm tra không có lỗi biên dịch trước khi push.
-              </p>
-            </div>
 
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">5</span>
-                Tạo Pull Request
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono space-y-2 text-slate-300">
+                <div className="text-slate-400 text-[10px] uppercase font-bold">Terminal Runbook:</div>
+                <div><span className="text-slate-500"># 1. Đứng tại nhánh feature cá nhân</span><br /><span className="text-emerald-400 font-semibold">$ git checkout feature/TE35D77_docker-sandbox</span></div>
+                <div><span className="text-slate-500"># 2. Kéo code develop mới nhất về trộn</span><br /><span className="text-amber-300 font-semibold">$ git pull origin develop</span></div>
+                <div><span className="text-slate-500"># 3. Mở VS Code chọn Accept Current / Incoming</span><br /><span className="text-emerald-400 font-semibold">$ git add . && git commit -m "chore: resolve conflicts with develop"</span></div>
+                <div><span className="text-slate-500"># 4. Đẩy ngược lại lên PR (PR sẽ tự động xanh)</span><br /><span className="text-emerald-400 font-semibold">$ git push origin feature/TE35D77_docker-sandbox</span></div>
               </div>
-              <p className="text-xs text-slate-600">
-                Mở PR hợp nhất vào nhánh develop, yêu cầu tối thiểu 1 thành viên review và approve.
-              </p>
-            </div>
 
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">6</span>
-                Nộp Bài & Thẩm định AI
+              <div className="text-[10px] text-emerald-400 font-mono flex items-center gap-1.5 pt-1 border-t border-slate-800">
+                <CheckCheck size={13} />
+                <span>Tuyệt đối không force push (-f) lên nhánh dùng chung.</span>
               </div>
-              <p className="text-xs text-slate-600">
-                Dán URL GitHub vào hệ thống, tự động phân tích commit cadence và sinh bộ câu hỏi vấn đáp cho Giảng viên.
-              </p>
             </div>
           </div>
         </div>
@@ -3955,8 +2971,10 @@ export default function GitProjectHub() {
 
       {/* Modal Liên Kết & Đồng Bộ GitHub Repo */}
       {showRepoModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-5 space-y-4">
+        <div onClick={handleCloseRepoModal} className={`fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 ${isRepoModalClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+          <div onClick={(e) => e.stopPropagation()} className={`bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-5 space-y-4 ${isRepoModalClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+            
+          
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -3968,7 +2986,7 @@ export default function GitProjectHub() {
                 </p>
               </div>
               <button
-                onClick={() => setShowRepoModal(false)}
+                onClick={handleCloseRepoModal}
                 className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
               >
                 ✕
@@ -4017,7 +3035,7 @@ export default function GitProjectHub() {
                 </div>
                 <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800">
                   <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG (GitKraken)</strong>.</li>
-                  <li>Tự động quét Pull Request qua <strong>CodeRabbit AI Senior Reviewer</strong>.</li>
+                  <li>Tự động quét Pull Request qua <strong>CodeMind AI Code Reviewer</strong>.</li>
                   <li>Tự động kiểm định liêm chính AI và nhịp độ đóng góp giữa 3 thành viên nhóm.</li>
                 </ul>
               </div>
@@ -4035,13 +3053,13 @@ export default function GitProjectHub() {
               </a>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setShowRepoModal(false)}
+                  onClick={handleCloseRepoModal}
                   className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg cursor-pointer"
                 >
                   Đóng
                 </button>
                 <button
-                  onClick={() => setShowRepoModal(false)}
+                  onClick={handleCloseRepoModal}
                   className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer"
                 >
                   Lưu & Đồng Bộ Ngay

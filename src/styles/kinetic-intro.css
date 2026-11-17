@@ -1,0 +1,559 @@
+/*! CodeMind AI Kinetic Typography Intro & Landing Styles */
+
+:root {
+  --intro-paper: #f7f7f5;
+  --intro-ink: #12131a;
+  --intro-accent: #e63a1b;
+  --intro-accent-deep: #a8210a;
+  --intro-accent-lift: #ff7f50;
+  --intro-grid-cell: 64px;
+  --intro-ease-out: cubic-bezier(.22, 1, .36, 1);
+  --intro-ease-in: cubic-bezier(.55, 0, 1, .45);
+}
+
+/* ─── KINETIC STAGE CONTAINER ─── */
+.intro-stage {
+  background: var(--intro-paper);
+  isolation: isolate;
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 640px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.intro-grain {
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.28;
+  background: url('/textures/grain.png') 0 0/128px 128px;
+  position: absolute;
+  inset: 0;
+}
+
+/* Grids */
+.intro-grid {
+  pointer-events: none;
+  background-image: repeating-linear-gradient(to right, currentColor 0 1px, transparent 1px var(--intro-grid-cell)),
+                    repeating-linear-gradient(to bottom, currentColor 0 1px, transparent 1px var(--intro-grid-cell));
+  position: absolute;
+  inset: -2px;
+}
+.intro-grid--ink {
+  color: #12131a12;
+  z-index: 1;
+}
+.intro-grid--light {
+  color: #ffffff24;
+  z-index: 2;
+}
+
+/* Paper side */
+.intro-paper {
+  z-index: 3;
+  place-items: center;
+  display: grid;
+  position: absolute;
+  inset: 0;
+}
+.intro-line {
+  color: var(--intro-ink);
+  letter-spacing: -0.045em;
+  white-space: nowrap;
+  will-change: transform, opacity;
+  grid-area: 1/1;
+  font-weight: 800;
+  font-family: inherit;
+}
+.intro-line--hi {
+  font-size: clamp(40px, 7vmin, 82px);
+}
+.intro-line--name {
+  padding-bottom: 0.18em;
+  font-size: clamp(46px, 8.2vmin, 96px);
+  position: relative;
+  text-align: center;
+}
+.intro-squiggle {
+  width: 66%;
+  height: auto;
+  color: var(--intro-ink);
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  overflow: visible;
+  transform: translate(-46%);
+}
+.intro-squiggle--sm {
+  width: 38%;
+  transform: translate(-50%);
+}
+.intro-squiggle__path {
+  vector-effect: non-scaling-stroke;
+}
+
+/* The falling dot */
+.intro-dot {
+  background: var(--intro-accent);
+  z-index: 5;
+  opacity: 0;
+  will-change: transform;
+  border-radius: 50%;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  pointer-events: none;
+}
+
+/* Flood field */
+.intro-field {
+  z-index: 6;
+  background: var(--intro-accent);
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.intro-blob {
+  opacity: 0;
+  will-change: transform;
+  border-radius: 50%;
+  position: absolute;
+}
+.intro-blob--1 {
+  background: radial-gradient(circle at 50% 50%, var(--intro-accent-lift) 0%, rgba(255, 127, 80, 0) 62%);
+  width: 90vmax;
+  height: 90vmax;
+  animation: 19s ease-in-out infinite alternate intro-drift1;
+  top: -30vmax;
+  left: -25vmax;
+}
+.intro-blob--2 {
+  background: radial-gradient(circle at 50% 50%, var(--intro-accent-deep) 0%, rgba(168, 33, 10, 0) 60%);
+  width: 78vmax;
+  height: 78vmax;
+  animation: 23s ease-in-out infinite alternate intro-drift2;
+  bottom: -28vmax;
+  right: -22vmax;
+}
+.intro-blob--3 {
+  background: radial-gradient(circle, rgba(255, 176, 130, 0.5) 0%, rgba(255, 176, 130, 0) 58%);
+  width: 62vmax;
+  height: 62vmax;
+  animation: 27s ease-in-out infinite alternate intro-drift3;
+  top: 18%;
+  left: 34%;
+}
+@keyframes intro-drift1 {
+  0% { transform: translate(0, 0) scale(1); }
+  to { transform: translate(9vmax, 6vmax) scale(1.14); }
+}
+@keyframes intro-drift2 {
+  0% { transform: translate(0, 0) scale(1.08); }
+  to { transform: translate(-8vmax, -5vmax) scale(1); }
+}
+@keyframes intro-drift3 {
+  0% { transform: translate(0, 0) scale(0.9); }
+  to { transform: translate(-11vmax, 8vmax) scale(1.2); }
+}
+
+.intro-vignette {
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(78% 62% at 50% 46%, rgba(88, 14, 2, 0) 45%, rgba(88, 14, 2, 0.35) 100%);
+  position: absolute;
+  inset: 0;
+}
+
+/* Ladder & Type Camera */
+.intro-camera {
+  z-index: 7;
+  will-change: transform;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.intro-ladder {
+  opacity: 1;
+  pointer-events: none;
+  align-items: center;
+  display: flex;
+  position: absolute;
+  inset: 0;
+}
+.intro-lockup {
+  white-space: nowrap;
+  color: #fff;
+  letter-spacing: -0.035em;
+  transform-origin: 0 50%;
+  will-change: transform;
+  flex: none;
+  font-size: clamp(38px, 5.4vw, 88px);
+  font-weight: 800;
+  line-height: 1.1;
+  display: inline-block;
+  position: relative;
+  font-family: inherit;
+  text-shadow: 0 4px 28px rgba(0, 0, 0, 0.22);
+}
+.intro-mask {
+  vertical-align: baseline;
+  margin: -0.14em 0 -0.26em;
+  padding: 0.14em 0 0.26em;
+  display: inline-block;
+  overflow: hidden;
+}
+.intro-mask > * {
+  will-change: transform;
+  display: inline-block;
+}
+.intro-anchor__ch,
+.intro-rung__ch {
+  white-space: pre;
+  will-change: transform;
+  backface-visibility: hidden;
+  display: inline-block;
+}
+.intro-rung {
+  white-space: nowrap;
+  opacity: 0;
+  margin-left: 0.22em;
+  position: absolute;
+  top: 0;
+  left: 100%;
+  display: inline-flex;
+  align-items: baseline;
+}
+.intro-pd {
+  vertical-align: baseline;
+  will-change: transform;
+  background: currentColor;
+  border-radius: 50%;
+  width: 0.17em;
+  height: 0.17em;
+  margin-left: 0.04em;
+  display: inline-block;
+  align-self: baseline;
+  transform: translateY(-0.04em);
+}
+
+.intro-dot--out {
+  background: var(--intro-paper);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* End card inside intro */
+.intro-endcard {
+  z-index: 50;
+  background: var(--intro-paper);
+  opacity: 0;
+  text-align: center;
+  align-content: center;
+  place-items: center;
+  gap: 2.2vmin;
+  display: grid;
+  position: absolute;
+  inset: 0;
+  padding: 24px;
+  pointer-events: auto;
+}
+.intro-endcard__cta {
+  color: var(--intro-ink);
+  letter-spacing: -0.045em;
+  will-change: transform, opacity;
+  font-size: clamp(32px, 8vw, 76px);
+  font-weight: 800;
+  line-height: 1.1;
+}
+.intro-endcard__sub {
+  color: #12131ad1;
+  letter-spacing: -0.005em;
+  will-change: transform, opacity;
+  font-size: clamp(15px, 2.8vw, 24px);
+  font-weight: 500;
+  max-w: 640px;
+}
+.intro-endcard__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 12px;
+  position: relative;
+  z-index: 60;
+  pointer-events: auto;
+}
+.intro-endcard__actions button {
+  position: relative;
+  z-index: 60;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.intro-btn-primary {
+  background: linear-gradient(180deg, #f8bd57 0%, #ee8420 100%);
+  color: #1c1304;
+  font-weight: 700;
+  font-size: clamp(14px, 2vw, 17px);
+  padding: 14px 28px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 10px 24px -8px rgba(238, 132, 32, 0.55);
+  transition: filter 0.18s ease, box-shadow 0.2s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+.intro-btn-primary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 16px 32px -10px rgba(238, 132, 32, 0.65);
+}
+.intro-btn-primary:active {
+  transform: scale(0.96) !important;
+  filter: brightness(0.97);
+}
+.intro-btn-secondary {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  color: #1c1304;
+  font-weight: 700;
+  font-size: clamp(14px, 2vw, 17px);
+  padding: 14px 24px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: background 0.2s var(--intro-ease-out), transform 0.2s var(--intro-ease-out), border-color 0.2s ease;
+  user-select: none;
+}
+.intro-btn-secondary:hover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.intro-btn-secondary:active {
+  transform: scale(0.96) !important;
+}
+.intro-endcard__handle {
+  color: var(--intro-ink);
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  will-change: transform, opacity;
+  margin-top: 1.5vmin;
+  padding-bottom: 0.4em;
+  font-size: clamp(16px, 3.8vw, 28px);
+  font-weight: 700;
+  position: relative;
+}
+
+/* Cinema bars */
+.intro-bar {
+  height: 50%;
+  z-index: 20;
+  will-change: transform;
+  background: #000;
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.intro-bar--top { top: 0; }
+.intro-bar--bot { bottom: 0; }
+
+/* Replay & Skip controls */
+.intro-controls {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.intro-ctrl-btn {
+  background: rgba(18, 19, 26, 0.7);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.2s var(--intro-ease-out), transform 0.2s var(--intro-ease-out);
+}
+.intro-ctrl-btn:hover {
+  background: rgba(18, 19, 26, 0.9);
+  transform: translateY(-1px);
+}
+
+/* ─── SCROLL REVEAL & BIDIRECTIONAL INTERACTIVE MOTION (MẠNH MẼ, ĐẬM NÉT 3D, NẢY SPRING) ─── */
+/* Default: Hidden state waiting to enter viewport (Mạnh mẽ: lùi sâu 80px, thu nhỏ 0.88, xoay 3D và mờ 8px) */
+.reveal-on-scroll,
+.reveal-fade-left,
+.reveal-fade-right,
+.reveal-zoom-in,
+.reveal-3d-tilt,
+.reveal-spring-pop,
+.reveal-slide-left,
+.reveal-slide-right,
+.reveal-pulse-glow {
+  opacity: 0;
+  transform: perspective(1200px) translateY(75px) scale(0.88) rotateX(15deg);
+  filter: blur(8px);
+  transition: opacity 0.85s cubic-bezier(0.22, 1.25, 0.36, 1),
+              transform 0.85s cubic-bezier(0.22, 1.25, 0.36, 1),
+              filter 0.85s cubic-bezier(0.22, 1.25, 0.36, 1);
+  will-change: transform, opacity, filter;
+  transform-origin: center bottom;
+}
+
+/* Specific directional hidden states (Bay mạnh mẽ từ hai cánh và phóng to từ tâm) */
+.reveal-fade-left:not(.is-in-view),
+.reveal-slide-left:not(.is-in-view) {
+  opacity: 0;
+  transform: perspective(1200px) translateX(-110px) translateY(30px) rotateY(-20deg) scale(0.84);
+  filter: blur(10px);
+}
+
+.reveal-fade-right:not(.is-in-view),
+.reveal-slide-right:not(.is-in-view) {
+  opacity: 0;
+  transform: perspective(1200px) translateX(110px) translateY(30px) rotateY(20deg) scale(0.84);
+  filter: blur(10px);
+}
+
+.reveal-zoom-in:not(.is-in-view),
+.reveal-spring-pop:not(.is-in-view) {
+  opacity: 0;
+  transform: scale(0.72) translateY(70px) rotateX(20deg);
+  filter: blur(12px);
+  transition: opacity 0.8s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1),
+              filter 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.reveal-3d-tilt:not(.is-in-view) {
+  opacity: 0;
+  transform: perspective(1200px) rotateX(25deg) translateY(90px) scale(0.82);
+  filter: blur(10px);
+  transition: opacity 0.9s cubic-bezier(0.22, 1.3, 0.36, 1),
+              transform 0.9s cubic-bezier(0.22, 1.3, 0.36, 1),
+              filter 0.9s cubic-bezier(0.22, 1.3, 0.36, 1);
+}
+
+.reveal-pulse-glow:not(.is-in-view) {
+  opacity: 0;
+  transform: translateY(65px) scale(0.85);
+  filter: blur(10px);
+}
+
+/* 🌟 ACTIVE IN-VIEW STATE: BUNG LỤA MẠNH MẼ VỚI HIỆU ỨNG SPRING BOUNCE & GLOW */
+.reveal-on-scroll.is-in-view,
+.reveal-fade-left.is-in-view,
+.reveal-fade-right.is-in-view,
+.reveal-zoom-in.is-in-view,
+.reveal-3d-tilt.is-in-view,
+.reveal-spring-pop.is-in-view,
+.reveal-slide-left.is-in-view,
+.reveal-slide-right.is-in-view,
+.reveal-pulse-glow.is-in-view {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+}
+
+/* Neutralize is-out-above to prevent jitter when scrolling near boundary */
+.is-out-above {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+}
+
+/* Reset immediately when out of view so entering is always fresh and snappy on both scroll up & down */
+.reveal-on-scroll:not(.is-in-view),
+.reveal-fade-left:not(.is-in-view),
+.reveal-fade-right:not(.is-in-view),
+.reveal-zoom-in:not(.is-in-view),
+.reveal-3d-tilt:not(.is-in-view),
+.reveal-spring-pop:not(.is-in-view),
+.reveal-slide-left:not(.is-in-view),
+.reveal-slide-right:not(.is-in-view),
+.reveal-pulse-glow:not(.is-in-view) {
+  transition-delay: 0s !important;
+  transition-duration: 0.2s !important;
+}
+
+/* Stagger transition delays dứt khoát theo nhịp domino khi hiển thị */
+.reveal-delay-1.is-in-view { transition-delay: 80ms !important; }
+.reveal-delay-2.is-in-view { transition-delay: 160ms !important; }
+.reveal-delay-3.is-in-view { transition-delay: 240ms !important; }
+.reveal-delay-4.is-in-view { transition-delay: 320ms !important; }
+.reveal-delay-5.is-in-view { transition-delay: 400ms !important; }
+
+/* ─── CYBER ROADMAP MATRIX & CAREER ODYSSEY STYLES ─── */
+.roadmap-conduit-bar {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 250, 252, 0.95) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+}
+
+.roadmap-station-card {
+  position: relative;
+  transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  cursor: pointer;
+}
+.roadmap-station-card:hover {
+  transform: translateY(-3px);
+}
+.roadmap-station-card.is-active {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px -12px var(--station-glow, rgba(229, 160, 35, 0.3));
+}
+
+.roadmap-code-window {
+  background: #0b0d13;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.6), 0 8px 24px -10px rgba(0, 0, 0, 0.4);
+}
+
+.roadmap-code-syntax {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.roadmap-terminal-logs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+@keyframes laser-pulse {
+  0% { transform: translateX(-100%); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateX(200%); opacity: 0; }
+}
+
+.laser-beam-anim {
+  animation: laser-pulse 3s infinite linear;
+}
+
+
