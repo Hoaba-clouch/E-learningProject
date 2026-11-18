@@ -206,6 +206,10 @@ def save_lesson_content(
         if payload.content is not None:
             lesson["content"] = payload.content
 
+        lesson["isInstructorEdited"] = True
+        lesson["instructorEditedAt"] = now_utc()
+        lesson["instructorName"] = user.get("display_name") or user.get("name") or "Giảng viên Phụ trách"
+
         _save_chapters(conn, course_id, chapters)
         if payload.isGenerated:
             conn.execute(

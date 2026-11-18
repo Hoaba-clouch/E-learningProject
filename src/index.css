@@ -2951,7 +2951,8 @@ html.dark .trello-slot-unfurl,
 
 .lesson-nav-item:focus,
 .lesson-nav-item:focus-visible {
-  outline: none;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 

@@ -84,7 +84,8 @@ function getToken(): string | null {
 function saveSessionTokens(
   accessToken: string,
   refreshToken?: string | null,
-  role?: string | null
+  role?: string | null,
+  user?: any | null
 ) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(TOKEN_KEY, accessToken);
@@ -94,6 +95,20 @@ function saveSessionTokens(
   if (role) {
     window.localStorage.setItem(TOKEN_ROLE_KEY, role);
   }
+  if (user) {
+    window.localStorage.setItem("codemind.user_info", JSON.stringify(user));
+  }
+}
+
+export function getStoredUser(): any | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem("codemind.user_info");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export function clearSessionTokens() {
@@ -101,6 +116,7 @@ export function clearSessionTokens() {
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
   window.localStorage.removeItem(TOKEN_ROLE_KEY);
+  window.localStorage.removeItem("codemind.user_info");
 }
 
 const inFlightRoleSessions: Record<string, Promise<string | null> | undefined> = {};
@@ -176,7 +192,7 @@ export async function demoLogin(role: "student" | "instructor" | "admin" = "stud
     });
     if (!res.ok) throw new Error("Login failed");
     const data = await res.json();
-    saveSessionTokens(data.access_token, data.refresh_token, data.role || role);
+    saveSessionTokens(data.access_token, data.refresh_token, data.role || role, data.user);
     return data;
   } catch (err) {
     console.warn("Backend offline, running in standalone client mode.", err);
@@ -206,7 +222,7 @@ export async function loginUser(
   }
   const data = await res.json();
   if (!data.requires_2fa && data.access_token) {
-    saveSessionTokens(data.access_token, data.refresh_token, data.role);
+    saveSessionTokens(data.access_token, data.refresh_token, data.role, data.user);
   }
   return data;
 }
@@ -231,7 +247,7 @@ export async function registerUser(payload: {
   }
   const data = await res.json();
   if (data.access_token) {
-    saveSessionTokens(data.access_token, data.refresh_token, data.role);
+    saveSessionTokens(data.access_token, data.refresh_token, data.role, data.user);
   }
   return data;
 }
@@ -255,7 +271,7 @@ export async function verifyLogin2FaApi(
     throw new Error(data.detail || "Xác thực OTP thất bại");
   }
   if (data.access_token) {
-    saveSessionTokens(data.access_token, data.refresh_token, data.role);
+    saveSessionTokens(data.access_token, data.refresh_token, data.role, data.user);
   }
   return data;
 }
@@ -313,7 +329,7 @@ export async function refreshAccessToken() {
   });
   if (!res.ok) throw new Error("Cấp lại Access Token thất bại");
   const data = await res.json();
-  saveSessionTokens(data.access_token, data.refresh_token, data.role);
+  saveSessionTokens(data.access_token, data.refresh_token, data.role, data.user);
   return data;
 }
 
@@ -2262,6 +2278,91 @@ export async function deleteWorkspaceTaskApi(taskId: string): Promise<boolean> {
   }
 }
 
+export async function reviewWorkspaceTaskApi(
+  taskId: string,
+  decision: "approve" | "request_revision",
+  feedback: string = "",
+  rating?: number
+): Promise<{ error?: string; task?: any; xp_awarded?: number }> {
+  const token = await getWorkspaceAuthToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/kanban/workspace/tasks/${encodeURIComponent(taskId)}/review`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ decision, feedback, rating }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối Backend" };
+  }
+}
+
+export async function fetchProjectEvaluationApi(
+  projectId: string
+): Promise<{
+  error?: string;
+  is_graded?: boolean;
+  evaluation?: any;
+  project?: any;
+  anti_freerider_metrics?: any[];
+  total_completed_points?: number;
+}> {
+  const token = await getWorkspaceAuthToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/kanban/workspace/projects/${encodeURIComponent(projectId)}/evaluation`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối Backend" };
+  }
+}
+
+export async function evaluateProjectApi(
+  projectId: string,
+  payload: {
+    group_score: number;
+    architecture_score: number;
+    process_score: number;
+    defense_score: number;
+    feedback: string;
+    member_scores: any[];
+  }
+): Promise<{ error?: string; status?: string; eval_id?: string; final_score?: number }> {
+  const token = await getWorkspaceAuthToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/kanban/workspace/projects/${encodeURIComponent(projectId)}/evaluate`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối Backend" };
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // NHÁNH 3 FULLSTACK API: GIT PROJECT HUB, COMMITS GRAPH & 2-TIER PR REVIEW
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2824,6 +2925,285 @@ export async function rotateCurrentJwtApi(): Promise<{
     return { ok: false, error: err?.message || "Không thể xoay vòng JWT Token" };
   }
 }
+
+export interface AppNotification {
+  id: string;
+  recipient_user_id?: string | null;
+  target_role: string;
+  title: string;
+  desc_text: string;
+  category: string;
+  is_read: number;
+  action_url?: string;
+  created_at: string;
+}
+
+export async function fetchNotificationsApi(): Promise<{ notifications: AppNotification[]; unread_count: number }> {
+  try {
+    const token = getToken();
+    if (!token) return { notifications: [], unread_count: 0 };
+    const res = await fetch(`${API_BASE}/v1/notifications`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { notifications: [], unread_count: 0 };
+    return await res.json();
+  } catch {
+    return { notifications: [], unread_count: 0 };
+  }
+}
+
+export async function markNotificationReadApi(id: string): Promise<void> {
+  try {
+    const token = getToken();
+    if (!token) return;
+    await fetch(`${API_BASE}/v1/notifications/${id}/read`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {}
+}
+
+export async function markAllNotificationsReadApi(): Promise<void> {
+  try {
+    const token = getToken();
+    if (!token) return;
+    await fetch(`${API_BASE}/v1/notifications/mark-all-read`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {}
+}
+
+export interface AcademicScheduleItem {
+  id: string;
+  course_id: string;
+  project_id?: string;
+  instructor_id: string;
+  instructor_name: string;
+  category: "exam" | "defense" | "office_hours";
+  title: string;
+  room_or_link: string;
+  schedule_date: string;
+  start_hour: number;
+  end_hour: number;
+  break_hour: number;
+  max_capacity: number;
+  current_booked: number;
+  is_locked: number;
+  status: string;
+  note?: string;
+  created_at: string;
+  updated_at: string;
+  bookings?: ScheduleBookingItem[];
+  my_booking?: ScheduleBookingItem;
+}
+
+export interface ScheduleBookingItem {
+  id: string;
+  schedule_id: string;
+  student_id: string;
+  student_name: string;
+  instructor_id: string;
+  topic: string;
+  repo_or_doc_url?: string;
+  student_note?: string;
+  booking_status: "pending" | "confirmed" | "rejected" | "completed";
+  instructor_reply?: string;
+  confirmed_at?: string;
+  completed_at?: string;
+  created_at: string;
+}
+
+export async function fetchSchedulesApi(filters?: {
+  courseId?: string;
+  category?: string;
+  date?: string;
+}): Promise<AcademicScheduleItem[]> {
+  try {
+    const token = getToken();
+    const query = new URLSearchParams();
+    if (filters?.courseId) query.set("course_id", filters.courseId);
+    if (filters?.category) query.set("category", filters.category);
+    if (filters?.date) query.set("schedule_date", filters.date);
+
+    const res = await fetch(`${API_BASE}/v1/schedules?${query.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.schedules || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createScheduleApi(payload: any): Promise<{ message: string; schedule_id: string }> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/v1/schedules`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tạo lịch mới");
+  }
+  return await res.json();
+}
+
+export async function bookScheduleApi(
+  scheduleId: string,
+  payload: { topic: string; repo_or_doc_url?: string; student_note?: string }
+): Promise<any> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/v1/schedules/${scheduleId}/book`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể đăng ký ca lịch");
+  }
+  return await res.json();
+}
+
+export async function updateBookingStatusApi(
+  bookingId: string,
+  payload: { status: string; instructor_reply?: string }
+): Promise<any> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/v1/schedules/bookings/${bookingId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể cập nhật trạng thái");
+  }
+  return await res.json();
+}
+
+export async function deleteScheduleApi(scheduleId: string): Promise<any> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/v1/schedules/${scheduleId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể xóa lịch");
+  }
+  return await res.json();
+}
+
+export interface StudentAnalyticsItem {
+  student_id: string;
+  student_code: string;
+  display_name: string;
+  email: string;
+  course_code: string;
+  progress_pct: number;
+  lessons_done: number;
+  total_lessons: number;
+  avg_quiz: number;
+  total_submissions: number;
+  defense_score: number;
+  kanban_tasks_done: number;
+  kanban_sp: number;
+  exp_points: number;
+  current_streak: number;
+  risk_status: "at_risk" | "top_performer" | "on_track";
+  risk_label: string;
+}
+
+export async function fetchStudentsAnalyticsApi(courseCode?: string): Promise<StudentAnalyticsItem[]> {
+  try {
+    const token = getToken();
+    const query = courseCode ? `?course_code=${encodeURIComponent(courseCode)}` : "";
+    const res = await fetch(`${API_BASE}/v1/instructor/students-analytics${query}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.students || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function remindStudentApi(
+  studentId: string,
+  payload: { message: string; action_type: string; bonus_xp?: number }
+): Promise<any> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/v1/instructor/students/${studentId}/remind`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể gửi nhắc nhở");
+  }
+  return await res.json();
+}
+
+export interface AdminAnalyticsData {
+  kpi: {
+    total_students: number;
+    total_instructors: number;
+    total_admins: number;
+    total_courses: number;
+    total_projects: number;
+    kanban_tasks_done: number;
+    kanban_sp_done: number;
+    total_submissions: number;
+    ci_cd_pass_rate: number;
+    ai_defense_avg: number;
+    total_ai_tokens: number;
+    total_ai_cost: number;
+    active_jwt_sessions: number;
+  };
+  curriculum_stages: Array<{
+    stage: number;
+    title: string;
+    codes: string[];
+    desc: string;
+    progress_pct: number;
+  }>;
+  ai_units: any[];
+}
+
+export async function fetchAdminAnalyticsApi(): Promise<AdminAnalyticsData | null> {
+  try {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/v1/admin/analytics-overview`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+
+
+
 
 
 

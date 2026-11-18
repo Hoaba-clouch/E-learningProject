@@ -8,6 +8,14 @@ DATA_DIR = ROOT_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "codemind.db"
 
+# Cấu hình CSDL MySQL 8.0 (CodeMind AI Learning OS)
+MYSQL_HOST = os.getenv("MYSQL_HOST", "127.0.0.1")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", 3306))
+MYSQL_USER = os.getenv("MYSQL_USER", "root")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "123456")
+MYSQL_DB = os.getenv("MYSQL_DB", "codemind_ai")
+USE_MYSQL = os.getenv("USE_MYSQL", "true").lower() in ("true", "1", "yes")
+
 PROJECT_NAME = "CodeMind Campus API"
 VERSION = "2.0.0"
 

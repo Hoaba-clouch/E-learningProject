@@ -22,10 +22,20 @@ router = APIRouter(tags=["Student Learning (Branch 1)"])
 SUBJECT_TO_CLASS_ID = {
     "oop": "class-oop",
     "dsa": "class-dsa",
-    "web": "class-web",
+    "network": "class-network",
     "frontend": "class-fe",
+    "realtime": "class-realtime",
+    "mobile": "class-mobile",
+    "web": "class-web",
+    "system-design": "class-system-design",
+    "distributed": "class-distributed",
+    "security": "class-security",
+    "ai-ml": "class-ai-ml",
     "ai-agent": "class-ai",
     "devops": "class-devops",
+    "cloud": "class-cloud",
+    "scrum": "class-scrum",
+    "capstone": "class-capstone",
 }
 
 DEFAULT_OWNED_ITEMS: dict[str, list[str]] = {

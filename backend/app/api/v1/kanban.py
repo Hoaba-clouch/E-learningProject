@@ -875,6 +875,11 @@ def move_workspace_task(
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
 
         target_col = payload.target_column.strip()
+        if user.get("role") == "student" and target_col == "verified":
+            raise HTTPException(
+                status_code=403,
+                detail="Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định. Sinh viên chỉ có thể chuyển sang 'Hoàn thành' để chờ nghiệm thu."
+            )
         _check_h2_constraint(conn, existing, target_col)
 
         existing_logs = json.loads(existing["audit_logs_json"] or "[]")
@@ -917,3 +922,231 @@ def delete_workspace_task(
         conn.execute("UPDATE engineering_tasks SET depends_on=NULL WHERE depends_on=?", (task_id,))
         conn.execute("DELETE FROM engineering_tasks WHERE id=?", (task_id,))
     return {"status": "deleted", "id": task_id}
+
+
+# ============================================================================
+# NHÁNH 3: THẨM ĐỊNH TASK & CHẤM ĐIỂM ĐỒ ÁN (ANTI-FREERIDER GRADING)
+# ============================================================================
+
+class TaskReviewIn(BaseModel):
+    decision: str  # "approve" | "request_revision"
+    feedback: str = ""
+    rating: int | None = None
+
+
+class ProjectEvaluationIn(BaseModel):
+    group_score: float
+    architecture_score: float
+    process_score: float
+    defense_score: float
+    feedback: str
+    member_scores: list[dict[str, Any]]
+
+
+@router.post("/kanban/workspace/tasks/{task_id}/review")
+def review_workspace_task(
+    task_id: str,
+    payload: TaskReviewIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Giảng viên thẩm định & nghiệm thu Task (Approve -> verified hoặc Request Revision -> in_progress)."""
+    if user.get("role") not in ("instructor", "admin"):
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên hoặc Admin mới có quyền thẩm định task.")
+
+    now = now_utc()
+    actor_name = user.get("full_name") or user.get("display_name") or "Giảng viên"
+    with db() as conn:
+        task = conn.execute("SELECT * FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
+        if not task:
+            raise HTTPException(status_code=404, detail="Không tìm thấy task")
+
+        target_col = "verified" if payload.decision == "approve" else "in_progress"
+        existing_logs = json.loads(task["audit_logs_json"] or "[]")
+        action_note = f"Giảng viên {actor_name} đã nghiệm thu task." if payload.decision == "approve" else f"Giảng viên {actor_name} yêu cầu sửa lại: {payload.feedback}"
+        existing_logs.append({
+            "user": actor_name,
+            "fromColumn": task["column_id"],
+            "toColumn": target_col,
+            "timestamp": now,
+            "note": action_note,
+        })
+
+        xp_awarded = 0
+        if payload.decision == "approve" and int(task.get("xp_awarded") or 0) == 0:
+            xp_awarded = max(50, int(task["points"]) * 10)
+            conn.execute("UPDATE engineering_tasks SET xp_awarded=? WHERE id=?", (xp_awarded, task_id))
+
+        conn.execute(
+            "UPDATE engineering_tasks SET column_id=?, audit_logs_json=?, updated_at=? WHERE id=?",
+            (target_col, json.dumps(existing_logs, ensure_ascii=False), now, task_id),
+        )
+
+        updated = conn.execute("SELECT * FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
+
+    return {
+        "status": "reviewed",
+        "decision": payload.decision,
+        "task": _serialize_task(updated),
+        "xp_awarded": xp_awarded,
+    }
+
+
+@router.get("/kanban/workspace/projects/{project_id}/evaluation")
+def get_project_evaluation(
+    project_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Lấy kết quả đánh giá đồ án hoặc tính toán đề xuất điểm số Anti-Freerider trực tiếp từ tiến độ thực tế."""
+    with db() as conn:
+        proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
+        if not proj:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+
+        eval_row = conn.execute(
+            "SELECT * FROM project_evaluations WHERE project_id=? ORDER BY graded_at DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+
+        tasks = conn.execute("SELECT * FROM engineering_tasks WHERE project_id=?", (project_id,)).fetchall()
+        team = json.loads(proj["team_json"] or "[]")
+
+        member_stats: dict[str, dict[str, Any]] = {}
+        for m in team:
+            member_stats[m["id"]] = {
+                "member_id": m["id"],
+                "name": m["name"],
+                "role": m.get("role", "Developer"),
+                "avatar": m.get("avatar", ""),
+                "total_tasks": 0,
+                "done_tasks": 0,
+                "verified_tasks": 0,
+                "completed_points": 0,
+                "total_points": 0,
+                "dod_completed": 0,
+                "dod_total": 0,
+            }
+
+        total_done_points = 0
+        for t in tasks:
+            assignee = json.loads(t["assignee_json"] or "{}")
+            pts = int(t.get("points") or 0)
+            col = t["column_id"]
+            dods = json.loads(t["dod_json"] or "[]")
+            m_id = assignee.get("id")
+
+            if m_id and m_id in member_stats:
+                member_stats[m_id]["total_tasks"] += 1
+                member_stats[m_id]["total_points"] += pts
+                member_stats[m_id]["dod_total"] += len(dods)
+                member_stats[m_id]["dod_completed"] += sum(1 for d in dods if d.get("done"))
+                if col in ("done", "verified"):
+                    member_stats[m_id]["done_tasks"] += 1
+                    member_stats[m_id]["completed_points"] += pts
+                    total_done_points += pts
+                if col == "verified":
+                    member_stats[m_id]["verified_tasks"] += 1
+
+        num_members = max(1, len(team))
+        expected_share = 100.0 / num_members
+        stats_list = []
+        for m_id, s in member_stats.items():
+            pct = round((s["completed_points"] / total_done_points * 100.0) if total_done_points > 0 else expected_share, 1)
+            s["contribution_pct"] = pct
+            ratio = pct / expected_share if expected_share > 0 else 1.0
+            factor = max(0.7, min(1.15, ratio))
+            s["suggested_factor"] = round(factor, 2)
+            stats_list.append(s)
+
+        if eval_row:
+            return {
+                "is_graded": True,
+                "evaluation": row_dict(eval_row),
+                "anti_freerider_metrics": stats_list,
+                "total_completed_points": total_done_points,
+            }
+
+        return {
+            "is_graded": False,
+            "project": row_dict(proj),
+            "anti_freerider_metrics": stats_list,
+            "total_completed_points": total_done_points,
+        }
+
+
+@router.post("/kanban/workspace/projects/{project_id}/evaluate")
+def evaluate_project(
+    project_id: str,
+    payload: ProjectEvaluationIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Giảng viên nộp điểm nghiệm thu đồ án, áp dụng trọng số Anti-Freerider & cấp XP."""
+    if user.get("role") not in ("instructor", "admin"):
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên hoặc Admin mới có quyền chấm điểm đồ án.")
+
+    eval_id = f"eval-{uid()[:8]}"
+    now = now_utc()
+    instructor_name = user.get("full_name") or user.get("display_name") or "Giảng viên"
+
+    final_score = round(
+        0.30 * payload.architecture_score + 0.40 * payload.process_score + 0.30 * payload.defense_score,
+        2,
+    )
+
+    with db() as conn:
+        proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
+        if not proj:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+
+        conn.execute(
+            """INSERT OR REPLACE INTO project_evaluations(
+                   id, project_id, instructor_id, group_score, architecture_score,
+                   process_score, defense_score, final_score, feedback,
+                   member_scores_json, anti_freerider_metrics_json, status, graded_at
+               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                eval_id,
+                project_id,
+                user["id"],
+                payload.group_score,
+                payload.architecture_score,
+                payload.process_score,
+                payload.defense_score,
+                final_score,
+                payload.feedback,
+                json.dumps(payload.member_scores, ensure_ascii=False),
+                json.dumps(payload.member_scores, ensure_ascii=False),
+                "graded",
+                now,
+            ),
+        )
+
+        conn.execute(
+            "UPDATE engineering_projects SET status='delivered', tl_color='done', updated_at=? WHERE id=?",
+            (now, project_id),
+        )
+
+        team = json.loads(proj["team_json"] or "[]")
+        for m in team:
+            notif_id = f"notif-ev-{uid()[:8]}"
+            conn.execute(
+                """INSERT INTO notifications(
+                       id, recipient_user_id, target_role, title, desc_text, category, is_read, action_url, created_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?)""",
+                (
+                    notif_id,
+                    None,
+                    "student",
+                    f"Đồ án {proj['code']} đã được nghiệm thu!",
+                    f"Giảng viên {instructor_name} đã hoàn tất chấm điểm với Điểm chung: {final_score}/10.",
+                    "project",
+                    0,
+                    "/kanban",
+                    now,
+                ),
+            )
+
+    return {
+        "status": "graded",
+        "eval_id": eval_id,
+        "final_score": final_score,
+    }

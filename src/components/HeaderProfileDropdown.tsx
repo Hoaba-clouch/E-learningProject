@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { getStoredUser, fetchCurrentUser } from "../api";
 import {
   UserRound,
   Moon,
@@ -88,19 +89,40 @@ export function HeaderProfileDropdown({
     };
   }, [isOpen, isClosing]);
 
+  const [currentUser, setCurrentUser] = useState<any>(() => getStoredUser());
+
+  useEffect(() => {
+    let active = true;
+    const user = getStoredUser();
+    if (user) {
+      setCurrentUser(user);
+    } else {
+      fetchCurrentUser().then((u) => {
+        if (active && u) setCurrentUser(u);
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [role]);
+
   const userName =
-    role === "student"
-      ? "Nguyễn Văn A"
+    currentUser?.name ||
+    currentUser?.full_name ||
+    (role === "student"
+      ? "Minh Anh"
       : role === "instructor"
       ? "Cô Trần Thị B"
-      : "Admin AIO";
+      : "Admin AIO");
 
   const userCode =
-    role === "student"
-      ? "2210842"
+    currentUser?.code ||
+    currentUser?.student_code ||
+    (role === "student"
+      ? "SV-2026-01"
       : role === "instructor"
       ? "GV-104"
-      : "ADM-01";
+      : "ADM-01");
 
   return (
     <div className="relative inline-block text-left shrink-0" ref={dropdownRef}>

@@ -1,15 +1,14 @@
 import React from "react";
 import {
-  Eye,
-  Droplets,
+  Award,
+  GraduationCap,
+  MessageSquare,
   Sliders,
-  Film,
-  Phone,
-  Upload,
+  Eye,
   Plus,
 } from "lucide-react";
 
-export type BookingKind = "review" | "grade" | "mix" | "edit" | "call" | "delivery";
+export type BookingKind = "exam" | "defense" | "mentor_1on1" | "lab_test" | "review";
 
 export interface AgendaMember {
   id: string;
@@ -43,225 +42,228 @@ export const KIND_META: Record<
   BookingKind,
   { label: string; icon: React.FC<{ size?: number; className?: string }> }
 > = {
-  review: {
-    label: "Client review",
-    icon: ({ size = 15, className }) => <Eye size={size} className={className} strokeWidth={2.2} />,
+  exam: {
+    label: "Ca thi Năng lực / Giữa kỳ",
+    icon: ({ size = 15, className }) => <Award size={size} className={className} strokeWidth={2.2} />,
   },
-  grade: {
-    label: "Grade",
-    icon: ({ size = 15, className }) => <Droplets size={size} className={className} strokeWidth={2.2} />,
+  defense: {
+    label: "Hội đồng Bảo vệ Đồ án",
+    icon: ({ size = 15, className }) => <GraduationCap size={size} className={className} strokeWidth={2.2} />,
   },
-  mix: {
-    label: "Mix",
+  mentor_1on1: {
+    label: "Tư vấn 1-on-1 Giảng viên",
+    icon: ({ size = 15, className }) => <MessageSquare size={size} className={className} strokeWidth={2.2} />,
+  },
+  lab_test: {
+    label: "Thực hành Sandbox Lab",
     icon: ({ size = 15, className }) => <Sliders size={size} className={className} strokeWidth={2.2} />,
   },
-  edit: {
-    label: "Edit session",
-    icon: ({ size = 15, className }) => <Film size={size} className={className} strokeWidth={2.2} />,
-  },
-  call: {
-    label: "Call",
-    icon: ({ size = 15, className }) => <Phone size={size} className={className} strokeWidth={2.2} />,
-  },
-  delivery: {
-    label: "Delivery",
-    icon: ({ size = 15, className }) => <Upload size={size} className={className} strokeWidth={2.2} />,
+  review: {
+    label: "Duyệt Tiến độ Đồ án",
+    icon: ({ size = 15, className }) => <Eye size={size} className={className} strokeWidth={2.2} />,
   },
 };
 
-// Members with authentic Marlo avatar hues
-export const MARLO_MEMBERS: Record<string, AgendaMember> = {
-  dw: { id: "dw", initials: "DW", name: "Dara Whitfield", bg: "#FCD34D", textColor: "#78350F" },
-  ab: { id: "ab", initials: "AB", name: "Alex Bright", bg: "#E2E8F0", textColor: "#334155" },
-  ka: { id: "ka", initials: "KA", name: "Kester Ainsley", bg: "#CBD5E1", textColor: "#1E293B" },
-  th: { id: "th", initials: "TH", name: "Tariq Hameed", bg: "#FED7AA", textColor: "#7C2D12" },
-  im: { id: "im", initials: "IM", name: "Iona Macleod", bg: "#FBCFE8", textColor: "#831843" },
-  yt: { id: "yt", initials: "YT", name: "Yuki Tanaka", bg: "#FDE68A", textColor: "#78350F" },
-  lh: { id: "lh", initials: "LH", name: "Lewis Hunter", bg: "#FEF08A", textColor: "#713F12" },
-  rn: { id: "rn", initials: "RN", name: "Rory Nairn", bg: "#BAE6FD", textColor: "#0369A1" },
+// Giảng viên & Ban cố vấn chuyên môn Khoa CNTT
+export const ACADEMIC_MEMBERS: Record<string, AgendaMember> = {
+  tb: { id: "tb", initials: "TB", name: "Cô Trần Thị B", bg: "#FCD34D", textColor: "#78350F" },
+  np: { id: "np", initials: "NP", name: "Thầy Nguyễn Phước", bg: "#C7D2FE", textColor: "#312E81" },
+  mq: { id: "mq", initials: "MQ", name: "Thầy Trần Minh Quân", bg: "#FED7AA", textColor: "#7C2D12" },
+  lhm: { id: "lhm", initials: "LM", name: "TS. Lê Hoàng Mai", bg: "#FBCFE8", textColor: "#831843" },
+  bhoa: { id: "bhoa", initials: "BH", name: "Nguyễn Bá Hòa (Lead)", bg: "#A7F3D0", textColor: "#064E3B" },
+  vhuy: { id: "vhuy", initials: "VH", name: "Võ Nhật Huy", bg: "#FEF08A", textColor: "#713F12" },
+  admin: { id: "admin", initials: "AD", name: "Phòng Khảo thí & Học vụ", bg: "#E2E8F0", textColor: "#334155" },
 };
 
-// Exact 7-day bookings from Marlo's screenshot (media_1794693473670_3f753964.png)
+// 7-day academic schedules & 1-on-1 bookings
 export const INITIAL_AGENDA_DAYS: AgendaDay[] = [
   {
     id: "yesterday",
-    label: "Yesterday",
+    label: "Hôm qua",
     bookings: [
       {
         id: "b1",
-        time: "9:30",
-        duration: "20 min",
-        kind: "call",
-        title: "Team stand-up",
-        sub: "Call · Suite B",
-        who: [MARLO_MEMBERS.dw, MARLO_MEMBERS.ab, MARLO_MEMBERS.ka],
+        time: "08:30",
+        duration: "45 phút",
+        kind: "lab_test",
+        title: "Test thực hành C++20 Sandbox",
+        sub: "Kiểm tra tự động · Lab-402 · CS201",
+        who: [ACADEMIC_MEMBERS.tb, ACADEMIC_MEMBERS.bhoa],
+        room: "Lab-402",
+        done: true,
       },
       {
         id: "b2",
-        time: "13:00",
-        duration: "2 h",
-        kind: "grade",
-        title: "Long Field look session",
-        sub: "Grade · Grade room · Screen Scotland",
-        who: [MARLO_MEMBERS.im, MARLO_MEMBERS.th],
+        time: "14:00",
+        duration: "2 giờ",
+        kind: "review",
+        title: "Sơ duyệt Kiến trúc Microservices",
+        sub: "Đồ án Capstone · Phòng Hội thảo 501",
+        who: [ACADEMIC_MEMBERS.np, ACADEMIC_MEMBERS.vhuy],
+        room: "Phòng Hội thảo 501",
+        done: true,
       },
     ],
   },
   {
     id: "today",
-    label: "Today",
+    label: "Hôm nay",
     isToday: true,
     canBook: true,
     bookings: [
       {
         id: "b3",
-        time: "10:30",
-        duration: "45 min",
-        kind: "review",
-        title: "Kestrel cut-down review",
-        sub: "Client review · Online · Kestrel Outdoor",
-        who: [MARLO_MEMBERS.ab, MARLO_MEMBERS.ka, MARLO_MEMBERS.dw],
+        time: "09:00",
+        duration: "90 phút",
+        kind: "exam",
+        title: "Thi trắc nghiệm Cấu trúc Dữ liệu & Giải thuật",
+        sub: "Khảo thí tập trung · Phòng Máy A2-301 · CS202",
+        who: [ACADEMIC_MEMBERS.mq, ACADEMIC_MEMBERS.admin],
+        room: "Phòng Máy A2-301",
       },
       {
         id: "b4",
-        time: "11:30",
-        duration: "1.5 h",
-        kind: "edit",
-        title: "Saltmarsh online check",
-        sub: "Edit session · Suite A · Northlight TV",
-        who: [MARLO_MEMBERS.ka, MARLO_MEMBERS.th],
+        time: "10:45",
+        duration: "1.5 giờ",
+        kind: "defense",
+        title: "Hội đồng Bảo vệ Sơ duyệt Đồ án Capstone",
+        sub: "Phản biện Vòng 1 · Phòng 501 · PRJ-CODEMIND",
+        who: [ACADEMIC_MEMBERS.tb, ACADEMIC_MEMBERS.np, ACADEMIC_MEMBERS.bhoa],
+        room: "Phòng 501",
       },
       {
         id: "b5",
         time: "14:00",
-        duration: "3 h",
-        kind: "mix",
-        title: "Mossgiel narration mix",
-        sub: "Mix · Mix room · Mossgiel Distillery",
-        who: [MARLO_MEMBERS.yt, MARLO_MEMBERS.dw],
+        duration: "2 giờ",
+        kind: "mentor_1on1",
+        title: "Tư vấn 1-on-1: Tối ưu Giải thuật Đồ thị & DP",
+        sub: "Cố vấn chuyên sâu · Văn phòng Bộ môn · Thầy Quân",
+        who: [ACADEMIC_MEMBERS.mq, ACADEMIC_MEMBERS.vhuy],
+        room: "Văn phòng Bộ môn",
       },
       {
         id: "b6",
         time: "16:30",
-        duration: "30 min",
-        kind: "call",
-        title: "Brightwell weekly call",
-        sub: "Call · Online · Brightwell Bank",
-        who: [MARLO_MEMBERS.ab, MARLO_MEMBERS.dw],
+        duration: "45 phút",
+        kind: "mentor_1on1",
+        title: "Hướng dẫn Kỹ thuật: Vector DB pgvector",
+        sub: "Hỏi đáp trực tuyến · Google Meet · TS. Lê Hoàng Mai",
+        who: [ACADEMIC_MEMBERS.lhm, ACADEMIC_MEMBERS.bhoa],
+        room: "Google Meet",
       },
     ],
   },
   {
     id: "tomorrow",
-    label: "Tomorrow",
+    label: "Ngày mai",
     canBook: true,
     bookings: [
       {
         id: "b7",
-        time: "9:30",
-        duration: "4 h",
-        kind: "grade",
-        title: "Harbour Lights reel 3 grade",
-        sub: "Grade · Grade room · Tidewater Films",
-        who: [MARLO_MEMBERS.im],
+        time: "08:30",
+        duration: "3 giờ",
+        kind: "exam",
+        title: "Thi thực hành Giữa kỳ C++20 Sandbox",
+        sub: "Chấm điểm tự động qua Docker · Lab C-302 · CS201",
+        who: [ACADEMIC_MEMBERS.tb],
+        room: "Lab C-302",
       },
       {
         id: "b8",
-        time: "10:00",
-        duration: "3 h",
-        kind: "edit",
-        title: "Long Field conform",
-        sub: "Edit session · Suite B · Screen Scotland",
-        who: [MARLO_MEMBERS.th],
+        time: "13:30",
+        duration: "2 giờ",
+        kind: "review",
+        title: "Kiểm tra tiến độ Sprint 3 & Dockerfile",
+        sub: "Nghiệm thu Kanban · Phòng Lab AI · Thầy Phước",
+        who: [ACADEMIC_MEMBERS.np],
+        room: "Phòng Lab AI",
       },
       {
         id: "b9",
-        time: "15:00",
-        duration: "1 h",
-        kind: "call",
-        title: "Ferro kick-off",
-        sub: "Call · Online · Ferro Cycles",
-        who: [MARLO_MEMBERS.lh, MARLO_MEMBERS.rn, MARLO_MEMBERS.yt],
+        time: "15:30",
+        duration: "1 giờ",
+        kind: "mentor_1on1",
+        title: "Tư vấn 1-on-1: Xử lý Race Condition & Deadlock",
+        sub: "Hỗ trợ học vụ · Văn phòng Thầy Phước",
+        who: [ACADEMIC_MEMBERS.np, ACADEMIC_MEMBERS.bhoa],
+        room: "Văn phòng Thầy Phước",
       },
     ],
   },
   {
     id: "thu",
-    label: "Thu 12 Nov",
+    label: "Thứ Năm (20/11)",
     canBook: true,
     bookings: [
       {
         id: "b10",
-        time: "10:00",
-        duration: "4 h",
-        kind: "mix",
-        title: "Saltmarsh pre-mix",
-        sub: "Mix · Mix room · Northlight TV",
-        who: [MARLO_MEMBERS.yt],
+        time: "09:00",
+        duration: "2.5 giờ",
+        kind: "lab_test",
+        title: "Thực hành Lập trình Hệ thống & Socket",
+        sub: "Hệ điều hành & Phân tán · Lab-504 · CS304",
+        who: [ACADEMIC_MEMBERS.np],
+        room: "Lab-504",
       },
       {
         id: "b11",
-        time: "12:00",
-        duration: "30 min",
-        kind: "delivery",
-        title: "Kestrel final delivery",
-        sub: "Delivery · Online · Kestrel Outdoor",
-        who: [MARLO_MEMBERS.ab],
-      },
-      {
-        id: "b12",
-        time: "14:30",
-        duration: "1 h",
-        kind: "review",
-        title: "Brightwell VFX review",
-        sub: "Client review · Suite A · Brightwell Bank",
-        who: [MARLO_MEMBERS.rn, MARLO_MEMBERS.ab, MARLO_MEMBERS.ka],
+        time: "14:00",
+        duration: "1 giờ",
+        kind: "mentor_1on1",
+        title: "Tư vấn Đồ án: Triển khai Kubernetes & Ingress",
+        sub: "Hỗ trợ Cloud DevOps · Lab AI · Cô Lan Anh",
+        who: [ACADEMIC_MEMBERS.tb],
+        room: "Lab AI",
       },
     ],
   },
   {
     id: "fri",
-    label: "Fri 13 Nov",
+    label: "Thứ Sáu (21/11)",
     canBook: true,
     bookings: [
       {
+        id: "b12",
+        time: "08:30",
+        duration: "4 giờ",
+        kind: "defense",
+        title: "Hội đồng Bảo vệ Khóa luận Tốt nghiệp Đợt 1",
+        sub: "Hội đồng Đánh giá Cấp Viện · Hội trường A",
+        who: [ACADEMIC_MEMBERS.np, ACADEMIC_MEMBERS.mq, ACADEMIC_MEMBERS.tb],
+        room: "Hội trường A",
+      },
+      {
         id: "b13",
-        time: "9:00",
-        duration: "5 h",
-        kind: "edit",
-        title: "Harbour Lights picture lock",
-        sub: "Edit session · Suite A · Tidewater Films",
-        who: [MARLO_MEMBERS.ka, MARLO_MEMBERS.th],
-      },
-      {
-        id: "b14",
-        time: "9:30",
-        duration: "20 min",
-        kind: "call",
-        title: "Team stand-up",
-        sub: "Call · Suite B",
-        who: [MARLO_MEMBERS.dw, MARLO_MEMBERS.ab, MARLO_MEMBERS.ka],
-      },
-      {
-        id: "b15",
-        time: "11:00",
-        duration: "1 h",
-        kind: "review",
-        title: "Mossgiel client screening",
-        sub: "Client review · Grade room · Mossgiel Distillery",
-        who: [MARLO_MEMBERS.dw, MARLO_MEMBERS.th, MARLO_MEMBERS.im],
+        time: "14:30",
+        duration: "90 phút",
+        kind: "exam",
+        title: "Kiểm tra Đánh giá Năng lực Thuật toán AI",
+        sub: "Học phần CS402 · Phòng Máy A2-302",
+        who: [ACADEMIC_MEMBERS.lhm],
+        room: "Phòng Máy A2-302",
       },
     ],
   },
   {
     id: "sat",
-    label: "Sat 14 Nov",
+    label: "Thứ Bảy (22/11)",
     canBook: true,
-    bookings: [],
+    bookings: [
+      {
+        id: "b14",
+        time: "09:00",
+        duration: "3 giờ",
+        kind: "mentor_1on1",
+        title: "Open Office Hours: Cố vấn Nghiên cứu Khoa học",
+        sub: "Mở tự do cho SV các đề tài Khoa học · Phòng B-101",
+        who: [ACADEMIC_MEMBERS.lhm, ACADEMIC_MEMBERS.mq],
+        room: "Phòng B-101",
+      },
+    ],
   },
   {
     id: "sun",
-    label: "Sun 15 Nov",
+    label: "Chủ Nhật (23/11)",
     canBook: true,
     bookings: [],
   },
@@ -280,7 +282,7 @@ export default function MarloAgendaView({
 }: MarloAgendaViewProps) {
   return (
     <div className="w-full">
-      {/* ─── EXACT MARLO AGENDA GRID (calendar.jsx line 256) ─── */}
+      {/* ─── EXACT MARLO AGENDA GRID ─── */}
       <div className="agenda">
         {days.map((day) => {
           const isToday = day.isToday;
@@ -297,8 +299,8 @@ export default function MarloAgendaView({
                   <h2>{day.label}</h2>
                   <p>
                     {hasBookings
-                      ? `${day.bookings.length} booking${day.bookings.length > 1 ? "s" : ""}`
-                      : "Nothing booked"}
+                      ? `${day.bookings.length} ca lịch / lịch hẹn`
+                      : "Trống lịch học vụ"}
                   </p>
                 </div>
 
@@ -306,9 +308,9 @@ export default function MarloAgendaView({
                   <button
                     type="button"
                     className="ibtn ibtn--sm"
-                    aria-label={`Book on ${day.label}`}
+                    aria-label={`Đặt lịch vào ${day.label}`}
                     onClick={() => onAddBooking?.(day.id)}
-                    title={`Book on ${day.label}`}
+                    title={`Đặt lịch hẹn vào ${day.label}`}
                   >
                     <Plus size={14} strokeWidth={2.5} />
                   </button>
@@ -318,7 +320,7 @@ export default function MarloAgendaView({
               {/* Booking Rows */}
               {hasBookings ? (
                 day.bookings.map((b) => {
-                  const meta = KIND_META[b.kind] || KIND_META.call;
+                  const meta = KIND_META[b.kind] || KIND_META.mentor_1on1;
                   const IconComponent = meta.icon;
 
                   return (
@@ -363,7 +365,7 @@ export default function MarloAgendaView({
                 })
               ) : (
                 <div className="py-6 text-center text-xs text-[#62656b] dark:text-[#a0a3a9] italic">
-                  Nothing booked
+                  Không có ca thi hoặc lịch hẹn nào
                 </div>
               )}
             </section>

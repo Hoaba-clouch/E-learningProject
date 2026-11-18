@@ -1,5 +1,5 @@
 import React, { useState, useRef, useLayoutEffect, useEffect } from "react";
-import { animateMarloPill } from "../utils/marloAnimations";
+import { animateMarloElasticPill } from "../utils/marloAnimations";
 import {
   Code2,
   ChevronDown,
@@ -78,16 +78,15 @@ function ChapterLessonGroup({
 
   useLayoutEffect(() => {
     const activeEl = getActiveElement();
-    animateMarloPill(pillRef.current, activeEl, {
+    animateMarloElasticPill(pillRef.current, activeEl, {
       animate: !isFirstRender.current,
-      radius: 14,
     });
     isFirstRender.current = false;
   }, [activeKey]);
 
   useEffect(() => {
     const handleResize = () => {
-      animateMarloPill(pillRef.current, getActiveElement(), { animate: false, radius: 14 });
+      animateMarloElasticPill(pillRef.current, getActiveElement(), { animate: false });
     };
     const ro = new ResizeObserver(handleResize);
     if (containerRef.current) ro.observe(containerRef.current);
@@ -104,11 +103,11 @@ function ChapterLessonGroup({
       ref={containerRef}
       className="relative animate-accordion-expand bg-slate-50/70 dark:bg-slate-950/40 p-2 flex flex-col gap-1.5 rounded-xl"
     >
-      {/* 🏷️ Marlo Liquid Rubberband Active Pill - EXACT 1:1 WITH NAVBAR */}
+      {/* 🏷️ Marlo Elastic Active Pill */}
       <div
         ref={pillRef}
         aria-hidden="true"
-        className="pointer-events-none opacity-0 absolute top-0 left-0 w-full h-full z-0 rounded-[14px] bg-[#141619] dark:bg-[#F4F4F6] shadow-[0_4px_16px_rgba(0,0,0,0.14)]"
+        className="pointer-events-none opacity-0 absolute z-0 rounded-[14px] bg-[#141619] dark:bg-[#F4F4F6] shadow-[0_4px_16px_rgba(0,0,0,0.14)]"
       />
 
       {chapter.lessons.map((lesson) => {
@@ -122,7 +121,7 @@ function ChapterLessonGroup({
               triggerWaterRipple(e, lesson.id);
               onSelectLesson(lesson.id, lesson.type);
             }}
-            className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
+            className={`lesson-nav-item outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
               isActive
                 ? "text-white dark:text-[#141619] font-bold"
                 : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
@@ -236,7 +235,7 @@ function ChapterLessonGroup({
           triggerWaterRipple(e, `exercise-${chapter.id}`);
           onOpenExercise?.(chapter.id);
         }}
-        className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
+        className={`lesson-nav-item outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
           activeKey === `exercise-${chapter.id}`
             ? "text-white dark:text-[#141619] font-bold"
             : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
@@ -306,7 +305,7 @@ function ChapterLessonGroup({
           triggerWaterRipple(e, `mindmap-${chapter.id}`);
           onOpenMindmap(chapter.id);
         }}
-        className={`lesson-nav-item outline-none focus:outline-none select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
+        className={`lesson-nav-item outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
           activeKey === `mindmap-${chapter.id}`
             ? "text-white dark:text-[#141619] font-bold"
             : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"

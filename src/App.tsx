@@ -38,6 +38,7 @@ export type Screen =
   | "instructor"
   | "instructor-courses"
   | "instructor-grading"
+  | "instructor-students"
   | "instructor-mindmap"
   | "instructor-evidence"
   | "kanban"
@@ -351,6 +352,7 @@ export default function App() {
       case "instructor":
       case "instructor-courses":
       case "instructor-grading":
+      case "instructor-students":
       case "instructor-mindmap":
       case "instructor-evidence":
         return (
@@ -359,10 +361,11 @@ export default function App() {
             onNavigate={setScreen}
           />
         );
-      case "kanban": return <KanbanBoard initialProjectId={selectedKanbanProjectId} />;
-      case "schedule": return <EngineeringScheduleRota />;
+      case "kanban": return <KanbanBoard initialProjectId={selectedKanbanProjectId} role={role} />;
+      case "schedule": return <EngineeringScheduleRota role={role} />;
       case "projects": return (
         <MarloProjectsScreen
+          role={role}
           onOpenProject={(p) => {
             if (p?.id) setSelectedKanbanProjectId(p.id);
             setScreen("kanban");

@@ -21,7 +21,13 @@ import {
 import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
 import { HeaderProfileDropdown } from "./HeaderProfileDropdown";
 import MarloThemeSwitch from "./MarloThemeSwitch";
-import { fetchStudentLearningOverview } from "../api";
+import {
+  fetchStudentLearningOverview,
+  fetchNotificationsApi,
+  markNotificationReadApi,
+  markAllNotificationsReadApi,
+  type AppNotification,
+} from "../api";
 
 export interface MarloGlobalHeaderProps {
   screen: Screen;
@@ -47,10 +53,28 @@ export default function MarloGlobalHeader({
   onOpenCommandPalette,
 }: MarloGlobalHeaderProps) {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(3);
+  const [notificationsList, setNotificationsList] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [streakDays, setStreakDays] = useState<number>(14);
   const [xpPoints, setXpPoints] = useState<number>(3240);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadNotifs = () => {
+      fetchNotificationsApi().then((data) => {
+        if (!active || !data) return;
+        setNotificationsList(data.notifications || []);
+        setUnreadCount(data.unread_count || 0);
+      });
+    };
+    loadNotifs();
+    const timer = setInterval(loadNotifs, 15000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [role]);
 
   useEffect(() => {
     if (role !== "student" || screen.startsWith("admin") || screen.startsWith("instructor")) {
@@ -193,10 +217,10 @@ export default function MarloGlobalHeader({
               type="button"
               onClick={() => onNavigate("instructor-courses")}
               className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-700 dark:border-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
-              title="Quản lý 6 Học phần CNTT"
+              title="Quản lý 16 Môn học CNTT 5 Chặng"
             >
               <BookOpen size={15} className="text-slate-500 dark:text-slate-400 shrink-0" />
-              <span className="whitespace-nowrap">6 Học phần</span>
+              <span className="whitespace-nowrap">16 Môn học</span>
             </button>
             <button
               type="button"
@@ -284,25 +308,61 @@ export default function MarloGlobalHeader({
                 </button>
               </div>
 
-              <div className="space-y-2">
-                {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className="flex flex-col gap-0.5 rounded-xl p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">{n.title}</h5>
-                      <span className="text-[10px] text-slate-400 font-mono">{n.time}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">{n.desc}</p>
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                {notificationsList.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-slate-400">
+                    Không có thông báo mới
                   </div>
-                ))}
+                ) : (
+                  notificationsList.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={async () => {
+                        await markNotificationReadApi(n.id);
+                        setNotificationsList((prev) =>
+                          prev.map((item) => (item.id === n.id ? { ...item, is_read: 1 } : item))
+                        );
+                        setUnreadCount((c) => Math.max(0, c - 1));
+                      }}
+                      className={`flex flex-col gap-0.5 rounded-xl p-2.5 transition cursor-pointer ${
+                        !n.is_read
+                          ? "bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/40"
+                          : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {!n.is_read && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          )}
+                          <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight truncate">
+                            {n.title}
+                          </h5>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-1">
+                          {n.category === "broadcast" ? "Toàn trường" : n.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
+                        {n.desc_text}
+                      </p>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-                <span className="text-[11px] font-semibold text-[#8F5404] dark:text-amber-400 hover:text-[#EE8420] hover:underline cursor-pointer">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await markAllNotificationsReadApi();
+                    setNotificationsList((prev) => prev.map((item) => ({ ...item, is_read: 1 })));
+                    setUnreadCount(0);
+                  }}
+                  className="text-[11px] font-semibold text-[#8F5404] dark:text-amber-400 hover:text-[#EE8420] hover:underline cursor-pointer"
+                >
                   Đánh dấu tất cả đã đọc
-                </span>
+                </button>
               </div>
             </div>
           )}

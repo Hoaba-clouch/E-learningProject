@@ -170,7 +170,7 @@
   [data-fade]{transition:opacity .3s linear,transform .3s var(--ease)}
   [data-mood=win] [data-fade]{opacity:.28;transform:translateY(4px);pointer-events:none}
   [data-mood=wrong] [data-shake]{animation:jolt .42s cubic-bezier(.36,.07,.19,.97)}
-  & :where(a,button,[tabindex]):focus-visible{outline:2px solid var(--violet);outline-offset:3px;border-radius:4px}
+  .auth :where(a,button,[tabindex]):focus-visible{outline:2px solid var(--violet);outline-offset:3px;border-radius:4px}
   .cta:focus-visible,.ghost:focus-visible{border-radius:999px}
   .field__input:focus-visible{outline:none}
   .check input:focus-visible+.check__box{outline:2px solid var(--violet);outline-offset:3px}

@@ -343,11 +343,17 @@ function MarloRing({
   );
 }
 
+import type { Role } from "../App";
+
 interface MarloProjectsScreenProps {
   onOpenProject?: (project: CNTTProjectItem) => void;
+  role?: Role;
 }
 
-export default function MarloProjectsScreen({ onOpenProject }: MarloProjectsScreenProps) {
+export default function MarloProjectsScreen({
+  onOpenProject,
+  role = "student",
+}: MarloProjectsScreenProps) {
   const [activeTab, setActiveTab] = useState<"slate" | "timeline">("slate");
   const [displayedTab, setDisplayedTab] = useState<"slate" | "timeline">("slate");
   const [isTransitioning, setIsTransitioning] = useState(false);
