@@ -2627,7 +2627,7 @@ export default function GitProjectHub({
                 strokeWidth="3"
               />
 
-              {activeProjectId === "prj-codemind" && (
+              {activeProjectId === "prj-codemind" && commits.length <= 16 && (
                 <>
                   <path
                     id="topo-dev1-path"
@@ -2711,10 +2711,10 @@ export default function GitProjectHub({
                 </>
               )}
 
-              {/* Dynamic Bezier edges for additional commits pushed/merged or switched projects */}
+              {/* Dynamic Bezier edges for all commits across branches */}
               {commits.map((c, idx) => {
                 if (idx === 0) return null;
-                if (activeProjectId === "prj-codemind" && idx < 16) return null;
+                if (activeProjectId === "prj-codemind" && commits.length <= 16 && idx < 16) return null;
                 const prev = commits[idx - 1];
                 const midX = (prev.cx + c.cx) / 2;
                 return (
@@ -2724,7 +2724,7 @@ export default function GitProjectHub({
                     fill="none"
                     stroke={c.branchColor}
                     strokeWidth="2.8"
-                    strokeDasharray={activeProjectId === "prj-codemind" ? "5 3" : undefined}
+                    strokeDasharray={activeProjectId === "prj-codemind" && commits.length <= 16 ? "5 3" : undefined}
                     opacity={0.85}
                   />
                 );
@@ -2743,7 +2743,7 @@ export default function GitProjectHub({
                     opacity={isFiltered ? 1 : 0.2}
                     style={{
                       transformOrigin: `${c.cx}px ${c.cy}px`,
-                      animation: `topoPopNode 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.15 + idx * 0.12}s both`,
+                      animation: `topoPopNode 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.05 + Math.min(idx * 0.04, 1.2)}s both`,
                     }}
                     onMouseEnter={() => setHoveredCommit(c)}
                     onMouseLeave={() => setHoveredCommit(null)}
@@ -2754,10 +2754,10 @@ export default function GitProjectHub({
                       <circle
                         cx={c.cx}
                         cy={c.cy}
-                        r={15}
+                        r={13}
                         fill="none"
                         stroke={c.branchColor}
-                        strokeWidth={3}
+                        strokeWidth={2.5}
                         opacity={0.4}
                         className="animate-pulse"
                       />
@@ -2776,17 +2776,17 @@ export default function GitProjectHub({
                     {/* Inner core dot */}
                     <circle cx={c.cx} cy={c.cy} r={2.5} fill="#ffffff" />
 
-                    {/* Clean Short SHA label above dot */}
+                    {/* Clean Short SHA label placed alternately above and below to prevent text overlap */}
                     <text
                       x={c.cx}
-                      y={c.cy - 12}
+                      y={idx % 2 === 0 ? c.cy - 14 : c.cy + 22}
                       textAnchor="middle"
                       fontSize={10}
                       fontFamily="monospace"
                       fontWeight={isSelected ? "bold" : "600"}
                       fill={isSelected ? "#0f172a" : "#475569"}
                       style={{
-                        animation: `topoFadeIn 0.35s ease-out ${0.25 + idx * 0.12}s both`,
+                        animation: `topoFadeIn 0.35s ease-out ${0.1 + Math.min(idx * 0.04, 1.2)}s both`,
                       }}
                     >
                       {c.sha}

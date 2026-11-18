@@ -981,24 +981,42 @@ def _fetch_remote_github_data(repo_url: str) -> dict[str, Any]:
         "User-Agent": "CodeMind-AI-GitPlatform/2.0",
         "Accept": "application/vnd.github.v3+json",
     }
-    commits_data = []
-    prs_data = []
+    commits_data: list[dict[str, Any]] = []
+    prs_data: list[dict[str, Any]] = []
+    default_branch = "main"
 
-    # 1. Fetch Remote Commits
+    # 0. Fetch Repo Metadata (Default Branch & Name)
     try:
-        commits_url = f"https://api.github.com/repos/{slug}/commits?per_page=15"
-        req = urllib.request.Request(commits_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=6) as resp:
+        repo_meta_url = f"https://api.github.com/repos/{slug}"
+        req_meta = urllib.request.Request(repo_meta_url, headers=headers)
+        with urllib.request.urlopen(req_meta, timeout=8) as resp:
             if resp.status == 200:
-                commits_data = json.loads(resp.read().decode("utf-8"))
+                meta = json.loads(resp.read().decode("utf-8"))
+                default_branch = meta.get("default_branch") or "main"
+    except Exception as exc:
+        print(f"[GitHub Sync] Remote meta warning for {slug}: {exc}")
+
+    # 1. Fetch Remote Commits with Pagination (support all commits, e.g. 72 commits)
+    try:
+        for page in range(1, 6):  # Fetch up to 5 pages * 30 = 150 commits max
+            commits_url = f"https://api.github.com/repos/{slug}/commits?sha={default_branch}&per_page=30&page={page}"
+            req = urllib.request.Request(commits_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    batch = json.loads(resp.read().decode("utf-8"))
+                    if not batch or not isinstance(batch, list):
+                        break
+                    commits_data.extend(batch)
+                    if len(batch) < 30:
+                        break
     except Exception as exc:
         print(f"[GitHub Sync] Remote commits warning for {slug}: {exc}")
 
-    # 2. Fetch Remote PRs
+    # 2. Fetch Remote PRs (Closed and Open)
     try:
-        prs_url = f"https://api.github.com/repos/{slug}/pulls?state=all&per_page=10"
+        prs_url = f"https://api.github.com/repos/{slug}/pulls?state=all&per_page=30"
         req = urllib.request.Request(prs_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=6) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             if resp.status == 200:
                 prs_data = json.loads(resp.read().decode("utf-8"))
     except Exception as exc:
@@ -1007,6 +1025,7 @@ def _fetch_remote_github_data(repo_url: str) -> dict[str, Any]:
     return {
         "ok": len(commits_data) > 0 or len(prs_data) > 0,
         "slug": slug,
+        "default_branch": default_branch,
         "commits": commits_data,
         "prs": prs_data,
     }
@@ -1063,25 +1082,66 @@ def sync_github_live(
                 commit_info = c.get("commit") or {}
                 author_commit = commit_info.get("author") or {}
 
-                author_name = author_commit.get("name") or author_obj.get("login") or "GitHub Committer"
+                raw_author_name = author_commit.get("name") or author_obj.get("login") or "GitHub Committer"
+                raw_login = author_obj.get("login") or raw_author_name
+
+                # Ánh xạ tên tác giả thân thiện
+                if "hoaba" in raw_login.lower() or "hoaba" in raw_author_name.lower():
+                    author_name = "Nguyễn Bá Hòa"
+                    author_role = "Leader / Architect"
+                    author_avatar = "H"
+                    author_color = "#2563eb"
+                elif "huy" in raw_login.lower() or "vonhathuy" in raw_login.lower():
+                    author_name = "Võ Nhật Huy"
+                    author_role = "Frontend / Fullstack"
+                    author_avatar = "H"
+                    author_color = "#16a34a"
+                else:
+                    author_name = raw_author_name
+                    author_role = "Core Developer"
+                    author_avatar = raw_login[:2].upper()
+                    author_color = _MEMBER_THEME_PALETTE[idx % len(_MEMBER_THEME_PALETTE)][0]
+
                 raw_msg = (commit_info.get("message") or "Update repository from GitHub").split("\n")[0]
-                task_code = _extract_task_code(None, raw_msg) or f"TSK-GH{idx+1:02d}"
+                task_code = _extract_task_code(None, raw_msg) or f"TE{((idx * 17 + 101) % 899 + 100):03d}A{(idx % 9)}"
 
-                # Phân giải nhánh dựa trên message hoặc luồng
-                branch = "main"
-                branch_color = "#2563eb"
-                cy = 225
-                if "feat" in raw_msg.lower() or "add" in raw_msg.lower():
-                    branch = "feature/live-sync"
-                    branch_color = "#16a34a"
-                    cy = 135
-                elif "fix" in raw_msg.lower() or "bug" in raw_msg.lower():
-                    branch = "hotfix/patch"
-                    branch_color = "#dc2626"
+                # Phân giải làn Metro chuẩn xác theo loại commit (Khớp 6 làn trên SVG)
+                msg_low = raw_msg.lower()
+                if "merge" in msg_low or "release" in msg_low:
+                    branch = "main"
+                    branch_color = "#2563eb"
                     cy = 45
+                elif "fix" in msg_low or "hotfix" in msg_low or "bug" in msg_low:
+                    branch = "hotfix/cve"
+                    branch_color = "#f43f5e"
+                    cy = 105
+                elif "ci" in msg_low or "deploy" in msg_low or "workflow" in msg_low or "pnpm" in msg_low or "vercel" in msg_low:
+                    branch = "release/v1.2"
+                    branch_color = "#a855f7"
+                    cy = 165
+                elif "auth" in msg_low or "jwt" in msg_low or "login" in msg_low or "user" in msg_low:
+                    branch = "feature/auth"
+                    branch_color = "#f59e0b"
+                    cy = 285
+                elif "eval" in msg_low or "score" in msg_low or "ai" in msg_low or "student" in msg_low or "course" in msg_low:
+                    branch = "feature/evaluator"
+                    branch_color = "#10b981"
+                    cy = 345
+                else:
+                    branch = "develop"
+                    branch_color = "#6366f1"
+                    cy = 225
 
-                palette_item = _MEMBER_THEME_PALETTE[idx % len(_MEMBER_THEME_PALETTE)]
-                avatar_seed = author_name.strip()[:2].upper()
+                # Format ngày giờ cam kết thực tế
+                commit_date_str = author_commit.get("date") or now
+                try:
+                    dt = datetime.fromisoformat(commit_date_str.replace("Z", "+00:00"))
+                    date_label = dt.strftime("%d/%m/%Y %H:%M")
+                    days_diff = (datetime.now(timezone.utc) - dt).days
+                    time_ago = f"{days_diff} ngày trước" if days_diff > 0 else "Hôm nay"
+                except Exception:
+                    date_label = now_label
+                    time_ago = "Live Sync"
 
                 commit_id = f"gh-c-{sha_short}-{idx}"
                 conn.execute(
@@ -1089,24 +1149,26 @@ def sync_github_live(
                            id, project_id, sha, author_name, author_role, author_avatar, author_color,
                            branch, branch_color, task_code, message, committed_at_label, time_ago_label,
                            additions, deletions, files_changed_json, cx, cy, position_order, created_at
-                       ) VALUES (?, ?, ?, ?, 'Contributor', ?, ?, ?, ?, ?, ?, ?, 'Live Sync', 24, 6, ?, ?, ?, ?, ?)""",
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 32, 8, ?, ?, ?, ?, ?)""",
                     (
                         commit_id,
                         project_id,
                         sha_short,
                         author_name,
-                        avatar_seed,
-                        palette_item[0],
+                        author_role,
+                        author_avatar,
+                        author_color,
                         branch,
                         branch_color,
                         task_code,
                         raw_msg,
-                        now_label,
-                        json.dumps(["src/App.tsx", "backend/app/main.py"], ensure_ascii=False),
-                        70 + idx * 85,
+                        date_label,
+                        time_ago,
+                        json.dumps(["src/App.tsx", "package.json"], ensure_ascii=False),
+                        60 + idx * 60,
                         cy,
                         idx + 1,
-                        now,
+                        commit_date_str,
                     ),
                 )
                 commits_synced += 1
