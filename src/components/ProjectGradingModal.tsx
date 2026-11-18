@@ -198,18 +198,18 @@ export default function ProjectGradingModal({
           ) : (
             <>
               {/* 1. ANTI-FREERIDER CONTRIBUTION METRICS BANNER */}
-              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-950/20 p-4 sm:p-5">
+              <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-4 sm:p-5">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <TrendingUp size={18} className="text-amber-600 dark:text-amber-400" />
+                    <TrendingUp size={18} className="text-slate-700 dark:text-slate-300" />
                     <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                       Đo lường Đóng góp Anti-Freerider (Dựa trên Story Points & DoD thực tế)
                     </h4>
                   </div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 border border-amber-300/70 dark:border-amber-700/60 text-xs font-medium shadow-2xs font-sans shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-0 outline-none ring-0 text-xs font-medium shadow-2xs font-sans shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500 animate-pulse" />
                     <span>Tổng tích lũy:</span>
-                    <span className="font-mono font-bold text-amber-900 dark:text-amber-200">{totalPoints} SP</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{totalPoints} SP</span>
                   </div>
                 </div>
 

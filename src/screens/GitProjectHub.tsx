@@ -2528,7 +2528,7 @@ export default function GitProjectHub({
           </div>
 
           {/* Interactive SVG Visual Git Graph with Floating Popover */}
-          <div className="relative overflow-x-auto p-4 bg-slate-50/70 rounded-xl border border-slate-200">
+          <div className="relative overflow-x-auto p-4 bg-slate-50/70 dark:bg-slate-950/80 rounded-xl border border-slate-200 dark:border-slate-800">
             <svg style={{ width: `${svgWidth}px`, height: "390px" }} viewBox={`0 0 ${svgWidth} 390`}>
               <defs>
                 <filter id="topoGlow" x="-50%" y="-50%" width="200%" height="200%">
@@ -2749,6 +2749,16 @@ export default function GitProjectHub({
                     onMouseLeave={() => setHoveredCommit(null)}
                     onClick={() => setSelectedCommit(c)}
                   >
+                    {/* Invisible generous hit-box for ultra-smooth hover */}
+                    <circle
+                      cx={c.cx}
+                      cy={c.cy}
+                      r={22}
+                      fill="transparent"
+                      className="cursor-pointer"
+                      pointerEvents="all"
+                    />
+
                     {/* Pulsing ring on hover or selected */}
                     {(isSelected || isHovered) && (
                       <circle
@@ -2809,58 +2819,71 @@ export default function GitProjectHub({
             </svg>
 
             {/* Interactive Floating Hover Popover Tooltip */}
-            {hoveredCommit && (
-              <div
-                key={`commit-popover-${hoveredCommit.id}`}
-                className="absolute z-30 pointer-events-none bg-slate-950/95 text-white backdrop-blur-md p-3.5 rounded-xl shadow-2xl border border-slate-700 w-[320px] text-xs space-y-2.5 animate-commit-popover ring-1 ring-white/10"
-                style={{
-                  left: Math.min(Math.max(hoveredCommit.cx - 150, 15), 760),
-                  top: Math.min(hoveredCommit.cy + 20, 170),
-                }}
-              >
-                {/* Pointer caret arrow pointing up to the commit node */}
+            {hoveredCommit && (() => {
+              const popoverWidth = 320;
+              const popoverLeft = Math.max(12, Math.min(hoveredCommit.cx - popoverWidth / 2, svgWidth - popoverWidth - 16));
+              const isAbove = hoveredCommit.cy > 180;
+              const popoverTop = isAbove ? Math.max(10, hoveredCommit.cy - 150) : hoveredCommit.cy + 20;
+              const caretLeft = Math.max(16, Math.min(hoveredCommit.cx - popoverLeft - 6, popoverWidth - 28));
+
+              return (
                 <div
-                  className="absolute -top-1.5 w-3 h-3 bg-slate-950 border-t border-l border-slate-700 rotate-45 pointer-events-none"
+                  key={`commit-popover-${hoveredCommit.id}`}
+                  className="absolute z-50 pointer-events-none bg-slate-950/95 dark:bg-slate-900/98 text-white backdrop-blur-md p-3.5 rounded-xl shadow-2xl border border-slate-700 w-[320px] text-xs space-y-2.5 ring-1 ring-white/10 transition-all duration-75"
                   style={{
-                    left: Math.max(16, Math.min(290, hoveredCommit.cx - Math.min(Math.max(hoveredCommit.cx - 150, 15), 760) - 6)),
+                    left: `${popoverLeft}px`,
+                    top: `${popoverTop}px`,
                   }}
-                />
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white shrink-0 shadow-xs"
-                      style={{ backgroundColor: hoveredCommit.author.color }}
-                    >
-                      {hoveredCommit.author.avatar}
-                    </span>
-                    <div>
-                      <div className="font-bold text-slate-100 leading-tight">{hoveredCommit.author.name}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{hoveredCommit.author.role}</div>
+                >
+                  {/* Pointer caret arrow pointing up or down to the commit node */}
+                  {isAbove ? (
+                    <div
+                      className="absolute -bottom-1.5 w-3 h-3 bg-slate-950 dark:bg-slate-900 border-b border-r border-slate-700 rotate-45 pointer-events-none"
+                      style={{ left: `${caretLeft}px` }}
+                    />
+                  ) : (
+                    <div
+                      className="absolute -top-1.5 w-3 h-3 bg-slate-950 dark:bg-slate-900 border-t border-l border-slate-700 rotate-45 pointer-events-none"
+                      style={{ left: `${caretLeft}px` }}
+                    />
+                  )}
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white shrink-0 shadow-xs"
+                        style={{ backgroundColor: hoveredCommit.author.color }}
+                      >
+                        {hoveredCommit.author.avatar}
+                      </span>
+                      <div>
+                        <div className="font-bold text-slate-100 leading-tight">{hoveredCommit.author.name}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{hoveredCommit.author.role}</div>
+                      </div>
                     </div>
+                    <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded bg-slate-800 text-blue-400 border border-slate-700">
+                      {hoveredCommit.sha}
+                    </span>
                   </div>
-                  <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded bg-slate-800 text-blue-400 border border-slate-700">
-                    {hoveredCommit.sha}
-                  </span>
-                </div>
 
-                <p className="text-slate-200 text-xs font-medium leading-relaxed">
-                  {hoveredCommit.message}
-                </p>
+                  <p className="text-slate-200 text-xs font-medium leading-relaxed">
+                    {hoveredCommit.message}
+                  </p>
 
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/80 font-mono">
-                  <span
-                    className="px-2 py-0.5 rounded text-white font-semibold text-[9.5px]"
-                    style={{ backgroundColor: hoveredCommit.branchColor }}
-                  >
-                    {hoveredCommit.branch}
-                  </span>
-                  <span className="text-emerald-400 font-bold">
-                    +{hoveredCommit.stats.additions} / -{hoveredCommit.stats.deletions} ({hoveredCommit.stats.files} tệp)
-                  </span>
-                  <span>{hoveredCommit.timeAgo}</span>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/80 font-mono">
+                    <span
+                      className="px-2 py-0.5 rounded text-white font-semibold text-[9.5px]"
+                      style={{ backgroundColor: hoveredCommit.branchColor }}
+                    >
+                      {hoveredCommit.branch}
+                    </span>
+                    <span className="text-emerald-400 font-bold">
+                      +{hoveredCommit.stats.additions} / -{hoveredCommit.stats.deletions} ({hoveredCommit.stats.files} tệp)
+                    </span>
+                    <span>{hoveredCommit.timeAgo}</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Selected Commit Detail Inspector Card */}

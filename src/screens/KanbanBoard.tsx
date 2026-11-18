@@ -5833,9 +5833,9 @@ export default function KanbanBoard({
                         {/* Instructor Task Review Toolbar for Tasks in "done" */}
 
                         {role === "instructor" && task.column === "done" && (
-                          <div className="mt-2 pt-1.5 border-t border-dashed border-amber-200 dark:border-amber-900/40 flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-mono text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1">
-                              <ShieldCheck size={11} /> Thẩm định:
+                          <div className="mt-2 pt-1.5 border-t border-dashed border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400 font-semibold flex items-center gap-1">
+                              <ShieldCheck size={11} className="text-slate-500" /> Thẩm định:
                             </span>
                             <div className="flex items-center gap-1">
                               <button
@@ -5844,7 +5844,7 @@ export default function KanbanBoard({
                                   e.stopPropagation();
                                   await handleInstructorReview(task.id, "approve");
                                 }}
-                                className="w-6 h-6 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                                className="w-6 h-6 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition shadow-2xs hover:scale-105 active:scale-95 cursor-pointer border-0 outline-none ring-0"
                                 title="Nghiệm thu task (Chuyển sang Đã nghiệm thu & cấp XP)"
                               >
                                 <Check size={13} strokeWidth={2.8} />
@@ -5861,7 +5861,7 @@ export default function KanbanBoard({
                                     await handleInstructorReview(task.id, "request_revision", fb);
                                   }
                                 }}
-                                className="w-6 h-6 rounded-md bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center justify-center transition hover:scale-105 active:scale-95 cursor-pointer"
+                                className="w-6 h-6 rounded-md bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border-0 outline-none ring-0 flex items-center justify-center transition hover:scale-105 active:scale-95 cursor-pointer"
                                 title="Yêu cầu sửa lại (Trả về cột Cần sửa lại kèm nhận xét)"
                               >
                                 <RotateCcw size={12} strokeWidth={2.2} />
