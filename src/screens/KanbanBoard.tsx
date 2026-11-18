@@ -2164,12 +2164,16 @@ export default function KanbanBoard({
 
   const [activeTab, setActiveTab] = useState<TabView>("board");
 
-  // Automatically switch tab for instructor
+  // Automatically switch tab according to role
   useEffect(() => {
     if (role === "instructor" && activeTab === "my-tasks") {
       setActiveTab("review");
+    } else if (role === "admin" && (activeTab === "my-tasks" || activeTab === "review")) {
+      setActiveTab("board");
     }
   }, [role, activeTab]);
+
+  const [isSprintLocked, setIsSprintLocked] = useState(false);
 
   const [kanbanAnimKey, setKanbanAnimKey] = useState<number>(0);
 
@@ -3702,14 +3706,16 @@ export default function KanbanBoard({
 
 
 
-    // Restrict student from moving directly to 'verified'
-
-    if (role === "student" && targetCol === "verified") {
-
-      alert("Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định. Sinh viên chỉ có thể chuyển sang 'Hoàn thành' để chờ nghiệm thu.");
-
+    // Restrict student when sprint is locked by Admin
+    if (role === "student" && isSprintLocked) {
+      alert("Sprint đã bị khóa bởi Ban Đào Tạo / Quản trị viên. Sinh viên không thể thay đổi trạng thái công việc.");
       return;
+    }
 
+    // Restrict student from moving directly to 'verified'
+    if (role === "student" && targetCol === "verified") {
+      alert("Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định. Sinh viên chỉ có thể chuyển sang 'Hoàn thành' để chờ nghiệm thu.");
+      return;
     }
 
 
@@ -5090,25 +5096,35 @@ export default function KanbanBoard({
 
 
 
-              {/* + New task Button (Hidden for Instructor, who inspects/grades rather than creating tasks for themselves) */}
+              {/* + New task Button (Student only: Disabled when sprint is locked by Admin) */}
 
-              {role !== "instructor" && (
+              {role === "student" && (
 
                 <button
 
                   type="button"
 
+                  disabled={isSprintLocked}
+
                   onClick={() => setIsNewTaskModalOpen(true)}
 
-                  className="px-4 py-2 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-97 transition cursor-pointer"
+                  className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-97 transition cursor-pointer ${
 
-                  title="Tạo công việc mới (Marlo Task) có checklist"
+                    isSprintLocked
+
+                      ? "bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed"
+
+                      : "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950"
+
+                  }`}
+
+                  title={isSprintLocked ? "Sprint đang bị khóa bởi Ban Đào Tạo" : "Tạo công việc mới (Marlo Task) có checklist"}
 
                 >
 
                   <Plus size={15} className="stroke-[2.5]" />
 
-                  <span>New task</span>
+                  <span>{isSprintLocked ? "Sprint Khóa" : "New task"}</span>
 
                 </button>
 
@@ -5142,17 +5158,65 @@ export default function KanbanBoard({
 
 
 
-              {/* Admin Read-only Indicator */}
+              {/* Admin Governance Actions: Lock Sprint & Audit Log */}
 
               {role === "admin" && (
 
-                <span className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-1.5">
 
-                  <Eye size={13} />
+                  <button
 
-                  <span>Giám sát (Read-Only)</span>
+                    type="button"
 
-                </span>
+                    onClick={() => {
+
+                      const next = !isSprintLocked;
+
+                      setIsSprintLocked(next);
+
+                      alert(next ? "🔒 Đã khóa Sprint. Sinh viên không thể di chuyển hoặc tạo task mới." : "🔓 Đã mở lại Sprint.");
+
+                    }}
+
+                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+
+                      isSprintLocked
+
+                        ? "bg-rose-600 hover:bg-rose-700 text-white"
+
+                        : "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 shadow-2xs"
+
+                    }`}
+
+                    title="Đóng băng toàn bộ hoạt động kéo thả task khi hết giờ thi/Sprint"
+
+                  >
+
+                    {isSprintLocked ? <Lock size={13} /> : <Unlock size={13} />}
+
+                    <span>{isSprintLocked ? "Sprint Đang Khóa" : "Khóa Sprint"}</span>
+
+                  </button>
+
+                  <button
+
+                    type="button"
+
+                    onClick={handleExportTasks}
+
+                    className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+
+                    title="Xuất file nhật ký kiểm toán công việc toàn bộ dự án"
+
+                  >
+
+                    <FileSpreadsheet size={13} />
+
+                    <span>Kiểm toán CSV</span>
+
+                  </button>
+
+                </div>
 
               )}
 
@@ -5174,7 +5238,37 @@ export default function KanbanBoard({
 
             options={
 
-              role === "instructor"
+              role === "admin"
+
+                ? [
+
+                    { id: "board", label: "Bảng Giám Sát Tuân Thủ", icon: <Columns3 size={14} /> },
+
+                    {
+
+                      id: "activity",
+
+                      label: "Nhật Ký Kiểm Toán (Audit Trail)",
+
+                      icon: <Activity size={14} />,
+
+                    },
+
+                    {
+
+                      id: "team",
+
+                      label: "Ma Trận Đóng Góp Toàn Khóa",
+
+                      icon: <Users size={14} />,
+
+                    },
+
+                    { id: "dependencies", label: "Cây Phụ Thuộc (WBS)", icon: <Link2 size={14} /> },
+
+                  ]
+
+                : role === "instructor"
 
                 ? [
 
@@ -5274,9 +5368,9 @@ export default function KanbanBoard({
 
           <div className="flex items-center gap-2">
 
-            {/* View Mode: Team vs My (Student only) or Teacher Perspective Badge */}
+            {/* View Mode: Team vs My (Student only) or Teacher / Admin Perspective Badge */}
 
-            {role !== "instructor" ? (
+            {role === "student" ? (
 
               <MarloSegmentedControl
 
@@ -5298,13 +5392,23 @@ export default function KanbanBoard({
 
               />
 
-            ) : (
+            ) : role === "instructor" ? (
 
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-slate-200/80 dark:border-slate-800 text-amber-800 dark:text-amber-300 text-xs font-semibold shadow-2xs">
 
                 <ShieldCheck size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
 
                 <span>Giám sát & Thẩm định Tiến độ</span>
+
+              </div>
+
+            ) : (
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-slate-200/80 dark:border-slate-800 text-rose-800 dark:text-rose-300 text-xs font-semibold shadow-2xs">
+
+                <ShieldAlert size={14} className="text-rose-600 dark:text-rose-400 shrink-0" />
+
+                <span>Kiểm Toán & Tuân Thủ Sprint</span>
 
               </div>
 

@@ -10,6 +10,14 @@ import {
   Award,
   FileSpreadsheet,
   Download,
+  Lock,
+  Unlock,
+  Users,
+  Settings,
+  UserCheck,
+  ShieldAlert,
+  Sparkles,
+  FolderGit2,
 } from "lucide-react";
 import ProjectGradingModal from "../components/ProjectGradingModal";
 import MarloTitle from "../components/MarloTitle";
@@ -367,6 +375,9 @@ export default function MarloProjectsScreen({
   const [projects, setProjects] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [gradingProject, setGradingProject] = useState<CNTTProjectItem | null>(null);
+  const [isSubmissionLocked, setIsSubmissionLocked] = useState(false);
+  const [assignMentorProject, setAssignMentorProject] = useState<CNTTProjectItem | null>(null);
+  const [selectedMentor, setSelectedMentor] = useState("Thầy Nguyễn Phước");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const tabsNavRef = useRef<HTMLElement>(null);
@@ -726,29 +737,89 @@ export default function MarloProjectsScreen({
     <div
       className="min-h-screen bg-transparent text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans select-none relative overflow-x-hidden transition-colors duration-200"
     >
-      {/* ─── TOP HEADER (ROLE-ADAPTIVE MARLO DESIGN) ─── */}
+      {/* ─── TOP HEADER (3-ROLE ADAPTIVE DESIGN: STUDENT vs INSTRUCTOR vs ADMIN) ─── */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2.5">
             <MarloTitle
-              text={role === "instructor" ? "Hội Đồng Quản Lý & Chấm Điểm Đồ Án" : "Không Gian Đồ Án Nhóm"}
+              text={
+                role === "admin"
+                  ? "Trung Tâm Quản Trị Đồ Án Toàn Khóa"
+                  : role === "instructor"
+                  ? "Hội Đồng Hướng Dẫn & Đánh Giá Đồ Án"
+                  : "Không Gian Đồ Án Nhóm Của Tôi"
+              }
               className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E1D1B] dark:text-white font-sans"
             />
+            {role === "admin" && (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-slate-200/80 dark:border-slate-800">
+                Quản trị viên / Đào tạo
+              </span>
+            )}
             {role === "instructor" && (
               <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-slate-200/80 dark:border-slate-800">
                 Góc nhìn Giảng viên
               </span>
             )}
+            {role === "student" && (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-slate-200/80 dark:border-slate-800">
+                Học viên thực hiện
+              </span>
+            )}
           </div>
           <p className="text-sm text-[#62656b] dark:text-[#a0a3a9] mt-1 font-normal max-w-3xl leading-relaxed">
-            {role === "instructor"
+            {role === "admin"
+              ? `Quản lý toàn bộ ${projects.length} đồ án Capstone, phân công Giảng viên hướng dẫn & Hội đồng bảo vệ, kiểm soát cổng nộp bài và xuất dữ liệu báo cáo.`
+              : role === "instructor"
               ? `Giám sát tiến độ ${projects.length} nhóm đồ án Capstone, thẩm định Definition of Done (DoD) và thực hiện đánh giá Hội đồng.`
-              : `${activeJobs} dự án đang triển khai, ${totalStoryPoints} Story Points trên tiến độ Scrum.`}
+              : `Theo dõi tiến độ Sprint của nhóm bạn, phân bổ Story Points (${totalStoryPoints} SP), hoàn thành tiêu chí DoD và chuẩn bị nghiệm thu.`}
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {role === "instructor" ? (
+          {role === "admin" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isSubmissionLocked;
+                  setIsSubmissionLocked(next);
+                  setToastMsg(next ? "🔒 Đã khóa cổng nộp đồ án cho toàn khóa." : "🔓 Đã mở lại cổng nộp đồ án.");
+                }}
+                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-2xl font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer ${
+                  isSubmissionLocked
+                    ? "bg-rose-600 hover:bg-rose-700 text-white"
+                    : "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950"
+                }`}
+                title="Khóa cổng để đóng băng dữ liệu nộp của học viên khi đến hạn"
+              >
+                {isSubmissionLocked ? <Lock size={14} /> : <Unlock size={14} />}
+                <span>{isSubmissionLocked ? "Đã Khóa Cổng Nộp" : "Khóa Cổng Nộp"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (projects.length > 0) setAssignMentorProject(projects[0]);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                title="Phân công Giảng viên hướng dẫn & Cố vấn kiến trúc cho các nhóm"
+              >
+                <Users size={14} />
+                <span>Phân Công GVHD</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setToastMsg("Đã xuất Master Report toàn bộ đồ án sang Excel.")}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-white dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200/90 dark:border-slate-700/80 shadow-2xs transition cursor-pointer"
+                title="Xuất dữ liệu toàn bộ nhóm đồ án sang bảng tính Excel"
+              >
+                <FileSpreadsheet size={14} />
+                <span>Master Excel</span>
+              </button>
+            </>
+          ) : role === "instructor" ? (
             <>
               <button
                 type="button"
@@ -777,10 +848,16 @@ export default function MarloProjectsScreen({
           ) : (
             <button
               onClick={() => setIsNewProjectModalOpen(true)}
-              className="flex items-center gap-2 px-4.5 py-2.5 rounded-2xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 font-bold text-sm shadow-xs transition active:scale-95 cursor-pointer"
+              disabled={isSubmissionLocked}
+              className={`flex items-center gap-2 px-4.5 py-2.5 rounded-2xl font-bold text-sm shadow-xs transition active:scale-95 cursor-pointer ${
+                isSubmissionLocked
+                  ? "bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed"
+                  : "bg-[#EE8420] hover:bg-[#d97316] text-slate-950"
+              }`}
+              title={isSubmissionLocked ? "Cổng nộp đề tài đang tạm khóa bởi Quản trị viên" : "Đăng ký đề tài đồ án mới"}
             >
               <Plus size={16} strokeWidth={2.5} />
-              <span>New project</span>
+              <span>{isSubmissionLocked ? "Cổng Đang Khóa" : "+ Đăng Ký Đồ Án"}</span>
             </button>
           )}
         </div>
@@ -956,7 +1033,37 @@ export default function MarloProjectsScreen({
                         </span>
                       </div>
 
-                      {/* Instructor Action Strip */}
+                      {/* ── Role-Adaptive Action Strip on Project Cards ── */}
+                      {role === "admin" && (
+                        <div
+                          className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAssignMentorProject(p);
+                              setSelectedMentor(p.instructor || "Thầy Nguyễn Phước");
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition shadow-2xs cursor-pointer active:scale-97"
+                            title="Phân công hoặc thay đổi Giảng viên hướng dẫn cho nhóm này"
+                          >
+                            <Users size={13} />
+                            <span>Phân công GV</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onOpenProject?.(p)}
+                            className="flex items-center gap-1 py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition cursor-pointer"
+                            title="Kiểm toán bảng Kanban và quy chuẩn DoD của nhóm"
+                          >
+                            <span>Kiểm toán</span>
+                            <ExternalLink size={12} />
+                          </button>
+                        </div>
+                      )}
+
                       {role === "instructor" && (
                         <div
                           className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2"
@@ -969,6 +1076,7 @@ export default function MarloProjectsScreen({
                               setGradingProject(p);
                             }}
                             className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 text-xs font-bold transition shadow-2xs cursor-pointer active:scale-97"
+                            title="Mở bảng thẩm định chấm điểm 5 tiêu chí DoD"
                           >
                             <ShieldCheck size={13} />
                             <span>Chấm điểm</span>
@@ -980,6 +1088,23 @@ export default function MarloProjectsScreen({
                             title="Mở Bảng Kanban để giám sát task nhóm"
                           >
                             <span>Kanban</span>
+                            <ExternalLink size={12} />
+                          </button>
+                        </div>
+                      )}
+
+                      {role === "student" && (
+                        <div
+                          className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onOpenProject?.(p)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 text-xs font-bold transition shadow-2xs cursor-pointer active:scale-97"
+                            title="Vào không gian làm việc Bảng Kanban của nhóm"
+                          >
+                            <span>Vào Kanban Nhóm</span>
                             <ExternalLink size={12} />
                           </button>
                         </div>
@@ -1125,6 +1250,68 @@ export default function MarloProjectsScreen({
             setGradingProject(null);
           }}
         />
+      )}
+
+      {/* ─── ADMIN ASSIGN MENTOR MODAL ─── */}
+      {assignMentorProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#0f1219] p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Users size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Phân Công Giảng Viên Hướng Dẫn
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Gán Giảng viên phụ trách chấm điểm và hướng dẫn nhóm {assignMentorProject.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Chọn Giảng viên hướng dẫn:
+              </label>
+              <select
+                value={selectedMentor}
+                onChange={(e) => setSelectedMentor(e.target.value)}
+                className="w-full rounded-xl border border-slate-200/90 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-hidden"
+              >
+                <option value="Thầy Nguyễn Phước">Thầy Nguyễn Phước (Cố vấn Kiến trúc & OOP)</option>
+                <option value="Thầy Trần Minh Quân">Thầy Trần Minh Quân (Cố vấn AI & RAG Engine)</option>
+                <option value="Cô Lan Anh">Cô Lan Anh (Giảng viên Hướng dẫn Agile & Scrum)</option>
+                <option value="Trần Minh Tuấn">Trần Minh Tuấn (Backend Lead & DevOps)</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setAssignMentorProject(null)}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = assignMentorProject.id;
+                  setProjects((prev) =>
+                    prev.map((p) => (p.id === targetId ? { ...p, instructor: selectedMentor } : p))
+                  );
+                  void updateWorkspaceProjectApi(targetId, { instructor: selectedMentor } as any);
+                  setToastMsg(`Đã phân công ${selectedMentor} hướng dẫn nhóm ${assignMentorProject.name}`);
+                  setAssignMentorProject(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+              >
+                Lưu Phân Công
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
