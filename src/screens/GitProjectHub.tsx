@@ -2211,18 +2211,18 @@ export default function GitProjectHub({
 
           {/* Active Flow Explanation Banner */}
           {activeArchFlow !== "all" && (
-            <div className="flex items-center justify-between p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/40 text-xs text-blue-950 dark:text-blue-200 animate-fade-in">
+            <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 text-xs text-slate-800 dark:text-slate-200 animate-fade-in">
               <div className="flex items-center gap-2">
                 <Zap size={15} className="text-blue-600 dark:text-blue-400 shrink-0 animate-pulse" />
                 <span className="font-semibold">{currentFlow.label}:</span>
-                <span className="text-blue-800 dark:text-blue-300">{currentFlow.summary}</span>
+                <span className="text-slate-600 dark:text-slate-400">{currentFlow.summary}</span>
               </div>
               <button
                 onClick={() => {
                   setActiveArchFlow("all");
                   setDiagramAnimKey((k) => k + 1);
                 }}
-                className="text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline shrink-0 ml-3 cursor-pointer"
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline shrink-0 ml-3 cursor-pointer"
               >
                 Xem tất cả luồng →
               </button>
@@ -2350,12 +2350,12 @@ export default function GitProjectHub({
                 </div>
 
                 {/* Defense Q&A Box (Understand Anything) */}
-                <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-xl space-y-2 text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-purple-900 text-[11px] uppercase tracking-wider font-mono">
-                    <Sparkles size={14} className="text-purple-600" />
+                <div className="p-4 bg-slate-50/80 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-purple-700 dark:text-purple-400 text-[11px] uppercase tracking-wider font-mono">
+                    <Sparkles size={14} className="text-purple-600 dark:text-purple-400" />
                     Vấn Đáp Phản Biện (Understand Anything)
                   </div>
-                  <p className="text-purple-950 leading-relaxed font-sans text-xs">
+                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-sans text-xs">
                     {(selectedNode.data as Record<string, string>).defenseQA}
                   </p>
                 </div>
@@ -3024,19 +3024,19 @@ export default function GitProjectHub({
           </div>
 
           {/* AI Anti-Cheating Banner */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-emerald-50/80 dark:from-emerald-950/40 dark:via-teal-950/20 dark:to-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800/60 space-y-2 animate-box-stagger-5 shadow-sm relative overflow-hidden">
+          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800 space-y-2 animate-box-stagger-5 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
+              <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-slate-100 text-sm">
                 <ShieldCheck size={18} className="text-emerald-600 dark:text-emerald-400" />
                 <span>Báo cáo Xác thực Liêm chính & Chống Gian lận AI (AI Anti-Cheating)</span>
               </div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-emerald-300 dark:border-emerald-700 font-mono">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white dark:bg-slate-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-slate-200 dark:border-slate-800 font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 CADENCE ACTIVE
               </span>
             </div>
-            <p className="text-xs text-emerald-950 dark:text-emerald-200 leading-relaxed">
-              Toàn bộ <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><OdometerNumber value={metricsState.totalCommits} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><AnimatedNumber value={metricsState.cadenceVarianceHours} decimals={1} suffix="h" key={`cv-${statAnimKey}-${activeProjectId}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><AnimatedNumber value={metricsState.taskLinkedPct} suffix="%" key={`cr-${statAnimKey}-${activeProjectId}`} /></span>.
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+              Toàn bộ <span className="font-bold font-mono text-slate-900 dark:text-white"><OdometerNumber value={metricsState.totalCommits} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400"><AnimatedNumber value={metricsState.cadenceVarianceHours} decimals={1} suffix="h" key={`cv-${statAnimKey}-${activeProjectId}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400"><AnimatedNumber value={metricsState.taskLinkedPct} suffix="%" key={`cr-${statAnimKey}-${activeProjectId}`} /></span>.
             </p>
           </div>
         </div>
@@ -3156,7 +3156,7 @@ export default function GitProjectHub({
                     <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
                       1
                     </span>
-                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-blue-700 dark:text-blue-400 border border-slate-200 dark:border-slate-700">
                       Planning & Lock
                     </span>
                   </div>
@@ -3185,7 +3185,7 @@ export default function GitProjectHub({
                     <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
                       2
                     </span>
-                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-purple-700 dark:text-purple-400 border border-slate-200 dark:border-slate-700">
                       Branching
                     </span>
                   </div>
@@ -3215,7 +3215,7 @@ export default function GitProjectHub({
                     <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
                       3
                     </span>
-                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-slate-200 dark:border-slate-700">
                       Commit Standard
                     </span>
                   </div>
@@ -3245,7 +3245,7 @@ export default function GitProjectHub({
                     <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
                       4
                     </span>
-                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700">
                       CI & Test
                     </span>
                   </div>
@@ -3267,7 +3267,7 @@ export default function GitProjectHub({
 
               {/* Bước 5 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-blue-300 bg-blue-50/30 shadow-xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 shadow-xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
                 style={{ animationDelay: "0.34s" }}
               >
                 <div className="space-y-2">
@@ -3275,29 +3275,29 @@ export default function GitProjectHub({
                     <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
                       5
                     </span>
-                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-rose-700 dark:text-rose-400 border border-slate-200 dark:border-slate-700">
                       2-Tier Review & Merge
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                     Mở Pull Request, Review 2 Lớp & Squash Merge
                   </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Mở PR từ nhánh feature vào <code className="text-blue-600 font-mono font-bold">develop</code>. Kích hoạt chu trình duyệt mã 2 tầng bảo mật nghiêm ngặt trước khi hợp nhất.
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Mở PR từ nhánh feature vào <code className="text-blue-600 dark:text-blue-400 font-mono font-bold">develop</code>. Kích hoạt chu trình duyệt mã 2 tầng bảo mật nghiêm ngặt trước khi hợp nhất.
                   </p>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-white border border-blue-200 text-[11px] font-mono text-slate-700 space-y-1.5 shadow-2xs">
-                  <div className="text-blue-900 font-bold text-[10px] uppercase">Quy trình Review & Merge chi tiết:</div>
-                  <div className="text-slate-600">• <strong className="text-slate-800">Lớp 1 (CodeMind AI Bot):</strong> Tự động quét CVE lỗ hổng, AST complexity, AST blast radius.</div>
-                  <div className="text-slate-600">• <strong className="text-slate-800">Lớp 2 (Peer Review chéo):</strong> Tối thiểu 1 thành viên khác (Hòa / Huy / Nghị) duyệt diff và Approve. Bắt buộc resolve 100% comment.</div>
-                  <div className="text-slate-600">• <strong className="text-purple-700 font-bold">Chiến lược Merge:</strong> Chọn <span className="bg-purple-100 text-purple-800 px-1 rounded font-bold">Squash and Merge</span> để gộp thành 1 commit duy nhất trên develop.</div>
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-700 dark:text-slate-300 space-y-1.5 shadow-2xs">
+                  <div className="text-blue-900 dark:text-blue-400 font-bold text-[10px] uppercase">Quy trình Review & Merge chi tiết:</div>
+                  <div className="text-slate-600 dark:text-slate-400">• <strong className="text-slate-800 dark:text-slate-200">Lớp 1 (CodeMind AI Bot):</strong> Tự động quét CVE lỗ hổng, AST complexity, AST blast radius.</div>
+                  <div className="text-slate-600 dark:text-slate-400">• <strong className="text-slate-800 dark:text-slate-200">Lớp 2 (Peer Review chéo):</strong> Tối thiểu 1 thành viên khác (Hòa / Huy / Nghị) duyệt diff và Approve. Bắt buộc resolve 100% comment.</div>
+                  <div className="text-slate-600 dark:text-slate-400">• <strong className="text-purple-700 dark:text-purple-400 font-bold">Chiến lược Merge:</strong> Chọn <span className="bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 px-1 rounded font-bold">Squash and Merge</span> để gộp thành 1 commit duy nhất trên develop.</div>
                 </div>
               </div>
 
               {/* Bước 6 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-emerald-300 bg-emerald-50/30 shadow-xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 shadow-xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
                 style={{ animationDelay: "0.39s" }}
               >
                 <div className="space-y-2">
@@ -3305,23 +3305,23 @@ export default function GitProjectHub({
                     <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
                       6
                     </span>
-                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-emerald-800 dark:text-emerald-300 border border-slate-200 dark:border-slate-700">
                       Submission & DoD
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                     Nộp Bài, Thẩm Định Liêm Chính & Vấn Đáp AI
                   </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                     Dán URL PR đã merge vào hệ thống CodeMind Campus. Hệ thống phân tích đối chiếu commit cadence, băm mã SHA-256 xác thực và tự động đóng dấu nghiệm thu hoàn thành.
                   </p>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-white border border-emerald-200 text-[11px] font-mono text-emerald-950 space-y-1.5 shadow-2xs">
-                  <div className="text-emerald-900 font-bold text-[10px] uppercase">Kết quả thẩm định:</div>
-                  <div className="text-emerald-800 font-bold">✓ Đóng dấu [ ĐÃ NGHIỆM THU - DoD 100% ]</div>
-                  <div className="text-slate-600">• Tự động cộng Story Points vào Sprint Burndown.</div>
-                  <div className="text-slate-600">• Sinh 20 câu hỏi vấn đáp phản biện phục vụ buổi bảo vệ.</div>
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-emerald-950 dark:text-emerald-300 space-y-1.5 shadow-2xs">
+                  <div className="text-emerald-900 dark:text-emerald-400 font-bold text-[10px] uppercase">Kết quả thẩm định:</div>
+                  <div className="text-emerald-800 dark:text-emerald-400 font-bold">✓ Đóng dấu [ ĐÃ NGHIỆM THU - DoD 100% ]</div>
+                  <div className="text-slate-600 dark:text-slate-400">• Tự động cộng Story Points vào Sprint Burndown.</div>
+                  <div className="text-slate-600 dark:text-slate-400">• Sinh 20 câu hỏi vấn đáp phản biện phục vụ buổi bảo vệ.</div>
                   <button
                     onClick={() => handleSetViewMode("prs")}
                     className="w-full mt-1 py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-sans font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition"
@@ -3354,15 +3354,15 @@ export default function GitProjectHub({
               <div className="space-y-2 text-xs">
                 {/* Option 1: Squash and Merge (Khuyên dùng) */}
                 <div
-                  className="marlo-row marlo-item-interactive p-3 rounded-xl bg-white border border-emerald-300 shadow-2xs space-y-1 hover:border-emerald-500 transition-all duration-200"
+                  className="marlo-row marlo-item-interactive p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-1.5 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200"
                   style={{ animationDelay: "0.46s" }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <span className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       1. Squash and Merge (Chuẩn đồ án Sprint)
                     </span>
-                    <span className="text-[10px] font-mono text-emerald-700 font-bold">ƯU TIÊN SỐ 1</span>
+                    <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-800">ƯU TIÊN SỐ 1</span>
                   </div>
                   <p className="text-[11px] text-slate-600 leading-relaxed">
                     Gộp tất cả 5-10 commit thử nghiệm vụn vặt trên nhánh feature thành <strong>đúng 1 commit duy nhất</strong> khi merge vào <code className="text-blue-600 font-mono">develop</code>. Tiêu đề commit gộp chứa đúng mã task: <code className="text-purple-700 font-mono font-bold">feat(#TE35D77): hoàn thiện docker sandbox (#PR-42)</code>. Lịch sử Git sạch sẽ, chuyên nghiệp, dễ rollback.
