@@ -734,40 +734,37 @@ export default function AIDefenseRoomScreen({
           return (
             <div
               key={jury.id}
-              className={`defense-jury-card relative rounded-3xl p-5 border transition-all duration-300 ${
+              className={`defense-jury-card relative rounded-2xl p-5 border transition-all duration-300 ${
                 isSpeaking
-                  ? "border-[#EE8420] bg-amber-50/25 dark:bg-amber-950/20 shadow-md ring-2 ring-[#EE8420]/30"
-                  : "border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs"
+                  ? "border-slate-900 dark:border-slate-100 bg-white dark:bg-[#14161F] shadow-sm"
+                  : "border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-2xs"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className={`relative w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black text-white shadow-md ${
-                      isSpeaking ? "ring-4 ring-amber-500/30 scale-105" : ""
-                    }`}
-                    style={{ backgroundColor: jury.colorHex }}
+                    className="relative w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white bg-slate-900 dark:bg-slate-800 dark:text-slate-100 shadow-2xs shrink-0"
                   >
                     <span>{jury.avatar}</span>
                     {isSpeaking && (
-                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#14161F] flex items-center justify-center">
-                        <Volume2 size={10} className="text-white" />
+                      <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-slate-900 dark:bg-slate-100 ring-2 ring-white dark:ring-[#14161F] flex items-center justify-center">
+                        <Volume2 size={8} className="text-white dark:text-slate-900" />
                       </span>
                     )}
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-slate-900 dark:text-white leading-tight">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
                       {jury.name}
                     </h4>
-                    <p className="text-[11px] font-bold text-[#EE8420] mt-0.5">{jury.title}</p>
+                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">{jury.title}</p>
                     <p className="text-[10px] text-slate-400 truncate mt-0.5">{jury.institution}</p>
                   </div>
                 </div>
 
                 <span
-                  className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                  className={`text-[9.5px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                     isSpeaking
-                      ? "bg-amber-500 text-white animate-pulse"
+                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
                       : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
                   }`}
                 >
@@ -780,18 +777,17 @@ export default function AIDefenseRoomScreen({
                   {jury.persona}
                 </p>
 
-                {/* Satisfaction bar */}
+                {/* Satisfaction bar - Đồng bộ 1 màu nhất quán */}
                 <div className="mt-3 space-y-1">
                   <div className="flex items-center justify-between text-[11px] font-bold">
                     <span className="text-slate-400">Độ hài lòng lập luận</span>
                     <span className="font-mono text-slate-900 dark:text-white">{jury.satisfaction}%</span>
                   </div>
-                  <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all duration-700"
+                      className="h-full rounded-full transition-all duration-700 bg-slate-900 dark:bg-slate-200"
                       style={{
                         width: `${jury.satisfaction}%`,
-                        backgroundColor: jury.colorHex,
                       }}
                     />
                   </div>
