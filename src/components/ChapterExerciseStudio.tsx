@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FileText,
   Link2,
@@ -24,12 +24,19 @@ import {
 } from "lucide-react";
 import { triggerMarloConfetti } from "../utils/confetti";
 import LiquidCardConnector from "./LiquidCardConnector";
+import {
+  submitStudentChapterExercise,
+  type StudentChapterSubmissionDto,
+} from "../api";
 import type { ChapterExerciseData } from "../data/chapterExercises";
 import type { MentorMascot } from "../App";
 
 interface ChapterExerciseStudioProps {
+  subjectId?: string;
   exercise: ChapterExerciseData;
   mentorMascot?: MentorMascot;
+  savedSubmission?: StudentChapterSubmissionDto | null;
+  onSubmissionSaved?: (submission: StudentChapterSubmissionDto, totalXp?: number) => void;
   onEarnXp?: (xp: number) => void;
   onBackToLecture?: () => void;
 }
@@ -101,121 +108,206 @@ const DEFAULT_GRADE_REPORT: AutoGradeReport = {
   },
 };
 
+function formatSubmittedTime(iso?: string | null): string {
+  if (!iso) {
+    const now = new Date();
+    return `${now.getHours().toString().padStart(2, "0")}:${now
+      .getMinutes()
+      .toString()
+      .padStart(2, "0")} - ${now.getDate().toString().padStart(2, "0")}/${(
+      now.getMonth() + 1
+    )
+      .toString()
+      .padStart(2, "0")}/${now.getFullYear()}`;
+  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getHours().toString().padStart(2, "0")}:${d
+    .getMinutes()
+    .toString()
+    .padStart(2, "0")} - ${d.getDate().toString().padStart(2, "0")}/${(
+    d.getMonth() + 1
+  )
+    .toString()
+    .padStart(2, "0")}/${d.getFullYear()}`;
+}
+
 export default function ChapterExerciseStudio({
+  subjectId = "oop",
   exercise,
   mentorMascot = "mino",
+  savedSubmission,
+  onSubmissionSaved,
   onEarnXp,
   onBackToLecture,
 }: ChapterExerciseStudioProps) {
-  const [submissionLink, setSubmissionLink] = useState("");
-  const [studentNote, setStudentNote] = useState("");
-  const [submittedLink, setSubmittedLink] = useState<string | null>(null);
-  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [submissionLink, setSubmissionLink] = useState(savedSubmission?.repo_url || "");
+  const [studentNote, setStudentNote] = useState(savedSubmission?.student_note || "");
+  const [submittedLink, setSubmittedLink] = useState<string | null>(
+    savedSubmission?.repo_url || null
+  );
+  const [submittedAt, setSubmittedAt] = useState<string | null>(
+    savedSubmission ? formatSubmittedTime(savedSubmission.submitted_at) : null
+  );
   const [isEditing, setIsEditing] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Auto-grading Pipeline States
-  const [gradingPhase, setGradingPhase] = useState<"idle" | "grading" | "graded">("idle");
+  const [gradingPhase, setGradingPhase] = useState<"idle" | "grading" | "graded">(
+    savedSubmission ? "graded" : "idle"
+  );
   const [gradingStep, setGradingStep] = useState<number>(0);
-  const [gradeReport, setGradeReport] = useState<AutoGradeReport>(DEFAULT_GRADE_REPORT);
+  const [gradeReport, setGradeReport] = useState<AutoGradeReport>(() =>
+    savedSubmission
+      ? {
+          score: savedSubmission.score,
+          maxScore: savedSubmission.maxScore,
+          gradeLabel: savedSubmission.gradeLabel,
+          testsPassed: savedSubmission.testsPassed,
+          testsTotal: savedSubmission.testsTotal,
+          executionTimeMs: savedSubmission.executionTimeMs,
+          valgrindLeaks: savedSubmission.valgrindLeaks ?? 0,
+          antiPlagiarismScore: savedSubmission.antiPlagiarismScore,
+          rubric: savedSubmission.rubric?.length
+            ? savedSubmission.rubric
+            : DEFAULT_GRADE_REPORT.rubric,
+          aiFeedback: savedSubmission.aiFeedback?.strengths
+            ? savedSubmission.aiFeedback
+            : DEFAULT_GRADE_REPORT.aiFeedback,
+        }
+      : DEFAULT_GRADE_REPORT
+  );
   const [liveLogs, setLiveLogs] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSubmitError(null);
+    setIsEditing(false);
+    if (savedSubmission) {
+      setSubmittedLink(savedSubmission.repo_url);
+      setSubmissionLink(savedSubmission.repo_url);
+      setStudentNote(savedSubmission.student_note || "");
+      setSubmittedAt(formatSubmittedTime(savedSubmission.submitted_at));
+      setGradingPhase("graded");
+      setGradeReport({
+        score: savedSubmission.score,
+        maxScore: savedSubmission.maxScore,
+        gradeLabel: savedSubmission.gradeLabel,
+        testsPassed: savedSubmission.testsPassed,
+        testsTotal: savedSubmission.testsTotal,
+        executionTimeMs: savedSubmission.executionTimeMs,
+        valgrindLeaks: savedSubmission.valgrindLeaks ?? 0,
+        antiPlagiarismScore: savedSubmission.antiPlagiarismScore,
+        rubric: savedSubmission.rubric?.length
+          ? savedSubmission.rubric
+          : DEFAULT_GRADE_REPORT.rubric,
+        aiFeedback: savedSubmission.aiFeedback?.strengths
+          ? savedSubmission.aiFeedback
+          : DEFAULT_GRADE_REPORT.aiFeedback,
+      });
+    } else {
+      setSubmittedLink(null);
+      setSubmissionLink("");
+      setStudentNote("");
+      setSubmittedAt(null);
+      setGradingPhase("idle");
+      setGradeReport(DEFAULT_GRADE_REPORT);
+      setLiveLogs([]);
+    }
+  }, [exercise.id, savedSubmission]);
 
   const GRADING_STEPS = [
     "Clone repository & kiểm tra cây thư mục mã nguồn...",
-    "Docker Sandbox: Biên dịch C++20 Clang-16 & Chạy 8/8 Test Cases...",
-    "AI Code Review: Phân tích Clean Code, con trỏ vtable & Valgrind leak...",
+    "Docker Sandbox: Biên dịch mã nguồn & Chạy bộ Test Cases chuẩn giảng viên...",
+    "AI Code Review: Phân tích Clean Code, kiến trúc & Valgrind memory safety...",
     "Thẩm định Liêm chính Học thuật & Tổng hợp Bảng điểm Rubric...",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanLink = submissionLink.trim();
     if (!cleanLink) return;
 
+    setSubmitError(null);
     setGradingPhase("grading");
     setGradingStep(0);
-    setLiveLogs([`[0.2s] [INIT] Khởi tạo luồng thẩm định tự động cho: ${cleanLink}`]);
+    setLiveLogs([
+      `[0.1s] [INIT] Khởi tạo luồng thẩm định Docker CI/CD cho: ${cleanLink}`,
+      `[0.3s] [GIT] git clone --depth=1 repo -> Chuẩn bị biên dịch Chương ${exercise.chapterNumber}`,
+    ]);
 
-    // Step 0 sub-log (0.8s)
-    setTimeout(() => {
-      setLiveLogs((prev) => [
-        ...prev,
-        "[0.8s] [GIT] git clone --depth=1 repo -> Tải thành công 14 files mã nguồn C++",
-      ]);
-    }, 800);
-
-    // Step 1: Docker Sandbox (1.8s)
-    setTimeout(() => {
+    const t1 = setTimeout(() => {
       setGradingStep(1);
       setLiveLogs((prev) => [
         ...prev,
-        "[1.8s] [DOCKER] Cấp phát Container Linux cô lập (2 vCPU, 4GB RAM, cgroup sandbox)",
+        "[0.5s] [DOCKER] Cấp phát Container Linux cô lập (--network=none, 2 vCPU, 4GB RAM)",
       ]);
-    }, 1800);
+    }, 300);
 
-    // Step 1 sub-log: Compile (2.8s)
-    setTimeout(() => {
-      setLiveLogs((prev) => [
-        ...prev,
-        "[2.8s] [BUILD] clang++ -std=c++20 -O2 -fsanitize=address src/*.cpp -o solution -> Build SUCCESS (0 warnings)",
-      ]);
-    }, 2800);
-
-    // Step 2: AI Review & Test Cases (3.9s)
-    setTimeout(() => {
+    const t2 = setTimeout(() => {
       setGradingStep(2);
       setLiveLogs((prev) => [
         ...prev,
-        "[3.9s] [TEST] Chạy 8/8 Test Cases ẩn: PASS (42ms) · Valgrind: 0 bytes memory leak",
+        "[0.7s] [TEST] Thực thi Docker Test Cases từ Giảng viên & Quét Valgrind sanitizer...",
       ]);
-    }, 3900);
+    }, 600);
 
-    // Step 2 sub-log: Socratic AST (4.9s)
-    setTimeout(() => {
-      setLiveLogs((prev) => [
-        ...prev,
-        "[4.9s] [ANALYSIS] AI Socratic Reviewer: Quét cây AST, kiểm tra vptr offset & tính đa hình OOP runtime...",
-      ]);
-    }, 4900);
-
-    // Step 3: Anti-Plagiarism & Rubric (5.8s)
-    setTimeout(() => {
+    const t3 = setTimeout(() => {
       setGradingStep(3);
       setLiveLogs((prev) => [
         ...prev,
-        "[5.8s] [AUDIT] Quét Liêm chính Học thuật: 98.6% Unique · Cyclomatic Complexity = 2.4",
+        "[0.9s] [SYNC] Đồng bộ kết quả Rubric vào SQLite & hàng đợi Giảng viên...",
       ]);
-    }, 5800);
+    }, 850);
 
-    // Step 3 sub-log (6.6s)
-    setTimeout(() => {
-      setLiveLogs((prev) => [
-        ...prev,
-        "[6.6s] [DONE] Hoàn tất thẩm định tự động! Chuẩn bị xuất Bảng điểm Rubric...",
-      ]);
-    }, 6600);
+    const [res] = await Promise.all([
+      submitStudentChapterExercise({
+        subject_id: subjectId,
+        chapter_number: exercise.chapterNumber,
+        exercise_id: exercise.id,
+        exercise_title: exercise.title,
+        repo_url: cleanLink,
+        student_note: studentNote.trim(),
+        xp: exercise.xp,
+      }),
+      new Promise((resolve) => setTimeout(resolve, 1000)),
+    ]);
 
-    // Finish & Show Report (7.3s)
-    setTimeout(() => {
-      setGradingPhase("graded");
-      setSubmittedLink(cleanLink);
-      const now = new Date();
-      const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now
-        .getMinutes()
-        .toString()
-        .padStart(2, "0")} - ${now.getDate().toString().padStart(2, "0")}/${(
-        now.getMonth() + 1
-      )
-        .toString()
-        .padStart(2, "0")}/${now.getFullYear()}`;
-      setSubmittedAt(timeStr);
-      setIsEditing(false);
+    clearTimeout(t1);
+    clearTimeout(t2);
+    clearTimeout(t3);
 
-      // Bắn confetti chúc mừng bài nộp được chấm điểm xuất sắc
-      triggerMarloConfetti();
-      if (onEarnXp) {
-        onEarnXp(exercise.xp);
-      }
-    }, 7300);
+    if (res.error || !res.submission) {
+      setGradingPhase(submittedLink ? "graded" : "idle");
+      setSubmitError(res.error || "Không thể chấm bài trên Docker Sandbox.");
+      return;
+    }
+
+    const saved = res.submission;
+    setGradeReport({
+      score: saved.score,
+      maxScore: saved.maxScore,
+      gradeLabel: saved.gradeLabel,
+      testsPassed: saved.testsPassed,
+      testsTotal: saved.testsTotal,
+      executionTimeMs: saved.executionTimeMs,
+      valgrindLeaks: saved.valgrindLeaks ?? 0,
+      antiPlagiarismScore: saved.antiPlagiarismScore,
+      rubric: saved.rubric?.length ? saved.rubric : DEFAULT_GRADE_REPORT.rubric,
+      aiFeedback: saved.aiFeedback?.strengths
+        ? saved.aiFeedback
+        : DEFAULT_GRADE_REPORT.aiFeedback,
+    });
+    setSubmittedLink(saved.repo_url);
+    setSubmittedAt(formatSubmittedTime(saved.submitted_at));
+    setGradingPhase("graded");
+    setIsEditing(false);
+
+    triggerMarloConfetti();
+    if (onSubmissionSaved) {
+      onSubmissionSaved(saved, res.total_xp);
+    } else if (saved.xp_awarded > 0 && onEarnXp) {
+      onEarnXp(saved.xp_awarded);
+    }
   };
 
   return (
@@ -251,7 +343,7 @@ export default function ChapterExerciseStudio({
               {exercise.title}
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              {exercise.description}
+              {exercise.problemStatement || exercise.objective}
             </p>
           </div>
 
@@ -603,6 +695,13 @@ export default function ChapterExerciseStudio({
               />
             </div>
 
+            {submitError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-700 dark:text-rose-300 font-medium flex items-center gap-2">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{submitError}</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-3 pt-2">
               {isEditing && (
                 <button
@@ -620,7 +719,7 @@ export default function ChapterExerciseStudio({
                 className="btn-marlo-primary btn--primary flex items-center gap-2 px-6 py-3 text-xs sm:text-sm font-black shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
               >
                 <Zap size={15} className="text-[#1c1304] shrink-0" />
-                <span>Nộp bài & Chấm điểm Tự động (+100 XP)</span>
+                <span>Nộp bài & Chấm điểm Tự động (+{exercise.xp} XP)</span>
               </button>
             </div>
           </form>

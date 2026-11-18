@@ -32,6 +32,7 @@ import {
 
 interface CourseCatalogHubProps {
   onSelectCourse: (subjectId: SubjectId) => void;
+  subjects?: SubjectModuleData[];
 }
 
 interface RoadmapStage {
@@ -99,12 +100,12 @@ interface SubjectVisualTheme {
 
 function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
   switch (id) {
-    // 1. OOP (Java & C++) - Memory & Pointer Matrix
+    // 1. OOP (Modern C++20) - Memory & Pointer Matrix
     case "oop":
       return {
-        tagline: "Java & C++",
+        tagline: "Modern C++20",
         subtitle: "OOP & Memory Pointers",
-        syntax: "class Dog extends Animal",
+        syntax: "class Developer : public Employee",
         fontClass: "font-mono font-extrabold tracking-wider text-cyan-300",
         bgGradient: "from-[#081b2f] via-[#0d2847] to-[#040e1a]",
         borderHover: "group-hover:border-cyan-500/60 group-hover:shadow-[0_0_20px_rgba(6,182,212,0.2)]",
@@ -114,7 +115,7 @@ function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
             {/* Memory Address Grid */}
             <div className="absolute top-2 right-3 font-mono text-[8px] text-cyan-400/80 space-y-0.5 text-right">
               <div>0x7FFE2A</div>
-              <div>vtable* -&gt; Dog</div>
+              <div>vtable* -&gt; Developer</div>
             </div>
             {/* Horizontal pointer line */}
             <div className="absolute bottom-6 left-4 right-4 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" />
@@ -472,11 +473,12 @@ function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
   }
 }
 
-export function CourseCatalogHub({ onSelectCourse }: CourseCatalogHubProps) {
+export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubProps) {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"roadmap" | "all">("roadmap");
+  const allSubjects = subjects && subjects.length > 0 ? subjects : MULTI_CHAPTER_SUBJECTS;
 
-  const filteredSubjects = MULTI_CHAPTER_SUBJECTS.filter((sub) => {
+  const filteredSubjects = allSubjects.filter((sub) => {
     return (
       sub.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sub.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -547,6 +549,9 @@ export function CourseCatalogHub({ onSelectCourse }: CourseCatalogHubProps) {
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pt-0.5 truncate">
               {sub.instructor}
+            </p>
+            <p className="text-[11px] font-mono text-slate-400 dark:text-slate-500 pt-0.5">
+              {sub.chapters.length} chương · {sub.totalLessons} bài học · {sub.totalDuration}
             </p>
           </div>
         </div>
@@ -646,7 +651,7 @@ export function CourseCatalogHub({ onSelectCourse }: CourseCatalogHubProps) {
         <div className="max-w-[1600px] w-full mx-auto px-1 sm:px-2 space-y-8">
           {ROADMAP_STAGES.map((stage, stageIdx) => {
             const stageSubjects = stage.subjectIds
-              .map((id) => MULTI_CHAPTER_SUBJECTS.find((s) => s.id === id))
+              .map((id) => allSubjects.find((s) => s.id === id))
               .filter((s): s is SubjectModuleData => Boolean(s));
 
             if (stageSubjects.length === 0) return null;

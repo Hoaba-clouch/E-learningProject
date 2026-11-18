@@ -1,29 +1,34 @@
-import { useState, useRef, useMemo, useEffect, useLayoutEffect } from "react";
-import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
-import MarloTitle from "../components/MarloTitle";
-import MarloSegmentedControl from "../components/MarloSegmentedControl";
-import type { Screen } from "../App";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
-  CheckCircle,
+  ArrowRight,
+  ArrowUpRight,
+  Bot,
+  CheckCircle2,
+  ChevronRight,
   Clock,
+  Cpu,
   Download,
+  FolderKanban,
   GraduationCap,
   History,
   KeyRound,
   Laptop,
-  LayoutDashboard,
   Lock,
   Plus,
   Radio,
+  RefreshCw,
   RotateCcw,
   Search,
   Send,
   ServerCog,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
   Smartphone,
-  Sparkles,
+  Terminal,
   Trash2,
   Unlock,
   UserPlus,
@@ -31,818 +36,1831 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import type { Screen } from "../App";
+import {
+  FALLBACK_ADMIN_USERS,
+  clearBroadcastApi,
+  createAdminClass,
+  createAdminUser,
+  deleteAdminUserApi,
+  ensureRoleSession,
+  fetchAdminGovernanceBundle,
+  fetchAdminUsers,
+  patchAdminAiService,
+  patchAdminClass,
+  patchAdminUser,
+  publishBroadcastApi,
+  resolveAdminApproval,
+  revokeJwtSessionApi,
+  revokeUntrustedSessionsApi,
+  saveAdminPolicies,
+  triggerAdminResetDemo,
+  type AdminUserRecord,
+} from "../api";
+import LiquidCardConnector from "../components/LiquidCardConnector";
+import MarloActivityRing from "../components/MarloActivityRing";
+import MarloCapacityBar from "../components/MarloCapacityBar";
+import MarloSegmentedControl from "../components/MarloSegmentedControl";
+import MarloTitle from "../components/MarloTitle";
+import MarloToast from "../components/MarloToast";
+import {
+  INITIAL_ADMIN_CLASSES,
+  INITIAL_ADMIN_SERVICES,
+  INITIAL_AUDIT_LOGS,
+  INITIAL_JWT_SESSIONS,
+  INITIAL_PENDING_APPROVALS,
+  type AdminAuditLog,
+  type AdminClassRecord,
+  type AdminJwtSession,
+  type AdminServiceUnit,
+  type PendingApprovalItem,
+} from "../data/adminData";
+import { CNTT_PROJECTS } from "./MarloProjectsScreen";
+import {
+  animateMarloCards,
+  animateMarloRows,
+  useMarloPageEntrance,
+} from "../utils/marloAnimations";
 
-type Tab = "overview" | "users" | "classes" | "ai" | "sessions" | "audit";
-type UserStatus = "active" | "pending" | "suspended";
-
-interface UserRow {
-  name: string;
-  role: "Giảng viên" | "Học viên";
-  email: string;
-  status: UserStatus;
-  lastActive: string;
-  device: string;
-}
-
-interface ClassItem {
-  code: string;
-  name: string;
-  teacher: string;
-  students: number;
-  progress: number;
-  review: number;
-  health: "Tốt" | "Ổn định" | "Cần theo dõi";
-  room?: string;
-}
-
-interface AuditLog {
-  id: string;
-  time: string;
-  actor: string;
-  action: string;
-  target: string;
-  type: "user" | "security" | "ai" | "class";
-}
-
-const initialUsers: UserRow[] = [
-  { name: "Trần Thị B", role: "Giảng viên", email: "ttb@edu.vn", status: "active", lastActive: "Vừa xong", device: "MacBook Pro" },
-  { name: "Lê Văn C", role: "Học viên", email: "lvc@student.vn", status: "active", lastActive: "5 phút trước", device: "Windows 11" },
-  { name: "Hoàng Ngọc D", role: "Học viên", email: "hnd@student.vn", status: "suspended", lastActive: "3 ngày trước", device: "iPhone 15" },
-  { name: "Võ Thị E", role: "Giảng viên", email: "vte@edu.vn", status: "pending", lastActive: "Chưa kích hoạt", device: "Chưa đăng ký" },
-  { name: "Nguyễn Minh Khôi", role: "Học viên", email: "nmk@student.vn", status: "active", lastActive: "15 phút trước", device: "Ubuntu Linux" },
-  { name: "Đặng Thuỳ Dương", role: "Học viên", email: "dtd@student.vn", status: "active", lastActive: "1 giờ trước", device: "iPad Air" },
-];
-
-const initialClasses: ClassItem[] = [
-  { code: "CM-OOP-2026-01", name: "Lập trình OOP & Cấu trúc dữ liệu - Nhóm 01", teacher: "Trần Thị B", students: 34, progress: 62, review: 12, health: "Ổn định", room: "Lab A3-201" },
-  { code: "CM-OOP-2026-02", name: "Lập trình OOP & Cấu trúc dữ liệu - Nhóm 02", teacher: "Lê Văn C", students: 28, progress: 47, review: 19, health: "Cần theo dõi", room: "Lab A3-204" },
-  { code: "CM-DSA-2026-01", name: "Cấu trúc dữ liệu nâng cao & Đồ thị", teacher: "Trần Thị B", students: 41, progress: 71, review: 7, health: "Tốt", room: "Hội trường C1" },
-  { code: "CM-WEB-2026-01", name: "Kỹ thuật Web Frontend Hiện đại (React 19)", teacher: "Võ Thị E", students: 38, progress: 85, review: 5, health: "Tốt", room: "Lab B1-102" },
-];
-
-const initialAiUsage = [
-  { id: "ai-mentor", name: "AI Mentor chat", value: "$128.40", usage: "42K lượt hỏi", requests: 42840, inputTokens: 12840000, outputTokens: 6240000, estimatedCost: 128.4, percent: 72, tone: "bg-blue-500", active: true },
-  { id: "ai-review", name: "Review bài tập tự động", value: "$86.10", usage: "318 lượt review", requests: 318, inputTokens: 3720000, outputTokens: 1180000, estimatedCost: 86.1, percent: 58, tone: "bg-emerald-500", active: true },
-  { id: "ai-audio", name: "Audio bài đọc (TTS)", value: "$54.30", usage: "1,204 phút đọc", requests: 1204, inputTokens: 940000, outputTokens: 2860000, estimatedCost: 54.3, percent: 36, tone: "bg-violet-500", active: true },
-  { id: "ai-summary", name: "Tóm tắt giáo trình AI", value: "$32.15", usage: "860 tài liệu", requests: 860, inputTokens: 1420000, outputTokens: 780000, estimatedCost: 32.15, percent: 24, tone: "bg-amber-500", active: true },
-];
-
-const initialAuditLogs: AuditLog[] = [
-  { id: "log-1", time: "10:42 Vừa xong", actor: "Admin ADM-01", action: "Duyệt yêu cầu tham gia lớp", target: "Nguyễn Minh Khôi (OOP - Nhóm 01)", type: "user" },
-  { id: "log-2", time: "10:15 - 30m trước", actor: "Admin ADM-01", action: "Cập nhật ngân sách AI tối đa", target: "$550.00 / tháng (+10%)", type: "ai" },
-  { id: "log-3", time: "09:30 - 1h trước", actor: "System Security", action: "Phát hiện đăng nhập thiết bị mới", target: "Trần Thị B (Windows 11 - Edge)", type: "security" },
-  { id: "log-4", time: "Hôm qua 21:00", actor: "Admin ADM-01", action: "Khóa tạm thời tài khoản", target: "Hoàng Ngọc D (Vi phạm nội quy làm bài)", type: "user" },
-  { id: "log-5", time: "Hôm qua 18:30", actor: "Admin ADM-01", action: "Tạo lớp học mới", target: "CM-WEB-2026-01 (Kỹ thuật Web Frontend)", type: "class" },
-];
-
-const statusStyle: Record<UserStatus, string> = {
-  active: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300",
-  pending: "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300",
-  suspended: "border-rose-200 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300",
-};
-
-const statusLabel: Record<UserStatus, string> = {
-  active: "Hoạt động",
-  pending: "Chờ kích hoạt",
-  suspended: "Bị khóa",
-};
-
-const sectionToTab = (section?: Screen): Tab => {
-  switch (section) {
-    case "admin-users": return "users";
-    case "admin-classes": return "classes";
-    case "admin-ai": return "ai";
-    case "admin-sessions": return "sessions";
-    case "admin-audit": return "audit";
-    default: return "overview";
-  }
-};
-
-const tabToSection = (t: Tab): Screen => {
-  switch (t) {
-    case "users": return "admin-users";
-    case "classes": return "admin-classes";
-    case "ai": return "admin-ai";
-    case "sessions": return "admin-sessions";
-    case "audit": return "admin-audit";
-    default: return "admin";
-  }
-};
+export type AdminTab = "overview" | "users" | "classes" | "ai" | "sessions" | "audit";
 
 interface AdminDashboardProps {
   currentSection?: Screen;
   onNavigateSection?: (s: Screen) => void;
 }
 
-export default function AdminDashboard({ currentSection, onNavigateSection }: AdminDashboardProps) {
+function sectionToTab(section?: Screen): AdminTab {
+  switch (section) {
+    case "admin-users":
+      return "users";
+    case "admin-classes":
+      return "classes";
+    case "admin-ai":
+      return "ai";
+    case "admin-sessions":
+      return "sessions";
+    case "admin-audit":
+      return "audit";
+    case "admin":
+    default:
+      return "overview";
+  }
+}
+
+function tabToSection(tab: AdminTab): Screen {
+  switch (tab) {
+    case "users":
+      return "admin-users";
+    case "classes":
+      return "admin-classes";
+    case "ai":
+      return "admin-ai";
+    case "sessions":
+      return "admin-sessions";
+    case "audit":
+      return "admin-audit";
+    case "overview":
+    default:
+      return "admin";
+  }
+}
+
+const statusPillStyle: Record<AdminUserRecord["status"], string> = {
+  active:
+    "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+  pending:
+    "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400",
+  suspended:
+    "bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400",
+};
+
+const statusLabel: Record<AdminUserRecord["status"], string> = {
+  active: "Hoạt động",
+  pending: "Chờ kích hoạt",
+  suspended: "Bị khóa",
+};
+
+const auditTypeLabel: Record<AdminAuditLog["type"], string> = {
+  user: "RBAC · USER",
+  ai: "AI · SANDBOX",
+  class: "CLASS · LAB",
+  security: "SECURITY · JWT",
+};
+
+export default function AdminDashboard({
+  currentSection = "admin",
+  onNavigateSection,
+}: AdminDashboardProps) {
   const adminRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [tab, setTab] = useState<Tab>(() => sectionToTab(currentSection));
+  const [tab, setTab] = useState<AdminTab>(() => sectionToTab(currentSection));
 
-  // Sync tab when currentSection changes from Sidebar click
   useEffect(() => {
     if (currentSection) {
       setTab(sectionToTab(currentSection));
     }
   }, [currentSection]);
 
-  const handleSelectTab = (newTab: Tab) => {
-    setTab(newTab);
-    onNavigateSection?.(tabToSection(newTab));
+  const handleSelectTab = (nextTab: AdminTab) => {
+    setTab(nextTab);
+    onNavigateSection?.(tabToSection(nextTab));
   };
 
-  // Core Data States
-  const [users, setUsers] = useState<UserRow[]>(initialUsers);
-  const [classesList, setClassesList] = useState<ClassItem[]>(initialClasses);
-  const [aiServices, setAiServices] = useState(initialAiUsage);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(initialAuditLogs);
+  // Core Governance States (pre-populated with zero-flicker synced fallback)
+  const [users, setUsers] = useState<AdminUserRecord[]>(FALLBACK_ADMIN_USERS);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [classesList, setClassesList] = useState<AdminClassRecord[]>(INITIAL_ADMIN_CLASSES);
+  const [aiServices, setAiServices] = useState<AdminServiceUnit[]>(INITIAL_ADMIN_SERVICES);
+  const [jwtSessions, setJwtSessions] = useState<AdminJwtSession[]>(INITIAL_JWT_SESSIONS);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApprovalItem[]>(
+    INITIAL_PENDING_APPROVALS
+  );
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>(INITIAL_AUDIT_LOGS);
+
+  // Filters & Search
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState<
+    "all" | "Quản trị viên" | "Giảng viên" | "Học viên" | "suspended"
+  >("all");
+  const [classHealthFilter, setClassHealthFilter] = useState<
+    "all" | "Tốt" | "Ổn định" | "Cần theo dõi"
+  >("all");
+  const [auditTypeFilter, setAuditTypeFilter] = useState<
+    "all" | "user" | "ai" | "class" | "security"
+  >("all");
+  const [auditSearch, setAuditSearch] = useState("");
+
+  // Governance & Guardrail Policies
   const [budgetCap, setBudgetCap] = useState(500);
+  const [guardrailRefuseAnswer, setGuardrailRefuseAnswer] = useState(true);
+  const [rateLimit20PerHour, setRateLimit20PerHour] = useState(true);
+  const [dockerNetworkNone, setDockerNetworkNone] = useState(true);
 
-  // Filter States
-  const [search, setSearch] = useState("");
-  const [userRoleFilter, setUserRoleFilter] = useState<"all" | "Giảng viên" | "Học viên" | "suspended">("all");
-  const [classHealthFilter, setClassHealthFilter] = useState<"all" | "Tốt" | "Ổn định" | "Cần theo dõi">("all");
-
-  // Security Toggles
   const [require2FA, setRequire2FA] = useState(true);
   const [blockConcurrentIP, setBlockConcurrentIP] = useState(true);
   const [autoLockFailedAttempts, setAutoLockFailedAttempts] = useState(true);
 
-  // Active Toast Feedback
-  const [toast, setToast] = useState("Hệ thống ổn định • 99.98% Uptime");
+  // Reset Demo Confirmation
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [isResettingDemo, setIsResettingDemo] = useState(false);
 
-  // Pending Enrollments
-  const [pending, setPending] = useState([
-    { name: "Nguyễn Minh Khôi", id: "SV-2024-0341", className: "OOP - Nhóm 01", risk: "Hồ sơ hợp lệ" },
-    { name: "Trần Thị Lan Anh", id: "SV-2024-0528", className: "OOP - Nhóm 02", risk: "Trùng email lớp cũ" },
-    { name: "Phạm Văn Đức", id: "SV-2024-0719", className: "DSA - Nhóm 01", risk: "Chờ xác nhận mã SV" },
-  ]);
-
-  // Modals
-  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
-  const [newUserName, setNewUserName] = useState("");
-  const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserRole, setNewUserRole] = useState<"Giảng viên" | "Học viên">("Học viên");
-
-  const [isAddClassModalOpen, setIsAddClassModalOpen] = useState(false);
-  const [newClassCode, setNewClassCode] = useState("");
-  const [newClassName, setNewClassName] = useState("");
-  const [newClassTeacher, setNewClassTeacher] = useState("Trần Thị B");
-  const [newClassStudents, setNewClassStudents] = useState("35");
-  const [newClassRoom, setNewClassRoom] = useState("Lab A3-201");
-
+  // System Broadcast Banner
+  const [activeBroadcast, setActiveBroadcast] = useState<string | null>(null);
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
-  const [activeBroadcast, setActiveBroadcast] = useState<string | null>(null);
 
-  // Filtered Users
-  const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
-      const matchSearch = `${u.name} ${u.email} ${u.role}`.toLowerCase().includes(search.toLowerCase());
-      if (!matchSearch) return false;
-      if (userRoleFilter === "all") return true;
-      if (userRoleFilter === "suspended") return u.status === "suspended";
-      return u.role === userRoleFilter;
+  // Add User Modal
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserCode, setNewUserCode] = useState("");
+  const [newUserRole, setNewUserRole] = useState<AdminUserRecord["role"]>("Học viên");
+
+  // Add / Inspect Class Modals
+  const [isAddClassModalOpen, setIsAddClassModalOpen] = useState(false);
+  const [newClassCode, setNewClassCode] = useState("");
+  const [newClassName, setNewClassName] = useState("");
+  const [newClassTeacher, setNewClassTeacher] = useState("Cô Trần Thị B");
+  const [newClassStudents, setNewClassStudents] = useState("40");
+  const [newClassRoom, setNewClassRoom] = useState("Lab A3-201");
+  const [newClassImage, setNewClassImage] = useState("codemind/cpp20-sandbox:valgrind-1.4");
+  const [editingClass, setEditingClass] = useState<AdminClassRecord | null>(null);
+
+  // Toast
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const notify = (msg: string) => {
+    setToastMsg(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMsg(null), 3400);
+  };
+
+  useMarloPageEntrance(adminRef);
+
+  const loadBackendUsers = async (showNotice = false) => {
+    setUsersLoading(true);
+    await ensureRoleSession("admin");
+    const bundle = await fetchAdminGovernanceBundle();
+    if (bundle) {
+      if (bundle.users.length > 0) setUsers(bundle.users);
+      if (bundle.classes.length > 0) setClassesList(bundle.classes);
+      if (bundle.aiServices.length > 0) setAiServices(bundle.aiServices);
+      setJwtSessions(bundle.jwtSessions);
+      setPendingApprovals(bundle.pendingApprovals);
+      if (bundle.auditLogs.length > 0) setAuditLogs(bundle.auditLogs);
+      if (bundle.policies) {
+        setBudgetCap(bundle.policies.budgetCap);
+        setGuardrailRefuseAnswer(bundle.policies.guardrailRefuseAnswer);
+        setRateLimit20PerHour(bundle.policies.rateLimit20PerHour);
+        setDockerNetworkNone(bundle.policies.dockerNetworkNone);
+        setRequire2FA(bundle.policies.require2FA);
+        setBlockConcurrentIP(bundle.policies.blockConcurrentIP);
+        setAutoLockFailedAttempts(bundle.policies.autoLockFailedAttempts);
+      }
+      setActiveBroadcast(bundle.broadcast);
+      setUsersLoading(false);
+      if (showNotice) {
+        notify(`Đã đồng bộ ${bundle.users.length} tài khoản RBAC & 6 học phần từ FastAPI.`);
+      }
+      return;
+    }
+    const data = await fetchAdminUsers();
+    setUsers(data);
+    setUsersLoading(false);
+    if (showNotice) {
+      notify(`Đã đồng bộ ${data.length} tài khoản RBAC.`);
+    }
+  };
+
+  useEffect(() => {
+    void loadBackendUsers(false);
+  }, []);
+
+  const syncPolicies = (overrides: Partial<{
+    budgetCap: number;
+    guardrailRefuseAnswer: boolean;
+    rateLimit20PerHour: boolean;
+    dockerNetworkNone: boolean;
+    require2FA: boolean;
+    blockConcurrentIP: boolean;
+    autoLockFailedAttempts: boolean;
+  }> = {}) => {
+    void saveAdminPolicies({
+      budgetCap,
+      guardrailRefuseAnswer,
+      rateLimit20PerHour,
+      dockerNetworkNone,
+      require2FA,
+      blockConcurrentIP,
+      autoLockFailedAttempts,
+      ...overrides,
     });
-  }, [users, search, userRoleFilter]);
+  };
 
-  // Filtered Classes
-  const filteredClasses = useMemo(() => {
-    return classesList.filter((c) => {
-      if (classHealthFilter === "all") return true;
-      return c.health === classHealthFilter;
-    });
-  }, [classesList, classHealthFilter]);
+  useLayoutEffect(() => {
+    if (!contentRef.current) return;
+    const cards = contentRef.current.querySelectorAll(".marlo-card");
+    if (cards.length > 0) {
+      animateMarloCards(cards, { stagger: 0.04, y: 16 });
+    }
+    const rows = contentRef.current.querySelectorAll(".marlo-row");
+    if (rows.length > 0) {
+      animateMarloRows(rows, { y: 10, stagger: 0.02, delay: 0.12 });
+    }
+  }, [tab, userRoleFilter, classHealthFilter, auditTypeFilter]);
 
-  const activeUsers = users.filter((user) => user.status === "active").length;
-  const suspendedUsers = users.filter((user) => user.status === "suspended").length;
-  const totalRequests = aiServices.reduce((sum, item) => sum + item.requests, 0);
-  const totalInputTokens = aiServices.reduce((sum, item) => sum + item.inputTokens, 0);
-  const totalOutputTokens = aiServices.reduce((sum, item) => sum + item.outputTokens, 0);
-  const totalEstimatedCost = aiServices.reduce((sum, item) => sum + item.estimatedCost, 0);
-
-  // Helper: Append Audit Log
-  const logAction = (action: string, target: string, type: AuditLog["type"]) => {
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
+  const logAction = (
+    action: string,
+    target: string,
+    type: AdminAuditLog["type"]
+  ) => {
+    const newEntry: AdminAuditLog = {
+      id: `aud-${Date.now()}`,
       time: "Vừa xong",
-      actor: "Admin ADM-01",
+      actor: "Admin AIO (ADM-01)",
       action,
       target,
       type,
     };
-    setAuditLogs((prev) => [newLog, ...prev]);
+    setAuditLogs((prev) => [newEntry, ...prev]);
   };
 
-  // Actions
-  const resolvePending = (index: number, action: "approved" | "rejected") => {
-    const item = pending[index];
-    setPending((list) => list.filter((_, i) => i !== index));
-    const msg = action === "approved" ? `Đã duyệt học viên ${item.name}` : `Đã từ chối hồ sơ ${item.name}`;
-    setToast(msg);
-    logAction(action === "approved" ? "Duyệt tham gia lớp" : "Từ chối tham gia lớp", `${item.name} (${item.className})`, "user");
-  };
-
-  const toggleUserLock = (email: string) => {
-    const targetUser = users.find((u) => u.email === email);
-    const newStatus = targetUser?.status === "suspended" ? "active" : "suspended";
-    setUsers((list) =>
-      list.map((u) => (u.email === email ? { ...u, status: newStatus } : u))
+  // Aggregates
+  const stats = useMemo(() => {
+    const activeCount = users.filter((u) => u.status === "active").length;
+    const suspendedCount = users.filter((u) => u.status === "suspended").length;
+    const instructorCount = users.filter((u) => u.role === "Giảng viên").length;
+    const totalStudentsEnrolled = classesList.reduce((sum, c) => sum + c.students, 0);
+    const avgClassProgress = Math.round(
+      classesList.reduce((sum, c) => sum + c.progressPct, 0) / Math.max(1, classesList.length)
     );
-    const msg = newStatus === "suspended" ? `Đã khóa tài khoản ${targetUser?.name}` : `Đã mở khóa tài khoản ${targetUser?.name}`;
-    setToast(msg);
-    logAction(newStatus === "suspended" ? "Khóa tài khoản" : "Mở khóa tài khoản", targetUser?.name || email, "user");
+    const sandboxReadyCount = classesList.filter((c) => c.sandboxEnabled).length;
+    const aiDefenseCount = classesList.filter((c) => c.aiDefenseEnabled).length;
+    const totalRequests = aiServices.reduce((sum, s) => sum + s.requests, 0);
+    const totalInputTokens = aiServices.reduce((sum, s) => sum + s.inputTokens, 0);
+    const totalOutputTokens = aiServices.reduce((sum, s) => sum + s.outputTokens, 0);
+    const totalEstimatedCost = aiServices.reduce((sum, s) => sum + s.estimatedCost, 0);
+    const untrustedSessions = jwtSessions.filter((s) => s.isUntrusted).length;
+
+    return {
+      activeCount,
+      suspendedCount,
+      instructorCount,
+      totalStudentsEnrolled,
+      avgClassProgress,
+      sandboxReadyCount,
+      aiDefenseCount,
+      totalRequests,
+      totalInputTokens,
+      totalOutputTokens,
+      totalEstimatedCost,
+      untrustedSessions,
+    };
+  }, [users, classesList, aiServices, jwtSessions]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return users.filter((u) => {
+      const matchQuery =
+        !q || `${u.name} ${u.code} ${u.email} ${u.role}`.toLowerCase().includes(q);
+      if (!matchQuery) return false;
+      if (userRoleFilter === "all") return true;
+      if (userRoleFilter === "suspended") return u.status === "suspended";
+      return u.role === userRoleFilter;
+    });
+  }, [users, userSearch, userRoleFilter]);
+
+  const filteredClasses = useMemo(() => {
+    if (classHealthFilter === "all") return classesList;
+    return classesList.filter((c) => c.health === classHealthFilter);
+  }, [classesList, classHealthFilter]);
+
+  const filteredAuditLogs = useMemo(() => {
+    const q = auditSearch.trim().toLowerCase();
+    return auditLogs.filter((log) => {
+      const matchType = auditTypeFilter === "all" || log.type === auditTypeFilter;
+      const matchText =
+        !q || `${log.actor} ${log.action} ${log.target}`.toLowerCase().includes(q);
+      return matchType && matchText;
+    });
+  }, [auditLogs, auditTypeFilter, auditSearch]);
+
+  // --- ACTIONS ---
+  const handleResolvePending = async (item: PendingApprovalItem, decision: "approved" | "rejected") => {
+    setPendingApprovals((prev) => prev.filter((p) => p.id !== item.id));
+    await resolveAdminApproval(item.id, decision);
+    if (decision === "approved") {
+      setUsers((prev) => {
+        const exists = prev.some((u) => u.email.toLowerCase() === item.email.toLowerCase());
+        if (exists) {
+          return prev.map((u) =>
+            u.email.toLowerCase() === item.email.toLowerCase()
+              ? { ...u, status: "active", role: item.requestedRole, lastActive: "Vừa duyệt" }
+              : u
+          );
+        }
+        return [
+          {
+            id: `usr-${Date.now()}`,
+            name: item.name,
+            code: item.studentCode,
+            email: item.email,
+            role: item.requestedRole,
+            status: "active",
+            lastActive: "Vừa duyệt",
+            device: "Web Session",
+            classesCount: 1,
+          },
+          ...prev,
+        ];
+      });
+      notify(`Đã phê duyệt ${item.name} (${item.requestedRole}) vào ${item.classCode}.`);
+      logAction(`Phê duyệt ${item.requestedRole}`, `${item.name} → ${item.classCode}`, "user");
+    } else {
+      notify(`Đã từ chối yêu cầu của ${item.name}.`);
+      logAction("Từ chối yêu cầu ghi danh", `${item.name} (${item.classCode})`, "user");
+    }
   };
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleChangeUserRole = async (userId: string, nextRole: AdminUserRecord["role"]) => {
+    const target = users.find((u) => u.id === userId);
+    if (!target) return;
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: nextRole } : u)));
+    await patchAdminUser(userId, { role: nextRole });
+    notify(`Đã cập nhật quyền RBAC của ${target.name} thành ${nextRole}.`);
+    logAction("Đổi vai trò RBAC", `${target.name} → ${nextRole}`, "user");
+  };
+
+  const handleToggleUserLock = async (userId: string) => {
+    const target = users.find((u) => u.id === userId);
+    if (!target) return;
+    const nextStatus: AdminUserRecord["status"] =
+      target.status === "suspended" ? "active" : "suspended";
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, status: nextStatus } : u)));
+    await patchAdminUser(userId, { status: nextStatus });
+    notify(
+      nextStatus === "suspended"
+        ? `Đã khóa tài khoản ${target.name}.`
+        : `Đã mở khóa tài khoản ${target.name}.`
+    );
+    logAction(
+      nextStatus === "suspended" ? "Khóa tài khoản" : "Mở khóa tài khoản",
+      `${target.name} (${target.code})`,
+      "user"
+    );
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    const target = users.find((u) => u.id === userId);
+    if (!target) return;
+    await deleteAdminUserApi(userId);
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
+    notify(`Đã xóa tài khoản ${target.name}.`);
+    logAction("Xóa tài khoản RBAC", `${target.name} (${target.email})`, "user");
+  };
+
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserName.trim() || !newUserEmail.trim()) return;
-    const newUser: UserRow = {
+    const apiCreated = await createAdminUser({
       name: newUserName.trim(),
+      email: newUserEmail.trim(),
+      code: newUserCode.trim(),
+      role: newUserRole,
+    });
+    const created: AdminUserRecord = apiCreated || {
+      id: `usr-${Date.now()}`,
+      name: newUserName.trim(),
+      code:
+        newUserCode.trim() ||
+        (newUserRole === "Quản trị viên"
+          ? `ADM-${Math.floor(10 + Math.random() * 89)}`
+          : newUserRole === "Giảng viên"
+          ? `GV-${Math.floor(100 + Math.random() * 899)}`
+          : `2210${Math.floor(100 + Math.random() * 899)}`),
       email: newUserEmail.trim(),
       role: newUserRole,
       status: "active",
       lastActive: "Vừa tạo",
       device: "Chưa đăng nhập",
+      classesCount: newUserRole === "Học viên" ? 1 : 2,
     };
-    setUsers((prev) => [newUser, ...prev]);
+    setUsers((prev) => [created, ...prev]);
     setIsAddUserModalOpen(false);
     setNewUserName("");
     setNewUserEmail("");
-    setToast(`Đã thêm tài khoản mới: ${newUser.name}`);
-    logAction("Tạo tài khoản người dùng", `${newUser.name} (${newUser.role})`, "user");
+    setNewUserCode("");
+    notify(`Đã tạo tài khoản ${created.role}: ${created.name}.`);
+    logAction("Tạo tài khoản RBAC", `${created.name} (${created.role})`, "user");
   };
 
-  const handleDeleteUser = (email: string) => {
-    const userToDelete = users.find((u) => u.email === email);
-    if (!userToDelete) return;
-    setUsers((prev) => prev.filter((u) => u.email !== email));
-    setToast(`Đã xóa tài khoản ${userToDelete.name}`);
-    logAction("Xóa tài khoản người dùng", userToDelete.name, "user");
+  const handleToggleClassFlag = async (
+    classId: string,
+    field: "sandboxEnabled" | "aiDefenseEnabled"
+  ) => {
+    const target = classesList.find((c) => c.id === classId);
+    if (!target) return;
+    const nextVal = !target[field];
+    setClassesList((prev) =>
+      prev.map((c) => (c.id === classId ? { ...c, [field]: nextVal } : c))
+    );
+    await patchAdminClass(classId, { [field]: nextVal });
+    const featureLabel = field === "sandboxEnabled" ? "Docker Sandbox" : "Phòng Phản biện 3D";
+    notify(`${target.code}: ${nextVal ? "Đã bật" : "Đã tắt"} ${featureLabel}.`);
+    logAction(`${nextVal ? "Bật" : "Tắt"} ${featureLabel}`, `${target.code} — ${target.name}`, "class");
   };
 
-  const handleAddClass = (e: React.FormEvent) => {
+  const handleAddClassSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassCode.trim() || !newClassName.trim()) return;
-    const newClass: ClassItem = {
+    const apiCreated = await createAdminClass({
       code: newClassCode.trim().toUpperCase(),
       name: newClassName.trim(),
       teacher: newClassTeacher,
-      students: Number(newClassStudents) || 30,
-      progress: 0,
-      review: 0,
+      students: Number(newClassStudents) || 35,
+      room: newClassRoom.trim() || "Lab A3-201",
+      dockerImage: newClassImage.trim() || "codemind/cpp20-sandbox:latest",
+    });
+    const created: AdminClassRecord = apiCreated || {
+      id: `adm-cls-${Date.now()}`,
+      code: newClassCode.trim().toUpperCase(),
+      name: newClassName.trim(),
+      teacher: newClassTeacher,
+      students: Number(newClassStudents) || 35,
+      progressPct: 0,
+      pendingDualReviews: 0,
       health: "Tốt",
       room: newClassRoom.trim() || "Lab A3-201",
+      dockerImage: newClassImage.trim() || "codemind/cpp20-sandbox:latest",
+      sandboxEnabled: true,
+      aiDefenseEnabled: true,
     };
-    setClassesList((prev) => [newClass, ...prev]);
+    setClassesList((prev) => [created, ...prev]);
     setIsAddClassModalOpen(false);
     setNewClassCode("");
     setNewClassName("");
-    setToast(`Đã tạo lớp học mới: ${newClass.code}`);
-    logAction("Tạo lớp học mới", `${newClass.code} (${newClass.name})`, "class");
+    notify(`Đã khởi tạo học phần ${created.code}.`);
+    logAction("Tạo lớp học phần", `${created.code} (${created.teacher})`, "class");
   };
 
-  const toggleAiService = (id: string) => {
-    setAiServices((prev) =>
-      prev.map((s) => {
-        if (s.id === id) {
-          const nextActive = !s.active;
-          setToast(`${s.name}: ${nextActive ? "Đã bật hoạt động" : "Đã tạm dừng khẩn cấp"}`);
-          logAction(nextActive ? "Bật dịch vụ AI" : "Tắt khẩn cấp dịch vụ AI", s.name, "ai");
-          return { ...s, active: nextActive };
-        }
-        return s;
-      })
+  const handleSaveClassEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClass) return;
+    setClassesList((prev) =>
+      prev.map((c) => (c.id === editingClass.id ? editingClass : c))
     );
+    await patchAdminClass(editingClass.id, {
+      teacher: editingClass.teacher,
+      students: editingClass.students,
+      room: editingClass.room,
+      dockerImage: editingClass.dockerImage,
+      health: editingClass.health,
+    });
+    notify(`Đã cập nhật điều phối lớp ${editingClass.code}.`);
+    logAction(
+      "Điều phối giảng viên & runner",
+      `${editingClass.code} → ${editingClass.teacher}`,
+      "class"
+    );
+    setEditingClass(null);
   };
 
-  const handlePurgeCache = () => {
-    setToast("Đã dọn dẹp 1.4GB Token Cache • Tiết kiệm ~$18.20 chi phí lưu trữ");
-    logAction("Dọn dẹp Token Cache hệ thống", "1.4GB Cache Memory", "ai");
+  const handleRevokeJwtSession = async (sessionId: string) => {
+    const target = jwtSessions.find((s) => s.id === sessionId);
+    if (!target) return;
+    setJwtSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    await revokeJwtSessionApi(sessionId);
+    notify(`Đã thu hồi JWT & ngắt phiên của ${target.userName}.`);
+    logAction("Thu hồi phiên JWT", `${target.userName} (${target.device})`, "security");
   };
 
-  const handleBroadcast = (e: React.FormEvent) => {
+  const handleRevokeAllUntrusted = async () => {
+    const count = jwtSessions.filter((s) => s.isUntrusted).length;
+    if (count === 0) {
+      notify("Không có thiết bị lạ hoặc phiên trùng IP nào cần thu hồi.");
+      return;
+    }
+    setJwtSessions((prev) => prev.filter((s) => !s.isUntrusted));
+    await revokeUntrustedSessionsApi();
+    notify(`Đã cưỡng chế đăng xuất ${count} thiết bị lạ / phiên nghi vấn.`);
+    logAction("Thu hồi toàn bộ phiên bất thường", `${count} phiên JWT bị hủy`, "security");
+  };
+
+  const handleConfirmResetDemo = async () => {
+    setIsResettingDemo(true);
+    const res = await triggerAdminResetDemo();
+    const refreshed = await fetchAdminGovernanceBundle();
+    if (refreshed) {
+      setUsers(refreshed.users);
+      setClassesList(refreshed.classes);
+      setAiServices(refreshed.aiServices);
+      setJwtSessions(refreshed.jwtSessions);
+      setPendingApprovals(refreshed.pendingApprovals);
+      setAuditLogs(refreshed.auditLogs);
+      setActiveBroadcast(refreshed.broadcast);
+    } else {
+      setPendingApprovals(INITIAL_PENDING_APPROVALS);
+      setJwtSessions(INITIAL_JWT_SESSIONS);
+      setClassesList(INITIAL_ADMIN_CLASSES);
+      setAiServices(INITIAL_ADMIN_SERVICES);
+      setUsers(FALLBACK_ADMIN_USERS);
+    }
+    setConfirmResetOpen(false);
+    setIsResettingDemo(false);
+    notify(res.message);
+    logAction("Khôi phục dữ liệu Demo Hệ thống", "POST /v1/admin/reset-demo", "security");
+  };
+
+  const handleBroadcastSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastTitle.trim() || !broadcastMessage.trim()) return;
-    setActiveBroadcast(`${broadcastTitle}: ${broadcastMessage}`);
+    setActiveBroadcast(`${broadcastTitle.trim()}: ${broadcastMessage.trim()}`);
     setIsBroadcastModalOpen(false);
-    setToast(`Đã phát thông báo khẩn cấp tới toàn thể học viên & giảng viên`);
-    logAction("Phát thông báo toàn hệ thống", broadcastTitle, "security");
+    await publishBroadcastApi(broadcastTitle.trim(), broadcastMessage.trim());
+    notify("Đã phát thông báo tới toàn bộ Học viên & Giảng viên.");
+    logAction("Phát thông báo toàn trường", broadcastTitle.trim(), "security");
     setBroadcastTitle("");
     setBroadcastMessage("");
   };
 
-  const exportUsersCSV = () => {
-    const headers = "Họ tên,Vai trò,Email,Trạng thái,Thiết bị,Hoạt động gần nhất\n";
-    const rows = users.map((u) => `"${u.name}","${u.role}","${u.email}","${statusLabel[u.status]}","${u.device}","${u.lastActive}"`).join("\n");
-    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
+  const exportCsv = (
+    filename: string,
+    headerLine: string,
+    bodyLines: string[],
+    logTitle: string
+  ) => {
+    const blob = new Blob([`${headerLine}\n${bodyLines.join("\n")}`], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `codemind_users_${Date.now()}.csv`);
+    link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setToast("Đã xuất danh sách người dùng thành công (CSV)");
-    logAction("Xuất danh sách người dùng", `${users.length} tài khoản CSV`, "user");
+    URL.revokeObjectURL(url);
+    notify(`Đã xuất tệp ${filename}.`);
+    logAction(logTitle, `${bodyLines.length} bản ghi CSV`, "user");
   };
 
-  // 🌟 Chuyển tab: Chỉ animate nội dung tab được chọn, Header và Tab bar ĐỨNG YÊN HOÀN TOÀN!
-  useLayoutEffect(() => {
-    if (!contentRef.current) return;
-    const cards = contentRef.current.querySelectorAll(".marlo-card");
-    if (cards.length > 0) {
-      animateMarloCards(cards, { stagger: 0.05, y: 20 });
-    }
-    const rows = contentRef.current.querySelectorAll(".marlo-row, tr");
-    if (rows.length > 0) {
-      animateMarloRows(rows, { y: 12, stagger: 0.02, delay: 0.15 });
-    }
-  }, [tab, userRoleFilter, classHealthFilter]);
-
   return (
-    <div ref={adminRef} className="min-h-full max-w-[1720px] mx-auto p-4 sm:p-6 space-y-4 lg:space-y-5">
-      {/* Broadcast Banner (nếu có thông báo toàn hệ thống) */}
+    <div
+      ref={adminRef}
+      className="min-h-full max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-7 pb-20 relative flex flex-col select-none"
+    >
+      {/* Floating Marlo Toast */}
+      {toastMsg && <MarloToast message={toastMsg} showUndo={false} />}
+
+      {/* Optional System Broadcast Banner */}
       {activeBroadcast && (
-        <div className="marlo-card rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50/95 dark:bg-amber-950/70 p-3.5 shadow-sm flex items-center justify-between gap-3 text-amber-900 dark:text-amber-200 text-xs font-semibold animate-pulse">
+        <div className="marlo-card mb-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center justify-between gap-3 text-xs font-semibold text-[#8F5404] dark:text-amber-300">
           <div className="flex items-center gap-2 min-w-0">
-            <Radio size={16} className="text-amber-600 shrink-0" />
-            <span className="truncate">📢 THÔNG BÁO HỆ THỐNG: {activeBroadcast}</span>
+            <Radio size={15} className="text-[#EE8420] shrink-0" />
+            <span className="truncate">THÔNG BÁO HỆ THỐNG: {activeBroadcast}</span>
           </div>
           <button
-            onClick={() => setActiveBroadcast(null)}
-            className="text-amber-700 hover:text-amber-900 dark:hover:text-amber-100 p-1 shrink-0 cursor-pointer"
+            type="button"
+            onClick={() => {
+              setActiveBroadcast(null);
+              void clearBroadcastApi();
+            }}
+            className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 shrink-0 cursor-pointer"
             title="Đóng thông báo"
           >
-            <X size={15} />
+            <X size={14} />
           </button>
         </div>
       )}
 
-      {/* 🏷️ CARD 1: STANDALONE FLOATING MODAL HEADER */}
-      <header className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-            CODE-MIND Platform • Core Governance
+      {/* ─── CARD 1: UNIFIED ADMIN GOVERNANCE HEADER ────────────────────────── */}
+      <header className="marlo-card relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              CodeMind Platform · Core Governance
+            </span>
+            <span className="text-slate-300 dark:text-slate-700">·</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              99.98% SLA · ${stats.totalEstimatedCost.toFixed(0)} / ${budgetCap}
+            </span>
           </div>
-          <MarloTitle text="Trung tâm Điều hành & Quản trị Toàn diện" className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white" />
-          <p className="mt-1 text-xs sm:text-sm text-[#62656b] dark:text-[#a0a3a9]">
-            Điều phối học viên, giảng viên, lớp học, kiểm soát hạn mức token AI và giám sát an ninh phiên đăng nhập.
+          <MarloTitle
+            text="Trung tâm Điều hành & Quản trị Hệ thống"
+            className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 dark:text-white leading-tight"
+          />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Điều phối tài khoản RBAC, 6 học phần CNTT, hạn mức AI Socratic, cụm Docker Sandbox và giám sát phiên JWT toàn trường.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
-          <div className="hidden lg:flex items-center gap-2 rounded-full border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 px-3.5 py-2 text-xs font-mono text-slate-600 dark:text-slate-300 shadow-xs shrink-0 whitespace-nowrap">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold">99.98% SLA</span>
-            <span className="text-slate-300 dark:text-slate-600">•</span>
-            <span>Ngân sách AI: ${totalEstimatedCost.toFixed(1)} / ${budgetCap}</span>
-          </div>
-
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
-            onClick={() => setIsBroadcastModalOpen(true)}
-            className="magnetic inline-flex items-center gap-1.5 rounded-full border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/40 px-3.5 py-2 text-xs font-bold text-amber-700 dark:text-amber-300 shadow-2xs hover:bg-amber-100 transition cursor-pointer"
+            type="button"
+            onClick={() => onNavigateSection?.("instructor")}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 transition cursor-pointer shadow-2xs"
           >
-            <Radio size={14} className="text-amber-600 shrink-0 animate-pulse" />
-            <span>Phát thông báo</span>
+            <GraduationCap size={14} className="text-slate-500 dark:text-slate-400" />
+            <span>Giao diện Giảng viên</span>
           </button>
 
-          <div className="flex items-center gap-2 rounded-full border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs shrink-0 whitespace-nowrap">
-            <Shield size={14} className="text-blue-600 shrink-0" />
-            <span>{toast}</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateSection?.("defense-room")}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 transition cursor-pointer shadow-2xs"
+          >
+            <ShieldCheck size={14} className="text-[#EE8420]" />
+            <span>Phòng Phản biện 3D</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsBroadcastModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] dark:hover:bg-white px-3.5 py-2 text-xs font-bold transition cursor-pointer shadow-xs"
+          >
+            <Radio size={14} />
+            <span>Phát thông báo</span>
+          </button>
         </div>
       </header>
 
-      {/* ── CARD 2: STANDALONE FLOATING TAB BAR WITH LIQUID RUBBERBAND PILL ── */}
-      <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-1.5 sm:p-2 shadow-xs flex items-center justify-between flex-wrap gap-2">
-        <MarloSegmentedControl
+      {/* Seamless Connector 1 */}
+      <LiquidCardConnector />
+
+      {/* ─── CARD 2: FLOATING SEGMENTED TAB BAR (TWO-WAY SYNCED WITH SIDEBAR) ── */}
+      <div className="relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-2 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <MarloSegmentedControl<AdminTab>
           value={tab}
-          onChange={(val) => setTab(val as Tab)}
+          onChange={handleSelectTab}
           options={[
-            { id: "overview", label: "Tổng quan", icon: <LayoutDashboard size={15} /> },
-            { id: "users", label: `Người dùng (${users.length})`, icon: <Users size={15} /> },
-            { id: "classes", label: `Lớp học (${classesList.length})`, icon: <GraduationCap size={15} /> },
-            { id: "ai", label: "AI & Token", icon: <Sparkles size={15} className="text-purple-500" /> },
-            { id: "sessions", label: "Phiên đăng nhập", icon: <Shield size={15} /> },
-            { id: "audit", label: "Nhật ký kiểm toán", icon: <Activity size={15} /> },
+            { id: "overview", label: "Tổng quan", icon: <Activity size={14} /> },
+            { id: "users", label: "Người dùng & RBAC", icon: <Users size={14} />, badge: users.length },
+            { id: "classes", label: "Học phần & Sandbox", icon: <GraduationCap size={14} />, badge: classesList.length },
+            { id: "ai", label: "AI & Docker Quota", icon: <Bot size={14} /> },
+            { id: "sessions", label: "An ninh & Phiên JWT", icon: <Shield size={14} />, badge: jwtSessions.length },
+            { id: "audit", label: "Nhật ký Kiểm toán", icon: <History size={14} />, badge: auditLogs.length },
           ]}
-          tone="dark"
         />
-        <div className="hidden lg:flex items-center gap-2 px-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Hệ thống giám sát SLA hoạt động bình thường</span>
+
+        <div className="hidden xl:flex items-center gap-2 px-3 text-xs font-mono text-slate-500 dark:text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          <span>{stats.sandboxReadyCount}/{classesList.length} Sandbox · {stats.untrustedSessions} Phiên cần chú ý</span>
         </div>
       </div>
 
-      <div ref={contentRef} key={tab} className="space-y-4 lg:space-y-5">
-      {/* ─── TAB 1: OVERVIEW (TỔNG QUAN) ──────────────────────────────────── */}
-      {tab === "overview" && (
-        <div key="admin-overview" className="space-y-4 lg:space-y-5">
-          {/* Quick Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              ["Học viên hoạt động", "1,247", `${activeUsers} tài khoản online`, <Users size={18} />, "text-blue-700 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-300"],
-              ["Chờ duyệt lớp", pending.length.toString(), "yêu cầu gia nhập lớp mới", <Clock size={18} />, "text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300"],
-              ["Lớp học đang vận hành", classesList.length.toString(), "lớp đang đào tạo chuẩn", <GraduationCap size={18} />, "text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-300"],
-              ["Cảnh báo vi phạm", suspendedUsers.toString(), "tài khoản đang tạm khóa", <AlertTriangle size={18} />, "text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300"],
-            ].map(([label, value, delta, icon, tone]) => (
-              <div key={label as string} className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition">
-                <div className={`mb-3.5 flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>{icon}</div>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{value}</div>
-                <div className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</div>
-                <div className="mt-1.5 text-xs text-slate-400 font-medium">{delta}</div>
-              </div>
-            ))}
-          </div>
+      {/* Seamless Connector 2 */}
+      <LiquidCardConnector />
 
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-4">
-            {/* Pending Approvals */}
-            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Yêu cầu xét duyệt tham gia lớp</h2>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Kiểm tra thông tin sinh viên và điều phối xếp lớp học tự động.</p>
-                </div>
-                <span className="rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-300">
-                  {pending.length} đang chờ
-                </span>
+      {/* ─── TAB CONTENT BODY ───────────────────────────────────────────────── */}
+      <div ref={contentRef} key={tab} className="relative z-10 space-y-5">
+        {/* ====================================================================
+            TAB 1: ADMIN OVERVIEW (MIRRORS StudentDashboard & InstructorPanel)
+           ==================================================================== */}
+        {tab === "overview" && (
+          <div className="animate-screen-enter space-y-5">
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+              {/* Left: MarloActivityRing */}
+              <div className="xl:col-span-5">
+                <MarloActivityRing
+                  title="Chỉ số Vận hành Học viện & Hạ tầng"
+                  subtitle="Tổng hợp tiến độ 6 học phần, Docker Runners & Phản biện AI 3D"
+                  actionText="Mở Lớp & Sandbox"
+                  onAction={() => handleSelectTab("classes")}
+                  centerValue={stats.avgClassProgress}
+                  centerLabel="đạt tiến độ"
+                  segments={[
+                    { id: "pending", label: "Hồ sơ chờ duyệt", value: Math.max(8, pendingApprovals.length * 4), count: pendingApprovals.length, color: "#cbd5e1" },
+                    { id: "defense", label: "Lớp bật Phản biện 3D", value: stats.aiDefenseCount * 5, count: stats.aiDefenseCount, color: "#64748b" },
+                    { id: "sandbox", label: "Sandbox CI/CD Active", value: stats.sandboxReadyCount * 6, count: stats.sandboxReadyCount, color: "#f97316" },
+                    { id: "prog", label: "Tiến độ đào tạo TB", value: stats.avgClassProgress, count: stats.totalStudentsEnrolled, color: "#1e293b" },
+                  ]}
+                  className="marlo-card h-full rounded-[24px] dark:bg-[#14161F]"
+                />
               </div>
 
-              {pending.length === 0 ? (
-                <div className="text-center py-10 text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                  Tất cả yêu cầu đã được duyệt hoàn tất!
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pending.map((item, index) => (
-                    <div key={item.id} className="marlo-row flex items-center gap-3 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 p-3.5 hover:border-slate-300 transition">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/60 font-bold text-blue-700 dark:text-blue-300 text-sm shrink-0">
-                        {item.name[0]}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold text-slate-900 dark:text-white truncate">{item.name}</div>
-                        <div className="text-xs text-slate-500 font-mono">{item.id} • {item.className}</div>
-                        <div className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">● {item.risk}</div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => resolvePending(index, "approved")}
-                          className="magnetic rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs cursor-pointer transition"
-                        >
-                          Duyệt
-                        </button>
-                        <button
-                          onClick={() => resolvePending(index, "rejected")}
-                          className="magnetic rounded-xl border border-red-200 dark:border-red-900/40 bg-white dark:bg-slate-800 hover:bg-red-50 text-red-600 dark:text-red-400 px-3 py-1.5 text-xs font-bold shadow-xs cursor-pointer transition"
-                        >
-                          Từ chối
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* AI Cost Snapshot */}
-            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={17} className="text-violet-600 shrink-0" />
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">AI usage snapshot</h2>
-                </div>
-                <button
-                  onClick={() => handleSelectTab("ai")}
-                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                >
-                  Xem chi tiết →
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {aiServices.map((item) => (
-                  <div key={item.name} className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{item.name}</span>
-                      <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{item.value}</span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                      <div className={`h-full rounded-full ${item.tone}`} style={{ width: `${item.percent}%` }} />
-                    </div>
-                    <div className="mt-1.5 flex justify-between text-[11px] text-slate-400">
-                      <span>{item.usage}</span>
-                      <span>{item.percent}% quota</span>
-                    </div>
+              {/* Right: Where the platform stands */}
+              <div className="xl:col-span-7 marlo-card rounded-[24px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+                      Trạng thái Hệ thống & Quản trị Học vụ
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Nhấp từng dòng để điều hướng nhanh tới module quản trị tương ứng.
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                  <div className="flex items-center gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-[3px] bg-[#14161a] dark:bg-white" />
+                      Hoạt động tốt
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-[3px] bg-[#EE8420]" />
+                      Đang xử lý / Cảnh báo
+                    </span>
+                  </div>
+                </div>
 
-      {/* ─── TAB 2: USERS (QUẢN LÝ NGƯỜI DÙNG) ───────────────────────────── */}
-      {tab === "users" && (
-        <div key="admin-users" className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs overflow-hidden">
-          {/* Action Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2 flex-1 max-w-md">
-              <div className="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2 text-sm shadow-2xs">
-                <Search size={15} className="text-slate-400 shrink-0" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Tìm theo tên, email hoặc vai trò..."
-                  className="flex-1 bg-transparent text-xs sm:text-sm outline-none text-slate-800 dark:text-slate-200"
+                <div className="space-y-2.5">
+                  {[
+                    {
+                      id: "adm-row-classes",
+                      icon: <GraduationCap size={15} className="text-slate-500" />,
+                      label: "6 Học phần & Cụm Sandbox",
+                      primaryMetric: stats.sandboxReadyCount,
+                      totalMetric: classesList.length,
+                      warnMetric: classesList.filter((c) => c.health === "Cần theo dõi").length,
+                      onClick: () => handleSelectTab("classes"),
+                    },
+                    {
+                      id: "adm-row-ai",
+                      icon: <Bot size={15} className="text-slate-500" />,
+                      label: "Cụm AI Socratic & Docker Runners",
+                      primaryMetric: aiServices.filter((s) => s.active).length,
+                      totalMetric: aiServices.length,
+                      warnMetric: aiServices.filter((s) => !s.active).length,
+                      onClick: () => handleSelectTab("ai"),
+                    },
+                    {
+                      id: "adm-row-rbac",
+                      icon: <ShieldCheck size={15} className="text-slate-500" />,
+                      label: "Tài khoản RBAC & Phiên bảo mật",
+                      primaryMetric: stats.activeCount,
+                      totalMetric: users.length,
+                      warnMetric: stats.suspendedCount + stats.untrustedSessions,
+                      onClick: () => handleSelectTab("users"),
+                    },
+                  ].map((row) => {
+                    const tot = Math.max(1, row.totalMetric);
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={row.onClick}
+                        className="marlo-row w-full flex items-center justify-between gap-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 px-4 py-3 text-left transition cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-[205px]">
+                          {row.icon}
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            {row.label}
+                          </span>
+                        </div>
+                        <div className="flex-1 h-2.5 rounded-full bg-slate-200/80 dark:bg-slate-800 overflow-hidden flex">
+                          <div
+                            className="h-full bg-[#14161a] dark:bg-white"
+                            style={{ width: `${(row.primaryMetric / tot) * 100}%` }}
+                          />
+                          {row.warnMetric > 0 && (
+                            <div
+                              className="h-full bg-[#EE8420]"
+                              style={{ width: `${Math.min(35, (row.warnMetric / tot) * 100)}%` }}
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 text-xs font-mono">
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {row.primaryMetric}/{row.totalMetric}
+                          </span>
+                          <ChevronRight
+                            size={14}
+                            className="text-slate-400 group-hover:translate-x-0.5 transition-transform"
+                          />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Budget Capacity Bar */}
+                <MarloCapacityBar
+                  title="Phân bổ Ngân sách AI & Compute Tháng hiện hành"
+                  subtitle={`Tổng chi ước tính $${stats.totalEstimatedCost.toFixed(1)} trên hạn mức $${budgetCap}.0`}
+                  totalLabel="USD / tháng"
+                  className="bg-slate-50/40 dark:bg-slate-900/40 border-slate-200/70"
+                  items={aiServices.map((s) => ({
+                    id: s.id,
+                    label: s.name.split(" & ")[0],
+                    count: Math.round(s.estimatedCost),
+                    color: s.barColor,
+                  }))}
                 />
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Role filter buttons */}
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
-                <button
-                  onClick={() => setUserRoleFilter("all")}
-                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${userRoleFilter === "all" ? "bg-white dark:bg-slate-900 shadow-2xs text-blue-600 font-bold" : "text-slate-500"}`}
-                >
-                  Tất cả ({users.length})
-                </button>
-                <button
-                  onClick={() => setUserRoleFilter("Giảng viên")}
-                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${userRoleFilter === "Giảng viên" ? "bg-white dark:bg-slate-900 shadow-2xs text-blue-600 font-bold" : "text-slate-500"}`}
-                >
-                  Giảng viên
-                </button>
-                <button
-                  onClick={() => setUserRoleFilter("Học viên")}
-                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${userRoleFilter === "Học viên" ? "bg-white dark:bg-slate-900 shadow-2xs text-blue-600 font-bold" : "text-slate-500"}`}
-                >
-                  Học viên
-                </button>
-                <button
-                  onClick={() => setUserRoleFilter("suspended")}
-                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${userRoleFilter === "suspended" ? "bg-white dark:bg-slate-900 shadow-2xs text-rose-600 font-bold" : "text-slate-500"}`}
-                >
-                  Bị khóa
-                </button>
-              </div>
+            {/* Bottom Grid: Pending RBAC / Class Approvals + Docker & Capstone Cluster */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Left: Pending Approvals */}
+              <div className="marlo-card rounded-[24px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Clock size={15} className="text-[#EE8420]" />
+                      Xét duyệt Ghi danh & Cấp quyền RBAC
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Phê duyệt sinh viên gia nhập lớp hoặc cấp quyền Giảng viên mới.
+                    </p>
+                  </div>
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-200">
+                    {pendingApprovals.length} chờ duyệt
+                  </span>
+                </div>
 
-              <button
-                onClick={exportUsersCSV}
-                className="magnetic inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 px-3.5 py-2 text-xs font-bold shadow-2xs cursor-pointer transition"
-                title="Tải file CSV danh sách người dùng"
-              >
-                <Download size={14} />
-                <span>Xuất CSV</span>
-              </button>
-
-              <button
-                onClick={() => setIsAddUserModalOpen(true)}
-                className="magnetic inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-xs font-bold shadow-xs cursor-pointer transition"
-              >
-                <UserPlus size={15} />
-                <span>Thêm tài khoản</span>
-              </button>
-            </div>
-          </div>
-
-          {/* User Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead className="bg-slate-50/80 dark:bg-slate-950/40 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                <tr>
-                  {["Họ tên", "Vai trò", "Email", "Trạng thái", "Thiết bị", "Thao tác"].map((head) => (
-                    <th key={head} className="px-4 py-3.5">{head}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-10 text-xs text-slate-400">
-                      Không tìm thấy người dùng phù hợp với điều kiện tìm kiếm.
-                    </td>
-                  </tr>
+                {pendingApprovals.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-6 text-center text-xs text-slate-400">
+                    Đã xử lý toàn bộ hồ sơ chờ duyệt!
+                  </div>
                 ) : (
-                  filteredUsers.map((user) => (
-                    <tr key={user.email} className="marlo-row text-xs sm:text-sm hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-slate-900 dark:text-white">{user.name}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{user.lastActive}</div>
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">
-                        <span className={`px-2 py-0.5 rounded-md text-xs ${user.role === "Giảng viên" ? "bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 font-bold" : "text-slate-600 dark:text-slate-300"}`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500">{user.email}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${statusStyle[user.status]}`}>
-                          {user.status === "active" ? <CheckCircle size={12} /> : user.status === "pending" ? <Clock size={12} /> : <XCircle size={12} />}
-                          {statusLabel[user.status]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 font-mono text-xs">{user.device}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
+                  <div className="space-y-2.5">
+                    {pendingApprovals.map((item) => (
+                      <div
+                        key={item.id}
+                        className="marlo-row flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3.5"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              {item.name}
+                            </span>
+                            <span className="text-[10.5px] font-mono text-slate-400">
+                              {item.studentCode}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                              {item.requestedRole}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                            {item.classCode} — {item.className}
+                          </div>
+                          <div className="text-[10.5px] text-[#8F5404] dark:text-amber-400 mt-0.5 font-medium">
+                            ● {item.riskNote}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <button
-                            onClick={() => toggleUserLock(user.email)}
-                            className="magnetic inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-blue-300 hover:text-blue-700 cursor-pointer shadow-2xs"
-                            title={user.status === "suspended" ? "Mở khóa tài khoản" : "Khóa tài khoản"}
+                            type="button"
+                            onClick={() => handleResolvePending(item, "approved")}
+                            className="rounded-lg bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] px-3 py-1.5 text-[11px] font-bold transition cursor-pointer"
                           >
-                            {user.status === "suspended" ? <Unlock size={12} /> : <Lock size={12} />}
-                            {user.status === "suspended" ? "Mở khóa" : "Khóa"}
+                            Duyệt
                           </button>
                           <button
-                            onClick={() => setToast(`Đã cấp mã đặt lại mật khẩu cho ${user.name}`)}
-                            className="magnetic inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-amber-600 cursor-pointer shadow-2xs"
-                            title="Reset mật khẩu"
+                            type="button"
+                            onClick={() => handleResolvePending(item, "rejected")}
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600 dark:text-rose-400 px-3 py-1.5 text-[11px] font-bold transition cursor-pointer"
                           >
-                            <KeyRound size={12} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(user.email)}
-                            className="magnetic inline-flex items-center gap-1 rounded-lg border border-rose-200 dark:border-rose-900/40 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer shadow-2xs"
-                            title="Xóa tài khoản"
-                          >
-                            <Trash2 size={12} />
+                            Từ chối
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  ))
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+              </div>
 
-      {/* ─── TAB 3: CLASSES (QUẢN LÝ LỚP HỌC) ────────────────────────────── */}
-      {tab === "classes" && (
-        <div key="admin-classes" className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-4 shadow-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lọc trạng thái lớp:</span>
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
-                {(["all", "Tốt", "Ổn định", "Cần theo dõi"] as const).map((filter) => (
+              {/* Right: Docker Sandbox & Capstone Infrastructure Health */}
+              <div className="marlo-card rounded-[24px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Terminal size={15} className="text-slate-500" />
+                      Cụm Docker Sandbox & Đồ án Capstone
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Hạ tầng chấm code cô lập Seccomp (--network=none) và theo dõi 8 đồ án CNTT.
+                    </p>
+                  </div>
                   <button
-                    key={filter}
-                    onClick={() => setClassHealthFilter(filter)}
-                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${classHealthFilter === filter ? "bg-white dark:bg-slate-900 shadow-2xs text-blue-600 font-bold" : "text-slate-500"}`}
+                    type="button"
+                    onClick={() => onNavigateSection?.("projects")}
+                    className="shrink-0 whitespace-nowrap text-xs font-bold text-slate-700 dark:text-slate-200 hover:underline inline-flex items-center gap-1 cursor-pointer"
                   >
-                    {filter === "all" ? "Tất cả" : filter}
+                    <span>Xem 8 Đồ án</span>
+                    <ArrowUpRight size={13} />
                   </button>
-                ))}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                  <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 p-3">
+                    <div className="text-[10.5px] font-bold uppercase text-slate-400">
+                      Runner Containers
+                    </div>
+                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-0.5">
+                      12 Nodes
+                    </div>
+                    <div className="text-[10.5px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                      Seccomp Active
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 p-3">
+                    <div className="text-[10.5px] font-bold uppercase text-slate-400">
+                      Lượt chấm CI/CD
+                    </div>
+                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-0.5">
+                      2,890
+                    </div>
+                    <div className="text-[10.5px] text-slate-500">Trung bình 41ms/test</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 p-3 col-span-2 sm:col-span-1">
+                    <div className="text-[10.5px] font-bold uppercase text-slate-400">
+                      Đồ án Capstone
+                    </div>
+                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-0.5">
+                      {CNTT_PROJECTS.length} Dự án
+                    </div>
+                    <div className="text-[10.5px] text-slate-500">
+                      {CNTT_PROJECTS.filter((p) => p.status === "delivered").length} đã nghiệm thu
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {CNTT_PROJECTS.slice(0, 2).map((prj) => {
+                    const pct = Math.round(prj.progress * 100);
+                    return (
+                      <div
+                        key={prj.id}
+                        className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3 space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-bold text-slate-900 dark:text-white truncate">
+                            {prj.name}
+                          </span>
+                          <span className="font-mono font-bold text-slate-700 dark:text-slate-200 shrink-0">
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[#14161a] dark:bg-white"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-
-            <button
-              onClick={() => setIsAddClassModalOpen(true)}
-              className="magnetic inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-xs font-bold shadow-xs cursor-pointer transition shrink-0"
-            >
-              <Plus size={15} />
-              <span>Tạo lớp học mới</span>
-            </button>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredClasses.map((item) => (
-              <div key={item.code} className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between">
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-900">
-                      {item.code}
-                    </span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold border ${item.health === "Tốt" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : item.health === "Cần theo dõi" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
-                      {item.health}
-                    </span>
-                  </div>
-
-                  <h3 className="mt-3 text-base font-bold text-slate-900 dark:text-white leading-snug">{item.name}</h3>
-                  <div className="mt-1 text-xs text-slate-500">Giảng viên: <span className="font-semibold text-slate-700 dark:text-slate-300">{item.teacher}</span></div>
-                  {item.room && <div className="text-xs text-slate-400 mt-0.5">Phòng: {item.room}</div>}
-
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-mono">
-                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5 border border-slate-100 dark:border-slate-800">
-                      <div className="font-bold text-slate-900 dark:text-white text-base">{item.students}</div>
-                      <div className="text-[11px] text-slate-400 font-sans">Học viên chính thức</div>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5 border border-slate-100 dark:border-slate-800">
-                      <div className="font-bold text-amber-600 text-base">{item.review}</div>
-                      <div className="text-[11px] text-slate-400 font-sans">Bài tập chờ chấm</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <div className="mb-1 flex justify-between text-xs font-semibold text-slate-500">
-                      <span>Tiến độ chương trình</span>
-                      <span>{item.progress}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                      <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${item.progress}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-400">Kỳ học: Spring 2026</span>
-                  <button
-                    onClick={() => setToast(`Đã mở danh sách quản lý chi tiết lớp ${item.code}`)}
-                    className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-                  >
-                    Xem chi tiết →
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ─── TAB 4: AI USAGE & TOKEN BUDGET ──────────────────────────────── */}
-      {tab === "ai" && (
-        <div key="admin-ai" className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4">
-          <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">AI Quota, Model Metrics & Cost Control</h2>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Giám sát số lượng token, chi phí ước tính và điều chỉnh giới hạn ngân sách hàng tháng.</p>
+        {/* ====================================================================
+            TAB 2: RBAC USER MANAGEMENT (SYNCED WITH /v1/admin/users)
+           ==================================================================== */}
+        {tab === "users" && (
+          <div className="animate-screen-enter marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs overflow-hidden">
+            {/* Toolbar */}
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3.5 py-2">
+                <Search size={15} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Tìm theo tên, mã số, email hoặc vai trò..."
+                  className="flex-1 bg-transparent text-xs outline-none text-slate-900 dark:text-white"
+                />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <MarloSegmentedControl<"all" | "Quản trị viên" | "Giảng viên" | "Học viên" | "suspended">
+                  size="sm"
+                  value={userRoleFilter}
+                  onChange={setUserRoleFilter}
+                  options={[
+                    { id: "all", label: `Tất cả (${users.length})` },
+                    { id: "Quản trị viên", label: "Admin" },
+                    { id: "Giảng viên", label: "Giảng viên" },
+                    { id: "Học viên", label: "Học viên" },
+                    { id: "suspended", label: "Bị khóa" },
+                  ]}
+                />
+
                 <button
-                  onClick={handlePurgeCache}
-                  className="magnetic inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 px-3.5 py-2 text-xs font-bold shadow-2xs cursor-pointer transition"
-                  title="Dọn dẹp cache token lặp lại"
+                  type="button"
+                  onClick={() => void loadBackendUsers(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
                 >
-                  <RotateCcw size={14} />
-                  <span>Xóa Token Cache</span>
+                  <RefreshCw size={13} className={usersLoading ? "animate-spin" : ""} />
+                  <span>Đồng bộ API</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    exportCsv(
+                      `codemind_rbac_users_${Date.now()}.csv`,
+                      "HoTen,MaSo,VaiTro,Email,TrangThai,ThietBi",
+                      users.map(
+                        (u) =>
+                          `"${u.name}","${u.code}","${u.role}","${u.email}","${statusLabel[u.status]}","${u.device}"`
+                      ),
+                      "Xuất danh sách RBAC CSV"
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Xuất CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddUserModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] px-3.5 py-2 text-xs font-bold cursor-pointer"
+                >
+                  <UserPlus size={14} />
+                  <span>Thêm tài khoản</span>
                 </button>
               </div>
             </div>
 
-            {/* Metric Totals */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                ["Tổng Request", totalRequests.toLocaleString(), "lượt gọi API"],
-                ["Input Tokens", totalInputTokens.toLocaleString(), "tokens bối cảnh"],
-                ["Output Tokens", totalOutputTokens.toLocaleString(), "tokens sinh ra"],
-                ["Chi phí tháng", `$${totalEstimatedCost.toFixed(2)}`, `Ngân sách: $${budgetCap}`],
-              ].map(([label, value, desc]) => (
-                <div key={label} className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 shadow-2xs">
-                  <div className="text-[11px] font-bold text-slate-400 uppercase">{label}</div>
-                  <div className="mt-1 text-lg font-bold text-slate-900 dark:text-white font-mono">{value}</div>
-                  <div className="mt-0.5 text-[11px] text-slate-400">{desc}</div>
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                <thead className="bg-slate-50/70 dark:bg-slate-900/70 border-b border-slate-100 dark:border-slate-800 text-[10.5px] font-bold uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Tài khoản</th>
+                    <th className="px-4 py-3">Vai trò RBAC</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Trạng thái</th>
+                    <th className="px-4 py-3">Thiết bị</th>
+                    <th className="px-4 py-3">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-10 text-center text-xs text-slate-400">
+                        Không có tài khoản nào khớp bộ lọc hiện tại.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <tr
+                        key={user.id}
+                        className="marlo-row text-xs hover:bg-slate-50/70 dark:hover:bg-slate-900/50 transition"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900 dark:text-white">{user.name}</div>
+                          <div className="text-[10.5px] font-mono text-slate-400">
+                            {user.code} · {user.lastActive}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            aria-label={`Vai trò của ${user.name}`}
+                            value={user.role}
+                            onChange={(e) =>
+                              handleChangeUserRole(
+                                user.id,
+                                e.target.value as AdminUserRecord["role"]
+                              )
+                            }
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
+                          >
+                            <option value="Học viên">Học viên</option>
+                            <option value="Giảng viên">Giảng viên</option>
+                            <option value="Quản trị viên">Quản trị viên</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">
+                          {user.email}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
+                              statusPillStyle[user.status]
+                            }`}
+                          >
+                            {user.status === "active" ? (
+                              <CheckCircle2 size={11} />
+                            ) : user.status === "pending" ? (
+                              <Clock size={11} />
+                            ) : (
+                              <XCircle size={11} />
+                            )}
+                            {statusLabel[user.status]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
+                          {user.device}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleUserLock(user.id)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                            >
+                              {user.status === "suspended" ? <Unlock size={12} /> : <Lock size={12} />}
+                              <span>{user.status === "suspended" ? "Mở" : "Khóa"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                notify(`Đã gửi liên kết đặt lại mật khẩu tới ${user.email}.`);
+                                logAction("Cấp reset mật khẩu", user.email, "user");
+                              }}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5 text-slate-500 hover:text-slate-900 cursor-pointer"
+                              title="Reset mật khẩu"
+                            >
+                              <KeyRound size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5 text-rose-500 hover:bg-rose-50 cursor-pointer"
+                              title="Xóa tài khoản"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================================
+            TAB 3: 6 CNTT COURSES, INSTRUCTOR ASSIGNMENT & SANDBOX/3D TOGGLES
+           ==================================================================== */}
+        {tab === "classes" && (
+          <div className="animate-screen-enter space-y-4">
+            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Sức khỏe lớp:
+                </span>
+                <MarloSegmentedControl<"all" | "Tốt" | "Ổn định" | "Cần theo dõi">
+                  size="sm"
+                  value={classHealthFilter}
+                  onChange={setClassHealthFilter}
+                  options={[
+                    { id: "all", label: "Tất cả" },
+                    { id: "Tốt", label: "Tốt" },
+                    { id: "Ổn định", label: "Ổn định" },
+                    { id: "Cần theo dõi", label: "Cần theo dõi" },
+                  ]}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsAddClassModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] px-4 py-2 text-xs font-bold cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>Tạo lớp học phần</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredClasses.map((cls) => (
+                <div
+                  key={cls.id}
+                  className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs flex flex-col justify-between space-y-4"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-mono text-xs font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 rounded-lg">
+                        {cls.code}
+                      </span>
+                      <span
+                        className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold ${
+                          cls.health === "Cần theo dõi"
+                            ? "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400"
+                            : "bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
+                        }`}
+                      >
+                        {cls.health}
+                      </span>
+                    </div>
+
+                    <h3 className="mt-3 text-sm font-bold text-slate-950 dark:text-white leading-snug">
+                      {cls.name}
+                    </h3>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Giảng viên:{" "}
+                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                        {cls.teacher}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-400 mt-0.5 truncate">
+                      {cls.room} · {cls.dockerImage}
+                    </div>
+
+                    <div className="mt-3.5 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2.5">
+                        <div className="text-base font-black font-mono text-slate-900 dark:text-white">
+                          {cls.students}
+                        </div>
+                        <div className="text-[10.5px] text-slate-500">Học viên</div>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2.5">
+                        <div className="text-base font-black font-mono text-[#EE8420]">
+                          {cls.pendingDualReviews}
+                        </div>
+                        <div className="text-[10.5px] text-slate-500">Bài chờ duyệt</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3.5 space-y-1">
+                      <div className="flex justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                        <span>Tiến độ chương trình</span>
+                        <span className="font-mono font-bold">{cls.progressPct}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            cls.health === "Cần theo dõi"
+                              ? "bg-[#EE8420]"
+                              : "bg-[#14161a] dark:bg-white"
+                          }`}
+                          style={{ width: `${cls.progressPct}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Inline Sandbox & 3D AI Toggles */}
+                    <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleClassFlag(cls.id, "sandboxEnabled")}
+                        className={`flex-1 rounded-lg border px-2 py-1.5 font-bold transition cursor-pointer ${
+                          cls.sandboxEnabled
+                            ? "border-[#141619] bg-[#141619] text-white dark:border-white dark:bg-white dark:text-[#141619]"
+                            : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-400"
+                        }`}
+                      >
+                        Docker: {cls.sandboxEnabled ? "BẬT" : "TẮT"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleClassFlag(cls.id, "aiDefenseEnabled")}
+                        className={`flex-1 rounded-lg border px-2 py-1.5 font-bold transition cursor-pointer ${
+                          cls.aiDefenseEnabled
+                            ? "border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                            : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-400"
+                        }`}
+                      >
+                        AI 3D: {cls.aiDefenseEnabled ? "BẬT" : "TẮT"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-[11px] font-mono text-slate-400">Học kỳ 1 / 2026</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingClass({ ...cls })}
+                      className="text-xs font-bold text-slate-900 dark:text-white hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Chi tiết & Điều phối</span>
+                      <ArrowRight size={13} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
+          </div>
+        )}
 
-            {/* AI Services Table with Kill-switches */}
-            <div className="overflow-hidden rounded-xl border border-slate-200/90 dark:border-slate-800">
-              <table className="w-full border-collapse">
-                <thead className="bg-slate-50 dark:bg-slate-950/40 text-left text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                  <tr>
-                    {["Dịch vụ AI", "Lượt gọi", "Input Token", "Output Token", "Chi phí", "Hạn mức", "Bật/Tắt"].map((head) => (
-                      <th key={head} className="px-4 py-3">{head}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900/60">
-                  {aiServices.map((item) => (
-                    <tr key={item.id} className="marlo-row text-xs sm:text-sm hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                          <span className={`h-2 w-2 rounded-full ${item.active ? "bg-emerald-500" : "bg-rose-500"}`} />
-                          {item.name}
-                        </div>
-                        <div className="text-[11px] text-slate-400">{item.usage}</div>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs">{item.requests.toLocaleString()}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{item.inputTokens.toLocaleString()}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{item.outputTokens.toLocaleString()}</td>
-                      <td className="px-4 py-3 font-bold font-mono text-slate-900 dark:text-white">${item.estimatedCost.toFixed(2)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                            <div className={`h-full rounded-full ${item.tone}`} style={{ width: `${item.percent}%` }} />
+        {/* ====================================================================
+            TAB 4: AI GUARDRAILS, TOKEN BUDGET & DOCKER RUNNER GOVERNANCE
+           ==================================================================== */}
+        {tab === "ai" && (
+          <div className="animate-screen-enter grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <div className="lg:col-span-8 marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-950 dark:text-white">
+                    Kiểm soát Hạn mức AI Socratic & Cụm Docker Runners
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Quản trị 4 dịch vụ lõi: Gia sư Socratic, Hội đồng AI 3D, AIGC Studio và Docker Sandbox.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    notify("Đã dọn dẹp 1.4 GB Prompt & AST Cache · Giảm ~18% chi phí token.");
+                    logAction("Xóa Token Cache hệ thống", "1.4 GB Prompt Cache", "ai");
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <RotateCcw size={13} />
+                  <span>Xóa Token Cache</span>
+                </button>
+              </div>
+
+              {/* 4 KPI Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Tổng Requests", val: stats.totalRequests.toLocaleString(), sub: "lượt gọi & chấm" },
+                  { label: "Input Tokens", val: stats.totalInputTokens.toLocaleString(), sub: "bối cảnh RAG & code" },
+                  { label: "Output Tokens", val: stats.totalOutputTokens.toLocaleString(), sub: "gợi ý & transcript" },
+                  {
+                    label: "Chi phí tháng",
+                    val: `$${stats.totalEstimatedCost.toFixed(2)}`,
+                    sub: `Hạn mức $${budgetCap}`,
+                  },
+                ].map((kpi) => (
+                  <div
+                    key={kpi.label}
+                    className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 p-3"
+                  >
+                    <div className="text-[10.5px] font-bold uppercase text-slate-400">{kpi.label}</div>
+                    <div className="mt-1 text-base sm:text-lg font-black font-mono text-slate-900 dark:text-white">
+                      {kpi.val}
+                    </div>
+                    <div className="text-[10.5px] text-slate-500">{kpi.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 4 Core Engines Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
+                <table className="w-full border-collapse text-left">
+                  <thead className="bg-slate-50/70 dark:bg-slate-900/70 border-b border-slate-100 dark:border-slate-800 text-[10.5px] font-bold uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">Dịch vụ Hệ thống</th>
+                      <th className="px-4 py-3">Lưu lượng</th>
+                      <th className="px-4 py-3">Chi phí</th>
+                      <th className="px-4 py-3">Mức dùng</th>
+                      <th className="px-4 py-3">Công tắc</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {aiServices.map((svc) => (
+                      <tr key={svc.id} className="marlo-row text-xs hover:bg-slate-50/60 dark:hover:bg-slate-900/40">
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                svc.active ? "bg-emerald-500" : "bg-rose-500"
+                              }`}
+                            />
+                            <span>{svc.name}</span>
                           </div>
-                          <span className="font-mono text-xs text-slate-400">{item.percent}%</span>
+                          <div className="text-[10.5px] font-mono text-slate-400 mt-0.5">
+                            {svc.engine} · {svc.usage}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-slate-700 dark:text-slate-300">
+                          {svc.requests.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">
+                          ${svc.estimatedCost.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-16 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${svc.quotaPct}%`, backgroundColor: svc.barColor }}
+                              />
+                            </div>
+                            <span className="font-mono text-[11px] text-slate-500">{svc.quotaPct}%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextActive = !svc.active;
+                              setAiServices((prev) =>
+                                prev.map((item) =>
+                                  item.id === svc.id ? { ...item, active: nextActive } : item
+                                )
+                              );
+                              void patchAdminAiService(svc.id, { active: nextActive });
+                              notify(`${svc.name}: ${nextActive ? "Đã bật" : "Đã tạm dừng"}.`);
+                              logAction(
+                                nextActive ? "Bật dịch vụ AI/Compute" : "Tạm dừng dịch vụ AI/Compute",
+                                svc.name,
+                                "ai"
+                              );
+                            }}
+                            className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold cursor-pointer transition ${
+                              svc.active
+                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+                                : "bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400"
+                            }`}
+                          >
+                            {svc.active ? "Đang bật" : "Tạm dừng"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Right Governance Sidebar */}
+            <aside className="lg:col-span-4 space-y-4">
+              <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-900 dark:text-white">Ngân sách AI hàng tháng</span>
+                  <span className="font-mono font-black text-sm text-slate-950 dark:text-white">
+                    ${budgetCap}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={200}
+                  max={1000}
+                  step={50}
+                  value={budgetCap}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setBudgetCap(val);
+                    syncPolicies({ budgetCap: val });
+                    notify(`Đã điều chỉnh trần ngân sách AI lên $${val}/tháng.`);
+                    logAction("Cập nhật ngân sách AI", `$${val}/tháng`, "ai");
+                  }}
+                  className="w-full accent-[#141619] cursor-pointer"
+                />
+                <div className="flex justify-between text-[10.5px] font-mono text-slate-400">
+                  <span>$200</span>
+                  <span>$500 (Chuẩn)</span>
+                  <span>$1,000</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Đạt 85% (${Math.round(budgetCap * 0.85)}) sẽ tự động ưu tiên Prompt Cache cho câu hỏi Socratic.
+                </p>
+              </div>
+
+              <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-3">
+                <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-[#EE8420]" />
+                  <span>Chính sách Guardrail Toàn trường</span>
+                </div>
+                {[
+                  {
+                    label: "Chặn tuyệt đối lộ code giải sẵn (refuse_answer)",
+                    desc: "Ép AI Socratic luôn phản hồi bằng câu hỏi gợi mở",
+                    checked: guardrailRefuseAnswer,
+                    onChange: (v: boolean) => {
+                      setGuardrailRefuseAnswer(v);
+                      syncPolicies({ guardrailRefuseAnswer: v });
+                      notify(`Guardrail refuse_answer: ${v ? "Đã bật" : "Đã tắt"}.`);
+                      logAction("Cập nhật Guardrail refuse_answer", v ? "Bật" : "Tắt", "ai");
+                    },
+                  },
+                  {
+                    label: "Giới hạn 20 lượt hỏi Socratic/giờ/SV",
+                    desc: "Ngăn spam API tự động hóa",
+                    checked: rateLimit20PerHour,
+                    onChange: (v: boolean) => {
+                      setRateLimit20PerHour(v);
+                      syncPolicies({ rateLimit20PerHour: v });
+                      notify(`Rate limit 20 câu/giờ: ${v ? "Đã bật" : "Đã tắt"}.`);
+                      logAction("Cập nhật Rate limit Socratic", v ? "20/giờ" : "Không giới hạn", "ai");
+                    },
+                  },
+                  {
+                    label: "Cô lập mạng Docker (--network=none)",
+                    desc: "Chặn toàn bộ kết nối ra ngoài khi chạy bài nộp sinh viên",
+                    checked: dockerNetworkNone,
+                    onChange: (v: boolean) => {
+                      setDockerNetworkNone(v);
+                      syncPolicies({ dockerNetworkNone: v });
+                      notify(`Docker network isolation: ${v ? "Đã bật" : "Đã tắt"}.`);
+                      logAction("Cập nhật Docker Sandbox Network", v ? "--network=none" : "Bridge", "ai");
+                    },
+                  },
+                ].map((policy) => (
+                  <label
+                    key={policy.label}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3 cursor-pointer text-xs"
+                  >
+                    <div>
+                      <div className="font-bold text-slate-800 dark:text-slate-100">{policy.label}</div>
+                      <div className="text-[10.5px] text-slate-500 mt-0.5">{policy.desc}</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={policy.checked}
+                      onChange={(e) => policy.onChange(e.target.checked)}
+                      className="mt-1 accent-[#141619] cursor-pointer"
+                    />
+                  </label>
+                ))}
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {/* ====================================================================
+            TAB 5: SECURITY, JWT SESSIONS & DEMO RESET (/v1/admin/reset-demo)
+           ==================================================================== */}
+        {tab === "sessions" && (
+          <div className="animate-screen-enter grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <div className="lg:col-span-8 marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-950 dark:text-white">
+                    Phiên JWT & Thiết bị Đang Kết Nối ({jwtSessions.length})
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Phát hiện thiết bị lạ hoặc đăng nhập trùng IP trong ca thi Phản biện AI 3D.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRevokeAllUntrusted}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-500/10 hover:bg-rose-500/20 px-3.5 py-2 text-xs font-bold text-rose-700 dark:text-rose-400 cursor-pointer transition"
+                >
+                  <XCircle size={14} />
+                  <span>Đăng xuất tất cả thiết bị lạ</span>
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {jwtSessions.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-xs text-slate-400">
+                    Không còn phiên kết nối nào đang hoạt động.
+                  </div>
+                ) : (
+                  jwtSessions.map((sess) => (
+                    <div
+                      key={sess.id}
+                      className="marlo-row flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3.5"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shrink-0">
+                          {sess.device.includes("iPhone") ? <Smartphone size={17} /> : <Laptop size={17} />}
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => toggleAiService(item.id)}
-                          className={`magnetic text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer transition ${
-                            item.active
-                              ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                              : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              {sess.userName}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                              {sess.role}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-500 truncate mt-0.5">
+                            {sess.device} · {sess.ipLocation} · {sess.issuedAt}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold ${
+                            sess.isUntrusted
+                              ? "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400"
+                              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
                           }`}
                         >
-                          {item.active ? "Đang bật" : "Tạm dừng"}
+                          {sess.state}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeJwtSession(sess.id)}
+                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-rose-50 text-rose-600 dark:text-rose-400 px-2.5 py-1.5 text-[11px] font-bold cursor-pointer"
+                        >
+                          Ngắt phiên
                         </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <aside className="lg:col-span-4 space-y-4">
+              <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-3">
+                <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Shield size={16} className="text-slate-600 dark:text-slate-300" />
+                  <span>Chính sách Bảo mật RBAC & Thi cử</span>
+                </div>
+                {[
+                  {
+                    label: "Bắt buộc 2FA Giảng viên & Admin",
+                    desc: "Yêu cầu mã OTP khi đăng nhập từ IP mới",
+                    checked: require2FA,
+                    onChange: (v: boolean) => {
+                      setRequire2FA(v);
+                      syncPolicies({ require2FA: v });
+                      notify(`Bắt buộc 2FA: ${v ? "Đã bật" : "Đã tắt"}.`);
+                      logAction("Cập nhật chính sách 2FA", v ? "Bật" : "Tắt", "security");
+                    },
+                  },
+                  {
+                    label: "Chống đăng nhập đồng thời khi Phản biện 3D",
+                    desc: "Tự ngắt phiên cũ nếu phát hiện mở 2 trình duyệt",
+                    checked: blockConcurrentIP,
+                    onChange: (v: boolean) => {
+                      setBlockConcurrentIP(v);
+                      syncPolicies({ blockConcurrentIP: v });
+                      notify(`Chống đăng nhập đồng thời: ${v ? "Đã bật" : "Đã tắt"}.`);
+                      logAction("Cập nhật chống share phiên", v ? "Bật" : "Tắt", "security");
+                    },
+                  },
+                  {
+                    label: "Tự khóa sau 5 lần sai mật khẩu",
+                    desc: "Bảo vệ tài khoản trước brute-force",
+                    checked: autoLockFailedAttempts,
+                    onChange: (v: boolean) => {
+                      setAutoLockFailedAttempts(v);
+                      syncPolicies({ autoLockFailedAttempts: v });
+                      notify(`Khóa 5 lần sai mật khẩu: ${v ? "Đã bật" : "Đã tắt"}.`);
+                      logAction("Cập nhật chống brute-force", v ? "Bật" : "Tắt", "security");
+                    },
+                  },
+                ].map((item) => (
+                  <label
+                    key={item.label}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3 cursor-pointer text-xs"
+                  >
+                    <div>
+                      <div className="font-bold text-slate-800 dark:text-slate-100">{item.label}</div>
+                      <div className="text-[10.5px] text-slate-500 mt-0.5">{item.desc}</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={(e) => item.onChange(e.target.checked)}
+                      className="mt-1 accent-[#141619] cursor-pointer"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              {/* POST /v1/admin/reset-demo */}
+              <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-3">
+                <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <ServerCog size={16} className="text-[#EE8420]" />
+                  <span>Khôi phục Dữ liệu Demo Hệ thống</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Gọi API <code className="font-mono">POST /v1/admin/reset-demo</code> để đưa toàn bộ phiên học, bằng chứng và kiểm thử về trạng thái sạch chuẩn bị bảo vệ đồ án.
+                </p>
+
+                {!confirmResetOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmResetOpen(true)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 py-2.5 text-xs font-bold text-slate-900 dark:text-white transition cursor-pointer"
+                  >
+                    Reset Dữ liệu Demo...
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isResettingDemo}
+                      onClick={() => void handleConfirmResetDemo()}
+                      className="flex-1 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] py-2 text-xs font-bold cursor-pointer"
+                    >
+                      {isResettingDemo ? "Đang khôi phục..." : "Xác nhận Reset"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmResetOpen(false)}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-semibold cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                )}
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {/* ====================================================================
+            TAB 6: REAL-TIME FILTERABLE AUDIT LOGS
+           ==================================================================== */}
+        {tab === "audit" && (
+          <div className="animate-screen-enter marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3.5 py-2">
+                <Search size={15} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  placeholder="Tìm tác nhân, hành động hoặc đối tượng trong Audit Log..."
+                  className="flex-1 bg-transparent text-xs outline-none text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <MarloSegmentedControl<"all" | "user" | "ai" | "class" | "security">
+                  size="sm"
+                  value={auditTypeFilter}
+                  onChange={setAuditTypeFilter}
+                  options={[
+                    { id: "all", label: "Tất cả" },
+                    { id: "user", label: "RBAC" },
+                    { id: "ai", label: "AI & Sandbox" },
+                    { id: "class", label: "Lớp học" },
+                    { id: "security", label: "An ninh" },
+                  ]}
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    exportCsv(
+                      `codemind_audit_log_${Date.now()}.csv`,
+                      "ThoiGian,TacNhan,HanhDong,DoiTuong,PhanLoai",
+                      filteredAuditLogs.map(
+                        (l) => `"${l.time}","${l.actor}","${l.action}","${l.target}","${l.type}"`
+                      ),
+                      "Xuất Nhật ký Kiểm toán CSV"
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Xuất Nhật ký</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                <thead className="bg-slate-50/70 dark:bg-slate-900/70 border-b border-slate-100 dark:border-slate-800 text-[10.5px] font-bold uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Thời gian</th>
+                    <th className="px-4 py-3">Tác nhân</th>
+                    <th className="px-4 py-3">Hành động thực hiện</th>
+                    <th className="px-4 py-3">Đối tượng mục tiêu</th>
+                    <th className="px-4 py-3">Phân loại</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredAuditLogs.map((log) => (
+                    <tr key={log.id} className="marlo-row text-xs hover:bg-slate-50/60 dark:hover:bg-slate-900/40">
+                      <td className="px-4 py-3 font-mono text-slate-500">{log.time}</td>
+                      <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">{log.actor}</td>
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{log.action}</td>
+                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-300">{log.target}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full border px-2.5 py-0.5 text-[10px] font-mono font-bold ${
+                            log.type === "security"
+                              ? "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400"
+                              : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          {auditTypeLabel[log.type]}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -850,278 +1868,96 @@ export default function AdminDashboard({ currentSection, onNavigateSection }: Ad
               </table>
             </div>
           </div>
-
-          {/* Right AI Governance Box */}
-          <aside className="space-y-4">
-            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-900 dark:text-white">Hạn mức ngân sách tháng</span>
-                <span className="font-mono font-bold text-blue-600 text-sm">${budgetCap}</span>
-              </div>
-              <input
-                type="range"
-                min="200"
-                max="1000"
-                step="50"
-                value={budgetCap}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setBudgetCap(val);
-                  setToast(`Đã điều chỉnh ngân sách tối đa lên $${val}/tháng`);
-                  logAction("Cập nhật hạn mức ngân sách AI", `$${val}/tháng`, "ai");
-                }}
-                className="w-full mt-3 cursor-pointer accent-blue-600"
-              />
-              <div className="mt-2 flex justify-between text-[11px] text-slate-400 font-mono">
-                <span>$200</span>
-                <span>$500 (Mặc định)</span>
-                <span>$1,000</span>
-              </div>
-              <p className="mt-3 text-xs text-slate-500 leading-relaxed">
-                Khi mức tiêu thụ đạt 85% hạn mức ($ {(budgetCap * 0.85).toFixed(0)}), hệ thống tự động cảnh báo và chuyển AI sang chế độ tiết kiệm token.
-              </p>
-            </div>
-
-            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs">
-              <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <Shield size={16} className="text-emerald-600" />
-                <span>Chính sách Token Cache</span>
-              </div>
-              <div className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-300">
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-                  ● Cache prompt Socratic Mentor cho các câu hỏi trùng lặp (giảm 60% token input).
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-                  ● Giới hạn 20 lượt hỏi/giờ cho mỗi sinh viên để chống spam script bot.
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
-      )}
-
-      {/* ─── TAB 5: SECURITY & ACTIVE SESSIONS ───────────────────────────── */}
-      {tab === "sessions" && (
-        <div key="admin-sessions" className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-4">
-          <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">Phiên đăng nhập đang hoạt động</h2>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Giám sát các thiết bị đang kết nối, phát hiện đăng nhập bất thường và ngăn chặn chia sẻ tài khoản.</p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setToast("Đã thu hồi tất cả các phiên lạ • Yêu cầu đăng nhập lại");
-                  logAction("Thu hồi tất cả phiên đăng nhập lạ", "Security Force Logout", "security");
-                }}
-                className="magnetic inline-flex items-center gap-1.5 rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-700 dark:text-rose-300 px-3.5 py-2 text-xs font-bold shadow-2xs cursor-pointer transition"
-              >
-                <XCircle size={14} />
-                <span>Đăng xuất tất cả thiết bị lạ</span>
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {[
-                { name: "Nguyễn Văn A (Học viên)", device: "MacBook Pro • Chrome 124", ip: "192.168.1.42 (Hà Nội)", state: "Ổn định", icon: <Laptop size={17} /> },
-                { name: "Trần Thị B (Giảng viên)", device: "Windows 11 • Edge 122", ip: "10.0.0.15 (TP.HCM)", state: "Thiết bị mới", icon: <Laptop size={17} /> },
-                { name: "Phạm Văn Đức (Học viên)", device: "iPhone 15 • Safari Mobile", ip: "172.16.0.8 (Đà Nẵng)", state: "Cần xác minh", icon: <Smartphone size={17} /> },
-                { name: "Lê Văn C (Học viên)", device: "Ubuntu 24.04 • Firefox", ip: "113.190.22.8 (Cần Thơ)", state: "Ổn định", icon: <Laptop size={17} /> },
-              ].map((s) => (
-                <div key={s.name} className="marlo-row flex items-center gap-3 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 p-3.5 hover:border-slate-300 transition">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-blue-600 shadow-2xs shrink-0">
-                    {s.icon}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-slate-900 dark:text-white truncate">{s.name}</div>
-                    <div className="text-xs text-slate-500 font-mono">{s.device} • {s.ip}</div>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold shrink-0 ${s.state === "Ổn định" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
-                    {s.state}
-                  </span>
-                  <button
-                    onClick={() => {
-                      setToast(`Đã reset phiên của ${s.name}`);
-                      logAction("Buộc đăng xuất thiết bị", s.name, "security");
-                    }}
-                    className="magnetic rounded-xl border border-red-200 dark:border-red-900/40 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-red-600 shadow-2xs cursor-pointer hover:bg-red-50 transition shrink-0"
-                  >
-                    Ngắt phiên
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Security Policy Settings */}
-          <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Shield size={16} className="text-blue-600" />
-              <span>Chính sách Bảo mật Nền tảng</span>
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 cursor-pointer">
-                <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Bắt buộc xác thực 2FA</div>
-                  <div className="text-[11px] text-slate-400">Áp dụng cho Giảng viên & Admin</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={require2FA}
-                  onChange={(e) => {
-                    setRequire2FA(e.target.checked);
-                    setToast(`Chính sách 2FA: ${e.target.checked ? "Đã bật" : "Đã tắt"}`);
-                    logAction("Thay đổi chính sách 2FA", e.target.checked ? "Bật 2FA" : "Tắt 2FA", "security");
-                  }}
-                  className="h-4 w-4 accent-blue-600 cursor-pointer"
-                />
-              </label>
-
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 cursor-pointer">
-                <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Chống đăng nhập đồng thời</div>
-                  <div className="text-[11px] text-slate-400">Ngăn chia sẻ tài khoản làm bài thi</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={blockConcurrentIP}
-                  onChange={(e) => {
-                    setBlockConcurrentIP(e.target.checked);
-                    setToast(`Chống chia sẻ tài khoản: ${e.target.checked ? "Đã bật" : "Đã tắt"}`);
-                    logAction("Cấu hình chống share tài khoản", e.target.checked ? "Bật" : "Tắt", "security");
-                  }}
-                  className="h-4 w-4 accent-blue-600 cursor-pointer"
-                />
-              </label>
-
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 cursor-pointer">
-                <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Khóa sau 5 lần sai mật khẩu</div>
-                  <div className="text-[11px] text-slate-400">Chống tấn công Brute-force</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={autoLockFailedAttempts}
-                  onChange={(e) => {
-                    setAutoLockFailedAttempts(e.target.checked);
-                    setToast(`Khóa tự động sai mật khẩu: ${e.target.checked ? "Đã bật" : "Đã tắt"}`);
-                  }}
-                  className="h-4 w-4 accent-blue-600 cursor-pointer"
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── TAB 6: AUDIT LOGS (NHẬT KÝ HỆ THỐNG) ─────────────────────────── */}
-      {tab === "audit" && (
-        <div key="admin-audit" className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">Audit Log • Nhật ký Thao tác Hệ thống</h2>
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Theo dõi chi tiết các hành động quản trị, bảo mật và thay đổi tài nguyên theo thời gian thực.</p>
-            </div>
-            <span className="text-xs font-mono text-slate-400">{auditLogs.length} sự kiện gần nhất</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead className="bg-slate-50 dark:bg-slate-950/40 text-left text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                <tr>
-                  {["Thời gian", "Tác nhân", "Hành động thực hiện", "Đối tượng mục tiêu", "Phân loại"].map((head) => (
-                    <th key={head} className="px-4 py-3.5">{head}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {auditLogs.map((log) => (
-                  <tr key={log.id} className="marlo-row text-xs sm:text-sm hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{log.time}</td>
-                    <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200">{log.actor}</td>
-                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300 font-medium">{log.action}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-blue-600 dark:text-blue-400">{log.target}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        log.type === "security"
-                          ? "bg-rose-50 text-rose-700 border border-rose-200"
-                          : log.type === "ai"
-                          ? "bg-purple-50 text-purple-700 border border-purple-200"
-                          : log.type === "class"
-                          ? "bg-blue-50 text-blue-700 border border-blue-200"
-                          : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      }`}>
-                        {log.type.toUpperCase()}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
+        )}
       </div>
 
-      {/* ─── MODAL 1: ADD USER MODAL ─────────────────────────────────────── */}
+      {/* ====================================================================
+          MODAL 1: ADD USER (MONOCHROME RBAC)
+         ==================================================================== */}
       {isAddUserModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="marlo-card w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl animate-pop-in">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <UserPlus size={18} className="text-blue-600" />
-                <span>Thêm tài khoản mới</span>
+        <div
+          onClick={() => setIsAddUserModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-xs p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Thêm tài khoản RBAC mới
               </h3>
-              <button onClick={() => setIsAddUserModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
-                <X size={16} />
+              <button
+                type="button"
+                onClick={() => setIsAddUserModalOpen(false)}
+                className="p-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 cursor-pointer"
+              >
+                <X size={15} />
               </button>
             </div>
 
-            <form onSubmit={handleAddUser} className="mt-4 space-y-3.5 text-xs">
+            <form onSubmit={handleAddUserSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Họ và tên</label>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Họ và tên
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Nguyễn Văn Hoàng"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ví dụ: Lê Minh Quân"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs outline-none"
                 />
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Email học viện / trường</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="hoangnv@student.vn"
-                  value={newUserEmail}
-                  onChange={(e) => setNewUserEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Mã số SV / GV
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserCode}
+                    onChange={(e) => setNewUserCode(e.target.value)}
+                    placeholder="2210890"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono text-xs outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Email trường
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    placeholder="quan.lm@edu.vn"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs outline-none"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Vai trò hệ thống</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewUserRole("Học viên")}
-                    className={`p-2.5 rounded-xl border text-center font-bold transition cursor-pointer ${newUserRole === "Học viên" ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"}`}
-                  >
-                    Học viên (Student)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewUserRole("Giảng viên")}
-                    className={`p-2.5 rounded-xl border text-center font-bold transition cursor-pointer ${newUserRole === "Giảng viên" ? "border-purple-600 bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"}`}
-                  >
-                    Giảng viên (Instructor)
-                  </button>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                  Vai trò phân quyền (RBAC)
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["Học viên", "Giảng viên", "Quản trị viên"] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setNewUserRole(r)}
+                      className={`rounded-xl border py-2 px-2 font-bold transition cursor-pointer ${
+                        newUserRole === r
+                          ? "border-[#141619] bg-[#141619] text-white dark:border-white dark:bg-white dark:text-[#141619]"
+                          : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1129,13 +1965,13 @@ export default function AdminDashboard({ currentSection, onNavigateSection }: Ad
                 <button
                   type="button"
                   onClick={() => setIsAddUserModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 font-semibold cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xs cursor-pointer"
+                  className="rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-4 py-2 font-bold cursor-pointer"
                 >
                   Tạo tài khoản
                 </button>
@@ -1145,77 +1981,97 @@ export default function AdminDashboard({ currentSection, onNavigateSection }: Ad
         </div>
       )}
 
-      {/* ─── MODAL 2: ADD CLASS MODAL ────────────────────────────────────── */}
+      {/* ====================================================================
+          MODAL 2: ADD CLASS MODAL
+         ==================================================================== */}
       {isAddClassModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="marlo-card w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl animate-pop-in">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Plus size={18} className="text-blue-600" />
-                <span>Tạo lớp học mới</span>
+        <div
+          onClick={() => setIsAddClassModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-xs p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Tạo lớp học phần & Docker Sandbox
               </h3>
-              <button onClick={() => setIsAddClassModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
-                <X size={16} />
+              <button
+                type="button"
+                onClick={() => setIsAddClassModalOpen(false)}
+                className="p-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 cursor-pointer"
+              >
+                <X size={15} />
               </button>
             </div>
 
-            <form onSubmit={handleAddClass} className="mt-4 space-y-3.5 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Mã lớp (Course Code)</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="CM-REACT-2026-02"
-                  value={newClassCode}
-                  onChange={(e) => setNewClassCode(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-sm font-mono text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Tên môn học & Lớp</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Lập trình React 19 & Next.js Fullstack"
-                  value={newClassName}
-                  onChange={(e) => setNewClassName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
+            <form onSubmit={handleAddClassSubmit} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Giảng viên phụ trách</label>
-                  <select
-                    value={newClassTeacher}
-                    onChange={(e) => setNewClassTeacher(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none"
-                  >
-                    <option value="Trần Thị B">Trần Thị B</option>
-                    <option value="Lê Văn C">Lê Văn C</option>
-                    <option value="Võ Thị E">Võ Thị E</option>
-                  </select>
+                  <label className="font-bold block mb-1">Mã học phần</label>
+                  <input
+                    type="text"
+                    required
+                    value={newClassCode}
+                    onChange={(e) => setNewClassCode(e.target.value)}
+                    placeholder="CS315"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Chỉ tiêu học viên</label>
+                  <label className="font-bold block mb-1">Phòng / Lab</label>
                   <input
-                    type="number"
-                    value={newClassStudents}
-                    onChange={(e) => setNewClassStudents(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-xs font-mono text-slate-800 dark:text-slate-100 outline-none"
+                    type="text"
+                    value={newClassRoom}
+                    onChange={(e) => setNewClassRoom(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Phòng học / Workspace</label>
+                <label className="font-bold block mb-1">Tên học phần</label>
                 <input
                   type="text"
-                  placeholder="Lab B2-302"
-                  value={newClassRoom}
-                  onChange={(e) => setNewClassRoom(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-slate-100 outline-none"
+                  required
+                  value={newClassName}
+                  onChange={(e) => setNewClassName(e.target.value)}
+                  placeholder="Hệ thống Phân tán & Kafka Cache"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold block mb-1">Giảng viên phụ trách</label>
+                  <select
+                    value={newClassTeacher}
+                    onChange={(e) => setNewClassTeacher(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2 font-semibold outline-none"
+                  >
+                    <option value="Cô Trần Thị B">Cô Trần Thị B</option>
+                    <option value="Thầy Nguyễn Phước">Thầy Nguyễn Phước</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold block mb-1">Chỉ tiêu HV</label>
+                  <input
+                    type="number"
+                    value={newClassStudents}
+                    onChange={(e) => setNewClassStudents(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Docker Runner Image</label>
+                <input
+                  type="text"
+                  value={newClassImage}
+                  onChange={(e) => setNewClassImage(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
                 />
               </div>
 
@@ -1223,15 +2079,15 @@ export default function AdminDashboard({ currentSection, onNavigateSection }: Ad
                 <button
                   type="button"
                   onClick={() => setIsAddClassModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 font-semibold cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xs cursor-pointer"
+                  className="rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-4 py-2 font-bold cursor-pointer"
                 >
-                  Tạo lớp
+                  Tạo học phần
                 </button>
               </div>
             </form>
@@ -1239,42 +2095,166 @@ export default function AdminDashboard({ currentSection, onNavigateSection }: Ad
         </div>
       )}
 
-      {/* ─── MODAL 3: BROADCAST MODAL ────────────────────────────────────── */}
-      {isBroadcastModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="marlo-card w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl animate-pop-in">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Radio size={18} className="text-amber-600" />
-                <span>Phát thông báo toàn hệ thống</span>
-              </h3>
-              <button onClick={() => setIsBroadcastModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
-                <X size={16} />
+      {/* ====================================================================
+          MODAL 3: CLASS COORDINATION / EDIT MODAL
+         ==================================================================== */}
+      {editingClass && (
+        <div
+          onClick={() => setEditingClass(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-xs p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <div className="text-[10.5px] font-mono font-bold text-slate-400">
+                  {editingClass.code}
+                </div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Điều phối Lớp & Hạ tầng Sandbox
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingClass(null)}
+                className="p-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 cursor-pointer"
+              >
+                <X size={15} />
               </button>
             </div>
 
-            <form onSubmit={handleBroadcast} className="mt-4 space-y-3.5 text-xs">
+            <form onSubmit={handleSaveClassEdit} className="space-y-3 text-xs">
               <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Tiêu đề thông báo</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ví dụ: Thông báo kiểm tra định kỳ Sprint 1"
-                  value={broadcastTitle}
-                  onChange={(e) => setBroadcastTitle(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-amber-500"
-                />
+                <label className="font-bold block mb-1">Giảng viên phụ trách</label>
+                <select
+                  value={editingClass.teacher}
+                  onChange={(e) =>
+                    setEditingClass({ ...editingClass, teacher: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-semibold outline-none"
+                >
+                  <option value="Cô Trần Thị B">Cô Trần Thị B</option>
+                  <option value="Thầy Nguyễn Phước">Thầy Nguyễn Phước</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold block mb-1">Phòng học</label>
+                  <input
+                    type="text"
+                    value={editingClass.room}
+                    onChange={(e) =>
+                      setEditingClass({ ...editingClass, room: e.target.value })
+                    }
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold block mb-1">Trạng thái lớp</label>
+                  <select
+                    value={editingClass.health}
+                    onChange={(e) =>
+                      setEditingClass({
+                        ...editingClass,
+                        health: e.target.value as AdminClassRecord["health"],
+                      })
+                    }
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-semibold outline-none"
+                  >
+                    <option value="Tốt">Tốt</option>
+                    <option value="Ổn định">Ổn định</option>
+                    <option value="Cần theo dõi">Cần theo dõi</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Nội dung chi tiết</label>
-                <textarea
+                <label className="font-bold block mb-1">Docker Sandbox Image</label>
+                <input
+                  type="text"
+                  value={editingClass.dockerImage}
+                  onChange={(e) =>
+                    setEditingClass({ ...editingClass, dockerImage: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingClass(null);
+                    onNavigateSection?.("instructor-courses");
+                  }}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <span>Xem Giáo trình Giảng viên</span>
+                  <ArrowUpRight size={13} />
+                </button>
+
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-4 py-2 font-bold cursor-pointer"
+                >
+                  Lưu thay đổi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          MODAL 4: SYSTEM BROADCAST MODAL
+         ==================================================================== */}
+      {isBroadcastModalOpen && (
+        <div
+          onClick={() => setIsBroadcastModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-xs p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Radio size={16} className="text-[#EE8420]" />
+                <span>Phát thông báo toàn hệ thống</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsBroadcastModalOpen(false)}
+                className="p-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <form onSubmit={handleBroadcastSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold block mb-1">Tiêu đề thông báo</label>
+                <input
+                  type="text"
                   required
+                  value={broadcastTitle}
+                  onChange={(e) => setBroadcastTitle(e.target.value)}
+                  placeholder="Ví dụ: Lịch bảo vệ Đồ án & Đóng cổng nộp Sprint 1"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
+                />
+              </div>
+              <div>
+                <label className="font-bold block mb-1">Nội dung gửi toàn trường</label>
+                <textarea
                   rows={3}
-                  placeholder="Nhập nội dung thông báo gửi đến toàn thể học viên và giảng viên..."
+                  required
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Nội dung sẽ xuất hiện trên bảng thông báo của Học viên & Giảng viên..."
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none resize-none"
                 />
               </div>
 
@@ -1282,15 +2262,15 @@ export default function AdminDashboard({ currentSection, onNavigateSection }: Ad
                 <button
                   type="button"
                   onClick={() => setIsBroadcastModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 font-semibold cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-4 py-2 font-bold cursor-pointer"
                 >
-                  <Send size={14} />
+                  <Send size={13} />
                   <span>Gửi thông báo</span>
                 </button>
               </div>

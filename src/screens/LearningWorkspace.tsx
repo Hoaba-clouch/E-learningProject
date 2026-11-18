@@ -1,6 +1,6 @@
 import ChapterExerciseStudio from "../components/ChapterExerciseStudio";
 import { getChapterExercise } from "../data/chapterExercises";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
@@ -47,6 +47,10 @@ import {
 } from "lucide-react";
 import {
   askSocraticTutor,
+  fetchStudentLearningOverview,
+  completeStudentLessonApi,
+  type StudentLearningOverview,
+  type StudentChapterSubmissionDto,
 } from "../api";
 import type { ChatSkin, MentorMascot } from "../App";
 import {
@@ -102,7 +106,7 @@ export default function LearningWorkspace({
   onToggleTheme = () => {},
   role = "student",
   avatarStyle = "initials",
-  badgeFrame = "none",
+  badgeFrame = "streak",
   onNavigate,
   onLogout,
   onOpenCommandPalette,
@@ -128,10 +132,27 @@ export default function LearningWorkspace({
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
   const [quizStreak, setQuizStreak] = useState<number>(0);
-  const [totalXpEarned, setTotalXpEarned] = useState<number>(120);
+  const [totalXpEarned, setTotalXpEarned] = useState<number>(3240);
+  const [learningOverview, setLearningOverview] = useState<StudentLearningOverview | null>(null);
+  const [completingLesson, setCompletingLesson] = useState<boolean>(false);
   const [quizDone, setQuizDone] = useState<boolean>(false);
   const [showXpToast, setShowXpToast] = useState<boolean>(false);
   const quizConfettiRef = useRef<HTMLDivElement>(null);
+
+  // Hydrate student learning overview (XP, completed lessons, chapter submissions, DB courses)
+  useEffect(() => {
+    let active = true;
+    fetchStudentLearningOverview().then((data) => {
+      if (!active || !data) return;
+      setLearningOverview(data);
+      if (typeof data.profile?.exp_points === "number") {
+        setTotalXpEarned(data.profile.exp_points);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // AI Mentor Chat State
   const [chatInput, setChatInput] = useState<string>("");
@@ -143,9 +164,93 @@ export default function LearningWorkspace({
     },
   ]);
 
+  // Merge SQLite courses, AIGC lessons, and completed lesson progress into MULTI_CHAPTER_SUBJECTS
+  const resolvedSubjects: SubjectModuleData[] = useMemo(() => {
+    const completedSet = new Set(
+      (learningOverview?.completed_lessons || []).map((r) => `${r.subject_id}:${r.lesson_id}`)
+    );
+    const dbCourseMap = new Map(
+      (learningOverview?.courses || []).map((c) => [c.subjectId, c])
+    );
+
+    return MULTI_CHAPTER_SUBJECTS.map((sub) => {
+      const dbCourse = dbCourseMap.get(sub.id);
+      const dbChapters: any[] = Array.isArray(dbCourse?.chapters) ? dbCourse.chapters : [];
+
+      const mergedChapters: ChapterItem[] = sub.chapters.map((chap, chIdx) => {
+        const dbChap = dbChapters[chIdx];
+        const dbLessons: any[] = Array.isArray(dbChap?.lessons) ? dbChap.lessons : [];
+
+        const updatedBaseLessons: LessonItem[] = chap.lessons.map((lesson, lIdx) => {
+          const isDoneInDb = completedSet.has(`${sub.id}:${lesson.id}`);
+          const dbL = dbLessons[lIdx];
+          const dbReading =
+            dbL?.isInstructorEdited && dbL?.status === "Đã phát hành" && dbL?.content?.reading
+              ? String(dbL.content.reading)
+              : null;
+          return {
+            ...lesson,
+            status: isDoneInDb ? "done" : lesson.status,
+            lead: dbReading || lesson.lead,
+          };
+        });
+
+        const extraPublished: LessonItem[] = dbLessons
+          .slice(chap.lessons.length)
+          .filter((l: any) => l?.status === "Đã phát hành")
+          .map((l: any, extraIdx: number) => {
+            const extraId = `${chap.number}.${chap.lessons.length + extraIdx + 1}`;
+            const isDone = completedSet.has(`${sub.id}:${extraId}`);
+            return {
+              id: extraId,
+              title: l.title || `Bài bổ sung ${extraId}`,
+              type: "lecture" as const,
+              duration: l.duration || "12 phút",
+              status: isDone ? "done" : "active",
+              xp: 50,
+              objective: l.title || "Nội dung bổ sung do Giảng viên phát hành",
+              lead:
+                l?.content?.reading ||
+                "Nội dung bài giảng mới được Giảng viên biên soạn và phát hành trên SQLite.",
+              keyTakeaways: [
+                "Hoàn thành phần đọc lý thuyết và thực hành theo hướng dẫn giảng viên.",
+              ],
+            };
+          });
+
+        const allLessons = [...updatedBaseLessons, ...extraPublished];
+        const doneCount = allLessons.filter((l) => l.status === "done").length;
+        const progressPct =
+          allLessons.length > 0 ? Math.round((doneCount / allLessons.length) * 100) : chap.progressPct;
+
+        return {
+          ...chap,
+          lessons: allLessons,
+          progressPct,
+        };
+      });
+
+      const totalLessonsCount = mergedChapters.reduce((acc, c) => acc + c.lessons.length, 0);
+      const totalDoneCount = mergedChapters.reduce(
+        (acc, c) => acc + c.lessons.filter((l) => l.status === "done").length,
+        0
+      );
+      const overallProgress =
+        totalLessonsCount > 0 ? Math.round((totalDoneCount / totalLessonsCount) * 100) : sub.overallProgress;
+
+      return {
+        ...sub,
+        instructor: dbCourse?.teacher || sub.instructor,
+        chapters: mergedChapters,
+        totalLessons: totalLessonsCount,
+        overallProgress,
+      };
+    });
+  }, [learningOverview]);
+
   // Resolve Multi-Chapter Data
   const currentMultiSubject: SubjectModuleData =
-    MULTI_CHAPTER_SUBJECTS.find((m) => m.id === selectedSubjectId) || MULTI_CHAPTER_SUBJECTS[0];
+    resolvedSubjects.find((m) => m.id === selectedSubjectId) || resolvedSubjects[0];
 
   let activeChapter: ChapterItem = currentMultiSubject.chapters[0];
   let activeMultiLesson: LessonItem = activeChapter.lessons[0];
@@ -159,6 +264,10 @@ export default function LearningWorkspace({
     }
   }
 
+  const activeDbCourse = learningOverview?.courses.find((c) => c.subjectId === selectedSubjectId);
+  const activeDbChapter =
+    activeDbCourse?.chapters?.[activeChapter.number - 1] || activeDbCourse?.chapters?.[0];
+
   const currentChapterExercise = getChapterExercise(
     selectedSubjectId,
     activeChapter.number,
@@ -167,13 +276,33 @@ export default function LearningWorkspace({
     currentMultiSubject.name
   );
 
+  const savedChapterSubmission: StudentChapterSubmissionDto | null = useMemo(() => {
+    const subs = learningOverview?.chapter_submissions || [];
+    return (
+      subs.find(
+        (s) =>
+          s.subject_id === selectedSubjectId &&
+          (s.exercise_id === currentChapterExercise.id || s.chapter_number === activeChapter.number)
+      ) || null
+    );
+  }, [learningOverview, selectedSubjectId, currentChapterExercise.id, activeChapter.number]);
+
   // Fallback to legacy subject data for quiz questions and audio
   const currentSubject =
     SUBJECT_MODULES.find((m) => m.id === selectedSubjectId) || SUBJECT_MODULES[0];
+  const activeQuizQuestions = currentMultiSubject.quizQuestions?.length
+    ? currentMultiSubject.quizQuestions
+    : currentSubject.quizQuestions;
   const legacyLesson = currentSubject.lessons[0];
   const mentor = mentorConfig[mentorMascot];
 
-
+  // Reset Quiz state whenever switching course or lesson
+  useEffect(() => {
+    setQuizIndex(0);
+    setSelectedOption(null);
+    setQuizSubmitted(false);
+    setQuizDone(false);
+  }, [selectedSubjectId, activeLessonId]);
 
   // Escape key exits cinema mode
   useEffect(() => {
@@ -195,7 +324,7 @@ export default function LearningWorkspace({
   const handleQuizSubmit = () => {
     if (!selectedOption) return;
     setQuizSubmitted(true);
-    const currQ = currentSubject.quizQuestions[quizIndex];
+    const currQ = activeQuizQuestions[quizIndex];
     if (currQ && selectedOption === currQ.correct) {
       setTotalXpEarned((x) => x + 25);
       setQuizStreak((s) => s + 1);
@@ -209,9 +338,95 @@ export default function LearningWorkspace({
     }
   };
 
-  const handleNextQuiz = () => {
-    if (quizIndex + 1 >= currentSubject.quizQuestions.length) {
+  const handleMarkLessonDone = async () => {
+    if (completingLesson) return;
+    setCompletingLesson(true);
+    try {
+      const res = await completeStudentLessonApi({
+        subject_id: selectedSubjectId,
+        chapter_id: activeChapter.id,
+        lesson_id: activeMultiLesson.id,
+        xp: activeMultiLesson.xp || 50,
+      });
+      if (res) {
+        setTotalXpEarned(res.total_xp);
+        setLearningOverview((prev) => {
+          if (!prev) return prev;
+          const exists = prev.completed_lessons.some(
+            (r) => r.subject_id === selectedSubjectId && r.lesson_id === activeMultiLesson.id
+          );
+          const nextCompleted = exists
+            ? prev.completed_lessons
+            : [
+                ...prev.completed_lessons,
+                {
+                  subject_id: selectedSubjectId,
+                  chapter_id: activeChapter.id,
+                  lesson_id: activeMultiLesson.id,
+                  status: "done",
+                  quiz_score: 0,
+                  quiz_total: 0,
+                  xp_earned: res.xp_awarded,
+                  completed_at: new Date().toISOString(),
+                },
+              ];
+          return {
+            ...prev,
+            profile: { ...prev.profile, exp_points: res.total_xp },
+            completed_lessons: nextCompleted,
+          };
+        });
+        if (res.xp_awarded > 0) {
+          setShowXpToast(true);
+          setTimeout(() => setShowXpToast(false), 2200);
+          triggerMarloConfetti(0.52, 0.45);
+        }
+      }
+    } finally {
+      setCompletingLesson(false);
+    }
+  };
+
+  const handleNextQuiz = async () => {
+    if (quizIndex + 1 >= activeQuizQuestions.length) {
       setQuizDone(true);
+      const res = await completeStudentLessonApi({
+        subject_id: selectedSubjectId,
+        chapter_id: activeChapter.id,
+        lesson_id: activeMultiLesson.id,
+        xp: activeMultiLesson.xp || 50,
+        quiz_score: quizStreak,
+        quiz_total: activeQuizQuestions.length,
+      });
+      if (res) {
+        setTotalXpEarned(res.total_xp);
+        setLearningOverview((prev) => {
+          if (!prev) return prev;
+          const exists = prev.completed_lessons.some(
+            (r) => r.subject_id === selectedSubjectId && r.lesson_id === activeMultiLesson.id
+          );
+          const nextCompleted = exists
+            ? prev.completed_lessons
+            : [
+                ...prev.completed_lessons,
+                {
+                  subject_id: selectedSubjectId,
+                  chapter_id: activeChapter.id,
+                  lesson_id: activeMultiLesson.id,
+                  status: "done",
+                  quiz_score: quizStreak,
+                  quiz_total: activeQuizQuestions.length,
+                  xp_earned: res.xp_awarded,
+                  completed_at: new Date().toISOString(),
+                },
+              ];
+          return {
+            ...prev,
+            profile: { ...prev.profile, exp_points: res.total_xp },
+            completed_lessons: nextCompleted,
+          };
+        });
+      }
     } else {
       setQuizIndex((i) => i + 1);
       setSelectedOption(null);
@@ -275,6 +490,7 @@ export default function LearningWorkspace({
 
         {/* F8 Course Grid Catalog Component */}
         <CourseCatalogHub
+          subjects={resolvedSubjects}
           onSelectCourse={(courseId) => {
             setSelectedSubjectId(courseId);
             setActiveLessonId("1.1");
@@ -496,7 +712,7 @@ export default function LearningWorkspace({
                 options={[
                   { id: "lecture", label: "Bài đọc", icon: <FileText size={15} /> },
                   { id: "video", label: "Video bài giảng", icon: <Video size={15} /> },
-                  { id: "quiz", label: `Quiz (${currentSubject.quizQuestions.length} câu)`, icon: <HelpCircle size={15} /> },
+                  { id: "quiz", label: `Quiz (${activeQuizQuestions.length} câu)`, icon: <HelpCircle size={15} /> },
                   { id: "exercise", label: `Bài tập C${activeChapter.number}`, icon: <Code2 size={15} /> },
                   { id: "mindmap", label: "Sơ đồ Tư duy", icon: <GitBranch size={15} /> },
                 ]}
@@ -645,7 +861,7 @@ export default function LearningWorkspace({
                           <span>Sai lầm thường gặp (Anti-Pattern)</span>
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed pl-3 border-l-2 border-slate-200 dark:border-slate-800">
-                          {legacyLesson?.full?.antiPattern?.badDesc || legacyLesson?.full?.antiPattern?.badTitle || "Lạm dụng thừa kế hoặc phá vỡ tính đóng gói trong các module."}
+                          {activeMultiLesson.antiPattern?.badDesc || legacyLesson?.full?.antiPattern?.badDesc || legacyLesson?.full?.antiPattern?.badTitle || "Lạm dụng thừa kế hoặc phá vỡ tính đóng gói trong các module."}
                         </p>
                       </div>
 
@@ -656,7 +872,7 @@ export default function LearningWorkspace({
                           <span>Giải pháp khuyến nghị</span>
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed pl-3 border-l-2 border-slate-300 dark:border-slate-700">
-                          {legacyLesson?.full?.antiPattern?.solution || "Áp dụng Composition over Inheritance và tuân thủ các nguyên lý SOLID."}
+                          {activeMultiLesson.antiPattern?.solution || legacyLesson?.full?.antiPattern?.solution || "Áp dụng Composition over Inheritance và tuân thủ các nguyên lý SOLID."}
                         </p>
                       </div>
                     </div>
@@ -680,13 +896,35 @@ export default function LearningWorkspace({
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setTab("mindmap")}
-                      className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer active:scale-95 shadow-2xs"
-                    >
-                      <span>Mở Mindmap Cuối Chương</span>
-                      <ArrowRight size={15} />
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={handleMarkLessonDone}
+                        disabled={completingLesson || activeMultiLesson.status === "done"}
+                        className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer active:scale-95 shadow-2xs ${
+                          activeMultiLesson.status === "done"
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 cursor-default"
+                            : "bg-amber-500 hover:bg-amber-400 text-slate-950"
+                        }`}
+                      >
+                        <CheckCircle2 size={15} />
+                        <span>
+                          {activeMultiLesson.status === "done"
+                            ? "Đã hoàn thành bài học ✓"
+                            : completingLesson
+                            ? "Đang lưu tiến độ..."
+                            : `Hoàn thành bài học (+${activeMultiLesson.xp || 50} XP)`}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setTab("mindmap")}
+                        className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer active:scale-95 shadow-2xs"
+                      >
+                        <span>Mở Mindmap Cuối Chương</span>
+                        <ArrowRight size={15} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -731,7 +969,7 @@ export default function LearningWorkspace({
                     <p className="text-xs text-slate-500">Các nguồn tài liệu chính thống RFC, IEEE/ACM và tài liệu chính thức từ hãng.</p>
                   </div>
                   <div className="space-y-3">
-                    {legacyLesson.resources.map(([title, desc, url], rIdx) => (
+                    {(activeMultiLesson.resources && activeMultiLesson.resources.length > 0 ? activeMultiLesson.resources : legacyLesson.resources).map(([title, desc, url], rIdx) => (
                       <a
                         key={rIdx}
                         href={url}
@@ -761,6 +999,8 @@ export default function LearningWorkspace({
             <div key={`video-${selectedSubjectId}-${activeLessonId}`} className="animate-screen-enter flex flex-col space-y-4">
               <LessonVideoStudio
                 subjectId={selectedSubjectId}
+                lessonId={activeMultiLesson.id}
+                lessonTitle={activeMultiLesson.title}
                 mentorMascot={mentorMascot}
                 onNavigateToTab={(targetTab) => {
                   if (targetTab !== "code") {
@@ -782,7 +1022,7 @@ export default function LearningWorkspace({
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div>
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Trắc nghiệm Tình huống Kỹ thuật ({quizIndex + 1}/{currentSubject.quizQuestions.length})
+                    Trắc nghiệm Tình huống Kỹ thuật ({quizIndex + 1}/{activeQuizQuestions.length})
                   </h2>
                   <p className="text-xs text-slate-500">Môn: {currentMultiSubject.name}</p>
                 </div>
@@ -801,12 +1041,12 @@ export default function LearningWorkspace({
               {!quizDone ? (
                 <div className="space-y-4">
                   <p className="animate-cascade-item text-sm font-semibold text-slate-900 dark:text-white" style={{ animationDelay: "120ms" }}>
-                    {currentSubject.quizQuestions[quizIndex]?.q}
+                    {activeQuizQuestions[quizIndex]?.q}
                   </p>
                   <div className="space-y-2">
-                    {currentSubject.quizQuestions[quizIndex]?.options.map((opt, optIdx) => {
+                    {activeQuizQuestions[quizIndex]?.options.map((opt, optIdx) => {
                       const isSelected = selectedOption === opt.id;
-                      const isCorrect = opt.id === currentSubject.quizQuestions[quizIndex].correct;
+                      const isCorrect = opt.id === activeQuizQuestions[quizIndex].correct;
                       let btnCls = "border-slate-200 bg-slate-50/70 hover:bg-slate-100 text-slate-700";
                       if (quizSubmitted) {
                         if (isCorrect) btnCls = "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold";
@@ -839,7 +1079,7 @@ export default function LearningWorkspace({
                     >
                       <strong className="text-slate-900 dark:text-white font-bold">Giải thích kỹ thuật:</strong>
                       <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                        {currentSubject.quizQuestions[quizIndex]?.explanation}
+                        {activeQuizQuestions[quizIndex]?.explanation}
                       </p>
                     </div>
                   )}
@@ -858,7 +1098,7 @@ export default function LearningWorkspace({
                         onClick={handleNextQuiz}
                         className="rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2 text-xs transition cursor-pointer shadow-xs"
                       >
-                        {quizIndex + 1 >= currentSubject.quizQuestions.length ? "Hoàn thành Quiz" : "Câu tiếp theo →"}
+                        {quizIndex + 1 >= activeQuizQuestions.length ? "Hoàn thành Quiz" : "Câu tiếp theo →"}
                       </button>
                     )}
                   </div>
@@ -890,8 +1130,30 @@ export default function LearningWorkspace({
           {tab === "exercise" && (
             <div key={`exercise-${selectedSubjectId}-${activeChapter.id}`} className="animate-screen-enter flex-1 flex flex-col min-h-0">
               <ChapterExerciseStudio
+                subjectId={selectedSubjectId}
                 exercise={currentChapterExercise}
                 mentorMascot={mentorMascot}
+                savedSubmission={savedChapterSubmission}
+                onSubmissionSaved={(saved, newTotalXp) => {
+                  if (typeof newTotalXp === "number") {
+                    setTotalXpEarned(newTotalXp);
+                  }
+                  setLearningOverview((prev) => {
+                    if (!prev) return prev;
+                    const filtered = prev.chapter_submissions.filter(
+                      (s) => s.exercise_id !== saved.exercise_id
+                    );
+                    return {
+                      ...prev,
+                      profile: {
+                        ...prev.profile,
+                        exp_points:
+                          typeof newTotalXp === "number" ? newTotalXp : prev.profile.exp_points,
+                      },
+                      chapter_submissions: [saved, ...filtered],
+                    };
+                  });
+                }}
                 onEarnXp={(xp) => setTotalXpEarned((prev) => prev + xp)}
                 onBackToLecture={() => setTab("lecture")}
               />
@@ -931,6 +1193,8 @@ export default function LearningWorkspace({
               <LessonMindmapStudio
                 subjectId={selectedSubjectId}
                 mentorMascot={mentorMascot}
+                instructorMindmapNodes={activeDbChapter?.mindmapNodes}
+                instructorMindmapEdges={activeDbChapter?.mindmapEdges}
                 onNavigateToTab={(targetTab) => setTab(targetTab)}
               />
             </div>

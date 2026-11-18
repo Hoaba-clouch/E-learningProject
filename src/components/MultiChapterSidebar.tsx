@@ -102,13 +102,13 @@ function ChapterLessonGroup({
   return (
     <div
       ref={containerRef}
-      className="relative animate-accordion-expand bg-slate-50/70 dark:bg-slate-950/40 p-2 space-y-1.5 rounded-xl"
+      className="relative animate-accordion-expand bg-slate-50/70 dark:bg-slate-950/40 p-2 flex flex-col gap-1.5 rounded-xl"
     >
       {/* 🏷️ Marlo Liquid Rubberband Active Pill - EXACT 1:1 WITH NAVBAR */}
       <div
         ref={pillRef}
         aria-hidden="true"
-        className="pointer-events-none absolute top-0 left-0 w-full h-full z-0 rounded-[14px] bg-[#141619] dark:bg-[#F4F4F6] shadow-[0_4px_16px_rgba(0,0,0,0.14)]"
+        className="pointer-events-none opacity-0 absolute top-0 left-0 w-full h-full z-0 rounded-[14px] bg-[#141619] dark:bg-[#F4F4F6] shadow-[0_4px_16px_rgba(0,0,0,0.14)]"
       />
 
       {chapter.lessons.map((lesson) => {
@@ -134,7 +134,7 @@ function ChapterLessonGroup({
               .map((r) => (
                 <React.Fragment key={r.id}>
                   <span
-                    className="animate-water-ripple"
+                    className="pointer-events-none absolute rounded-full animate-water-ripple"
                     style={{
                       left: r.x,
                       top: r.y,
@@ -143,7 +143,7 @@ function ChapterLessonGroup({
                     }}
                   />
                   <span
-                    className="animate-water-ring"
+                    className="pointer-events-none absolute rounded-full animate-water-ring"
                     style={{
                       left: r.x,
                       top: r.y,
@@ -154,7 +154,7 @@ function ChapterLessonGroup({
                 </React.Fragment>
               ))}
 
-            <div className="flex items-center gap-2.5 min-w-0 pr-2 pl-0.5">
+            <div className="relative z-10 flex items-center gap-2.5 min-w-0 pr-2 pl-0.5">
               {/* Step Type Icon */}
               <div
                 className={`p-1.5 rounded-lg shrink-0 transition-all duration-200 ${
@@ -191,9 +191,9 @@ function ChapterLessonGroup({
                       : "text-slate-500 dark:text-slate-400"
                   }`}
                 >
-                  <span className="font-mono">{lesson.duration}</span>
+                  <span className="font-mono whitespace-nowrap">{lesson.duration}</span>
                   <span
-                    className={`font-bold transition-colors duration-150 ${
+                    className={`font-bold whitespace-nowrap transition-colors duration-150 ${
                       isActive
                         ? "text-amber-300 dark:text-amber-700 font-mono"
                         : "text-amber-600 dark:text-amber-400"
@@ -206,7 +206,7 @@ function ChapterLessonGroup({
             </div>
 
             {/* Status Check / Icon */}
-            <div className="shrink-0">
+            <div className="relative z-10 shrink-0">
               {lesson.status === "done" ? (
                 <CheckCircle2
                   size={16}
@@ -247,7 +247,7 @@ function ChapterLessonGroup({
           .map((r) => (
             <span
               key={r.id}
-              className="animate-water-ripple"
+              className="pointer-events-none absolute rounded-full animate-water-ripple"
               style={{
                 left: r.x,
                 top: r.y,
@@ -257,7 +257,7 @@ function ChapterLessonGroup({
             />
           ))}
 
-        <div className="flex items-center gap-2.5 min-w-0 pr-1 pl-0.5">
+        <div className="relative z-10 flex items-center gap-2.5 min-w-0 pr-1 pl-0.5">
           <div
             className={`p-1.5 rounded-lg shrink-0 transition-colors duration-200 ${
               activeKey === `exercise-${chapter.id}`
@@ -289,7 +289,7 @@ function ChapterLessonGroup({
           </div>
         </div>
         <span
-          className={`text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 ${
+          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 ${
             activeKey === `exercise-${chapter.id}`
               ? "bg-[#EE8420] text-white"
               : "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
@@ -317,7 +317,7 @@ function ChapterLessonGroup({
           .map((r) => (
             <span
               key={r.id}
-              className="animate-water-ripple"
+              className="pointer-events-none absolute rounded-full animate-water-ripple"
               style={{
                 left: r.x,
                 top: r.y,
@@ -327,7 +327,7 @@ function ChapterLessonGroup({
             />
           ))}
 
-        <div className="flex items-center gap-2.5 min-w-0 pr-1 pl-0.5">
+        <div className="relative z-10 flex items-center gap-2.5 min-w-0 pr-1 pl-0.5">
           <div
             className={`p-1.5 rounded-lg shrink-0 transition-colors duration-200 ${
               activeKey === `mindmap-${chapter.id}`
@@ -359,7 +359,7 @@ function ChapterLessonGroup({
           </div>
         </div>
         <span
-          className={`text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 ${
+          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 ${
             activeKey === `mindmap-${chapter.id}`
               ? "bg-[#EE8420] text-white"
               : "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"

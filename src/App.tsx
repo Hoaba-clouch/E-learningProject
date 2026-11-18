@@ -17,6 +17,8 @@ import MarloCommandPalette from "./components/MarloCommandPalette";
 import MarloGlobalHeader from "./components/MarloGlobalHeader";
 import CodeMindIntroLandingPage from "./screens/CodeMindIntroLandingPage";
 import AIDefenseRoomScreen from "./screens/AIDefenseRoomScreen";
+import SecurityDevicesScreen from "./screens/SecurityDevicesScreen";
+import { logoutUser } from "./api";
 
 export type Screen =
   | "login"
@@ -26,6 +28,7 @@ export type Screen =
   | "github"
   | "xp-shop"
   | "profile"
+  | "security"
   | "admin"
   | "admin-users"
   | "admin-classes"
@@ -33,6 +36,10 @@ export type Screen =
   | "admin-sessions"
   | "admin-audit"
   | "instructor"
+  | "instructor-courses"
+  | "instructor-grading"
+  | "instructor-mindmap"
+  | "instructor-evidence"
   | "kanban"
   | "schedule"
   | "projects"
@@ -69,7 +76,11 @@ export default function App() {
     }
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   };
-  const [role, setRole] = useState<Role>("student");
+  const [role, setRole] = useState<Role>(() => {
+    if (screen.startsWith("instructor")) return "instructor";
+    if (screen.startsWith("admin")) return "admin";
+    return "student";
+  });
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("code-mind-theme") as Theme | null) ?? "light";
@@ -223,6 +234,11 @@ export default function App() {
       .catch(() => {});
   };
 
+  const handleLogout = () => {
+    void logoutUser();
+    setScreen("login");
+  };
+
   if (screen === "login") {
     return (
       <div className={`theme-${theme} ${theme === "dark" ? "dark" : ""} pc-login-bg min-h-screen`}>
@@ -265,7 +281,7 @@ export default function App() {
             theme={theme}
             onToggleTheme={toggleTheme}
             role={role}
-            onLogout={() => setScreen("login")}
+            onLogout={handleLogout}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
         );
@@ -280,12 +296,30 @@ export default function App() {
             avatarStyle={avatarStyle}
             badgeFrame={badgeFrame}
             onNavigate={setScreen}
-            onLogout={() => setScreen("login")}
+            onLogout={handleLogout}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
         );
-      case "profile": return <StudentProfile avatarStyle={avatarStyle} badgeFrame={badgeFrame} onApplyAvatar={setAvatarStyle} onApplyBadge={setBadgeFrame} />;
-      case "github": return <GitProjectHub />;
+      case "profile":
+        return (
+          <StudentProfile
+            avatarStyle={avatarStyle}
+            badgeFrame={badgeFrame}
+            onApplyAvatar={setAvatarStyle}
+            onApplyBadge={setBadgeFrame}
+            onOpenSecurity={() => setScreen("security")}
+          />
+        );
+      case "security":
+        return <SecurityDevicesScreen role={role} onLogout={handleLogout} />;
+      case "github":
+        return (
+          <GitProjectHub
+            initialProjectId={selectedKanbanProjectId}
+            onSelectProject={setSelectedKanbanProjectId}
+            onNavigate={setScreen}
+          />
+        );
       case "xp-shop": return (
         <XPShop
           activeTheme={backgroundTheme}
@@ -314,7 +348,17 @@ export default function App() {
             onNavigateSection={setScreen}
           />
         );
-      case "instructor": return <InstructorPanel />;
+      case "instructor":
+      case "instructor-courses":
+      case "instructor-grading":
+      case "instructor-mindmap":
+      case "instructor-evidence":
+        return (
+          <InstructorPanel
+            currentSection={screen}
+            onNavigate={setScreen}
+          />
+        );
       case "kanban": return <KanbanBoard initialProjectId={selectedKanbanProjectId} />;
       case "schedule": return <EngineeringScheduleRota />;
       case "projects": return (
@@ -335,6 +379,12 @@ export default function App() {
     }
   };
 
+  const screenContainerKey = screen.startsWith("admin")
+    ? "admin-shell"
+    : screen.startsWith("instructor")
+    ? "instructor-shell"
+    : screen;
+
   return (
     <div className={`theme-${theme} ${theme === "dark" ? "dark text-slate-100" : "text-slate-900"} bg-theme-${backgroundTheme} pc-app-bg flex h-screen overflow-hidden`}>
       <ErrorBoundary>
@@ -346,7 +396,7 @@ export default function App() {
           badgeFrame={badgeFrame}
           onToggleTheme={toggleTheme}
           onNavigate={setScreen}
-          onLogout={() => setScreen("login")}
+          onLogout={handleLogout}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
       </ErrorBoundary>
@@ -360,12 +410,12 @@ export default function App() {
           avatarStyle={avatarStyle}
           badgeFrame={badgeFrame}
           onNavigate={setScreen}
-          onLogout={() => setScreen("login")}
+          onLogout={handleLogout}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
         <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto relative flex flex-col scroll-smooth">
           <ErrorBoundary>
-            <div key={screen} className="min-h-full flex-1">
+            <div key={screenContainerKey} className="min-h-full flex-1">
               {renderScreen()}
             </div>
           </ErrorBoundary>

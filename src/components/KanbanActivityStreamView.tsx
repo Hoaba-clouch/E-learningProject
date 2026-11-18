@@ -45,8 +45,33 @@ export default function KanbanActivityStreamView({
 }: Props) {
   const [filterType, setFilterType] = useState<"all" | "commit" | "task_done" | "h2_unblocked" | "pr_merged">("all");
 
-  const rawEvents: ActivityEvent[] = useMemo(() => [
-    {
+  const rawEvents: ActivityEvent[] = useMemo(() => {
+    const dynamicLogs: ActivityEvent[] = [];
+    for (const task of tasks) {
+      const logs = Array.isArray(task.auditLogs) ? task.auditLogs : [];
+      logs.forEach((log, idx) => {
+        const isDoneCol = log.toColumn.includes("Hoàn thành") || log.toColumn.toLowerCase().includes("done");
+        dynamicLogs.push({
+          id: `aud-${task.id}-${idx}`,
+          type: isDoneCol ? "task_done" : "commit",
+          actor: log.user || task.assignee?.name || "Thành viên",
+          avatar: (log.user || "H").trim().slice(-1).toUpperCase(),
+          avatarColor: isDoneCol ? "bg-emerald-600" : "bg-amber-600",
+          role: "Thành viên Scrum",
+          title: `[#${task.code}] ${task.title} (${log.fromColumn} → ${log.toColumn})`,
+          sub: `${task.epic} • Cập nhật trạng thái Kanban đồng bộ SQLite`,
+          time: log.timestamp || "Vừa xong",
+          badge: log.toColumn,
+          badgeColor: isDoneCol
+            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+            : "bg-amber-50 text-amber-700 border-amber-200",
+          taskId: task.id,
+        });
+      });
+    }
+    return [
+      ...dynamicLogs.reverse(),
+      {
       id: "act-1",
       type: "commit",
       actor: "Nguyễn Bá Hòa",
@@ -142,7 +167,8 @@ export default function KanbanActivityStreamView({
       badge: "CSV Import",
       badgeColor: "bg-teal-50 text-teal-700 border-teal-200",
     },
-  ], []);
+    ];
+  }, [tasks]);
 
   const filteredEvents = useMemo(() => {
     if (filterType === "all") return rawEvents;

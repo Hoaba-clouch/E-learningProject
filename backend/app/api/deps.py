@@ -6,7 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 
 from app.core.database import db, row_dict
-from app.core.security import TOKENS, decode_token, uid
+from app.core.security import TOKENS, decode_token, sha256, uid
 from app.core.timezone import now_utc
 
 security = HTTPBearer(auto_error=False)
@@ -28,6 +28,27 @@ def log_audit(
         )
 
 
+def record_audit_log(
+    actor_name: str,
+    actor_id: str | None,
+    action: str,
+    target: str,
+    log_type: str = "security",
+    resource_type: str = "platform",
+    resource_id: str | None = None,
+    decision: str = "allow",
+) -> None:
+    """Ghi nhật ký kiểm toán chi tiết phục vụ Admin Audit Console."""
+    with db() as conn:
+        conn.execute(
+            """INSERT INTO audit_events(
+                   id, actor_user_id, actor_label, action, resource_type, resource_id,
+                   target_label, decision, reason_code, category, created_at
+               ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            (uid(), actor_id, actor_name, action, resource_type, resource_id, target, decision, log_type, log_type, now_utc()),
+        )
+
+
 def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> dict[str, Any]:
     """
     FastAPI Dependency: Trích xuất và xác thực thông tin người dùng từ Bearer Token.
@@ -46,7 +67,19 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
     if raw_token in TOKENS:
         token_data = TOKENS[raw_token]
         user_id = token_data.get("id") or token_data.get("user_id")
+        tok_hash = sha256(raw_token)
         with db() as conn:
+            revoked_demo = conn.execute(
+                "SELECT revoked FROM jwt_sessions WHERE token_hash=? AND revoked=1 LIMIT 1",
+                (tok_hash,),
+            ).fetchone()
+            if revoked_demo:
+                TOKENS.pop(raw_token, None)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Phiên đăng nhập trên thiết bị này đã bị thu hồi",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
             user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
             membership = conn.execute(
                 "SELECT role, organization_id FROM memberships WHERE user_id=? LIMIT 1",
@@ -95,7 +128,19 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    jti = payload.get("jti")
     with db() as conn:
+        if jti:
+            revoked_row = conn.execute(
+                "SELECT revoked FROM jwt_sessions WHERE jti=? AND revoked=1 LIMIT 1",
+                (jti,),
+            ).fetchone()
+            if revoked_row:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Phiên đăng nhập JWT đã bị thu hồi bởi Quản trị viên",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
         user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         if not user:
             raise HTTPException(

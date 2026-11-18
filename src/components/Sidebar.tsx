@@ -59,13 +59,34 @@ interface NavGroup {
 }
 
 const navGroups: NavGroup[] = [
-  // ── GROUP 1: WORKSPACE ──
+  // ── ADMIN MANAGEMENT & SYSTEM (Visible for role="admin", placed top for Overview-first UX) ──
+  {
+    label: "Management",
+    items: [
+      { id: "admin", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["admin"] },
+      { id: "admin-users", label: "Users & RBAC", icon: <Users size={18} strokeWidth={1.85} />, roles: ["admin"], badge: "9" },
+      { id: "admin-classes", label: "Classes", icon: <GraduationCap size={18} strokeWidth={1.85} />, roles: ["admin"], badge: "6" },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { id: "admin-ai", label: "AI & Sandbox", icon: <Bot size={18} strokeWidth={1.85} />, roles: ["admin"], badge: "4" },
+      { id: "admin-sessions", label: "Security & JWT", icon: <ServerCog size={18} strokeWidth={1.85} />, roles: ["admin"] },
+      { id: "admin-audit", label: "Audit Logs", icon: <History size={18} strokeWidth={1.85} />, roles: ["admin"] },
+    ],
+  },
+
+  // ── WORKSPACE & STUDIO (Student & Instructor primary, plus shared inspect views for Admin) ──
   {
     label: "Workspace",
     items: [
       { id: "student-dashboard", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["student"] },
+      { id: "instructor", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["instructor"] },
       { id: "workspace", label: "Tasks", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["student"], badge: "7" },
-      { id: "projects", label: "Projects", icon: <FolderKanban size={18} strokeWidth={1.85} />, roles: ["student", "instructor"] },
+      { id: "instructor-courses", label: "Courses", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["instructor"], badge: "6" },
+      { id: "instructor-grading", label: "Grading & AI", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["instructor"], badge: "5", badgeDot: true },
+      { id: "projects", label: "Projects", icon: <FolderKanban size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
       { id: "kanban", label: "Kanban", icon: <Columns3 size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "9" },
       { id: "schedule", label: "Calendar", icon: <CalendarDays size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "4" },
     ],
@@ -73,8 +94,10 @@ const navGroups: NavGroup[] = [
   {
     label: "Studio",
     items: [
+      { id: "instructor-mindmap", label: "Master Map", icon: <Compass size={18} strokeWidth={1.85} />, roles: ["instructor"] },
+      { id: "instructor-evidence", label: "Evidence", icon: <History size={18} strokeWidth={1.85} />, roles: ["instructor"], badge: "Live" },
       { id: "intro", label: "Roadmap", icon: <Compass size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "Intro" },
-      { id: "defense-room", label: "AI Defense", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "Live" },
+      { id: "defense-room", label: "AI Defense", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"], badge: "3D" },
       { id: "github", label: "Git", icon: <GitFork size={18} strokeWidth={1.85} />, roles: ["student", "instructor"] },
       { id: "xp-shop", label: "Shop", icon: <ShoppingBag size={18} strokeWidth={1.85} />, roles: ["student"] },
     ],
@@ -83,25 +106,7 @@ const navGroups: NavGroup[] = [
     label: "Account",
     items: [
       { id: "profile", label: "Profile", icon: <UserRound size={18} strokeWidth={1.85} />, roles: ["student"] },
-      { id: "instructor", label: "Instructor", icon: <GraduationCap size={18} strokeWidth={1.85} />, roles: ["instructor"] },
-    ],
-  },
-
-  // ── GROUP 2: MANAGEMENT & SYSTEM ──
-  {
-    label: "Management",
-    items: [
-      { id: "admin", label: "Overview", icon: <LayoutDashboard size={18} />, roles: ["admin"] },
-      { id: "admin-users", label: "Users", icon: <Users size={18} />, roles: ["admin"], badge: "6" },
-      { id: "admin-classes", label: "Classes", icon: <GraduationCap size={18} />, roles: ["admin"], badge: "4" },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { id: "admin-ai", label: "AI", icon: <Bot size={18} />, roles: ["admin"] },
-      { id: "admin-sessions", label: "Security", icon: <ServerCog size={18} />, roles: ["admin"] },
-      { id: "admin-audit", label: "Logs", icon: <History size={18} />, roles: ["admin"] },
+      { id: "security", label: "Security", icon: <Shield size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
     ],
   },
 ];
@@ -212,7 +217,7 @@ export default function Sidebar({
           <div className={`flex items-center ${collapsed ? "flex-col gap-2.5 justify-center" : "justify-between"}`}>
             {/* Logo & Brand title */}
             <div
-              onClick={() => onNavigate("student-dashboard")}
+              onClick={() => onNavigate(role === "admin" ? "admin" : role === "instructor" ? "instructor" : "student-dashboard")}
               className="flex items-center gap-2.5 min-w-0 cursor-pointer group"
               title="CodeMind AI • Learning OS"
             >
@@ -356,7 +361,7 @@ export default function Sidebar({
       </div>
 
       {/* ─── 🌟 BOX 2: BOTTOM POMODORO TIMER CAPSULE (MARLO FLOATING CARD) ─── */}
-      {role === "student" && !screen.startsWith("admin") && screen !== "instructor" && (
+      {role === "student" && !screen.startsWith("admin") && !screen.startsWith("instructor") && (
         <div className="shrink-0 mt-2">
           <MarloFocusTimer collapsed={collapsed} />
         </div>

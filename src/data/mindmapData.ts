@@ -46,7 +46,7 @@ export const TREE_MINDMAP_DATA: Record<string, SubjectTreeData> = {
       integrityScore: 100,
     },
     quickSummary: [
-      "Kế thừa (extends) tái sử dụng mã nguồn theo quan hệ 'is-a'; dùng super() khởi tạo lớp cha.",
+      "Kế thừa (: public Base) tái sử dụng theo quan hệ 'is-a'; dùng Member Initializer List khởi tạo lớp cha.",
       "Đa hình (Override) dispatch qua con trỏ vtable tại runtime với tốc độ O(1).",
       "Interface đóng vai trò hợp đồng hành vi, mở rộng hệ thống mà không sửa code cũ.",
     ],
@@ -125,7 +125,7 @@ export const TREE_MINDMAP_DATA: Record<string, SubjectTreeData> = {
         position: { x: 610, y: 50 },
         data: {
           nodeType: "leaf",
-          title: "extends (is-a)",
+          title: ": public Base (Is-A)",
           summary: "Lớp con tái sử dụng toàn bộ trường và hàm cha; chỉ áp dụng khi có quan hệ 'là một'.",
           badge: "Tái sử dụng mã",
           progressPct: 100,
@@ -138,7 +138,7 @@ export const TREE_MINDMAP_DATA: Record<string, SubjectTreeData> = {
         position: { x: 610, y: 180 },
         data: {
           nodeType: "leaf",
-          title: "super() constructor",
+          title: "Initializer List (: Base)",
           summary: "Gọi constructor lớp cha ở dòng đầu tiên để cấp phát bộ nhớ cha trước khi gán thuộc tính con.",
           badge: "Cấp phát cha trước",
           progressPct: 100,
@@ -166,8 +166,8 @@ export const TREE_MINDMAP_DATA: Record<string, SubjectTreeData> = {
         position: { x: 610, y: 450 },
         data: {
           nodeType: "leaf",
-          title: "@Override method",
-          summary: "Định nghĩa lại hành vi phương thức của lớp cha tại runtime; không được thu hẹp quyền truy cập.",
+          title: "virtual & override",
+          summary: "Gắn từ khóa override ở lớp con để compiler C++20 kiểm khớp chữ ký hàm ảo của lớp cha.",
           badge: "Runtime Binding",
           progressPct: 100,
           status: "completed",
@@ -180,7 +180,7 @@ export const TREE_MINDMAP_DATA: Record<string, SubjectTreeData> = {
         data: {
           nodeType: "leaf",
           title: "vtable & vptr Dispatch",
-          summary: "Bảng con trỏ hàm ảo giúp máy ảo tra cứu địa chỉ hàm đa hình tại runtime với tốc độ O(1).",
+          summary: "Mỗi object chứa con trỏ ẩn vptr trỏ vào vtable của lớp thực tế để Dynamic Dispatch tốc độ O(1).",
           badge: "Tra cứu O(1)",
           progressPct: 80,
           status: "in-progress",
@@ -193,7 +193,7 @@ export const TREE_MINDMAP_DATA: Record<string, SubjectTreeData> = {
         data: {
           nodeType: "leaf",
           title: "Upcasting & Downcasting",
-          summary: "Ép kiểu an toàn từ lớp con lên cha và ngược lại, ngăn ngừa lỗi bộ nhớ ClassCastException.",
+          summary: "Dùng smart pointer đa hình và dynamic_cast an toàn; luôn khai báo virtual ~Base() = default.",
           badge: "Kiểm tra kiểu RTTI",
           progressPct: 75,
           status: "in-progress",
@@ -291,7 +291,7 @@ export const TREE_MINDMAP_DATA: Record<string, SubjectTreeData> = {
           nodeType: "subleaf",
           title: "class Dog : public Animal",
           summary: "Tái sử dụng trường & hàm công khai; kiểm tra quan hệ 'là một' chặt chẽ trước khi kế thừa.",
-          badge: "C++ / Java",
+          badge: "Modern C++20",
           progressPct: 100,
           status: "completed",
         },
@@ -709,4 +709,3406 @@ export const TREE_MINDMAP_DATA: Record<string, SubjectTreeData> = {
     ],
   },
 
+
+  // ─── AUTO-GENERATED 10 SUBJECT MINDMAPS (CS202..CS499)
+
+  "dsa": {
+    "subjectId": "dsa",
+    "subjectCode": "CS202",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Giải thuật Đồ thị, Truy vấn Đoạn & DP",
+    "overviewStats": {
+      "completionRate": 85,
+      "totalXp": 290,
+      "timeSpentMins": 55,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Danh sách kề O(V+E) + Dijkstra Min-Heap Lazy Deletion đạt O((V+E) log V) cho đồ thị trọng số không âm.",
+      "Kruskal + DSU (Path Compression + Union by Size) tìm Cây khung cực tiểu với độ phức tạp gần hằng số O(alpha(N)).",
+      "Fenwick/Segment Tree xử lý truy vấn đoạn O(log N), còn 0/1 Knapsack nén Rolling Array 1D tiết kiệm RAM O(W)."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS202: Đồ thị & DP",
+          "progressPct": 85,
+          "xp": 290,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Bài 1 · Đồ thị & Dijkstra",
+          "badge": "O(E log V)",
+          "progressPct": 100,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Danh sách kề (Adj List)",
+          "summary": "Lưu V danh sách cạnh kề vector<vector<pair>> chỉ tốn O(V+E) RAM cho 10^5 đỉnh.",
+          "badge": "Sparse Graph",
+          "progressPct": 100,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Dijkstra Lazy Deletion",
+          "summary": "Dùng min-heap priority_queue kèm `if (d > dist[u]) continue;` tránh duyệt lặp trạng thái cũ.",
+          "badge": "Shortest Path",
+          "progressPct": 100,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Bài 2 · DSU & Kruskal MST",
+          "badge": "O(alpha(N))",
+          "progressPct": 90,
+          "status": "completed",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Path Compression",
+          "summary": "Gán trực tiếp `parent[v] = find(parent[v])` làm phẳng chiều cao cây tập hợp rời nhau.",
+          "badge": "Find O(1)*",
+          "progressPct": 95,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Kruskal Greedy MST",
+          "summary": "Sắp xếp cạnh tăng dần và gộp bằng DSU tới khi chọn đủ V-1 cạnh không tạo chu trình.",
+          "badge": "Min Spanning Tree",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Bài 3 · Truy vấn Đoạn",
+          "badge": "O(log N)",
+          "progressPct": 80,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Fenwick Tree (BIT)",
+          "summary": "Khai thác phép bit `i & -i` trên mảng 1-based để cập nhật điểm và tính tổng đoạn trong 10 dòng.",
+          "badge": "LSB Bit Trick",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Segment Tree 4*N",
+          "summary": "Truy vấn Range Min/Max/GCD kết hợp Lazy Propagation cập nhật cả đoạn [L, R] tốc độ O(log N).",
+          "badge": "Lazy Prop",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Bài 4 · Quy hoạch Động",
+          "badge": "Optimal State",
+          "progressPct": 85,
+          "status": "completed",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Memoization Top-Down",
+          "summary": "Lưu kết quả bài toán con trùng lặp vào mảng `memo[]` biến cây mũ O(2^N) thành đa thức.",
+          "badge": "Khử trùng lặp",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Rolling Array 0/1 Knapsack",
+          "summary": "Duyệt ngược trọng lượng từ W về w[i] trên mảng 1D đảm bảo mỗi vật chỉ chọn tối đa 1 lần.",
+          "badge": "O(W) Space",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-dsa-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-dsa-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-dsa-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-dsa-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-dsa-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-dsa-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-dsa-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-dsa-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-dsa-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-dsa-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-dsa-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-dsa-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "network": {
+    "subjectId": "network",
+    "subjectCode": "CS205",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Kiến trúc Máy tính, OS & TCP/IP",
+    "overviewStats": {
+      "completionRate": 75,
+      "totalXp": 220,
+      "timeSpentMins": 45,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "TCP thiết lập kênh tin cậy qua bắt tay 3 bước SYN -> SYN-ACK -> ACK; HTTP/3 dùng QUIC UDP loại bỏ HoL Blocking.",
+      "Virtual Memory cô lập không gian tiến trình thông qua Page Table 4KB + bộ nhớ đệm TLB tăng tốc dịch địa chỉ.",
+      "DNS phân giải theo chuỗi Recursive -> Root -> TLD -> Auth, kết hợp TLS 1.3 (1-RTT) bảo mật HTTPS."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS205: OS & TCP/IP",
+          "progressPct": 75,
+          "xp": 220,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Tầng 1 · TCP Socket & QUIC",
+          "badge": "SYN-ACK",
+          "progressPct": 100,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "TCP 3-Way Handshake",
+          "summary": "Bắt tay SYN -> SYN-ACK -> ACK đồng bộ Sequence Number, kèm Sliding Window & Flow Control.",
+          "badge": "Reliable Stream",
+          "progressPct": 100,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "HTTP/3 trên UDP QUIC",
+          "summary": "Tách luồng Stream độc lập trên UDP giúp rớt 1 gói không khóa chéo các luồng còn lại.",
+          "badge": "Zero HoL Block",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Tầng 2 · Virtual Memory",
+          "badge": "MMU & TLB",
+          "progressPct": 70,
+          "status": "in-progress",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Paging & Page Table",
+          "summary": "Chia RAM thành trang 4KB; tách địa chỉ ảo thành Virtual Page Number (VPN) + 12-bit Offset.",
+          "badge": "Cô lập RAM",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "TLB Hardware Cache",
+          "summary": "Đệm ánh xạ Virtual -> Physical ngay trong CPU giúp giảm chi phí tra cứu Page Table nhiều tầng.",
+          "badge": "CPU Cache Hit",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Tầng 3 · Đa luồng CPU",
+          "badge": "Concurrency",
+          "progressPct": 65,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Process vs Thread",
+          "summary": "Process tách riêng không gian địa chỉ ảo; Thread chia sẻ Heap nên nhanh hơn nhưng cần Mutex.",
+          "badge": "Context Switch",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "RAII Lock & Atomic",
+          "summary": "Dùng `std::lock_guard` và thứ tự khóa toàn cục để triệt tiêu Race Condition và Deadlock.",
+          "badge": "Thread Safe",
+          "progressPct": 60,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Tầng 4 · DNS & TLS 1.3",
+          "badge": "HTTPS Security",
+          "progressPct": 80,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Phân giải DNS đệ quy",
+          "summary": "Local Cache -> Resolver -> Root -> TLD -> Authoritative Name Server với bản ghi A/CNAME/TTL.",
+          "badge": "UDP/53 Query",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "TLS 1.3 & PFS",
+          "summary": "Thỏa thuận khóa ECDHE ngay trong ClientHello (1-RTT) kèm AES-GCM & Perfect Forward Secrecy.",
+          "badge": "1-RTT TLS",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-network-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-network-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-network-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-network-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-network-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-network-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-network-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-network-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-network-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-network-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-network-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-network-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "realtime": {
+    "subjectId": "realtime",
+    "subjectCode": "CS215",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Event Loop, WebSockets & Core Web Vitals",
+    "overviewStats": {
+      "completionRate": 78,
+      "totalXp": 240,
+      "timeSpentMins": 50,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Microtask Queue (Promise) luôn giải phóng sạch trước Macrotask Queue (setTimeout); chạy song song bằng Promise.all.",
+      "WebSockets giữ kênh Full-Duplex 2 chiều (HTTP 101) kèm Exponential Backoff + Jitter; SSE tối ưu cho AI Streaming 1 chiều.",
+      "Giữ Web Vitals chuẩn xanh: LCP <= 2.5s, INP <= 200ms, CLS <= 0.1 bằng Virtualization và GPU transform/opacity."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS215: Realtime & Vitals",
+          "progressPct": 78,
+          "xp": 240,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chặng 1 · JS Concurrency",
+          "badge": "Event Loop",
+          "progressPct": 100,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Microtask > Macrotask",
+          "summary": "Call Stack trống -> rút cạn Promise `.then` queue -> lấy 1 Macrotask setTimeout -> lặp lại.",
+          "badge": "Async Order",
+          "progressPct": 100,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Closure & Debounce",
+          "summary": "Đóng gói `timerId` qua Lexical Scope để hoãn API search 300ms và dùng useRef tránh Stale Closure.",
+          "badge": "300ms Guard",
+          "progressPct": 95,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chặng 2 · Caching & Sync",
+          "badge": "TanStack Query",
+          "progressPct": 80,
+          "status": "in-progress",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Stale-While-Revalidate",
+          "summary": "Phân tách Server State Cache (`staleTime`) khỏi Client UI State, cập nhật nền mượt mà.",
+          "badge": "0ms Cache UI",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Optimistic Rollback",
+          "summary": "Cập nhật UI ngay khi kéo thả Kanban và hoàn nguyên về snapshot cũ nếu API Server báo lỗi.",
+          "badge": "Optimistic UI",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chặng 3 · Socket & SSE",
+          "badge": "HTTP 101",
+          "progressPct": 70,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "WebSocket Full-Duplex",
+          "summary": "Nâng cấp từ HTTP 101 truyền tin 2 chiều độ trễ thấp, kèm Ping/Pong Heartbeat & Jitter Backoff.",
+          "badge": "2-Way Channel",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Server-Sent Events",
+          "summary": "Luồng streaming 1 chiều siêu nhẹ trên HTTP chuẩn cho LLM AI token streaming.",
+          "badge": "1-Way AI Stream",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chặng 4 · Web Vitals 60fps",
+          "badge": "Lighthouse 100",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "LCP / INP / CLS",
+          "summary": "Đặt kích thước trước chống giật CLS <= 0.1; chia nhỏ Long Task < 50ms giữ INP <= 200ms.",
+          "badge": "Vital Thresholds",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Windowing & GPU Layer",
+          "summary": "List Virtualization chỉ render ~25 dòng nhìn thấy và chạy animation bằng `transform`/`opacity`.",
+          "badge": "Zero Reflow",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-realtime-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-realtime-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-realtime-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-realtime-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-realtime-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-realtime-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-realtime-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-realtime-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-realtime-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-realtime-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-realtime-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-realtime-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "mobile": {
+    "subjectId": "mobile",
+    "subjectCode": "CS306",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Kiến trúc Flutter Engine, BLoC & Offline",
+    "overviewStats": {
+      "completionRate": 72,
+      "totalXp": 230,
+      "timeSpentMins": 45,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Flutter biên dịch AOT Dart và tự vẽ qua Impeller trên 3 cây: Widget (cấu hình) -> Element (BuildContext/State) -> RenderObject.",
+      "Tách UI khỏi Business Logic bằng Cubit/BLoC Immutable State + Dart Sealed Class và `const` Widget cắt tỉa rebuild.",
+      "Bảo vệ Auth Token bằng FlutterSecureStorage (Keychain/Keystore) và Dio Interceptor tự động Refresh Token."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS306: Flutter Mobile",
+          "progressPct": 72,
+          "xp": 230,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chặng 1 · Flutter Engine",
+          "badge": "3 Trees",
+          "progressPct": 90,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Widget -> Element -> Render",
+          "summary": "Widget bất biến nhẹ; Element giữ State và BuildContext leo ngược tìm InheritedWidget tổ tiên.",
+          "badge": "Impeller 120fps",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "const & mounted Guard",
+          "summary": "Gắn `const` bỏ qua diff nhánh tĩnh và kiểm tra `if (!mounted) return;` sau mọi thao tác `await`.",
+          "badge": "Crash-Free",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chặng 2 · BLoC / Cubit",
+          "badge": "Unidirectional",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Event -> BLoC -> State",
+          "summary": "UI phát Event và lắng nghe BlocBuilder với Sealed State Class bất biến.",
+          "badge": "Sealed Dart 3",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "ListView.builder & GoRouter",
+          "summary": "Lazy render theo viewport với `itemExtent` cố định và Auth Guard điều hướng tập trung.",
+          "badge": "Smooth Scroll",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chặng 3 · API & Storage",
+          "badge": "Secure Auth",
+          "progressPct": 60,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Dio JWT Interceptor",
+          "summary": "Tự chèn Authorization Bearer Header và xoay vòng Refresh Token khi gặp 401.",
+          "badge": "Auto Refresh",
+          "progressPct": 65,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "FlutterSecureStorage",
+          "summary": "Lưu Refresh Token vào Keychain/Keystore mã hóa phần cứng, tránh dùng SharedPreferences.",
+          "badge": "Hardware Vault",
+          "progressPct": 60,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chặng 4 · Offline & Release",
+          "badge": "Profile AOT",
+          "progressPct": 65,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Offline-First SQLite",
+          "summary": "Hiển thị bài giảng tức thì < 50ms từ Cache cục bộ rồi đồng bộ nền khi có mạng.",
+          "badge": "Zero Spinner",
+          "progressPct": 65,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Build AAB & Obfuscate",
+          "summary": "Đo FPS bằng `--profile` và phát hành `.aab` release làm gọn + split-debug-info.",
+          "badge": "Store Ready",
+          "progressPct": 65,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-mobile-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-mobile-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-mobile-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-mobile-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-mobile-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-mobile-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-mobile-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-mobile-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-mobile-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-mobile-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-mobile-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-mobile-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "distributed": {
+    "subjectId": "distributed",
+    "subjectCode": "CS315",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Redis Cache, Apache Kafka & Hệ phân tán",
+    "overviewStats": {
+      "completionRate": 74,
+      "totalXp": 250,
+      "timeSpentMins": 50,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Redis Cache-Aside + Sorted Set xử lý 100k+ RPS dưới 1ms; chống Penetration/Stampede/Avalanche bằng Bloom Filter, Lock & Jitter.",
+      "Apache Kafka lưu Append-Only Partitioned Log đảm bảo thứ tự theo Partition Key và Replay bằng Consumer Group Offset.",
+      "Cân bằng CAP (CP vs AP), phân mảnh Sharding bằng Consistent Hashing và điều tiết API bằng Token Bucket Redis."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS315: Distributed Systems",
+          "progressPct": 74,
+          "xp": 250,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Mảng 1 · Redis Caching",
+          "badge": "< 1ms RAM",
+          "progressPct": 85,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Cache-Aside & ZSET",
+          "summary": "Đọc Redis trước -> DB nếu miss -> `SETEX` TTL; dùng Sorted Set cho Leaderboard thời gian thực.",
+          "badge": "Cache Hit",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Chống Stampede & Avalanche",
+          "summary": "Khóa bằng Atomic `SET NX EX`, thêm Random TTL Jitter và cache giá trị Null ngắn hạn.",
+          "badge": "Guard 3 Thảm họa",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Mảng 2 · Apache Kafka",
+          "badge": "Commit Log",
+          "progressPct": 70,
+          "status": "in-progress",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Topic & Partition Key",
+          "summary": "Gắn Key=`user_id` giúp mọi sự kiện cùng user vào đúng 1 Partition bảo toàn thứ tự.",
+          "badge": "Ordered Log",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Idempotency & DLQ",
+          "summary": "Lưu bảng `processed_events` tránh xử lý trùng và đẩy lỗi vĩnh viễn sang Dead Letter Queue.",
+          "badge": "At-Least-Once+",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Mảng 3 · CAP & Hashing",
+          "badge": "CP vs AP",
+          "progressPct": 70,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Định lý CAP Trade-off",
+          "summary": "Chọn CP (Nhất quán) cho sổ cái giao dịch hoặc AP (Sẵn sàng) cho feed/cache khi mất mạng.",
+          "badge": "Partition Guard",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Consistent Hashing",
+          "summary": "Vòng băm kết hợp Virtual Nodes giúp chỉ di chuyển 1/N key khi mở rộng số Node.",
+          "badge": "Elastic Shard",
+          "progressPct": 65,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Mảng 4 · Rate Limiter",
+          "badge": "HTTP 429",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Token Bucket Lua",
+          "summary": "Thực thi trừ token nguyên tử trên Redis dùng chung giữa nhiều instance Gateway.",
+          "badge": "Burst Safe",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Transactional Outbox",
+          "summary": "Ghi sự kiện cùng transaction PostgreSQL đảm bảo DB và Kafka không bao giờ lệch trạng thái.",
+          "badge": "Zero Event Loss",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-distributed-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-distributed-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-distributed-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-distributed-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-distributed-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-distributed-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-distributed-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-distributed-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-distributed-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-distributed-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-distributed-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-distributed-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "security": {
+    "subjectId": "security",
+    "subjectCode": "CS312",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Bảo mật Web OWASP Top 10 & Auth Guard",
+    "overviewStats": {
+      "completionRate": 80,
+      "totalXp": 260,
+      "timeSpentMins": 50,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Chặn Top OWASP: Prepared Statements triệt tiêu SQLi, Ownership Query (`AND user_id = ?`) khóa chặt IDOR (A01).",
+      "Phòng thủ trình duyệt: Auto-escape + DOMPurify + CSP chống XSS; Bearer Auth / SameSite Cookie chống CSRF.",
+      "An toàn xác thực: Bcrypt/Argon2id + `secrets` CSPRNG cho 2FA OTP + Brute-Force Lockout 5 lần sai + Audit Trail."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS312: OWASP Security",
+          "progressPct": 80,
+          "xp": 260,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Lớp 1 · A01 & Injection",
+          "badge": "OWASP Top 3",
+          "progressPct": 95,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Prepared Statements",
+          "summary": "Truyền tham số ràng buộc `?` / `$1` tách rạch ròi mã lệnh SQL khỏi chuỗi dữ liệu người dùng.",
+          "badge": "Zero SQLi",
+          "progressPct": 100,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Ownership Check (IDOR)",
+          "summary": "Luôn đọc `user['id']` từ JWT đã xác thực và ràng buộc `AND user_id = ?` trên mọi ID resource.",
+          "badge": "Anti-IDOR",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Lớp 2 · XSS & CSRF/CORS",
+          "badge": "Browser Guard",
+          "progressPct": 80,
+          "status": "in-progress",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Output Escape & CSP",
+          "summary": "Không dùng `dangerouslySetInnerHTML`, chặn `javascript:` URL và bật `Content-Security-Policy`.",
+          "badge": "XSS Shield",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "HttpOnly + SameSite + CORS",
+          "summary": "Khóa cookie bằng `HttpOnly; SameSite=Lax; Secure` và Whitelist chính xác CORS Origins.",
+          "badge": "Anti-CSRF",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Lớp 3 · Crypto & 2FA OTP",
+          "badge": "Bcrypt + CSPRNG",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Bcrypt Work Factor",
+          "summary": "Băm mật khẩu kèm Salt riêng chống GPU Brute-Force và bảng cầu vồng Rainbow Table.",
+          "badge": "Key Stretching",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "secrets OTP & Constant-Time",
+          "summary": "Sinh OTP 6 số bằng `secrets.randbelow` và đối chiếu bằng `hmac.compare_digest`.",
+          "badge": "Anti-Timing",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Lớp 4 · Brute-Force Guard",
+          "badge": "HTTP 423 Lock",
+          "progressPct": 80,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Lockout 5 Lần Sai",
+          "summary": "Tăng `failed_login_attempts`, khóa 15 phút (`423 Locked`) và xóa đếm khi đăng nhập đúng.",
+          "badge": "Anti-Guessing",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Audit Log & Device Trust",
+          "summary": "Ghi vết mọi hành động an ninh nhạy cảm và thu hồi ngay phiên JWT thiết bị lạ.",
+          "badge": "Incident Ready",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-security-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-security-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-security-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-security-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-security-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-security-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-security-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-security-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-security-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-security-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-security-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-security-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "ai-ml": {
+    "subjectId": "ai-ml",
+    "subjectCode": "CS410",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Mạng Nơ-ron, Backpropagation & Attention",
+    "overviewStats": {
+      "completionRate": 82,
+      "totalXp": 270,
+      "timeSpentMins": 55,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Hàm kích hoạt phi tuyến (ReLU/GELU) là bắt buộc để mạng sâu học ranh giới phức tạp; chia Train/Test trước khi fit Scaler.",
+      "Training Loop PyTorch chuẩn 4 bước: `zero_grad()` -> Forward -> Loss -> `loss.backward()` (Chain Rule) -> `optimizer.step()`.",
+      "Đo chuẩn Imbalanced bằng Precision/Recall/F1 thay cho Accuracy; Self-Attention `softmax(QK^T/sqrt(d_k))V` là lõi LLM."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS410: Deep ML Core",
+          "progressPct": 82,
+          "xp": 270,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chương 1 · Neural Net & Data",
+          "badge": "MLP + ReLU",
+          "progressPct": 95,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Phi tuyến ReLU & Dropout",
+          "summary": "Ngăn các tầng tuyến tính gộp làm một, tránh Vanishing ở miền dương và chống Overfitting.",
+          "badge": "Non-Linearity",
+          "progressPct": 100,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Chống Data Leakage",
+          "summary": "Luôn `train_test_split` trước -> `fit()` Scaler/Imputer DUY NHẤT trên tập Train -> `transform` Test.",
+          "badge": "Clean Pipeline",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chương 2 · Optim & Backprop",
+          "badge": "AdamW + Chain",
+          "progressPct": 85,
+          "status": "completed",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Gradient Descent Loop",
+          "summary": "Luôn gọi `optimizer.zero_grad()` trước `backward()` để không tích lũy gradient qua các batch.",
+          "badge": "PyTorch 4-Step",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Chain Rule & Skip Connect",
+          "summary": "Lan truyền ngược sai số qua đồ thị Autograd kết hợp Residual `x + F(x)` & `clip_grad_norm_`.",
+          "badge": "Stable Grad",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chương 3 · Metrics & Variance",
+          "badge": "Precision / F1",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Bias vs Variance",
+          "summary": "Phát hiện Underfitting/Overfitting qua đường cong Train vs Val Loss và dùng Early Stopping.",
+          "badge": "Generalization",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Confusion Matrix & F1",
+          "summary": "Dùng Precision, Recall và F1-Score thay vì Accuracy giả tạo trên tập dữ liệu lệch nhãn.",
+          "badge": "Imbalanced Eval",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Chương 4 · Self-Attention",
+          "badge": "Transformer Core",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Q · K^T / sqrt(d_k)",
+          "summary": "Chia cho căn bậc hai chiều vector giữ phương sai ổn định trước khi đưa qua Softmax.",
+          "badge": "Scaled Attn",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Multi-Head Embeddings",
+          "summary": "Nắm bắt song song nhiều ngữ cảnh xa trong câu — nền móng trực tiếp của LLM & RAG.",
+          "badge": "Foundation AI",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-ai-ml-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-ai-ml-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-ai-ml-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-ai-ml-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-ai-ml-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-ai-ml-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-ai-ml-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-ai-ml-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-ai-ml-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-ai-ml-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-ai-ml-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-ai-ml-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "devops": {
+    "subjectId": "devops",
+    "subjectCode": "CS405",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Docker Containers, Compose & CI/CD Pipeline",
+    "overviewStats": {
+      "completionRate": 84,
+      "totalXp": 260,
+      "timeSpentMins": 50,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Multi-Stage Build + `.dockerignore` + thứ tự `COPY lockfile` trước `COPY . .` giúp giảm 90% dung lượng và tăng tốc Layer Cache.",
+      "Docker Compose dùng Named Volumes bảo toàn DB, DNS nội bộ theo Service Name và `condition: service_healthy`.",
+      "GitHub Actions CI khóa `--frozen-lockfile`, chạy Pytest/Vite Build bắt buộc và gắn Tag Image bất biến theo Git SHA."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS405: DevOps & CI/CD",
+          "progressPct": 84,
+          "xp": 260,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Phần 1 · Container Engine",
+          "badge": "WSL2 & Sandbox",
+          "progressPct": 100,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Namespaces & Cgroups",
+          "summary": "Cô lập tiến trình & giới hạn `--memory`, `--cpus`, `--network=none` cho Sandbox chạy code.",
+          "badge": "Linux Isolation",
+          "progressPct": 100,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Multi-Stage Dockerfile",
+          "summary": "Biên dịch ở Stage Builder rồi chỉ copy artifact sạch sang Alpine/Distroless Stage Runner.",
+          "badge": "< 50MB Image",
+          "progressPct": 95,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Phần 2 · Layer & Security",
+          "badge": "Non-root User",
+          "progressPct": 85,
+          "status": "completed",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Tối ưu Layer Caching",
+          "summary": "Đặt bước `COPY package.json lockfile` + `install` lên trên để tránh tải lại thư viện khi sửa code.",
+          "badge": "Fast Build",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Non-root & .dockerignore",
+          "summary": "Chuyển `USER appuser` chống leo thang đặc quyền và loại `.env`/`.git`/`node_modules` khỏi context.",
+          "badge": "Hardened Image",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Phần 3 · Docker Compose",
+          "badge": "Multi-Service",
+          "progressPct": 80,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Named Volumes & DNS",
+          "summary": "Giữ bền DB ngoài vòng đời Container; kết nối DB qua hostname service (`db:5432`, KHÔNG `localhost`).",
+          "badge": "Persistent DB",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Healthcheck & Startup",
+          "summary": "Dùng `pg_isready` kết hợp `condition: service_healthy` đảm bảo API bật sau khi Postgres sẵn sàng.",
+          "badge": "Zero Race Init",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Phần 4 · GitHub Actions",
+          "badge": "CI/CD SHA Tag",
+          "progressPct": 80,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "CI Gates (--frozen-lockfile)",
+          "summary": "Ép mọi PR qua Pytest + TypeCheck + Vite Build tự động với dependencies khóa chặt phiên bản.",
+          "badge": "Reproducible CI",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Blue-Green & SHA Tags",
+          "summary": "Push tag bất biến theo `github.sha` để Rollback dưới 5 giây không downtime.",
+          "badge": "Zero Downtime",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-devops-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-devops-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-devops-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-devops-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-devops-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-devops-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-devops-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-devops-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-devops-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-devops-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-devops-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-devops-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "cloud": {
+    "subjectId": "cloud",
+    "subjectCode": "CS415",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Cloud Native AWS, Kubernetes & Observability",
+    "overviewStats": {
+      "completionRate": 75,
+      "totalXp": 250,
+      "timeSpentMins": 50,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Microservices giao tiếp Sync bằng gRPC Protobuf và Async qua Kafka; tách dữ liệu bằng Database-per-Service.",
+      "Kubernetes điều phối Pod bằng Deployment + Service ClusterIP/Ingress, phân biệt rõ `readinessProbe` vs `livenessProbe`.",
+      "File upload đưa sang Private S3 + Pre-signed URLs; scale tự động bằng HPA và giám sát qua OpenTelemetry + p95/p99."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS415: Cloud & K8s",
+          "progressPct": 75,
+          "xp": 250,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Mảng 1 · Cloud Native",
+          "badge": "12-Factor App",
+          "progressPct": 85,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "gRPC vs Async Events",
+          "summary": "Tốc độ cao nội bộ dùng HTTP/2 gRPC Protobuf; tách lỏng tác vụ nền chịu lỗi bằng Queue/Kafka.",
+          "badge": "Service Mesh",
+          "progressPct": 90,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Private S3 & Pre-signed URL",
+          "summary": "Client tải thẳng file nặng lên Object Storage qua URL ký 60s kết hợp IAM Role tối thiểu.",
+          "badge": "Stateless App",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Mảng 2 · Kubernetes Core",
+          "badge": "Pods & Deploy",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Deployment Self-Healing",
+          "summary": "Control Plane (`etcd` + Scheduler) tự giữ đúng số Replica khỏe mạnh khi Node gặp sự cố.",
+          "badge": "Desired State",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Service DNS & Ingress L7",
+          "summary": "Định tuyến ổn định tới các Pod đổi IP liên tục và cấu hình Routing HTTPS qua một Ingress duy nhất.",
+          "badge": "L7 Gateway",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Mảng 3 · Stability Probes",
+          "badge": "Requests/Limits",
+          "progressPct": 70,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Readiness vs Liveness",
+          "summary": "Readiness rút Pod chưa sẵn sàng khỏi Service; Liveness chỉ restart khi tiến trình treo nội tại.",
+          "badge": "Smart Probes",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "CPU/Memory Resource Spec",
+          "summary": "Luôn khai báo `requests` (để HPA và Scheduler hoạt động) và `limits` chống OOMKill dây chuyền.",
+          "badge": "QoS Guard",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Mảng 4 · HPA & Telemetry",
+          "badge": "p95/p99 Traces",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "HPA Auto-Scaling",
+          "summary": "Co giãn số Pod tự động theo tải CPU/Queue với `minReplicas >= 2` giữ High Availability.",
+          "badge": "Elastic Cloud",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Logs + Metrics + Traces",
+          "summary": "Gắn `X-Request-ID` xuyên suốt dịch vụ, cảnh báo theo đuôi trễ p95/p99 thay vì số trung bình.",
+          "badge": "OpenTelemetry",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-cloud-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-cloud-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-cloud-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-cloud-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-cloud-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-cloud-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-cloud-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-cloud-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-cloud-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-cloud-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-cloud-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-cloud-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
+
+  "capstone": {
+    "subjectId": "capstone",
+    "subjectCode": "CS499",
+    "title": "Sơ Đồ Tư Duy Tổng Kết: Kiến trúc Enterprise & Bảo vệ Đồ án CS499",
+    "overviewStats": {
+      "completionRate": 78,
+      "totalXp": 350,
+      "timeSpentMins": 60,
+      "integrityScore": 100
+    },
+    "quickSummary": [
+      "Thiết kế Architecture Blueprint + ADR (ngữ cảnh, quyết định, trade-offs) kèm SLO nội bộ chặt hơn SLA cam kết.",
+      "Xây dựng Monorepo Fullstack liên thông dữ liệu thật qua 3 vai trò (Student · Instructor · Admin) và RBAC chặt chẽ.",
+      "Chứng minh chất lượng bằng Tháp Kiểm thử (Pytest Integration + E2E F5 Persist + Build) và Bảo vệ Trade-off trước Hội đồng."
+    ],
+    "nodes": [
+      {
+        "id": "root",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 40,
+          "y": 580
+        },
+        "data": {
+          "nodeType": "root",
+          "title": "CS499: Enterprise Capstone",
+          "progressPct": 78,
+          "xp": 350,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 95
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Cột mốc 1 · Blueprint & SLO",
+          "badge": "ADR Design",
+          "progressPct": 90,
+          "status": "completed",
+          "tone": "blue"
+        }
+      },
+      {
+        "id": "l-1-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 20
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "ADR & Back-of-Envelope",
+          "summary": "Ước lượng QPS, lưu trữ và ghi rõ lý do chọn giải pháp kèm đánh đổi kỹ thuật.",
+          "badge": "Design Trade-off",
+          "progressPct": 95,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-1-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 175
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "SLI -> SLO -> SLA Margin",
+          "summary": "Giữ Error Budget và đặt mục tiêu SLO nội bộ cao hơn cam kết hợp đồng SLA.",
+          "badge": "99.9% Uptime",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "b-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 420
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Cột mốc 2 · End-to-End Flow",
+          "badge": "3 Roles Sync",
+          "progressPct": 80,
+          "status": "in-progress",
+          "tone": "purple"
+        }
+      },
+      {
+        "id": "l-2-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 345
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Cross-Module SQLite Sync",
+          "summary": "Liên thông Student Learning <-> Git PR & Kanban <-> Instructor Dual Grading <-> Admin Audit.",
+          "badge": "Single Truth",
+          "progressPct": 85,
+          "status": "completed"
+        }
+      },
+      {
+        "id": "l-2-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 500
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Bền dữ liệu sau F5",
+          "summary": "Mọi thao tác người dùng ghi xuống SQLite Transaction và đóng Lock trước khi ghi Audit.",
+          "badge": "Zero Mock Bug",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-3",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 745
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Cột mốc 3 · Test Pyramid",
+          "badge": "Pytest + E2E",
+          "progressPct": 75,
+          "status": "in-progress",
+          "tone": "amber"
+        }
+      },
+      {
+        "id": "l-3-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 670
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Pytest RBAC Integration",
+          "summary": "Bao phủ toàn bộ nhánh 200/201/401/403/423 và idempotent XP/submission.",
+          "badge": "7/7 Suites Pass",
+          "progressPct": 80,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-3-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 825
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "E2E & HTTPS Production",
+          "summary": "0 Console Errors, 0 HTTP >= 400, Backup/Restore đã kiểm thử và Secret không lọt vào Git.",
+          "badge": "Shippable App",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "b-4",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 330,
+          "y": 1070
+        },
+        "data": {
+          "nodeType": "branch",
+          "title": "Cột mốc 4 · AI Defense",
+          "badge": "Hội đồng CS499",
+          "progressPct": 70,
+          "status": "in-progress",
+          "tone": "emerald"
+        }
+      },
+      {
+        "id": "l-4-1",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 995
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Self-Audit Git Diff",
+          "summary": "Kiểm toán sạch code trước khi nộp: DRY helper, Guard Clauses và Docstring rõ ràng.",
+          "badge": "Clean Code",
+          "progressPct": 75,
+          "status": "in-progress"
+        }
+      },
+      {
+        "id": "l-4-2",
+        "type": "compactTreeNode",
+        "position": {
+          "x": 620,
+          "y": 1150
+        },
+        "data": {
+          "nodeType": "leaf",
+          "title": "Phản biện 4 Bước STAR",
+          "summary": "Trình bày tự tin Bối cảnh -> Lựa chọn -> Đánh đổi -> Lộ trình Scale gấp 100x.",
+          "badge": "Defense Ready",
+          "progressPct": 70,
+          "status": "in-progress"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-capstone-b1",
+        "source": "root",
+        "target": "b-1",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-capstone-1-l1",
+        "source": "b-1",
+        "target": "l-1-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-capstone-1-l2",
+        "source": "b-1",
+        "target": "l-1-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-capstone-b2",
+        "source": "root",
+        "target": "b-2",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-capstone-2-l1",
+        "source": "b-2",
+        "target": "l-2-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-capstone-2-l2",
+        "source": "b-2",
+        "target": "l-2-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-capstone-b3",
+        "source": "root",
+        "target": "b-3",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-capstone-3-l1",
+        "source": "b-3",
+        "target": "l-3-1",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-capstone-3-l2",
+        "source": "b-3",
+        "target": "l-3-2",
+        "style": {
+          "stroke": "#94a3b8",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-capstone-b4",
+        "source": "root",
+        "target": "b-4",
+        "animated": true,
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "e-capstone-4-l1",
+        "source": "b-4",
+        "target": "l-4-1",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      },
+      {
+        "id": "e-capstone-4-l2",
+        "source": "b-4",
+        "target": "l-4-2",
+        "style": {
+          "stroke": "#64748b",
+          "strokeWidth": 1.5
+        }
+      }
+    ]
+  },
 };

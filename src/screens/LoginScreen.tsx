@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, ShieldCheck, KeyRound } from "lucide-react";
 import type { Role, Theme } from "../App";
+import {
+  checkBackendHealth,
+  demoLogin,
+  forgotPasswordApi,
+  loginUser,
+  registerUser,
+  resetPasswordApi,
+  verifyLogin2FaApi,
+} from "../api";
 import "../styles/huddle.css";
 
 interface Props {
@@ -31,9 +40,21 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
   const [emailErr, setEmailErr] = useState("");
   const [passwordErr, setPasswordErr] = useState("");
 
-  // ── SIGN-UP EXTRA FIELDS ──
+  // ── AUTH MODE & SECURITY FLOWS ──
+  const [authStep, setAuthStep] = useState<"credentials" | "2fa" | "forgot" | "reset">("credentials");
+  const [rememberMe, setRememberMe] = useState(true);
   const [fullName, setFullName] = useState("");
   const [fullNameErr, setFullNameErr] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmPasswordErr, setConfirmPasswordErr] = useState("");
+  const [userCode, setUserCode] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [otpInput, setOtpInput] = useState("");
+  const [demoOtpHint, setDemoOtpHint] = useState("");
+  const [otpErr, setOtpErr] = useState("");
+  const [newResetPassword, setNewResetPassword] = useState("");
+  const [securityBanner, setSecurityBanner] = useState<string | null>(null);
 
   const huddleRef = useRef<HTMLDivElement>(null);
   const inkRef = useRef<HTMLDivElement>(null);
@@ -224,6 +245,125 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
     setCapsOn(isCaps);
   };
 
+  const getPasswordStrength = (pwd: string) => {
+    if (!pwd) return { level: 0, label: "", color: "#cbd5e1" };
+    let score = 0;
+    if (pwd.length >= 6) score += 1;
+    if (pwd.length >= 10) score += 1;
+    if (/[A-Z]/.test(pwd) && /[0-9]/.test(pwd)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+    if (score <= 1) return { level: 1, label: "Yếu", color: "#ef4444" };
+    if (score === 2) return { level: 2, label: "Trung bình", color: "#f59e0b" };
+    if (score === 3) return { level: 3, label: "Mạnh", color: "#10b981" };
+    return { level: 4, label: "Rất mạnh", color: "#5b22f9" };
+  };
+
+  const passwordStrength = getPasswordStrength(isSignUp ? passwordVal : newResetPassword);
+
+  const finishAuthenticatedTransition = (resolvedRole: Role, isNewSignUp: boolean) => {
+    setIsBusy(false);
+    setIsSignedIn(true);
+    throwConfetti();
+    setTimeout(() => {
+      if (isNewSignUp && onOpenIntro) {
+        onOpenIntro();
+      } else {
+        onLogin(resolvedRole);
+      }
+    }, 1500);
+  };
+
+  const handleGoogleDemoLogin = async () => {
+    if (isBusy || isSignedIn) return;
+    setIsBusy(true);
+    setSecurityBanner(null);
+    const data = await demoLogin(role);
+    const resolved: Role =
+      data?.role === "admin" || data?.role === "instructor" || data?.role === "student"
+        ? data.role
+        : role;
+    finishAuthenticatedTransition(resolved, false);
+  };
+
+  const handleVerify2FaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isBusy || isSignedIn) return;
+    setOtpErr("");
+    if (!otpInput.trim()) {
+      setOtpErr("Vui lòng nhập mã OTP 6 chữ số.");
+      setIsRefused(true);
+      setTimeout(() => setIsRefused(false), 900);
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const authData = await verifyLogin2FaApi(challengeToken, otpInput.trim());
+      const resolved: Role =
+        authData?.role === "admin" || authData?.role === "instructor" || authData?.role === "student"
+          ? authData.role
+          : role;
+      finishAuthenticatedTransition(resolved, false);
+    } catch (err: any) {
+      setIsBusy(false);
+      setOtpErr(err?.message || "Mã OTP không hợp lệ");
+      setIsRefused(true);
+      setTimeout(() => setIsRefused(false), 900);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isBusy) return;
+    setEmailErr("");
+    if (!emailVal.trim()) {
+      setEmailErr("Vui lòng nhập email cần khôi phục.");
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const res = await forgotPasswordApi(emailVal.trim());
+      setChallengeToken(res.challenge_token);
+      setMaskedEmail(res.masked_email);
+      setDemoOtpHint(res.demo_otp_hint);
+      setOtpInput("");
+      setOtpErr("");
+      setAuthStep("reset");
+      setSecurityBanner(`Đã phát mã OTP khôi phục tới ${res.masked_email}`);
+    } catch (err: any) {
+      setEmailErr(err?.message || "Không tìm thấy tài khoản");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isBusy) return;
+    setOtpErr("");
+    setPasswordErr("");
+    if (!otpInput.trim()) {
+      setOtpErr("Vui lòng nhập mã OTP.");
+      return;
+    }
+    if (newResetPassword.length < 6) {
+      setPasswordErr("Mật khẩu mới cần tối thiểu 6 ký tự.");
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const res = await resetPasswordApi(challengeToken, otpInput.trim(), newResetPassword);
+      setPasswordVal(newResetPassword);
+      setNewResetPassword("");
+      setOtpInput("");
+      setAuthStep("credentials");
+      setSecurityBanner(res.message || "Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay.");
+    } catch (err: any) {
+      setOtpErr(err?.message || "Không thể đặt lại mật khẩu");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isBusy || isSignedIn) return;
@@ -231,6 +371,8 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
     setEmailErr("");
     setPasswordErr("");
     setFullNameErr("");
+    setConfirmPasswordErr("");
+    setSecurityBanner(null);
 
     const emailTrim = emailVal.trim();
     if (!emailTrim) {
@@ -266,23 +408,66 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
       return;
     }
 
+    if (isSignUp && confirmPassword !== passwordVal) {
+      setConfirmPasswordErr("Mật khẩu nhập lại chưa khớp.");
+      setIsRefused(true);
+      setTimeout(() => setIsRefused(false), 900);
+      return;
+    }
+
     setIsBusy(true);
     if (ctaRef.current) lookAtEl(ctaRef.current, 0.5);
 
-    setTimeout(() => {
-      setIsBusy(false);
-      setIsSignedIn(true);
-      throwConfetti();
+    const backendUp = await checkBackendHealth();
+    let resolvedRole: Role = role;
 
-      // Log in and enter app after sweet celebration
-      setTimeout(() => {
-        if (isSignUp && onOpenIntro) {
-          onOpenIntro();
-        } else {
-          onLogin(role);
+    if (backendUp) {
+      try {
+        const authData = isSignUp
+          ? await registerUser({
+              email: emailTrim,
+              password: passwordVal,
+              full_name: fullName.trim(),
+              role,
+              user_code: userCode.trim() || undefined,
+            })
+          : await loginUser(emailTrim, passwordVal, rememberMe);
+
+        if (!isSignUp && authData?.requires_2fa) {
+          setIsBusy(false);
+          setChallengeToken(authData.challenge_token || "");
+          setMaskedEmail(authData.masked_email || emailTrim);
+          setDemoOtpHint(authData.demo_otp_hint || "");
+          setOtpInput("");
+          setOtpErr("");
+          setAuthStep("2fa");
+          return;
         }
-      }, 1600);
-    }, 1150);
+
+        if (
+          authData?.role === "admin" ||
+          authData?.role === "instructor" ||
+          authData?.role === "student"
+        ) {
+          resolvedRole = authData.role;
+        }
+      } catch (err: any) {
+        const msg = err?.message || "Email hoặc mật khẩu không chính xác";
+        setIsBusy(false);
+        if (msg.toLowerCase().includes("email đã")) {
+          setEmailErr(msg);
+        } else {
+          setPasswordErr(msg);
+        }
+        setIsRefused(true);
+        setTimeout(() => setIsRefused(false), 900);
+        return;
+      }
+    }
+
+    setTimeout(() => {
+      finishAuthenticatedTransition(resolvedRole, isSignUp);
+    }, backendUp ? 500 : 1000);
   };
 
   return (
@@ -472,325 +657,645 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
               </svg>
 
               <h2 className="panel__title">
-                {isSignUp ? "Create an account" : "Welcome back"}
+                {authStep === "2fa"
+                  ? "Xác thực 2 lớp (2FA)"
+                  : authStep === "forgot"
+                  ? "Khôi phục mật khẩu"
+                  : authStep === "reset"
+                  ? "Đặt mật khẩu mới"
+                  : isSignUp
+                  ? "Create an account"
+                  : "Welcome back"}
               </h2>
               <p className="panel__sub">
-                {isSignUp ? "Join the CodeMind community today." : "Please enter your details."}
+                {authStep === "2fa"
+                  ? `Nhập mã OTP 6 chữ số gửi tới ${maskedEmail}`
+                  : authStep === "forgot"
+                  ? "Nhập email đã đăng ký để nhận mã OTP bảo mật."
+                  : authStep === "reset"
+                  ? `Xác minh OTP cho ${maskedEmail} và thiết lập mật khẩu mới.`
+                  : isSignUp
+                  ? "Join the CodeMind community today."
+                  : "Please enter your details."}
               </p>
 
-              {onOpenIntro && (
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
-                  <button
-                    type="button"
-                    onClick={onOpenIntro}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "5px 12px",
-                      borderRadius: "6px",
-                      background: "rgba(0, 0, 0, 0.04)",
-                      border: "1px solid rgba(0, 0, 0, 0.08)",
-                      color: "#475569",
-                      fontSize: "0.76rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <span>Giới thiệu Nền tảng & Lộ trình Khóa học</span>
-                    <span style={{ fontSize: "0.82rem" }}>→</span>
-                  </button>
+              {securityBanner && (
+                <div
+                  style={{
+                    marginBottom: "14px",
+                    padding: "9px 12px",
+                    borderRadius: "10px",
+                    background: "rgba(23, 134, 79, 0.1)",
+                    border: "1px solid rgba(23, 134, 79, 0.3)",
+                    color: "#166534",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  ✓ {securityBanner}
                 </div>
               )}
 
-              {/* SLEEK ROLE SELECTOR PILLS */}
-              <div style={{ display: "flex", gap: "6px", marginBottom: "22px" }}>
-                {roleOptions.map((r) => {
-                  const isSel = role === r.id;
-                  return (
+              {authStep === "2fa" ? (
+                <form className="form" onSubmit={handleVerify2FaSubmit} noValidate>
+                  {demoOtpHint && (
                     <button
-                      key={r.id}
                       type="button"
-                      onClick={() => handleRoleSelect(r.id)}
+                      onClick={() => {
+                        setOtpInput(demoOtpHint);
+                        setOtpErr("");
+                      }}
                       style={{
-                        flex: 1,
-                        padding: "6px 8px",
-                        borderRadius: "8px",
-                        border: isSel ? "1.5px solid var(--violet)" : "1px solid var(--hair)",
-                        background: isSel ? "rgba(91, 34, 249, 0.08)" : "transparent",
-                        color: isSel ? "var(--violet)" : "var(--muted)",
-                        fontWeight: isSel ? 600 : 500,
+                        width: "100%",
+                        marginBottom: "16px",
+                        padding: "9px 12px",
+                        borderRadius: "10px",
+                        background: "rgba(91, 34, 249, 0.08)",
+                        border: "1px dashed rgba(91, 34, 249, 0.45)",
+                        color: "var(--violet)",
                         fontSize: "0.76rem",
+                        fontWeight: 700,
                         cursor: "pointer",
-                        transition: "all 0.15s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
                       }}
                     >
-                      {r.label}
+                      <ShieldCheck size={15} />
+                      <span>Mã OTP Sandbox: {demoOtpHint} (Nhấn để điền nhanh)</span>
                     </button>
-                  );
-                })}
-              </div>
+                  )}
 
-              {/* FORM */}
-              <form className="form" data-form onSubmit={handleSubmit} noValidate>
-                {/* Email Field */}
-                <div className="field" data-field="email" data-invalid={emailErr ? "" : undefined}>
-                  <label className="field__label" htmlFor="email">
-                    Email
-                  </label>
-                  <input
-                    ref={emailRef}
-                    className="field__input"
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    spellCheck="false"
-                    enterKeyHint="next"
-                    placeholder="you@example.com"
-                    value={emailVal}
-                    onChange={(e) => {
-                      setEmailVal(e.target.value);
-                      if (emailErr) setEmailErr("");
-                      lookAtEl(e.target, clamp(e.target.value.length / 26, 0, 1) * 0.9 + 0.05);
-                    }}
-                    onFocus={() => {
-                      focusRef.current = emailRef.current;
-                      setFocusedField("email");
-                      if (emailRef.current) lookAtEl(emailRef.current, 0.1);
-                    }}
-                    onBlur={() => {
-                      if (focusRef.current === emailRef.current) focusRef.current = null;
-                      setFocusedField(null);
-                    }}
-                  />
-                  <span className="field__rule" aria-hidden="true" />
-                  <p className="field__err" id="err-email" data-shown={emailErr ? "" : undefined}>
-                    <svg className="field__err-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                      <circle cx="8" cy="8" r="6.6" />
-                      <path d="M8 4.9v3.6" />
-                      <circle cx="8" cy="11.1" r=".95" />
-                    </svg>
-                    <span>{emailErr}</span>
+                  <div className="field" data-field="otp" data-invalid={otpErr ? "" : undefined}>
+                    <label className="field__label" htmlFor="otp-2fa">
+                      Mã xác thực OTP (6 chữ số)
+                    </label>
+                    <input
+                      className="field__input"
+                      id="otp-2fa"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={8}
+                      placeholder="123456"
+                      value={otpInput}
+                      onChange={(e) => {
+                        setOtpInput(e.target.value);
+                        if (otpErr) setOtpErr("");
+                      }}
+                    />
+                    <span className="field__rule" aria-hidden="true" />
+                    <p className="field__err" data-shown={otpErr ? "" : undefined}>
+                      <span>{otpErr}</span>
+                    </p>
+                  </div>
+
+                  <div className="actions">
+                    <button className="cta" type="submit" data-cta data-busy={isBusy ? "" : undefined}>
+                      <span className="cta__label">Xác minh &amp; Đăng nhập</span>
+                      <span className="cta__spin" aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  <p className="panel__foot">
+                    <a
+                      className="link link--strong"
+                      href="#back-login"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setAuthStep("credentials");
+                        setOtpErr("");
+                      }}
+                    >
+                      ← Quay lại đăng nhập
+                    </a>
                   </p>
-                </div>
+                </form>
+              ) : authStep === "forgot" ? (
+                <form className="form" onSubmit={handleForgotSubmit} noValidate>
+                  <div className="field" data-field="email" data-invalid={emailErr ? "" : undefined}>
+                    <label className="field__label" htmlFor="forgot-email">
+                      Email tài khoản
+                    </label>
+                    <input
+                      className="field__input"
+                      id="forgot-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={emailVal}
+                      onChange={(e) => {
+                        setEmailVal(e.target.value);
+                        if (emailErr) setEmailErr("");
+                      }}
+                    />
+                    <span className="field__rule" aria-hidden="true" />
+                    <p className="field__err" data-shown={emailErr ? "" : undefined}>
+                      <span>{emailErr}</span>
+                    </p>
+                  </div>
 
-                {/* ── SIGN-UP EXTRA FIELDS (only visible in Sign Up mode) ── */}
-                {isSignUp && (
-                  <>
-                    {/* Full Name */}
-                    <div className="field" data-field="fullname" data-invalid={fullNameErr ? "" : undefined}>
-                      <label className="field__label" htmlFor="fullname">
-                        Họ và tên
+                  <div className="actions">
+                    <button className="cta" type="submit" data-cta data-busy={isBusy ? "" : undefined}>
+                      <span className="cta__label">Gửi mã OTP khôi phục</span>
+                      <span className="cta__spin" aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  <p className="panel__foot">
+                    <a
+                      className="link link--strong"
+                      href="#back-login"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setAuthStep("credentials");
+                        setEmailErr("");
+                      }}
+                    >
+                      ← Quay lại đăng nhập
+                    </a>
+                  </p>
+                </form>
+              ) : authStep === "reset" ? (
+                <form className="form" onSubmit={handleResetPasswordSubmit} noValidate>
+                  {demoOtpHint && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtpInput(demoOtpHint);
+                        setOtpErr("");
+                      }}
+                      style={{
+                        width: "100%",
+                        marginBottom: "14px",
+                        padding: "9px 12px",
+                        borderRadius: "10px",
+                        background: "rgba(91, 34, 249, 0.08)",
+                        border: "1px dashed rgba(91, 34, 249, 0.45)",
+                        color: "var(--violet)",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <KeyRound size={14} />
+                      <span>OTP Khôi phục: {demoOtpHint} (Nhấn điền nhanh)</span>
+                    </button>
+                  )}
+
+                  <div className="field" data-invalid={otpErr ? "" : undefined}>
+                    <label className="field__label" htmlFor="reset-otp">
+                      Mã OTP khôi phục
+                    </label>
+                    <input
+                      className="field__input"
+                      id="reset-otp"
+                      type="text"
+                      placeholder="123456"
+                      value={otpInput}
+                      onChange={(e) => {
+                        setOtpInput(e.target.value);
+                        if (otpErr) setOtpErr("");
+                      }}
+                    />
+                    <span className="field__rule" aria-hidden="true" />
+                    <p className="field__err" data-shown={otpErr ? "" : undefined}>
+                      <span>{otpErr}</span>
+                    </p>
+                  </div>
+
+                  <div className="field" data-invalid={passwordErr ? "" : undefined}>
+                    <label className="field__label" htmlFor="reset-new-pw">
+                      Mật khẩu mới (tối thiểu 6 ký tự)
+                    </label>
+                    <input
+                      className="field__input"
+                      id="reset-new-pw"
+                      type="password"
+                      placeholder="••••••••"
+                      value={newResetPassword}
+                      onChange={(e) => {
+                        setNewResetPassword(e.target.value);
+                        if (passwordErr) setPasswordErr("");
+                      }}
+                    />
+                    <span className="field__rule" aria-hidden="true" />
+                    <p className="field__err" data-shown={passwordErr ? "" : undefined}>
+                      <span>{passwordErr}</span>
+                    </p>
+                  </div>
+
+                  <div className="actions">
+                    <button className="cta" type="submit" data-cta data-busy={isBusy ? "" : undefined}>
+                      <span className="cta__label">Đặt lại mật khẩu &amp; Mở khóa</span>
+                      <span className="cta__spin" aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  <p className="panel__foot">
+                    <a
+                      className="link link--strong"
+                      href="#back-login"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setAuthStep("credentials");
+                      }}
+                    >
+                      ← Hủy và quay lại đăng nhập
+                    </a>
+                  </p>
+                </form>
+              ) : (
+                <>
+                  {onOpenIntro && (
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
+                      <button
+                        type="button"
+                        onClick={onOpenIntro}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "5px 12px",
+                          borderRadius: "6px",
+                          background: "rgba(0, 0, 0, 0.04)",
+                          border: "1px solid rgba(0, 0, 0, 0.08)",
+                          color: "#475569",
+                          fontSize: "0.76rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <span>Giới thiệu Nền tảng &amp; Lộ trình Khóa học</span>
+                        <span style={{ fontSize: "0.82rem" }}>→</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* SLEEK ROLE SELECTOR PILLS */}
+                  <div style={{ display: "flex", gap: "6px", marginBottom: "20px" }}>
+                    {roleOptions.map((r) => {
+                      const isSel = role === r.id;
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => handleRoleSelect(r.id)}
+                          style={{
+                            flex: 1,
+                            padding: "6px 8px",
+                            borderRadius: "8px",
+                            border: isSel ? "1.5px solid var(--violet)" : "1px solid var(--hair)",
+                            background: isSel ? "rgba(91, 34, 249, 0.08)" : "transparent",
+                            color: isSel ? "var(--violet)" : "var(--muted)",
+                            fontWeight: isSel ? 600 : 500,
+                            fontSize: "0.76rem",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {r.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* FORM */}
+                  <form className="form" data-form onSubmit={handleSubmit} noValidate>
+                    {/* Email Field */}
+                    <div className="field" data-field="email" data-invalid={emailErr ? "" : undefined}>
+                      <label className="field__label" htmlFor="email">
+                        Email
                       </label>
                       <input
-                        ref={fullNameRef}
+                        ref={emailRef}
                         className="field__input"
-                        id="fullname"
-                        name="fullname"
-                        type="text"
-                        autoComplete="name"
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
                         spellCheck="false"
                         enterKeyHint="next"
-                        placeholder="Nguyễn Văn A"
-                        value={fullName}
+                        placeholder="you@example.com"
+                        value={emailVal}
                         onChange={(e) => {
-                          setFullName(e.target.value);
-                          if (fullNameErr) setFullNameErr("");
-                          lookAtEl(e.target, clamp(e.target.value.length / 20, 0, 1) * 0.9 + 0.05);
+                          setEmailVal(e.target.value);
+                          if (emailErr) setEmailErr("");
+                          lookAtEl(e.target, clamp(e.target.value.length / 26, 0, 1) * 0.9 + 0.05);
                         }}
                         onFocus={() => {
-                          focusRef.current = fullNameRef.current;
-                          setFocusedField("fullname");
-                          if (fullNameRef.current) lookAtEl(fullNameRef.current, 0.1);
+                          focusRef.current = emailRef.current;
+                          setFocusedField("email");
+                          if (emailRef.current) lookAtEl(emailRef.current, 0.1);
                         }}
                         onBlur={() => {
-                          if (focusRef.current === fullNameRef.current) focusRef.current = null;
+                          if (focusRef.current === emailRef.current) focusRef.current = null;
                           setFocusedField(null);
                         }}
                       />
                       <span className="field__rule" aria-hidden="true" />
-                      <p className="field__err" id="err-fullname" data-shown={fullNameErr ? "" : undefined}>
+                      <p className="field__err" id="err-email" data-shown={emailErr ? "" : undefined}>
                         <svg className="field__err-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                           <circle cx="8" cy="8" r="6.6" />
                           <path d="M8 4.9v3.6" />
                           <circle cx="8" cy="11.1" r=".95" />
                         </svg>
-                        <span>{fullNameErr}</span>
+                        <span>{emailErr}</span>
                       </p>
                     </div>
 
-                  </>
-                )}
+                    {/* ── SIGN-UP EXTRA FIELDS ── */}
+                    {isSignUp && (
+                      <>
+                        <div className="field" data-field="fullname" data-invalid={fullNameErr ? "" : undefined}>
+                          <label className="field__label" htmlFor="fullname">
+                            Họ và tên
+                          </label>
+                          <input
+                            ref={fullNameRef}
+                            className="field__input"
+                            id="fullname"
+                            name="fullname"
+                            type="text"
+                            autoComplete="name"
+                            spellCheck="false"
+                            enterKeyHint="next"
+                            placeholder="Nguyễn Văn A"
+                            value={fullName}
+                            onChange={(e) => {
+                              setFullName(e.target.value);
+                              if (fullNameErr) setFullNameErr("");
+                              lookAtEl(e.target, clamp(e.target.value.length / 20, 0, 1) * 0.9 + 0.05);
+                            }}
+                            onFocus={() => {
+                              focusRef.current = fullNameRef.current;
+                              setFocusedField("fullname");
+                              if (fullNameRef.current) lookAtEl(fullNameRef.current, 0.1);
+                            }}
+                            onBlur={() => {
+                              if (focusRef.current === fullNameRef.current) focusRef.current = null;
+                              setFocusedField(null);
+                            }}
+                          />
+                          <span className="field__rule" aria-hidden="true" />
+                          <p className="field__err" id="err-fullname" data-shown={fullNameErr ? "" : undefined}>
+                            <svg className="field__err-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                              <circle cx="8" cy="8" r="6.6" />
+                              <path d="M8 4.9v3.6" />
+                              <circle cx="8" cy="11.1" r=".95" />
+                            </svg>
+                            <span>{fullNameErr}</span>
+                          </p>
+                        </div>
 
-                {/* Password Field */}
-                <div className="field" data-field="password" data-invalid={passwordErr ? "" : undefined}>
-                  <label className="field__label" htmlFor="password">
-                    Password
-                  </label>
-                  <input
-                    ref={passwordRef}
-                    className="field__input field__input--pw"
-                    id="password"
-                    name="password"
-                    type={isRevealed ? "text" : "password"}
-                    autoComplete="current-password"
-                    enterKeyHint="go"
-                    placeholder="••••••••"
-                    value={passwordVal}
-                    onChange={(e) => {
-                      setPasswordVal(e.target.value);
-                      if (passwordErr) setPasswordErr("");
-                    }}
-                    onFocus={() => {
-                      focusRef.current = passwordRef.current;
-                      setFocusedField("password");
-                    }}
-                    onBlur={() => {
-                      if (focusRef.current === passwordRef.current) focusRef.current = null;
-                      setFocusedField(null);
-                      setCapsOn(false);
-                    }}
-                    onKeyDown={handleCapsCheck}
-                    onKeyUp={handleCapsCheck}
-                  />
-                  <button
-                    className="peek"
-                    type="button"
-                    data-peek
-                    aria-pressed={isRevealed}
-                    aria-controls="password"
-                    onClick={handleTogglePeek}
-                  >
-                    <span className="sr-only">
-                      {isRevealed ? "Hide password" : "Show password"}
-                    </span>
-                    <svg className="peek__icon peek__icon--on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M2.6 12S6.4 5.8 12 5.8 21.4 12 21.4 12 17.6 18.2 12 18.2 2.6 12 2.6 12Z" />
-                      <circle cx="12" cy="12" r="3.1" />
-                    </svg>
-                    <svg className="peek__icon peek__icon--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M2.6 12S6.4 5.8 12 5.8c1.4 0 2.7.4 3.8 1M21.4 12s-3.8 6.2-9.4 6.2c-1.5 0-2.8-.4-4-1.1" />
-                      <path d="M9.9 9.9a3.1 3.1 0 0 0 4.3 4.3" />
-                      <path d="M4 4l16 16" />
-                    </svg>
-                  </button>
-                  <span className="field__rule" aria-hidden="true" />
-                  <p className="field__err" id="err-password" data-shown={passwordErr ? "" : undefined}>
-                    <svg className="field__err-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                      <circle cx="8" cy="8" r="6.6" />
-                      <path d="M8 4.9v3.6" />
-                      <circle cx="8" cy="11.1" r=".95" />
-                    </svg>
-                    <span>{passwordErr}</span>
-                  </p>
-                  {capsOn && <p className="caps" id="caps">Caps lock is on.</p>}
-                </div>
+                        <div className="field" style={{ paddingBottom: "22px" }}>
+                          <label className="field__label" htmlFor="usercode">
+                            Mã sinh viên / Mã GV (tùy chọn)
+                          </label>
+                          <input
+                            className="field__input"
+                            id="usercode"
+                            type="text"
+                            placeholder="2210899"
+                            value={userCode}
+                            onChange={(e) => setUserCode(e.target.value)}
+                          />
+                          <span className="field__rule" style={{ bottom: "22px" }} aria-hidden="true" />
+                        </div>
+                      </>
+                    )}
 
+                    {/* Password Field */}
+                    <div className="field" data-field="password" data-invalid={passwordErr ? "" : undefined}>
+                      <label className="field__label" htmlFor="password">
+                        Password
+                      </label>
+                      <input
+                        ref={passwordRef}
+                        className="field__input field__input--pw"
+                        id="password"
+                        name="password"
+                        type={isRevealed ? "text" : "password"}
+                        autoComplete="current-password"
+                        enterKeyHint="go"
+                        placeholder="••••••••"
+                        value={passwordVal}
+                        onChange={(e) => {
+                          setPasswordVal(e.target.value);
+                          if (passwordErr) setPasswordErr("");
+                        }}
+                        onFocus={() => {
+                          focusRef.current = passwordRef.current;
+                          setFocusedField("password");
+                        }}
+                        onBlur={() => {
+                          if (focusRef.current === passwordRef.current) focusRef.current = null;
+                          setFocusedField(null);
+                          setCapsOn(false);
+                        }}
+                        onKeyDown={handleCapsCheck}
+                        onKeyUp={handleCapsCheck}
+                      />
+                      <button
+                        className="peek"
+                        type="button"
+                        data-peek
+                        aria-pressed={isRevealed}
+                        aria-controls="password"
+                        onClick={handleTogglePeek}
+                      >
+                        <span className="sr-only">
+                          {isRevealed ? "Hide password" : "Show password"}
+                        </span>
+                        <svg className="peek__icon peek__icon--on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M2.6 12S6.4 5.8 12 5.8 21.4 12 21.4 12 17.6 18.2 12 18.2 2.6 12 2.6 12Z" />
+                          <circle cx="12" cy="12" r="3.1" />
+                        </svg>
+                        <svg className="peek__icon peek__icon--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M2.6 12S6.4 5.8 12 5.8c1.4 0 2.7.4 3.8 1M21.4 12s-3.8 6.2-9.4 6.2c-1.5 0-2.8-.4-4-1.1" />
+                          <path d="M9.9 9.9a3.1 3.1 0 0 0 4.3 4.3" />
+                          <path d="M4 4l16 16" />
+                        </svg>
+                      </button>
+                      <span className="field__rule" aria-hidden="true" />
+                      <p className="field__err" id="err-password" data-shown={passwordErr ? "" : undefined}>
+                        <svg className="field__err-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                          <circle cx="8" cy="8" r="6.6" />
+                          <path d="M8 4.9v3.6" />
+                          <circle cx="8" cy="11.1" r=".95" />
+                        </svg>
+                        <span>{passwordErr}</span>
+                      </p>
+                      {capsOn && <p className="caps" id="caps">Caps lock is on.</p>}
+                    </div>
 
-                {/* Remember & Forgot Row */}
-                <div className="row" data-fade>
-                  <label className="check">
-                    <input type="checkbox" name="remember" defaultChecked />
-                    <span className="check__box" aria-hidden="true">
-                      <svg viewBox="0 0 16 16" focusable="false">
-                        <path d="M3.5 8.4 6.6 11.5 12.5 5" pathLength="1" />
-                      </svg>
-                    </span>
-                    <span className="check__text">Remember for 30 days</span>
-                  </label>
-                  <a className="link" href="#forgot" onClick={(e) => e.preventDefault()}>
-                    Forgot password?
-                  </a>
-                </div>
+                    {isSignUp && passwordVal && (
+                      <div style={{ marginTop: "-18px", marginBottom: "14px" }}>
+                        <div style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+                          {[1, 2, 3, 4].map((lvl) => (
+                            <span
+                              key={lvl}
+                              style={{
+                                flex: 1,
+                                height: "4px",
+                                borderRadius: "99px",
+                                background: lvl <= passwordStrength.level ? passwordStrength.color : "#e2e8f0",
+                                transition: "background 0.2s ease",
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <span style={{ fontSize: "0.7rem", fontWeight: 600, color: passwordStrength.color }}>
+                          Độ mạnh mật khẩu: {passwordStrength.label}
+                        </span>
+                      </div>
+                    )}
 
-                {/* CTA Action button & Done Box */}
-                <div className="actions">
-                  <button
-                    ref={ctaRef}
-                    className="cta"
-                    type="submit"
-                    data-cta
-                    data-busy={isBusy ? "" : undefined}
-                  >
-                    <span className="cta__label">{isSignUp ? "Sign up" : "Log in"}</span>
-                    <span className="cta__spin" aria-hidden="true" />
-                    <svg className="cta__check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M5.5 12.6 10 17l8.5-9.5" pathLength="1" />
-                    </svg>
-                  </button>
+                    {isSignUp && (
+                      <div className="field" data-invalid={confirmPasswordErr ? "" : undefined}>
+                        <label className="field__label" htmlFor="confirm-password">
+                          Nhập lại mật khẩu
+                        </label>
+                        <input
+                          className="field__input"
+                          id="confirm-password"
+                          type="password"
+                          placeholder="••••••••"
+                          value={confirmPassword}
+                          onChange={(e) => {
+                            setConfirmPassword(e.target.value);
+                            if (confirmPasswordErr) setConfirmPasswordErr("");
+                          }}
+                        />
+                        <span className="field__rule" aria-hidden="true" />
+                        <p className="field__err" data-shown={confirmPasswordErr ? "" : undefined}>
+                          <span>{confirmPasswordErr}</span>
+                        </p>
+                      </div>
+                    )}
 
-                  <div className="done" data-done inert={!isSignedIn ? true : undefined}>
-                    <p className="done__who">
-                      Signed in as <b>{emailVal}</b>
-                    </p>
-                    <button
-                      className="reset"
-                      type="button"
-                      onClick={() => setIsSignedIn(false)}
-                    >
-                      Sign out
-                    </button>
+                    {/* Remember & Forgot Row */}
+                    <div className="row" data-fade>
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          name="remember"
+                          checked={rememberMe}
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                        />
+                        <span className="check__box" aria-hidden="true">
+                          <svg viewBox="0 0 16 16" focusable="false">
+                            <path d="M3.5 8.4 6.6 11.5 12.5 5" pathLength="1" />
+                          </svg>
+                        </span>
+                        <span className="check__text">Remember for 30 days</span>
+                      </label>
+                      <a
+                        className="link"
+                        href="#forgot"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setSecurityBanner(null);
+                          setEmailErr("");
+                          setAuthStep("forgot");
+                        }}
+                      >
+                        Forgot password?
+                      </a>
+                    </div>
+
+                    {/* CTA Action button & Done Box */}
+                    <div className="actions">
+                      <button
+                        ref={ctaRef}
+                        className="cta"
+                        type="submit"
+                        data-cta
+                        data-busy={isBusy ? "" : undefined}
+                      >
+                        <span className="cta__label">{isSignUp ? "Sign up" : "Log in"}</span>
+                        <span className="cta__spin" aria-hidden="true" />
+                        <svg className="cta__check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M5.5 12.6 10 17l8.5-9.5" pathLength="1" />
+                        </svg>
+                      </button>
+
+                      <div className="done" data-done inert={!isSignedIn ? true : undefined}>
+                        <p className="done__who">
+                          Signed in as <b>{emailVal}</b>
+                        </p>
+                        <button
+                          className="reset"
+                          type="button"
+                          onClick={() => setIsSignedIn(false)}
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="sep" data-fade>
+                    <span>or</span>
                   </div>
-                </div>
-              </form>
 
-              <div className="sep" data-fade>
-                <span>or</span>
-              </div>
+                  {/* Google Button */}
+                  <button
+                    className="ghost"
+                    type="button"
+                    data-google
+                    data-fade
+                    onClick={handleGoogleDemoLogin}
+                  >
+                    <svg className="ghost__g" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.4Z" />
+                      <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1a5.9 5.9 0 0 1-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
+                      <path fill="#FBBC05" d="M6.4 14a5.9 5.9 0 0 1 0-3.8V7.6H3.1a10 10 0 0 0 0 8.9L6.4 14Z" />
+                      <path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.6l3.3 2.6A5.9 5.9 0 0 1 12 5.9Z" />
+                    </svg>
+                    Log in with Google
+                  </button>
 
-              {/* Google Button */}
-              <button
-                className="ghost"
-                type="button"
-                data-google
-                data-fade
-                onClick={() => {
-                  handleSubmit(new Event("submit") as any);
-                }}
-              >
-                <svg className="ghost__g" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.4Z" />
-                  <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1a5.9 5.9 0 0 1-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
-                  <path fill="#FBBC05" d="M6.4 14a5.9 5.9 0 0 1 0-3.8V7.6H3.1a10 10 0 0 0 0 8.9L6.4 14Z" />
-                  <path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.6l3.3 2.6A5.9 5.9 0 0 1 12 5.9Z" />
-                </svg>
-                Log in with Google
-              </button>
-
-              {/* Foot Switch */}
-              <p className="panel__foot" data-fade>
-                {isSignUp ? (
-                  <>
-                    Already have an account?{" "}
-                    <a
-                      className="link link--strong"
-                      href="#login"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setIsSignUp(false);
-                      }}
-                    >
-                      Log in
-                    </a>
-                  </>
-                ) : (
-                  <>
-                    Don&apos;t have an account?{" "}
-                    <a
-                      className="link link--strong"
-                      href="#signup"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setIsSignUp(true);
-                      }}
-                    >
-                      Sign up
-                    </a>
-                  </>
-                )}
-              </p>
+                  {/* Foot Switch */}
+                  <p className="panel__foot" data-fade>
+                    {isSignUp ? (
+                      <>
+                        Already have an account?{" "}
+                        <a
+                          className="link link--strong"
+                          href="#login"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setIsSignUp(false);
+                            setConfirmPasswordErr("");
+                          }}
+                        >
+                          Log in
+                        </a>
+                      </>
+                    ) : (
+                      <>
+                        Don&apos;t have an account?{" "}
+                        <a
+                          className="link link--strong"
+                          href="#signup"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setIsSignUp(true);
+                          }}
+                        >
+                          Sign up
+                        </a>
+                      </>
+                    )}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </section>
@@ -799,7 +1304,7 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
         <p className="hint">
           <span className="hint__say">Type your password. Watch them look away.</span>
           <span className="hint__creds">
-            <span className="hint__b">{emailVal}</span> · <span className="hint__b">codemind123</span>
+            <span className="hint__b">{emailVal}</span> · <span className="hint__b">hasib123</span>
           </span>
         </p>
       </main>

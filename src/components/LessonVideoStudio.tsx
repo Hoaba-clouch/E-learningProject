@@ -22,27 +22,36 @@ import {
   Layers,
 } from "lucide-react";
 import {
-  VIDEO_LECTURES_BY_SUBJECT,
+  getF8VideoLecture,
   type VideoLectureInfo,
   type VideoNote,
   type VideoChapter,
 } from "../data/videoLectureData";
+import {
+  fetchStudentVideoNotes,
+  createStudentVideoNote,
+  deleteStudentVideoNote,
+} from "../api";
 import type { MentorMascot } from "../App";
 import LiquidCardConnector from "./LiquidCardConnector";
 
 interface LessonVideoStudioProps {
   subjectId: string;
+  lessonId?: string;
+  lessonTitle?: string;
   mentorMascot: MentorMascot;
   onNavigateToTab?: (tab: "lecture" | "quiz" | "code" | "mindmap") => void;
 }
 
 export function LessonVideoStudio({
   subjectId,
+  lessonId,
+  lessonTitle,
   mentorMascot,
   onNavigateToTab,
 }: LessonVideoStudioProps) {
-  const currentVideo: VideoLectureInfo =
-    VIDEO_LECTURES_BY_SUBJECT[subjectId] || VIDEO_LECTURES_BY_SUBJECT.oop;
+  const currentVideo: VideoLectureInfo = getF8VideoLecture(subjectId, lessonId, lessonTitle);
+  const resolvedLessonId = lessonId || currentVideo.lessonId || "1.1";
 
   const [activeTab, setActiveTab] = useState<"chapters" | "notes" | "resources">("chapters");
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
@@ -75,11 +84,32 @@ export function LessonVideoStudio({
   }, [activeTab, currentVideo.chapters.length, notes.length, currentVideo.resources.length]);
 
   useEffect(() => {
-    setNotes(currentVideo.defaultNotes);
+    let active = true;
     setCurrentSeconds(0);
     setVideoTimestamp(0);
     setIsAddingNote(false);
-  }, [subjectId]);
+    setNotes(currentVideo.defaultNotes);
+
+    fetchStudentVideoNotes(subjectId, resolvedLessonId).then((dbNotes) => {
+      if (!active || !dbNotes) return;
+      const seenIds = new Set(dbNotes.map((n) => n.id));
+      const merged = [
+        ...dbNotes.map((n) => ({
+          id: n.id,
+          timeSec: n.timeSec,
+          timestamp: n.timestamp,
+          content: n.content,
+          createdAt: n.createdAt,
+        })),
+        ...currentVideo.defaultNotes.filter((n) => !seenIds.has(n.id)),
+      ];
+      setNotes(merged);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [subjectId, resolvedLessonId]);
 
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
@@ -92,23 +122,43 @@ export function LessonVideoStudio({
     setVideoTimestamp(secs);
   };
 
-  const handleAddNote = () => {
-    if (!newNoteText.trim()) return;
-    const newNote: VideoNote = {
-      id: `note-${Date.now()}`,
-      timeSec: currentSeconds,
-      timestamp: formatTime(currentSeconds),
-      content: newNoteText.trim(),
-      createdAt: "Vừa xong",
-    };
-    setNotes([newNote, ...notes]);
+  const handleAddNote = async () => {
+    const clean = newNoteText.trim();
+    if (!clean) return;
+    const timestamp = formatTime(currentSeconds);
+    const saved = await createStudentVideoNote({
+      subject_id: subjectId,
+      lesson_id: resolvedLessonId,
+      time_sec: currentSeconds,
+      timestamp,
+      content: clean,
+    });
+    const newNote: VideoNote = saved
+      ? {
+          id: saved.id,
+          timeSec: saved.timeSec,
+          timestamp: saved.timestamp,
+          content: saved.content,
+          createdAt: saved.createdAt,
+        }
+      : {
+          id: `note-local-${Date.now()}`,
+          timeSec: currentSeconds,
+          timestamp,
+          content: clean,
+          createdAt: "Vừa xong",
+        };
+    setNotes((prev) => [newNote, ...prev]);
     setNewNoteText("");
     setIsAddingNote(false);
     setActiveTab("notes");
   };
 
-  const handleDeleteNote = (noteId: string) => {
-    setNotes(notes.filter((n) => n.id !== noteId));
+  const handleDeleteNote = async (noteId: string) => {
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    if (!noteId.startsWith("note-local-") && !noteId.endsWith("-note-1") && !noteId.endsWith("-note-2")) {
+      await deleteStudentVideoNote(noteId);
+    }
   };
 
   const handleCopyShare = () => {
@@ -147,7 +197,7 @@ export function LessonVideoStudio({
         <div className="relative aspect-video w-full max-h-[500px] bg-black">
           <iframe
             key={`${currentVideo.youtubeId}-${videoTimestamp}`}
-            src={`https://www.youtube-nocookie.com/embed/${currentVideo.youtubeId}?autoplay=1&start=${videoTimestamp}&rel=0&modestbranding=1`}
+            src={`https://www.youtube-nocookie.com/embed/${currentVideo.youtubeId}?autoplay=${videoTimestamp > 0 ? 1 : 0}&start=${videoTimestamp}&rel=0&modestbranding=1`}
             title={currentVideo.title}
             className="w-full h-full border-0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

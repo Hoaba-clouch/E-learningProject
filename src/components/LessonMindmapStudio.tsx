@@ -41,6 +41,8 @@ const nodeTypes = {
 interface LessonMindmapStudioProps {
   subjectId: string;
   mentorMascot: MentorMascot;
+  instructorMindmapNodes?: any[];
+  instructorMindmapEdges?: any[];
   onNavigateToTab?: (tab: "lecture" | "video" | "quiz") => void;
 }
 
@@ -168,17 +170,61 @@ function FitViewButton() {
 export function LessonMindmapStudio({
   subjectId,
   mentorMascot,
+  instructorMindmapNodes,
+  instructorMindmapEdges,
   onNavigateToTab,
 }: LessonMindmapStudioProps) {
   const [showMiniMap, setShowMiniMap] = useState(false);
+  const hasInstructorMap = Boolean(instructorMindmapNodes && instructorMindmapNodes.length > 0);
+  const [mindmapSource, setMindmapSource] = useState<"standard" | "instructor">("standard");
 
   // Mặc định ban đầu chỉ mở root -> Chỉ hiện các nốt chính (Bài 1.1, Bài 1.2...)
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     () => new Set(["root"])
   );
 
-  const currentData: SubjectTreeData =
+  const baseData: SubjectTreeData =
     TREE_MINDMAP_DATA[subjectId] || TREE_MINDMAP_DATA.oop;
+
+  const currentData: SubjectTreeData = useMemo(() => {
+    if (mindmapSource !== "instructor" || !hasInstructorMap) {
+      return baseData;
+    }
+    const mappedNodes = (instructorMindmapNodes || []).map((n: any, idx: number) => ({
+      id: String(n.id || `inst-n-${idx}`),
+      type: "compactTreeNode" as const,
+      position: n.position || { x: 40 + idx * 240, y: 120 },
+      data: {
+        title: n.data?.title || "Khái niệm Giảng viên",
+        badge: n.data?.tag || "Master Map",
+        summary: n.data?.summary || "",
+        status: ((Number(n.data?.masteryPct ?? 75) >= 80
+          ? "completed"
+          : "in-progress") as "completed" | "in-progress"),
+        progressPct: Number(n.data?.masteryPct ?? 75),
+        xp: n.data?.xp ? Number(n.data.xp) : undefined,
+        nodeType: (n.data?.nodeType === "root" ? "root" : "branch") as "root" | "branch",
+        tone: "blue",
+      },
+    }));
+    const mappedEdges = (instructorMindmapEdges || []).map((e: any, idx: number) => ({
+      id: String(e.id || `inst-e-${idx}`),
+      source: String(e.source),
+      target: String(e.target),
+    }));
+    return {
+      ...baseData,
+      title: `Master Mindmap Giảng viên · ${baseData.subjectCode}`,
+      nodes: mappedNodes,
+      edges: mappedEdges,
+    };
+  }, [baseData, hasInstructorMap, instructorMindmapEdges, instructorMindmapNodes, mindmapSource]);
+
+  useEffect(() => {
+    if (!hasInstructorMap && mindmapSource === "instructor") {
+      setMindmapSource("standard");
+    }
+  }, [hasInstructorMap, mindmapSource, subjectId]);
 
   // Khi đổi môn học, reset về trạng thái chỉ mở root
   useEffect(() => {
@@ -230,8 +276,8 @@ export function LessonMindmapStudio({
 
   // Thu gọn về mặc định (Chỉ hiện các bài chính)
   const handleCollapseToMain = useCallback(() => {
-    setExpandedNodeIds(new Set(["root"]));
-  }, []);
+    setExpandedNodeIds(new Set([rootNodeId]));
+  }, [rootNodeId]);
 
   // Mở rộng tất cả các nhánh
   const handleExpandAll = useCallback(() => {
@@ -393,6 +439,33 @@ export function LessonMindmapStudio({
 
             {/* Quick Metrics & Dynamic Drilldown Controls */}
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Toggle Master Mindmap Giảng viên (SQLite) */}
+              {hasInstructorMap && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = mindmapSource === "instructor" ? "standard" : "instructor";
+                    setMindmapSource(next);
+                    const nextFirstRoot =
+                      next === "instructor"
+                        ? String(instructorMindmapNodes?.[0]?.id || "root")
+                        : "root";
+                    setExpandedNodeIds(new Set([nextFirstRoot]));
+                  }}
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                    mindmapSource === "instructor"
+                      ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
+                      : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
+                  }`}
+                  title="Chuyển giữa Cây Tri thức Chuẩn và Master Mindmap Giảng viên"
+                >
+                  <GitBranch size={12} />
+                  <span className="text-[11px]">
+                    {mindmapSource === "instructor" ? "Cây chuẩn" : "Sơ đồ Giảng viên"}
+                  </span>
+                </button>
+              )}
+
               {/* Counter Pill */}
               <span className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
                 Hiển thị: {visibleCount} / {totalCount} nút

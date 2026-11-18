@@ -137,3 +137,31 @@ def submit_concept_answers(session_id: str, payload: ConceptAnswersIn, user: dic
     if not correct:
         raise HTTPException(status_code=422, detail="Hãy nối bước kiểm tra page trước append")
     return {"score": 1, "correct": True, "feedback": "Đúng: input guard phải chạy trước history.append(page)."}
+
+
+@router.get("/student/profile")
+def get_student_profile(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    """Lấy hồ sơ học tập, XP, streak và kỹ năng 5 chiều của học viên."""
+    with db() as conn:
+        profile = conn.execute("SELECT * FROM student_profiles WHERE user_id=?", (user["id"],)).fetchone()
+        notes = conn.execute("SELECT * FROM student_notes WHERE user_id=? ORDER BY created_at DESC LIMIT 20", (user["id"],)).fetchall()
+    prof_dict = row_dict(profile) or {"current_streak": 0, "longest_streak": 0, "exp_points": 0, "selected_title": "Novice Developer"}
+    try:
+        prof_dict["owned_items"] = json.loads(prof_dict.get("owned_items_json") or "{}")
+    except Exception:
+        prof_dict["owned_items"] = {}
+    try:
+        prof_dict["claimed_quests"] = json.loads(prof_dict.get("claimed_quests_json") or '["q3"]')
+    except Exception:
+        prof_dict["claimed_quests"] = ["q3"]
+    return {
+        "user": {
+            "id": user["id"],
+            "name": user.get("full_name") or user.get("display_name"),
+            "email": user.get("email"),
+            "code": user.get("user_code") or "2210842",
+            "role": user.get("role", "student"),
+        },
+        "profile": prof_dict,
+        "notes": [row_dict(n) for n in notes],
+    }

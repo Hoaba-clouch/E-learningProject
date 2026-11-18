@@ -8,6 +8,7 @@ import {
   Check,
   Monitor,
   Settings,
+  ShieldCheck,
   HelpCircle,
   LayoutGrid,
 } from "lucide-react";
@@ -211,11 +212,26 @@ export function HeaderProfileDropdown({
           <button
             type="button"
             role="menuitem"
-            onClick={() => closeDropdown(() => onNavigate?.("profile"))}
+            onClick={() =>
+              closeDropdown(() =>
+                onNavigate?.(role === "instructor" ? "instructor" : role === "admin" ? "admin" : "profile")
+              )
+            }
             className="w-full h-[36px] px-3 rounded-xl flex items-center gap-2.5 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100/90 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
           >
             <UserRound size={16} className="text-slate-400 dark:text-slate-400 shrink-0" />
             <span>Profile</span>
+          </button>
+
+          {/* 4b. Security & Devices */}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => closeDropdown(() => onNavigate?.("security"))}
+            className="w-full h-[36px] px-3 rounded-xl flex items-center gap-2.5 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100/90 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
+          >
+            <ShieldCheck size={16} className="text-slate-400 dark:text-slate-400 shrink-0" />
+            <span>Bảo mật &amp; Thiết bị</span>
           </button>
 
           {/* 5. Studio settings */}

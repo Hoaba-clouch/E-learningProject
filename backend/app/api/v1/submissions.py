@@ -7,11 +7,35 @@ from app.api.deps import current_user, session_owned, log_audit
 from app.core.database import db, row_dict
 from app.core.security import uid, sha256
 from app.core.timezone import now_utc
-from app.schemas.submission import SubmissionIn
+from app.schemas.submission import SandboxEvaluateIn, SubmissionIn
 from app.services.analytics import track_event
-from app.services.code_evaluator import evaluate_code
+from app.services.code_evaluator import evaluate_code, evaluate_sandbox_detailed
 
 router = APIRouter(tags=["Submissions & Evaluation"])
+
+
+@router.post("/sandbox/evaluate")
+def evaluate_sandbox_code(
+    payload: SandboxEvaluateIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Chấm điểm nhanh code trên Docker Sandbox trực quan cho LearningWorkspace."""
+    with db() as conn:
+        docker_svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-docker'").fetchone()
+        if docker_svc and not docker_svc["active"]:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Docker CI/CD Isolated Sandbox Pool đang được Quản trị viên tạm dừng bảo trì.",
+            )
+        result = evaluate_sandbox_detailed(payload.code, payload.language, payload.exercise_id)
+        conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id='svc-docker'")
+    track_event(
+        user["id"],
+        None,
+        "sandbox_evaluated",
+        {"exercise_id": payload.exercise_id, "passed_count": result["passed_count"], "language": payload.language},
+    )
+    return result
 
 
 @router.post("/sessions/{session_id}/submissions", status_code=status.HTTP_201_CREATED)

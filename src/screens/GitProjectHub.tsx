@@ -5,6 +5,24 @@ import OdometerNumber from "../components/OdometerNumber";
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
 import {
+  GitPrReviewPanel,
+  GitNewCommitModal,
+  GitNewPrModal,
+} from "../components/GitPrReviewPanel";
+import {
+  applyPrAiFixApi,
+  approvePrPeerReviewApi,
+  createGitPullRequestApi,
+  fetchGitHubWorkspaceApi,
+  mergeGitPullRequestApi,
+  pushGitCommitApi,
+  updateGitHubRepoApi,
+  type GitHubProjectSummary,
+  type GitMemberAnalytics,
+  type GitProjectTaskRef,
+  type GitPullRequestRecord,
+} from "../api";
+import {
   ReactFlow,
   Background,
   Controls,
@@ -20,6 +38,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
+  Plus,
   ExternalLink,
   Network,
   Layers,
@@ -1259,9 +1278,49 @@ function AnimatedNumber({
   return <span className="marlo-num font-mono">{decimals > 0 ? displayValue.toFixed(decimals) : displayValue.toLocaleString()}{suffix}</span>;
 }
 
-export default function GitProjectHub() {
+interface GitProjectHubProps {
+  initialProjectId?: string;
+  onSelectProject?: (projectId: string) => void;
+  onNavigate?: (screen: any) => void;
+}
+
+export default function GitProjectHub({
+  initialProjectId = "prj-codemind",
+  onSelectProject,
+  onNavigate,
+}: GitProjectHubProps = {}) {
   const gitHubRef = useRef<HTMLDivElement>(null);
-  const [viewMode, setViewMode] = useState<"topology" | "gitdiagram" | "analytics" | "gitflow">("topology");
+  const [viewMode, setViewMode] = useState<"topology" | "prs" | "gitdiagram" | "analytics" | "gitflow">("topology");
+  const [activeProjectId, setActiveProjectId] = useState<string>(initialProjectId);
+  const [projectsList, setProjectsList] = useState<GitHubProjectSummary[]>([]);
+  const [repoSlug, setRepoSlug] = useState<string>("hoaba-clouch/e-learningproject");
+  const [mergeStrategy, setMergeStrategy] = useState<string>("squash");
+  const [commits, setCommits] = useState<GitCommitItem[]>(GIT_COMMITS);
+  const [pullRequests, setPullRequests] = useState<GitPullRequestRecord[]>([]);
+  const [selectedPr, setSelectedPr] = useState<GitPullRequestRecord | null>(null);
+  const [memberAnalytics, setMemberAnalytics] = useState<GitMemberAnalytics[]>([]);
+  const [projectTasks, setProjectTasks] = useState<GitProjectTaskRef[]>([]);
+  const [metricsState, setMetricsState] = useState({
+    gitCultureScore: 94.8,
+    taskLinkedPct: 100,
+    aiIntegrityPct: 100,
+    cadenceVarianceHours: 4.8,
+    totalCommits: 16,
+    openPrsCount: 3,
+    mergedPrsCount: 1,
+    memberShares: [36, 34, 30],
+    balanceStatus: "Cân bằng",
+  });
+  const [actionToast, setActionToast] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [prActionLoading, setPrActionLoading] = useState<string | null>(null);
+  const [showNewCommitModal, setShowNewCommitModal] = useState(false);
+  const [showNewPrModal, setShowNewPrModal] = useState(false);
+
+  const showToast = (msg: string) => {
+    setActionToast(msg);
+    setTimeout(() => setActionToast(null), 3500);
+  };
 
   // 🏷️ Marlo Horizontal Liquid Rubberband Active Pill State
   const tabTrackRef = useRef<HTMLDivElement>(null);
@@ -1337,8 +1396,9 @@ export default function GitProjectHub() {
   const [topoAnimKey, setTopoAnimKey] = useState<number>(0);
   const [statAnimKey, setStatAnimKey] = useState<number>(0);
 
-  const handleSetViewMode = (mode: "topology" | "gitdiagram" | "analytics" | "gitflow") => {
+  const handleSetViewMode = (mode: "topology" | "prs" | "gitdiagram" | "analytics" | "gitflow") => {
     setViewMode(mode);
+    setActionError(null);
     setStatAnimKey((k) => k + 1);
     if (mode === "topology") setTopoAnimKey((k) => k + 1);
     if (mode === "gitdiagram") setDiagramAnimKey((k) => k + 1);
@@ -1350,8 +1410,169 @@ export default function GitProjectHub() {
   const [memberFilter, setMemberFilter] = useState<string>("all");
   const [branchFilter, setBranchFilter] = useState<string>("all");
 
+  const loadGitWorkspace = useCallback(async (pid: string, preserveSelectedPrId?: string) => {
+    const data = await fetchGitHubWorkspaceApi(pid);
+    if (!data) return;
+    setProjectsList(data.projects || []);
+    setRepoUrl(data.repository.repoUrl);
+    setRepoSlug(data.repository.repoSlug);
+    setTargetBranch(data.repository.targetBranch);
+    setMergeStrategy(data.repository.defaultMergeStrategy || "squash");
+    setMetricsState(data.metrics);
+    setProjectTasks(data.projectTasks || []);
+    setMemberAnalytics(data.memberAnalytics || []);
+    if (Array.isArray(data.commits) && data.commits.length > 0) {
+      setCommits(data.commits as GitCommitItem[]);
+      setSelectedCommit((prev) => {
+        const match = data.commits.find((c) => c.id === prev?.id);
+        return (match || data.commits[Math.min(8, data.commits.length - 1)] || data.commits[0]) as GitCommitItem;
+      });
+    } else {
+      setCommits([]);
+    }
+    const prs = data.pullRequests || [];
+    setPullRequests(prs);
+    setSelectedPr((prev) => {
+      const targetId = preserveSelectedPrId || prev?.id;
+      return prs.find((p) => p.id === targetId) || prs[0] || null;
+    });
+  }, []);
+
+  useEffect(() => {
+    setActiveProjectId(initialProjectId || "prj-codemind");
+  }, [initialProjectId]);
+
+  useEffect(() => {
+    setMemberFilter("all");
+    setBranchFilter("all");
+    void loadGitWorkspace(activeProjectId);
+  }, [activeProjectId, loadGitWorkspace]);
+
+  const handleSaveRepoSync = async () => {
+    const res = await updateGitHubRepoApi(activeProjectId, {
+      repo_url: repoUrl,
+      target_branch: targetBranch,
+      default_merge_strategy: mergeStrategy,
+    });
+    if (res.error) {
+      setActionError(res.error);
+      return;
+    }
+    if (res.repository) {
+      setRepoUrl(res.repository.repoUrl);
+      setRepoSlug(res.repository.repoSlug);
+      setTargetBranch(res.repository.targetBranch);
+    }
+    handleCloseRepoModal();
+    showToast(`Đã đồng bộ Repo ${res.repository?.repoSlug || repoSlug} (nhánh ${targetBranch})`);
+    void loadGitWorkspace(activeProjectId, selectedPr?.id);
+  };
+
+  const handlePushNewCommit = async (payload: {
+    branch: string;
+    message: string;
+    task_code?: string;
+    author_name?: string;
+    files_changed: string[];
+  }) => {
+    const res = await pushGitCommitApi(activeProjectId, payload);
+    if (res.error) {
+      showToast(res.error);
+      return;
+    }
+    if (res.commit) {
+      await loadGitWorkspace(activeProjectId, selectedPr?.id);
+      setSelectedCommit(res.commit as GitCommitItem);
+      setTopoAnimKey((k) => k + 1);
+      showToast(
+        `Đã ghi nhận commit ${res.commit.sha}${
+          (res.xp_awarded || 0) > 0 ? ` (+${res.xp_awarded} XP)` : ""
+        }`
+      );
+    }
+  };
+
+  const handleCreateNewPr = async (payload: {
+    title: string;
+    description: string;
+    source_branch: string;
+    target_branch: string;
+    task_code?: string;
+    code_snippet: string;
+  }) => {
+    setActionError(null);
+    const res = await createGitPullRequestApi(activeProjectId, payload);
+    if (res.error) {
+      setActionError(res.error);
+      return;
+    }
+    if (res.pullRequest) {
+      await loadGitWorkspace(activeProjectId, res.pullRequest.id);
+      setViewMode("prs");
+      showToast(`Đã tạo PR #${String(res.pullRequest.prNumber).padStart(2, "0")} & chạy AST Scanner`);
+    }
+  };
+
+  const handleAiFixPr = async (prId: string) => {
+    setActionError(null);
+    setPrActionLoading("ai-fix");
+    try {
+      const res = await applyPrAiFixApi(prId);
+      if (res.error) {
+        setActionError(res.error);
+        return;
+      }
+      await loadGitWorkspace(activeProjectId, prId);
+      showToast("Đã áp dụng bản vá bảo mật 1-Click từ CodeMind AI!");
+    } finally {
+      setPrActionLoading(null);
+    }
+  };
+
+  const handlePeerApprovePr = async (prId: string, comment: string) => {
+    setActionError(null);
+    setPrActionLoading("peer-approve");
+    try {
+      const res = await approvePrPeerReviewApi(prId, { comment });
+      if (res.error) {
+        setActionError(res.error);
+        return;
+      }
+      await loadGitWorkspace(activeProjectId, prId);
+      showToast("Đã ký Peer Review Approve cho Pull Request!");
+    } finally {
+      setPrActionLoading(null);
+    }
+  };
+
+  const handleMergePr = async (prId: string, strategy: string) => {
+    setActionError(null);
+    setPrActionLoading("merge");
+    try {
+      const res = await mergeGitPullRequestApi(prId, strategy);
+      if (res.error) {
+        setActionError(res.error);
+        return;
+      }
+      await loadGitWorkspace(activeProjectId, prId);
+      showToast(
+        `Đã Squash Merge & đóng dấu SHA-256 DoD${
+          res.updatedTaskCode ? ` (Task #${res.updatedTaskCode} → Hoàn thành)` : ""
+        }${(res.xp_awarded || 0) > 0 ? ` • +${res.xp_awarded} XP` : ""}`
+      );
+    } finally {
+      setPrActionLoading(null);
+    }
+  };
+
+  const uniqueAuthors = useMemo(() => {
+    const counts = new Map<string, number>();
+    commits.forEach((c) => counts.set(c.author.name, (counts.get(c.author.name) || 0) + 1));
+    return Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
+  }, [commits]);
+
   const filteredCommits = useMemo(() => {
-    return GIT_COMMITS.filter((c) => {
+    return commits.filter((c) => {
       const matchMember = memberFilter === "all" || c.author.name === memberFilter;
       const matchBranch =
         branchFilter === "all" ||
@@ -1364,7 +1585,12 @@ export default function GitProjectHub() {
           : c.branch === branchFilter);
       return matchMember && matchBranch;
     });
-  }, [memberFilter, branchFilter]);
+  }, [commits, memberFilter, branchFilter]);
+
+  const svgWidth = useMemo(() => {
+    const maxCx = commits.reduce((acc, c) => Math.max(acc, c.cx || 70), 1300);
+    return Math.max(1420, maxCx + 110);
+  }, [commits]);
 
   // ReactFlow state & Branch-Tree Flow Simulation
   const [archNodes, , onNodesChange] = useNodesState(INITIAL_ARCH_NODES);
@@ -1530,28 +1756,60 @@ export default function GitProjectHub() {
       const rows = el.querySelectorAll(".marlo-row");
       if (rows.length > 0) animateMarloRows(rows, { y: 10, stagger: 0.03, delay: 0.2 });
     },
-    [viewMode]
+    [viewMode, activeProjectId]
   );
 
   return (
     <div ref={gitHubRef} className="min-h-full p-4 lg:p-6 space-y-5 text-slate-900 dark:text-slate-100">
+      {actionToast && (
+        <div className="p-3 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-md flex items-center justify-between animate-fade-in">
+          <span className="flex items-center gap-2">
+            <CheckCircle2 size={15} />
+            {actionToast}
+          </span>
+          <button onClick={() => setActionToast(null)} className="opacity-80 hover:opacity-100 cursor-pointer">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Top Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/90 dark:border-slate-800 pb-5 animate-cascade-1">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="pill pill--info font-mono text-[11px] font-bold">
               <Network size={13} />
-              Phân hệ 2 • Sơ đồ Kiến trúc Chuẩn GitDiagram & Understand Anything
+              Phân hệ 2 • Sơ đồ Kiến trúc Chuẩn GitDiagram & Git Project Hub
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">hoaba-clouch/e-learningproject</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium font-mono">
+              {repoSlug} ({targetBranch})
+            </span>
           </div>
           <MarloTitle text="Sơ đồ Kiến trúc Hệ thống (GitDiagram) & Git Hub" className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 dark:text-white" />
           <p className="mt-1 text-sm text-[#62656b] dark:text-[#a0a3a9] max-w-4xl">
-            Cấu trúc phân tầng chuẩn 100% từ GitDiagram: Campus App (Frontend), API Platform (FastAPI), Project Workspace, Learning Services và SQLite Database.
+            Cấu trúc phân tầng chuẩn GitDiagram kết hợp Cây phân nhánh Git Graph, CodeMind AI AST Reviewer & Thẩm định DoD SHA-256.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          {projectsList.length > 0 && (
+            <select
+              aria-label="Chọn dự án GitHub"
+              value={activeProjectId}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setActiveProjectId(nextId);
+                onSelectProject?.(nextId);
+              }}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            >
+              {projectsList.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.code} · {p.name}
+                </option>
+              ))}
+            </select>
+          )}
           <a
             href={repoUrl}
             target="_blank"
@@ -1580,13 +1838,15 @@ export default function GitProjectHub() {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-              <AnimatedNumber value={94.8} decimals={1} key={`score-${statAnimKey}`} />
+              <AnimatedNumber value={metricsState.gitCultureScore} decimals={1} key={`score-${statAnimKey}-${activeProjectId}`} />
             </span>
             <span className="pill pill--info pill--plain text-[10.5px] font-bold">
-              Hạng A+ (Chuẩn)
+              {metricsState.gitCultureScore >= 90 ? "Hạng A+ (Chuẩn)" : "Đạt chuẩn"}
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">100% commit có mã Task và format feat/fix.</p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            {metricsState.taskLinkedPct}% commit gắn mã Task Kanban ({metricsState.totalCommits} commits).
+          </p>
         </div>
 
         <div key="metric-ai-integrity" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
@@ -1596,45 +1856,53 @@ export default function GitProjectHub() {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-              <AnimatedNumber value={100} suffix="%" key={`integ-${statAnimKey}`} />
+              <AnimatedNumber value={metricsState.aiIntegrityPct} suffix="%" key={`integ-${statAnimKey}-${activeProjectId}`} />
             </span>
             <span className="pill pill--good pill--plain text-[10.5px] font-bold">
               Bình thường
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Không phát hiện hành vi dump code AI gian lận.</p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            Cadence Variance {metricsState.cadenceVarianceHours}h — không dump code AI.
+          </p>
         </div>
 
         <div key="metric-team-split" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Phân bổ Nhóm 3 người</span>
+            <span>Phân bổ Nhóm ({memberAnalytics.length || 3} người)</span>
             <UserCheck size={16} className="text-purple-600 dark:text-purple-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-purple-600 dark:text-purple-400 font-mono">
-              <AnimatedNumber value={36} key={`h-${statAnimKey}`} /> : <AnimatedNumber value={34} key={`v-${statAnimKey}`} /> : <AnimatedNumber value={30} key={`n-${statAnimKey}`} />
+              {(metricsState.memberShares.length > 0 ? metricsState.memberShares : [36, 34, 30]).join(" : ")}
             </span>
             <span className="pill pill--plain text-[10.5px] font-bold">
-              Cân bằng
+              {metricsState.balanceStatus}
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Nguyễn Bá Hòa (36%), Võ Nhật Huy (34%), Phan Đình Nghị (30%).</p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            {memberAnalytics.length > 0
+              ? memberAnalytics.map((m) => `${m.name} (${m.sharePct}%)`).join(", ")
+              : "Nguyễn Bá Hòa (36%), Võ Nhật Huy (34%), Phan Đình Nghị (30%)."}
+          </p>
         </div>
 
         <div key="metric-diagram" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Cấu trúc GitDiagram</span>
+            <span>Pull Requests & AST</span>
             <Boxes size={16} className="text-amber-600 dark:text-amber-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">
-              <AnimatedNumber value={22} key={`diag-${statAnimKey}`} />
+              <AnimatedNumber value={pullRequests.length} key={`prs-${statAnimKey}-${activeProjectId}`} />
             </span>
             <span className="pill pill--warn pill--plain text-[10.5px] font-bold">
-              5 Phân tầng
+              {metricsState.mergedPrsCount} Merged · {metricsState.openPrsCount} Mở
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Khớp 100% sơ đồ gitdiagram.com repo của nhóm.</p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            Kiến trúc 22 Components + Quét bảo mật AST 2 lớp.
+          </p>
         </div>
       </section>
 
@@ -1644,6 +1912,12 @@ export default function GitProjectHub() {
           value={viewMode}
           options={[
             { id: "topology", label: "Git Graph", icon: <Network size={15} /> },
+            {
+              id: "prs",
+              label: "Pull Requests",
+              icon: <GitPullRequest size={15} />,
+              badge: pullRequests.filter((p) => p.status !== "merged").length || undefined,
+            },
             { id: "gitdiagram", label: "Architecture Diagram", icon: <Boxes size={15} /> },
             { id: "analytics", label: "Team Analytics", icon: <BarChart3 size={15} /> },
             { id: "gitflow", label: "Git Flow", icon: <Layers size={15} /> },
@@ -1655,13 +1929,32 @@ export default function GitProjectHub() {
         <div className="hidden lg:flex items-center gap-3 text-xs text-slate-500 pr-3 font-mono shrink-0">
           <button
             onClick={copyMermaidCode}
-            className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-600 font-sans font-medium text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200"
+            className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-600 font-sans font-medium text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 cursor-pointer"
           >
             {copiedMermaid ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
             {copiedMermaid ? "Đã copy Mermaid.js" : "Sao chép mã Mermaid.js"}
           </button>
         </div>
       </div>
+
+      {/* MODE 0: PULL REQUESTS & CODEMIND AI 2-TIER REVIEW */}
+      {viewMode === "prs" && (
+        <GitPrReviewPanel
+          pullRequests={pullRequests}
+          selectedPr={selectedPr}
+          onSelectPr={(pr) => {
+            setActionError(null);
+            setSelectedPr(pr);
+          }}
+          onOpenNewPrModal={() => setShowNewPrModal(true)}
+          onAiFix={handleAiFixPr}
+          onPeerApprove={handlePeerApprovePr}
+          onMerge={handleMergePr}
+          onOpenDefenseRoom={onNavigate ? () => onNavigate("defense-room") : undefined}
+          actionLoading={prActionLoading}
+          actionError={actionError}
+        />
+      )}
 
       {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS (FULL-WIDTH 100% EXPANSIVE VIEW) */}
       {viewMode === "gitdiagram" && (
@@ -1712,7 +2005,7 @@ export default function GitProjectHub() {
             {/* Watermark badge on canvas */}
             <div className="absolute top-3 left-3 z-10 flex items-center gap-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs text-xs font-mono text-slate-600 dark:text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>gitdiagram.com/hoaba-clouch/e-learningproject</span>
+              <span>gitdiagram.com/{repoSlug}</span>
             </div>
 
             {/* Helper hint pill floating on bottom-right of canvas */}
@@ -1783,12 +2076,12 @@ export default function GitProjectHub() {
               <span className="pill pill--warn pill--plain text-[10px] font-mono font-semibold">Learning</span>
             </div>
             <a
-              href="https://gitdiagram.com/hoaba-clouch/e-learningproject"
+              href={`https://gitdiagram.com/${repoSlug}`}
               target="_blank"
               rel="noreferrer"
               className="text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1 shrink-0"
             >
-              gitdiagram.com/hoaba-clouch/e-learningproject
+              gitdiagram.com/{repoSlug}
               <ExternalLink size={12} />
             </a>
           </div>
@@ -1937,8 +2230,16 @@ export default function GitProjectHub() {
               </p>
             </div>
 
-            {/* Member & Branch Filter Controls + Replay Animation */}
+            {/* Member & Branch Filter Controls + Push Commit + Replay Animation */}
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowNewCommitModal(true)}
+                className="btn-marlo-primary btn--primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-2xs cursor-pointer"
+              >
+                <Plus size={13} />
+                Ghi nhận Commit
+              </button>
+
               <button
                 onClick={() => setTopoAnimKey((k) => k + 1)}
                 title="Kích hoạt lại chuyển động vẽ nhánh Git"
@@ -1948,43 +2249,38 @@ export default function GitProjectHub() {
                 Phát Lại Chuyển Động
               </button>
 
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
+              <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
                 <span className="text-[11px] text-slate-500 px-2 flex items-center gap-1">
                   <User size={12} />
                   Thành viên:
                 </span>
                 <button
                   onClick={() => setMemberFilter("all")}
-                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
+                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer ${
                     memberFilter === "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Tất cả (16)
+                  Tất cả ({commits.length})
                 </button>
-                <button
-                  onClick={() => setMemberFilter("Nguyễn Bá Hòa")}
-                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
-                    memberFilter === "Nguyễn Bá Hòa" ? "bg-blue-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Nguyễn Bá Hòa (7)
-                </button>
-                <button
-                  onClick={() => setMemberFilter("Võ Nhật Huy")}
-                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
-                    memberFilter === "Võ Nhật Huy" ? "bg-emerald-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Võ Nhật Huy (4)
-                </button>
-                <button
-                  onClick={() => setMemberFilter("Phan Đình Nghị")}
-                  className={`px-2.5 py-1 rounded-md transition text-xs font-semibold ${
-                    memberFilter === "Phan Đình Nghị" ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Phan Đình Nghị (5)
-                </button>
+                {uniqueAuthors.map((au, idx) => {
+                  const activeCls =
+                    idx % 3 === 0
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : idx % 3 === 1
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "bg-purple-600 text-white shadow-xs";
+                  return (
+                    <button
+                      key={au.name}
+                      onClick={() => setMemberFilter(au.name)}
+                      className={`px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer ${
+                        memberFilter === au.name ? activeCls : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {au.name} ({au.count})
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
@@ -2046,7 +2342,7 @@ export default function GitProjectHub() {
 
           {/* Interactive SVG Visual Git Graph with Floating Popover */}
           <div className="relative overflow-x-auto p-4 bg-slate-50/70 rounded-xl border border-slate-200">
-            <svg className="w-[1420px] h-[390px]" viewBox="0 0 1420 390">
+            <svg style={{ width: `${svgWidth}px`, height: "390px" }} viewBox={`0 0 ${svgWidth} 390`}>
               <defs>
                 <filter id="topoGlow" x="-50%" y="-50%" width="200%" height="200%">
                   <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
@@ -2115,22 +2411,22 @@ export default function GitProjectHub() {
               `}</style>
 
               {/* 6 Lane Guides & Branch Labels */}
-              <line x1="50" y1="45" x2="1380" y2="45" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <line x1="50" y1="45" x2={svgWidth - 40} y2="45" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="10" y="49" fill="#2563eb" fontSize="11" fontFamily="monospace" fontWeight="bold">main</text>
 
-              <line x1="50" y1="105" x2="1380" y2="105" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <line x1="50" y1="105" x2={svgWidth - 40} y2="105" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="10" y="109" fill="#f43f5e" fontSize="11" fontFamily="monospace" fontWeight="bold">hotfix/cve</text>
 
-              <line x1="50" y1="165" x2="1380" y2="165" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <line x1="50" y1="165" x2={svgWidth - 40} y2="165" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="10" y="169" fill="#a855f7" fontSize="11" fontFamily="monospace" fontWeight="bold">release/v1.2</text>
 
-              <line x1="50" y1="225" x2="1380" y2="225" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <line x1="50" y1="225" x2={svgWidth - 40} y2="225" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="10" y="229" fill="#6366f1" fontSize="11" fontFamily="monospace" fontWeight="bold">develop</text>
 
-              <line x1="50" y1="285" x2="1380" y2="285" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <line x1="50" y1="285" x2={svgWidth - 40} y2="285" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="10" y="289" fill="#f59e0b" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/auth</text>
 
-              <line x1="50" y1="345" x2="1380" y2="345" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
+              <line x1="50" y1="345" x2={svgWidth - 40} y2="345" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="10" y="349" fill="#10b981" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/evaluator</text>
 
               {/* Branch Connecting Lines (Smooth Bézier curves with drawing animations) */}
@@ -2138,119 +2434,117 @@ export default function GitProjectHub() {
               <path
                 id="topo-main-path"
                 className="topo-path-main"
-                d="M 50 45 L 1380 45"
+                d={`M 50 45 L ${svgWidth - 40} 45`}
                 fill="none"
                 stroke="#2563eb"
                 strokeWidth="3"
               />
 
-              {/* 2. Develop branch split from main (c-1 @ 70,45 -> c-2 @ 170,225) & merge back into v1.0.0 (c-10 @ 810,45) */}
-              <path
-                id="topo-dev1-path"
-                className="topo-path-develop1"
-                d="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45"
-                fill="none"
-                stroke="#6366f1"
-                strokeWidth="3"
-              />
+              {activeProjectId === "prj-codemind" && (
+                <>
+                  <path
+                    id="topo-dev1-path"
+                    className="topo-path-develop1"
+                    d="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45"
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth="3"
+                  />
+                  <path
+                    id="topo-dev2-path"
+                    className="topo-path-develop2"
+                    d="M 720 225 L 1050 225"
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth="3"
+                  />
+                  <path
+                    id="topo-auth-path"
+                    className="topo-path-auth"
+                    d="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225"
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="3"
+                  />
+                  <path
+                    id="topo-eval-path"
+                    className="topo-path-evaluator"
+                    d="M 170 225 C 230 225, 280 345, 340 345 L 560 345 C 630 345, 680 345, 690 345 C 705 345, 715 225, 720 225"
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="3"
+                  />
+                  <path
+                    id="topo-hotfix-path"
+                    className="topo-path-hotfix"
+                    d="M 810 45 C 840 45, 860 105, 890 105 C 920 105, 940 45, 970 45"
+                    fill="none"
+                    stroke="#f43f5e"
+                    strokeWidth="3"
+                  />
+                  <path
+                    id="topo-hotfix-dev-path"
+                    className="topo-path-hotfix-dev"
+                    d="M 890 105 C 930 105, 980 225, 1030 225"
+                    fill="none"
+                    stroke="#f43f5e"
+                    strokeWidth="2.5"
+                    strokeDasharray="4 3"
+                  />
+                  <path
+                    id="topo-release-path"
+                    className="topo-path-release"
+                    d="M 1030 225 C 1060 225, 1080 165, 1110 165 L 1200 165 C 1240 165, 1270 45, 1300 45"
+                    fill="none"
+                    stroke="#a855f7"
+                    strokeWidth="3"
+                  />
 
-              {/* 3. Develop continuation past v1.0.0 to v1.2 release */}
-              <path
-                id="topo-dev2-path"
-                className="topo-path-develop2"
-                d="M 720 225 L 1050 225"
-                fill="none"
-                stroke="#6366f1"
-                strokeWidth="3"
-              />
+                  <circle r="6" fill="#38bdf8" filter="url(#topoGlow)">
+                    <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="3.8s" repeatCount="indefinite" begin="0.3s" />
+                  </circle>
+                  <circle r="12" fill="#38bdf8" opacity="0.25" filter="url(#topoGlow)">
+                    <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="3.8s" repeatCount="indefinite" begin="0.3s" />
+                  </circle>
+                  <circle r="5.5" fill="#a855f7" filter="url(#topoGlow)">
+                    <animateMotion path="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45" dur="4.2s" repeatCount="indefinite" begin="0.6s" />
+                  </circle>
+                  <circle r="5.5" fill="#f59e0b" filter="url(#topoGlow)">
+                    <animateMotion path="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225" dur="3.5s" repeatCount="indefinite" begin="1.0s" />
+                  </circle>
+                  <circle r="5.5" fill="#10b981" filter="url(#topoGlow)">
+                    <animateMotion path="M 170 225 C 230 225, 280 345, 340 345 L 560 345 C 630 345, 680 345, 690 345 C 705 345, 715 225, 720 225" dur="4s" repeatCount="indefinite" begin="1.3s" />
+                  </circle>
+                  <circle r="5.5" fill="#f43f5e" filter="url(#topoGlow)">
+                    <animateMotion path="M 810 45 C 840 45, 860 105, 890 105 C 920 105, 940 45, 970 45" dur="2.8s" repeatCount="indefinite" begin="1.6s" />
+                  </circle>
+                  <circle r="5.5" fill="#c084fc" filter="url(#topoGlow)">
+                    <animateMotion path="M 1030 225 C 1060 225, 1080 165, 1110 165 L 1200 165 C 1240 165, 1270 45, 1300 45" dur="3.6s" repeatCount="indefinite" begin="1.9s" />
+                  </circle>
+                </>
+              )}
 
-              {/* 4. feature/auth split from develop (c-2 @ 170,225 -> c-3 @ 260,285) & merge back at c-8 (640,225) */}
-              <path
-                id="topo-auth-path"
-                className="topo-path-auth"
-                d="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225"
-                fill="none"
-                stroke="#f59e0b"
-                strokeWidth="3"
-              />
-
-              {/* 5. feature/evaluator concurrent split from develop (170,225 -> 340,345) & merge back at c-9 (720,225) */}
-              <path
-                id="topo-eval-path"
-                className="topo-path-evaluator"
-                d="M 170 225 C 230 225, 280 345, 340 345 L 560 345 C 630 345, 680 345, 690 345 C 705 345, 715 225, 720 225"
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="3"
-              />
-
-              {/* 6. hotfix/cve split from main (810,45 -> 890,105) & merge to main (970,45) */}
-              <path
-                id="topo-hotfix-path"
-                className="topo-path-hotfix"
-                d="M 810 45 C 840 45, 860 105, 890 105 C 920 105, 940 45, 970 45"
-                fill="none"
-                stroke="#f43f5e"
-                strokeWidth="3"
-              />
-
-              {/* 7. hotfix/cve dual-merge back to develop (890,105 -> 1030,225) */}
-              <path
-                id="topo-hotfix-dev-path"
-                className="topo-path-hotfix-dev"
-                d="M 890 105 C 930 105, 980 225, 1030 225"
-                fill="none"
-                stroke="#f43f5e"
-                strokeWidth="2.5"
-                strokeDasharray="4 3"
-              />
-
-              {/* 8. release/v1.2 split from develop (1030,225 -> 1110,165) & merge to main (1300,45) */}
-              <path
-                id="topo-release-path"
-                className="topo-path-release"
-                d="M 1030 225 C 1060 225, 1080 165, 1110 165 L 1200 165 C 1240 165, 1270 45, 1300 45"
-                fill="none"
-                stroke="#a855f7"
-                strokeWidth="3"
-              />
-
-              {/* Living Data Pulses (Traveling along Git paths with Glowing Halos) */}
-              <circle r="6" fill="#38bdf8" filter="url(#topoGlow)">
-                <animateMotion path="M 50 45 L 1380 45" dur="3.8s" repeatCount="indefinite" begin="0.3s" />
-              </circle>
-              <circle r="12" fill="#38bdf8" opacity="0.25" filter="url(#topoGlow)">
-                <animateMotion path="M 50 45 L 1380 45" dur="3.8s" repeatCount="indefinite" begin="0.3s" />
-              </circle>
-
-              <circle r="5.5" fill="#a855f7" filter="url(#topoGlow)">
-                <animateMotion path="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45" dur="4.2s" repeatCount="indefinite" begin="0.6s" />
-              </circle>
-              <circle r="10" fill="#a855f7" opacity="0.25" filter="url(#topoGlow)">
-                <animateMotion path="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45" dur="4.2s" repeatCount="indefinite" begin="0.6s" />
-              </circle>
-
-              <circle r="5.5" fill="#f59e0b" filter="url(#topoGlow)">
-                <animateMotion path="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225" dur="3.5s" repeatCount="indefinite" begin="1.0s" />
-              </circle>
-              <circle r="10" fill="#f59e0b" opacity="0.25" filter="url(#topoGlow)">
-                <animateMotion path="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225" dur="3.5s" repeatCount="indefinite" begin="1.0s" />
-              </circle>
-
-              <circle r="5.5" fill="#10b981" filter="url(#topoGlow)">
-                <animateMotion path="M 170 225 C 230 225, 280 345, 340 345 L 560 345 C 630 345, 680 345, 690 345 C 705 345, 715 225, 720 225" dur="4s" repeatCount="indefinite" begin="1.3s" />
-              </circle>
-
-              <circle r="5.5" fill="#f43f5e" filter="url(#topoGlow)">
-                <animateMotion path="M 810 45 C 840 45, 860 105, 890 105 C 920 105, 940 45, 970 45" dur="2.8s" repeatCount="indefinite" begin="1.6s" />
-              </circle>
-
-              <circle r="5.5" fill="#c084fc" filter="url(#topoGlow)">
-                <animateMotion path="M 1030 225 C 1060 225, 1080 165, 1110 165 L 1200 165 C 1240 165, 1270 45, 1300 45" dur="3.6s" repeatCount="indefinite" begin="1.9s" />
-              </circle>
+              {/* Dynamic Bezier edges for additional commits pushed/merged or switched projects */}
+              {commits.map((c, idx) => {
+                if (idx === 0) return null;
+                if (activeProjectId === "prj-codemind" && idx < 16) return null;
+                const prev = commits[idx - 1];
+                const midX = (prev.cx + c.cx) / 2;
+                return (
+                  <path
+                    key={`dyn-edge-${c.id}`}
+                    d={`M ${prev.cx} ${prev.cy} C ${midX} ${prev.cy}, ${midX} ${c.cy}, ${c.cx} ${c.cy}`}
+                    fill="none"
+                    stroke={c.branchColor}
+                    strokeWidth="2.8"
+                    strokeDasharray={activeProjectId === "prj-codemind" ? "5 3" : undefined}
+                    opacity={0.85}
+                  />
+                );
+              })}
 
               {/* Interactive Commit Dots */}
-              {GIT_COMMITS.map((c, idx) => {
+              {commits.map((c, idx) => {
                 const isFiltered = filteredCommits.some((fc) => fc.id === c.id);
                 const isSelected = selectedCommit?.id === c.id;
                 const isHovered = hoveredCommit?.id === c.id;
@@ -2489,78 +2783,60 @@ export default function GitProjectHub() {
         </div>
       )}
 
-      {/* MODE 3: MEMBER CONTRIBUTION ANALYTICS (Khớp Chuẩn 100% Ảnh 2 với Hiệu Ứng Thác Nước & Nhảy Số) */}
+      {/* MODE 3: MEMBER CONTRIBUTION ANALYTICS */}
       {viewMode === "analytics" && (
-        <div key={`mode-analytics-${statAnimKey}`} className="animate-screen-enter bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 space-y-6">
+        <div key={`mode-analytics-${statAnimKey}-${activeProjectId}`} className="animate-screen-enter bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 space-y-6">
           {/* Header Title & Subtitle */}
           <div className="border-b border-slate-100 dark:border-slate-800 pb-4 animate-box-stagger-1">
             <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <BarChart3 size={18} className="text-blue-600 dark:text-blue-400" />
-              Thống kê Đóng góp Nhóm & Tính Liêm chính Mã Nguồn
+              Thống kê Đóng góp Nhóm & Tính Liêm chính Mã Nguồn (Anti-Freerider 50/30/20)
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Phân bổ số lượng commit, số dòng code đóng góp và kiểm định tính nguyên bản của 3 thành viên theo chuẩn Hội đồng Đồ án.
+              Tính toán tự động từ SQLite: 50% Story Points hoàn thành + 30% Commit/PR + 20% DoD Review của {memberAnalytics.length || 3} thành viên.
             </p>
           </div>
 
-          {/* 3 Member Contribution Cards (Xuất hiện lần lượt từng card từ trái qua phải) */}
+          {/* Dynamic Member Contribution Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Card 1: Nguyễn Bá Hòa (Leader) */}
-            <div className="p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 animate-box-stagger-2 shadow-xs hover:shadow-md transition-all hover:bg-white dark:hover:bg-slate-800/70">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">Nguyễn Bá Hòa (Leader)</span>
-                <span className="pill pill--info pill--plain text-xs font-bold font-mono">
-                  <OdometerNumber value={36} suffix="%" />
-                </span>
+            {memberAnalytics.map((m, idx) => (
+              <div
+                key={m.name}
+                className={`p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 shadow-xs hover:shadow-md transition-all hover:bg-white dark:hover:bg-slate-800/70 animate-box-stagger-${Math.min(idx + 2, 5)}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      {m.name}
+                    </span>
+                    <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                      {m.role} • Hạng {m.grade}
+                    </span>
+                  </div>
+                  <span className={`pill ${m.pillClass} pill--plain text-xs font-bold font-mono`}>
+                    <OdometerNumber value={m.sharePct} suffix="%" />
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className={`${m.barClass} h-full rounded-full animate-bar-grow`}
+                    style={{ width: `${m.sharePct}%` }}
+                  />
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 font-mono">
+                  <div>
+                    Commits: <span className="font-bold text-slate-700 dark:text-slate-200"><OdometerNumber value={m.commitsCount} /></span> commits • SP Done: <span className="font-bold text-blue-600 dark:text-blue-400">{m.storyPointsDone} SP</span>
+                  </div>
+                  <div>
+                    Thêm dòng: <span className="font-bold text-emerald-600 dark:text-emerald-400">+<OdometerNumber value={m.additions} /></span> / -{m.deletions} dòng
+                  </div>
+                  <div className="truncate font-sans">Nhiệm vụ: {m.tasksSummary}</div>
+                </div>
               </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-blue-600 h-full rounded-full animate-bar-grow" style={{ width: "36%" }} />
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 font-mono">
-                <div>Commits: <span className="font-bold text-slate-700 dark:text-slate-200"><OdometerNumber value={28} /></span> commits</div>
-                <div>Thêm dòng: <span className="font-bold text-emerald-600 dark:text-emerald-400">+<OdometerNumber value={3420} /></span> dòng</div>
-                <div>Nhiệm vụ: Cấu trúc ERD, Router FastAPI, Quản lý Sprint</div>
-              </div>
-            </div>
-
-            {/* Card 2: Võ Nhật Huy (Frontend/AI) */}
-            <div className="p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 animate-box-stagger-3 shadow-xs hover:shadow-md transition-all hover:bg-white dark:hover:bg-slate-800/70">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">Võ Nhật Huy (Frontend/AI)</span>
-                <span className="pill pill--good pill--plain text-xs font-bold font-mono">
-                  <OdometerNumber value={34} suffix="%" />
-                </span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-emerald-600 h-full rounded-full animate-bar-grow" style={{ width: "34%" }} />
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 font-mono">
-                <div>Commits: <span className="font-bold text-slate-700 dark:text-slate-200"><OdometerNumber value={26} /></span> commits</div>
-                <div>Thêm dòng: <span className="font-bold text-emerald-600 dark:text-emerald-400">+<OdometerNumber value={3180} /></span> dòng</div>
-                <div>Nhiệm vụ: Giao diện ReactFlow, Authentication, UI Theme</div>
-              </div>
-            </div>
-
-            {/* Card 3: Phan Đình Nghị (Backend/DB) */}
-            <div className="p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 animate-box-stagger-4 shadow-xs hover:shadow-md transition-all hover:bg-white dark:hover:bg-slate-800/70">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">Phan Đình Nghị (Backend/DB)</span>
-                <span className="pill pill--plain text-xs font-bold font-mono">
-                  <OdometerNumber value={30} suffix="%" />
-                </span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-purple-600 h-full rounded-full animate-bar-grow" style={{ width: "30%" }} />
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 font-mono">
-                <div>Commits: <span className="font-bold text-slate-700 dark:text-slate-200"><OdometerNumber value={23} /></span> commits</div>
-                <div>Thêm dòng: <span className="font-bold text-emerald-600 dark:text-emerald-400">+<OdometerNumber value={2850} /></span> dòng</div>
-                <div>Nhiệm vụ: Code Evaluator Sandbox, Unit Tests, Analytics</div>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* AI Anti-Cheating Banner (Xuất hiện sau cùng với các số liệu nhảy thống kê) */}
+          {/* AI Anti-Cheating Banner */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-emerald-50/80 dark:from-emerald-950/40 dark:via-teal-950/20 dark:to-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800/60 space-y-2 animate-box-stagger-5 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
@@ -2573,7 +2849,7 @@ export default function GitProjectHub() {
               </span>
             </div>
             <p className="text-xs text-emerald-950 dark:text-emerald-200 leading-relaxed">
-              Toàn bộ <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><OdometerNumber value={77} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><AnimatedNumber value={4.8} decimals={1} suffix="h" key={`cv-${statAnimKey}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><AnimatedNumber value={100} suffix="%" key={`cr-${statAnimKey}`} /></span>.
+              Toàn bộ <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><OdometerNumber value={metricsState.totalCommits} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><AnimatedNumber value={metricsState.cadenceVarianceHours} decimals={1} suffix="h" key={`cv-${statAnimKey}-${activeProjectId}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300"><AnimatedNumber value={metricsState.taskLinkedPct} suffix="%" key={`cr-${statAnimKey}-${activeProjectId}`} /></span>.
             </p>
           </div>
         </div>
@@ -2854,11 +3130,18 @@ export default function GitProjectHub() {
                   </p>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-white border border-emerald-200 text-[11px] font-mono text-emerald-950 space-y-1 shadow-2xs">
+                <div className="p-2.5 rounded-lg bg-white border border-emerald-200 text-[11px] font-mono text-emerald-950 space-y-1.5 shadow-2xs">
                   <div className="text-emerald-900 font-bold text-[10px] uppercase">Kết quả thẩm định:</div>
                   <div className="text-emerald-800 font-bold">✓ Đóng dấu [ ĐÃ NGHIỆM THU - DoD 100% ]</div>
                   <div className="text-slate-600">• Tự động cộng Story Points vào Sprint Burndown.</div>
                   <div className="text-slate-600">• Sinh 20 câu hỏi vấn đáp phản biện phục vụ buổi bảo vệ.</div>
+                  <button
+                    onClick={() => handleSetViewMode("prs")}
+                    className="w-full mt-1 py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-sans font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition"
+                  >
+                    <GitPullRequest size={13} />
+                    <span>Mở Trình Duyệt PR & Thẩm Định DoD Ngay</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -3028,6 +3311,21 @@ export default function GitProjectHub() {
                 </select>
               </div>
 
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Chiến lược Merge mặc định (Default Merge Strategy):
+                </label>
+                <select
+                  value={mergeStrategy}
+                  onChange={(e) => setMergeStrategy(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  <option value="squash">squash (Squash and Merge — Chuẩn Sprint)</option>
+                  <option value="rebase">rebase (Rebase and Merge — Tuyến tính)</option>
+                  <option value="merge">merge (Merge Commit --no-ff)</option>
+                </select>
+              </div>
+
               <div className="p-3 bg-blue-50/70 rounded-lg text-blue-900 space-y-1.5 text-xs">
                 <div className="font-bold flex items-center gap-1.5 text-blue-800">
                   <ShieldCheck size={14} />
@@ -3036,7 +3334,7 @@ export default function GitProjectHub() {
                 <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800">
                   <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG (GitKraken)</strong>.</li>
                   <li>Tự động quét Pull Request qua <strong>CodeMind AI Code Reviewer</strong>.</li>
-                  <li>Tự động kiểm định liêm chính AI và nhịp độ đóng góp giữa 3 thành viên nhóm.</li>
+                  <li>Tự động kiểm định liêm chính AI và nhịp độ đóng góp giữa các thành viên nhóm.</li>
                 </ul>
               </div>
             </div>
@@ -3059,7 +3357,7 @@ export default function GitProjectHub() {
                   Đóng
                 </button>
                 <button
-                  onClick={handleCloseRepoModal}
+                  onClick={handleSaveRepoSync}
                   className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer"
                 >
                   Lưu & Đồng Bộ Ngay
@@ -3069,6 +3367,21 @@ export default function GitProjectHub() {
           </div>
         </div>
       )}
+
+      <GitNewCommitModal
+        isOpen={showNewCommitModal}
+        onClose={() => setShowNewCommitModal(false)}
+        onSubmit={handlePushNewCommit}
+        members={memberAnalytics}
+        tasks={projectTasks}
+      />
+
+      <GitNewPrModal
+        isOpen={showNewPrModal}
+        onClose={() => setShowNewPrModal(false)}
+        onSubmit={handleCreateNewPr}
+        tasks={projectTasks}
+      />
     </div>
   );
 }

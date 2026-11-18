@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import {
   Bot,
@@ -18,6 +18,7 @@ import {
 import type { AvatarStyle, BackgroundTheme, BadgeFrame, ChatSkin, MentorMascot, SkillMapSkin } from "../App";
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
+import { claimXpQuestApi, fetchStudentLearningOverview, purchaseXpShopItem } from "../api";
 
 interface Props {
   activeTheme: BackgroundTheme;
@@ -149,11 +150,55 @@ export default function XPShop({
     badge: activeBadge,
   };
 
-  const apply = (item: ShopItem) => {
+  useEffect(() => {
+    let active = true;
+    fetchStudentLearningOverview().then((data) => {
+      if (!active || !data?.profile) return;
+      if (typeof data.profile.exp_points === "number") {
+        setXp(data.profile.exp_points);
+      }
+      if (data.profile.owned_items) {
+        setOwned((prev) => ({
+          ...prev,
+          ...(data.profile.owned_items as Partial<Record<ShopCategory, string[]>>),
+        }));
+      }
+      if (Array.isArray(data.profile.claimed_quests)) {
+        const claimedSet = new Set(data.profile.claimed_quests);
+        setQuests((prev) =>
+          prev.map((q) =>
+            claimedSet.has(q.id) ? { ...q, status: "claimed", progress: "Đã nhận" } : q
+          )
+        );
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const apply = async (item: ShopItem) => {
     if (!owned[item.category].includes(item.id)) {
       if (xp < item.cost) return;
-      setXp((value) => value - item.cost);
-      setOwned((value) => ({ ...value, [item.category]: [...value[item.category], item.id] }));
+      const res = await purchaseXpShopItem({
+        category: item.category,
+        item_id: item.id,
+        cost: item.cost,
+      });
+      if (res.error) return;
+      if (typeof res.exp_points === "number") {
+        setXp(res.exp_points);
+      } else {
+        setXp((value) => value - item.cost);
+      }
+      if (res.owned_items) {
+        setOwned((prev) => ({
+          ...prev,
+          ...(res.owned_items as Partial<Record<ShopCategory, string[]>>),
+        }));
+      } else {
+        setOwned((value) => ({ ...value, [item.category]: [...value[item.category], item.id] }));
+      }
     }
 
     if (item.category === "theme") onApplyTheme(item.id as BackgroundTheme);
@@ -164,8 +209,14 @@ export default function XPShop({
     if (item.category === "badge") onApplyBadge(item.id as BadgeFrame);
   };
 
-  const claimQuestReward = (questId: string, reward: number) => {
-    setXp((prev) => prev + reward);
+  const claimQuestReward = async (questId: string, reward: number) => {
+    const res = await claimXpQuestApi({ quest_id: questId, reward });
+    if (res.error) return;
+    if (typeof res.exp_points === "number") {
+      setXp(res.exp_points);
+    } else {
+      setXp((prev) => prev + reward);
+    }
     setQuests((prev) =>
       prev.map((q) => (q.id === questId ? { ...q, status: "claimed", progress: "Đã nhận" } : q))
     );

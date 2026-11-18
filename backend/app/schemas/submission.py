@@ -12,3 +12,16 @@ class AIInteractionIn(BaseModel):
     message: str
     submission_id: str | None = None
     idempotency_key: str
+
+
+class SandboxEvaluateIn(BaseModel):
+    exercise_id: str = "exercise-deque"
+    code: str
+    language: str = "python"
+    idempotency_key: str | None = None
+
+
+class SocraticChatIn(BaseModel):
+    message: str
+    code_context: str | None = None
+    session_id: str | None = None

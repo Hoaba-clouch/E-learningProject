@@ -1,16 +1,18 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import { Award, Check, Flame, Star, Trophy, UserRound, GitFork, ShieldCheck, Code, Brain, Zap } from "lucide-react";
 import type { AvatarStyle, BadgeFrame } from "../App";
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
 import MarloActivityHeatmap from "../components/MarloActivityHeatmap";
+import { fetchStudentLearningOverview } from "../api";
 
 interface Props {
   avatarStyle: AvatarStyle;
   badgeFrame: BadgeFrame;
   onApplyAvatar: (avatar: AvatarStyle) => void;
   onApplyBadge: (badge: BadgeFrame) => void;
+  onOpenSecurity?: () => void;
 }
 
 const avatarLabel: Record<AvatarStyle, string> = {
@@ -76,7 +78,7 @@ const getAchievementStyle = (id: string, unlocked: boolean) => {
   }
 };
 
-export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar, onApplyBadge }: Props) {
+export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar, onApplyBadge, onOpenSecurity }: Props) {
   const profileRef = useRef<HTMLDivElement>(null);
 
   useMarloPageEntrance(
@@ -110,7 +112,34 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
   // SVG Radar Chart Path computation
   // Center is (100, 100). Max radius is 70.
   // 5 Axes: OOP Theory (90%), Coding Style (85%), Git Flow (75%), Mindmap Logic (92%), Debugging (65%)
-  const scores = [90, 85, 75, 92, 65];
+  const [studentName, setStudentName] = useState("Nguyễn Văn A");
+  const [expPoints, setExpPoints] = useState(3240);
+  const [streakDays, setStreakDays] = useState(14);
+  const [scores, setScores] = useState<number[]>([90, 85, 75, 92, 65]);
+
+  useEffect(() => {
+    let active = true;
+    fetchStudentLearningOverview().then((data) => {
+      if (!active || !data) return;
+      if (data.user?.name) setStudentName(data.user.name);
+      if (typeof data.profile?.exp_points === "number") setExpPoints(data.profile.exp_points);
+      if (typeof data.profile?.current_streak === "number") setStreakDays(data.profile.current_streak);
+      const r = data.profile?.radar;
+      if (r) {
+        setScores([
+          Math.round(r.algorithm ?? 90),
+          Math.round(r.cleancode ?? 85),
+          Math.round(r.teamwork ?? 75),
+          Math.round(r.defense ?? 92),
+          Math.round(r.debugging ?? 65),
+        ]);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const angles = [0, 72, 144, 216, 288];
   
   const getCoordinates = (index: number, score: number) => {
@@ -140,7 +169,7 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
                 <UserRound size={12} />
                 Hồ sơ học viên
               </div>
-              <MarloTitle text="Nguyễn Văn A" className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mt-1" />
+              <MarloTitle text={studentName} className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mt-1" />
               <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-1 font-medium">OOP - Nhóm 01 · Visual/Kinesthetic learner</p>
               
               <div className="mt-2 flex flex-wrap gap-2">
@@ -157,8 +186,8 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
           {/* Quick metrics */}
           <div className="grid grid-cols-3 gap-2.5 shrink-0 self-start md:self-auto">
             {[
-              [<Star size={16} />, <MarloNumber value={3240} durationMs={1200} />, "XP"],
-              [<Flame size={16} />, <MarloNumber value={14} durationMs={1000} />, "streak"],
+              [<Star size={16} />, <MarloNumber value={expPoints} durationMs={1200} />, "XP"],
+              [<Flame size={16} />, <MarloNumber value={streakDays} durationMs={1000} />, "streak"],
               [<Trophy size={16} />, "Bạc", "league"],
             ].map(([icon, value, label], idx) => (
               <div key={idx} style={{ animationDelay: `${idx * 40}ms` }} className="marlo-row rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-2.5 text-center min-w-[75px] shadow-inner">
@@ -392,6 +421,16 @@ export default function StudentProfile({ avatarStyle, badgeFrame, onApplyAvatar,
                 </div>
               ))}
             </div>
+            {onOpenSecurity && (
+              <button
+                type="button"
+                onClick={onOpenSecurity}
+                className="w-full mt-2 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition"
+              >
+                <ShieldCheck size={14} />
+                <span>Quản lý Bảo mật, 2FA &amp; Thiết bị</span>
+              </button>
+            )}
           </div>
         </section>
       </div>

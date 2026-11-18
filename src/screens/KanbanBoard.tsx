@@ -58,6 +58,17 @@ import KanbanTeamScrumView from "../components/KanbanTeamScrumView";
 import KanbanActivityStreamView from "../components/KanbanActivityStreamView";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
+import {
+  fetchKanbanWorkspace,
+  createWorkspaceProjectApi,
+  updateWorkspaceProjectApi,
+  createWorkspaceTaskApi,
+  batchCreateWorkspaceTasksApi,
+  generateAiWbsTasksApi,
+  updateWorkspaceTaskApi,
+  moveWorkspaceTaskApi,
+  deleteWorkspaceTaskApi,
+} from "../api";
 
 export type ColumnId = "backlog" | "ready" | "in-progress" | "done" | "verified" | "fail";
 export type Priority = "low" | "medium" | "high";
@@ -492,6 +503,9 @@ const initialTasks: KanbanTask[] = [
     dueDate: "13/11/2026",
     epic: "Realtime Lab",
     epicColor: "bg-amber-50 text-amber-700 border-amber-200",
+    checklist: [],
+    commentsCount: 0,
+    attachmentsCount: 0,
   },
   {
     id: "task-12",
@@ -507,6 +521,9 @@ const initialTasks: KanbanTask[] = [
     dueDate: "28/11/2026",
     epic: "AI Gateway",
     epicColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    checklist: [],
+    commentsCount: 0,
+    attachmentsCount: 0,
   },
   {
     id: "task-13",
@@ -522,6 +539,9 @@ const initialTasks: KanbanTask[] = [
     dueDate: "04/11/2026",
     epic: "DevOps & CI",
     epicColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    checklist: [],
+    commentsCount: 0,
+    attachmentsCount: 0,
   },
   {
     id: "task-14",
@@ -537,6 +557,9 @@ const initialTasks: KanbanTask[] = [
     dueDate: "03/11/2026",
     epic: "Load Testing",
     epicColor: "bg-slate-50 text-slate-700 border-slate-200",
+    checklist: [],
+    commentsCount: 0,
+    attachmentsCount: 0,
   },
 ];
 
@@ -874,6 +897,38 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
   });
   const [currentProjectId, setCurrentProjectId] = useState<string>(() => initialProjectId || "prj-codemind");
 
+  const normalizeWorkspaceProject = (p: any): Project => ({
+    id: p.id,
+    code: p.code,
+    name: p.name,
+    course: p.course,
+    sprint: p.sprint,
+    kind: p.kind,
+    status: p.kanbanStatus || (p.status === "active" ? "in-progress" : p.status),
+    fav: p.fav,
+    dueDate: p.dueDate,
+    tasks: Array.isArray(p.tasks) ? p.tasks : [],
+    team: Array.isArray(p.team) ? p.team : [],
+  });
+
+  const reloadWorkspace = async () => {
+    const ws = await fetchKanbanWorkspace();
+    if (ws?.projects?.length) {
+      setProjects(ws.projects.map(normalizeWorkspaceProject));
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    fetchKanbanWorkspace().then((ws) => {
+      if (!active || !ws?.projects?.length) return;
+      setProjects(ws.projects.map(normalizeWorkspaceProject));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (initialProjectId) {
       setCurrentProjectId(initialProjectId);
@@ -922,41 +977,68 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
     });
   };
 
-  const handleCreateProject = (newProjData: Omit<Project, "tasks" | "team">) => {
-    const newProj: Project = {
-      ...newProjData,
-      team: [
-        { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-[#14161a] dark:bg-slate-700" },
-        { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Developer", color: "bg-amber-500" },
-      ],
-      tasks: [
-        {
-          id: `task-${Date.now()}-1`,
-          code: `${newProjData.code}-01`,
-          title: "Khởi tạo kiến trúc dự án & Thiết lập Repo",
-          description: `Thiết lập cấu trúc thư mục, CI/CD pipeline và tài liệu SRS ban đầu cho ${newProjData.name}.`,
-          column: "ready",
-          priority: "high",
-          moscow: "must",
-          points: 5,
-          assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
-          estimateHours: 4,
-          dueDate: newProjData.dueDate,
-          epic: "Khởi tạo",
-          epicColor: "bg-blue-50 text-blue-700 border-blue-200",
-          commentsCount: 0,
-          attachmentsCount: 0,
-        },
-      ],
-    };
+  const handleCreateProject = async (newProjData: any) => {
+    const saved = await createWorkspaceProjectApi({
+      name: newProjData.name,
+      client: newProjData.client || "CodeMind Campus",
+      course: newProjData.course || newProjData.client || "CNTT-2026 · Đồ án Chuyên ngành",
+      sprint: newProjData.sprint || "Sprint 1 (Tuần 1 - 4)",
+      kind: (newProjData.kind || "AI / FULLSTACK").toUpperCase(),
+      status: "planning",
+      fav: true,
+      due_date: newProjData.dueDate || "15/12/2026",
+      story_points: newProjData.storyPoints || 600,
+      team_members: Array.isArray(newProjData.teamMembers) ? newProjData.teamMembers : [],
+    });
+
+    const newProj: Project = saved
+      ? normalizeWorkspaceProject(saved)
+      : {
+          id: newProjData.id || `prj-${Date.now()}`,
+          code: newProjData.code || "PRJ-NEW",
+          name: newProjData.name,
+          course: newProjData.course || "CNTT-2026 · Đồ án Chuyên ngành",
+          sprint: newProjData.sprint || "Sprint 1",
+          kind: newProjData.kind || "AI / FULLSTACK",
+          status: "planning",
+          fav: true,
+          dueDate: newProjData.dueDate || "15/12/2026",
+          team: [
+            { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-[#14161a] dark:bg-slate-700" },
+            { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Developer", color: "bg-amber-500" },
+          ],
+          tasks: [
+            {
+              id: `task-${Date.now()}-1`,
+              code: `${newProjData.code || "PRJ"}-01`,
+              title: "Khởi tạo kiến trúc dự án & Thiết lập Repo",
+              description: `Thiết lập cấu trúc thư mục, CI/CD pipeline và tài liệu SRS ban đầu cho ${newProjData.name}.`,
+              column: "ready",
+              priority: "high",
+              moscow: "must",
+              points: 5,
+              assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+              estimateHours: 4,
+              dueDate: newProjData.dueDate || "15/12/2026",
+              epic: "Khởi tạo",
+              epicColor: "bg-blue-50 text-blue-700 border-blue-200",
+              checklist: [],
+              commentsCount: 0,
+              attachmentsCount: 0,
+            },
+          ],
+        };
     setProjects((prev) => [newProj, ...prev]);
     setCurrentProjectId(newProj.id);
   };
 
   const handleTogglePinProject = (projId: string) => {
+    const target = projects.find((p) => p.id === projId);
+    const nextFav = target ? !target.fav : true;
     setProjects((prev) =>
-      prev.map((p) => (p.id === projId ? { ...p, fav: !p.fav } : p))
+      prev.map((p) => (p.id === projId ? { ...p, fav: nextFav } : p))
     );
+    void updateWorkspaceProjectApi(projId, { fav: nextFav });
   };
 
   useEffect(() => {
@@ -1000,6 +1082,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
     toCol?: ColumnId;
     deletedTask?: KanbanTask;
     deletedIndex?: number;
+    customMessage?: string;
     undone?: boolean;
   } | null>(null);
 
@@ -1010,6 +1093,8 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
     if (selectedTask?.id === taskToDelete.id) {
       setSelectedTask(null);
     }
+
+    void deleteWorkspaceTaskApi(taskToDelete.id);
 
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoToast({
@@ -1465,12 +1550,14 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
         return copy;
       });
       setJustDroppedTaskId(restoreTask.id);
+      void createWorkspaceTaskApi(currentProjectId, restoreTask);
     } else if (undoToast.fromCol) {
       const { taskId, fromCol } = undoToast;
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, column: fromCol } : t))
       );
       setJustDroppedTaskId(taskId);
+      void moveWorkspaceTaskApi(taskId, fromCol, 0);
     }
     if (justDroppedTimerRef.current) clearTimeout(justDroppedTimerRef.current);
     justDroppedTimerRef.current = setTimeout(() => {
@@ -1536,6 +1623,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
   const handleImportCsvTasks = (newTasks: KanbanTask[]) => {
     setTasks((prev) => [...prev, ...newTasks]);
     handleTabChange("board");
+    void batchCreateWorkspaceTasksApi(currentProjectId, newTasks);
   };
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("Frontend Developer");
@@ -1743,11 +1831,27 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
     }
 
     const previousCol = task.column;
+    const targetColLength = tasks.filter((t) => t.id !== taskId && t.column === targetCol).length;
+    const resolvedIdx = targetIndex !== undefined
+      ? Math.max(0, Math.min(targetIndex, targetColLength))
+      : targetColLength;
 
     setTasks((prev) => {
       const existingTask = prev.find((t) => t.id === taskId);
       if (!existingTask) return prev;
-      const updatedTask = { ...existingTask, column: targetCol };
+      const fromTitle = columnsConfig.find((c) => c.id === previousCol)?.title || previousCol;
+      const toTitle = columnsConfig.find((c) => c.id === targetCol)?.title || targetCol;
+      const nowLog = {
+        user: existingTask.assignee?.name || "Nguyễn Bá Hòa",
+        fromColumn: fromTitle,
+        toColumn: toTitle,
+        timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      };
+      const nextLogs =
+        previousCol !== targetCol
+          ? [...(existingTask.auditLogs || []), nowLog]
+          : existingTask.auditLogs;
+      const updatedTask = { ...existingTask, column: targetCol, auditLogs: nextLogs };
 
       const withoutTask = prev.filter((t) => t.id !== taskId);
       const targetColTasks = withoutTask.filter((t) => t.column === targetCol);
@@ -1771,6 +1875,12 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
     if (previousCol !== targetCol) {
       triggerUndoToast(task, previousCol, targetCol);
     }
+
+    moveWorkspaceTaskApi(taskId, targetCol, resolvedIdx).then((res) => {
+      if (res.error) {
+        void reloadWorkspace();
+      }
+    });
   };
 
   const moveTask = (taskId: string, targetCol: ColumnId) => {
@@ -1884,6 +1994,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
       attachmentsCount: 0,
     };
     setTasks((prev) => [...prev, newTask]);
+    void createWorkspaceTaskApi(currentProjectId, newTask);
     setJustDroppedTaskId(newTask.id);
     if (justDroppedTimerRef.current) clearTimeout(justDroppedTimerRef.current);
     justDroppedTimerRef.current = setTimeout(() => {
@@ -1915,7 +2026,9 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
       color: randomColor,
     };
 
-    setTeamMembers((prev) => [...prev, newMember]);
+    const nextTeam = [...teamMembers, newMember];
+    setTeamMembers(nextTeam);
+    void updateWorkspaceProjectApi(currentProjectId, { team: nextTeam });
     setAiSelectedMemberIds((prev) => [...prev, newMember.id]);
     setNewMemberName("");
     setMemberModalOpen(false);
@@ -1924,7 +2037,9 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
   // Remove Dynamic Team Member
   const handleRemoveMember = (memberId: string) => {
     if (teamMembers.length <= 1) return;
-    setTeamMembers((prev) => prev.filter((m) => m.id !== memberId));
+    const nextTeam = teamMembers.filter((m) => m.id !== memberId);
+    setTeamMembers(nextTeam);
+    void updateWorkspaceProjectApi(currentProjectId, { team: nextTeam });
     setAiSelectedMemberIds((prev) => prev.filter((id) => id !== memberId));
   };
 
@@ -1957,17 +2072,33 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
   ];
 
   // AI WBS Generation Logic dynamically distributing among SELECTED members!
-  const handleGenerateWbs = () => {
+  const handleGenerateWbs = async () => {
     if (!aiFeatureName.trim()) return;
     setAiGenerating(true);
+
+    const activeMembers = teamMembers.filter((m) => aiSelectedMemberIds.includes(m.id));
+    const pool = activeMembers.length > 0 ? activeMembers : teamMembers;
+
+    const apiTasks = await generateAiWbsTasksApi({
+      feature_name: aiFeatureName.trim(),
+      description: aiDescription,
+      stack: aiStack,
+      custom_tech: aiCustomTech,
+      granularity: aiGranularity,
+      include_h2: aiIncludeH2,
+      selected_members: pool,
+    });
+
+    if (apiTasks && apiTasks.length > 0) {
+      setAiPreviewTasks(apiTasks);
+      setAiGenerating(false);
+      setAiStage("preview");
+      return;
+    }
 
     setTimeout(() => {
       const stamp = Date.now();
       const parentId = `task-ai-${stamp}-1`;
-
-      // Get list of active selected members
-      const activeMembers = teamMembers.filter((m) => aiSelectedMemberIds.includes(m.id));
-      const pool = activeMembers.length > 0 ? activeMembers : teamMembers;
 
       const techLabel =
         aiStack === "custom" && aiCustomTech.trim()
@@ -2145,7 +2276,9 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
   };
 
   const confirmAiTasks = () => {
-    setTasks((prev) => [...prev, ...aiPreviewTasks]);
+    const confirmed = [...aiPreviewTasks];
+    setTasks((prev) => [...prev, ...confirmed]);
+    void batchCreateWorkspaceTasksApi(currentProjectId, confirmed);
     setAiModalOpen(false);
     setAiStage("input");
     setAiFeatureName("");
@@ -2811,7 +2944,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
         <KanbanTeamScrumView
           teamMembers={teamMembers}
           tasks={tasks}
-          sprintStats={sprintStats}
+          sprintStats={{ ...sprintStats, percentage: sprintStats.percentDone }}
           onManageMembers={() => setMemberModalOpen(true)}
           onFilterByMember={handleFilterByMember}
         />
@@ -3890,8 +4023,31 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
         teamMembers={teamMembers}
         onClose={() => setSelectedTask(null)}
         onUpdateTask={(updated) => {
-          setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-          setSelectedTask(updated);
+          const prevTask = tasks.find((t) => t.id === updated.id);
+          let safeUpdated = updated;
+          if (
+            updated.column === "done" &&
+            prevTask?.column !== "done" &&
+            updated.dependsOn
+          ) {
+            const parent = getTaskById(updated.dependsOn);
+            if (parent && parent.column !== "done") {
+              safeUpdated = {
+                ...updated,
+                column: prevTask?.column || "ready",
+              };
+            }
+          }
+          setTasks((prev) => prev.map((t) => (t.id === safeUpdated.id ? safeUpdated : t)));
+          setSelectedTask(safeUpdated);
+          void updateWorkspaceTaskApi(safeUpdated.id, {
+            checklist: safeUpdated.checklist,
+            definitionOfDone: safeUpdated.definitionOfDone,
+            assignee: safeUpdated.assignee,
+            title: safeUpdated.title,
+            description: safeUpdated.description,
+            priority: safeUpdated.priority,
+          });
         }}
         onDeleteTask={(taskToDelete) => {
           handleDeleteTask(taskToDelete);
@@ -3899,12 +4055,15 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
         }}
         onMoveColumn={(taskId, col) => {
           const task = tasks.find((t) => t.id === taskId);
-          const previousCol = task?.column;
+          if (col === "done" && task?.dependsOn) {
+            const parent = getTaskById(task.dependsOn);
+            if (parent && parent.column !== "done") {
+              setH2Violation({ task, blockingTask: parent });
+              return;
+            }
+          }
           moveTask(taskId, col);
           setSelectedTask((prev) => (prev ? { ...prev, column: col } : null));
-          if (task && previousCol && previousCol !== col) {
-            triggerUndoToast(task, previousCol, col);
-          }
         }}
       />
 
@@ -3922,13 +4081,24 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
         isOpen={isNewTaskModalOpen}
         onClose={() => setIsNewTaskModalOpen(false)}
         onAddTask={(newTask) => {
-          setTasks((prev) => [newTask, ...prev]);
-          setSelectedTask(newTask); // Open drawer so user can inspect their newly created task immediately!
-          setJustDroppedTaskId(newTask.id);
-          if (justDroppedTimerRef.current) clearTimeout(justDroppedTimerRef.current);
-          justDroppedTimerRef.current = setTimeout(() => {
-            setJustDroppedTaskId(null);
-          }, 600);
+          const targetProj = projects.find((p) => p.name === newTask.epic);
+          const targetProjId = targetProj?.id || currentProjectId;
+          setProjects((prevProjects) =>
+            prevProjects.map((proj) =>
+              proj.id === targetProjId
+                ? { ...proj, tasks: [newTask, ...(proj.tasks || [])] }
+                : proj
+            )
+          );
+          if (targetProjId === currentProjectId) {
+            setSelectedTask(newTask); // Open drawer so user can inspect their newly created task immediately!
+            setJustDroppedTaskId(newTask.id);
+            if (justDroppedTimerRef.current) clearTimeout(justDroppedTimerRef.current);
+            justDroppedTimerRef.current = setTimeout(() => {
+              setJustDroppedTaskId(null);
+            }, 600);
+          }
+          void createWorkspaceTaskApi(targetProjId, newTask);
         }}
         teamMembers={teamMembers}
         currentProjectName={currentProject?.name}

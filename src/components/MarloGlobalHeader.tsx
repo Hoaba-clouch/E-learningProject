@@ -15,11 +15,13 @@ import {
   FolderKanban,
   FileCode,
   Check,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
 import { HeaderProfileDropdown } from "./HeaderProfileDropdown";
 import MarloThemeSwitch from "./MarloThemeSwitch";
+import { fetchStudentLearningOverview } from "../api";
 
 export interface MarloGlobalHeaderProps {
   screen: Screen;
@@ -46,7 +48,33 @@ export default function MarloGlobalHeader({
 }: MarloGlobalHeaderProps) {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(3);
+  const [streakDays, setStreakDays] = useState<number>(14);
+  const [xpPoints, setXpPoints] = useState<number>(3240);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (role !== "student" || screen.startsWith("admin") || screen.startsWith("instructor")) {
+      return;
+    }
+    let active = true;
+    const loadStats = () => {
+      fetchStudentLearningOverview().then((data) => {
+        if (!active || !data?.profile) return;
+        if (typeof data.profile.current_streak === "number") {
+          setStreakDays(data.profile.current_streak);
+        }
+        if (typeof data.profile.exp_points === "number") {
+          setXpPoints(data.profile.exp_points);
+        }
+      });
+    };
+    loadStats();
+    window.addEventListener("codemind-xp-updated", loadStats);
+    return () => {
+      active = false;
+      window.removeEventListener("codemind-xp-updated", loadStats);
+    };
+  }, [role, screen]);
 
   // Close notification popover when clicking outside
   useEffect(() => {
@@ -130,31 +158,79 @@ export default function MarloGlobalHeader({
           <span className="font-semibold whitespace-nowrap">{todayFormatted}</span>
           <span className="text-slate-300 dark:text-slate-700 shrink-0">•</span>
           <span className="text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap shrink-0">
-            {role === "student" && !screen.startsWith("admin") && screen !== "instructor"
+            {role === "student" && !screen.startsWith("admin") && !screen.startsWith("instructor")
               ? "Sprint 1"
-              : role === "instructor" || screen === "instructor"
+              : role === "instructor" || screen.startsWith("instructor")
               ? "Học kỳ 1 / 2026"
               : "Core System"}
           </span>
         </div>
 
-        {/* CodeMind Exclusive: Streak & XP Counter Pills (Chỉ hiện cho Học viên, ẩn hoàn toàn trên Giảng viên & Admin) */}
-        {role === "student" && !screen.startsWith("admin") && screen !== "instructor" && (
+        {/* CodeMind Exclusive: Streak & XP Counter Pills (Chỉ hiện cho Học viên) */}
+        {role === "student" && !screen.startsWith("admin") && !screen.startsWith("instructor") && (
           <div className="hidden xl:flex items-center gap-1.5 shrink-0">
             <span
               className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-amber-700 dark:border-slate-800 dark:text-amber-400 shadow-xs shrink-0 whitespace-nowrap"
-              title="Chuỗi học liên tục: 5 ngày"
+              title={`Chuỗi học liên tục: ${streakDays} ngày`}
             >
               <Flame size={15} className="text-amber-500 fill-amber-500 shrink-0" />
-              <span className="whitespace-nowrap">5 ngày</span>
+              <span className="whitespace-nowrap">{streakDays} ngày</span>
             </span>
             <span
               className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-[#F5E6CC]/80 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-[#8F5404] dark:border-slate-800 dark:text-amber-400 shadow-xs shrink-0 whitespace-nowrap"
-              title="XP tích lũy hiện tại: 1,240 XP"
+              title={`XP tích lũy hiện tại: ${xpPoints.toLocaleString("en-US")} XP`}
             >
               <Zap size={15} className="text-[#EE8420] fill-[#EE8420] shrink-0" />
-              <span className="whitespace-nowrap">1,240 XP</span>
+              <span className="whitespace-nowrap">{xpPoints.toLocaleString("en-US")} XP</span>
             </span>
+          </div>
+        )}
+
+        {/* Instructor Status Pills (Mirrors Student pills in clean monochrome + subtle amber) */}
+        {(role === "instructor" || screen.startsWith("instructor")) && !screen.startsWith("admin") && (
+          <div className="hidden xl:flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigate("instructor-courses")}
+              className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-700 dark:border-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
+              title="Quản lý 6 Học phần CNTT"
+            >
+              <BookOpen size={15} className="text-slate-500 dark:text-slate-400 shrink-0" />
+              <span className="whitespace-nowrap">6 Học phần</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate("instructor-grading")}
+              className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-900 dark:border-slate-800 dark:text-white hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
+              title="5 bài nộp CI/CD & Phản biện AI đang chờ duyệt"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#EE8420] shrink-0" />
+              <span className="whitespace-nowrap">5 Chờ duyệt</span>
+            </button>
+          </div>
+        )}
+
+        {/* Admin Governance Status Pills */}
+        {(role === "admin" || screen.startsWith("admin")) && !screen.startsWith("instructor") && (
+          <div className="hidden xl:flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigate("admin-ai")}
+              className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-700 dark:border-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
+              title="Giám sát SLA, Token Guardrails & Docker Sandbox"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              <span className="whitespace-nowrap">99.98% SLA</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate("admin-sessions")}
+              className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-900 dark:border-slate-800 dark:text-white hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
+              title="Quản lý An ninh Phiên JWT & RBAC"
+            >
+              <ShieldCheck size={15} className="text-[#EE8420] shrink-0" />
+              <span className="whitespace-nowrap">RBAC · JWT Active</span>
+            </button>
           </div>
         )}
 

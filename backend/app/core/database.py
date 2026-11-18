@@ -71,11 +71,85 @@ def _migrate_existing_tables(conn: sqlite3.Connection) -> None:
     ls_cols = {col[1] for col in conn.execute("PRAGMA table_info(learning_sessions)").fetchall()}
     if ls_cols and "updated_at" not in ls_cols:
         conn.execute("ALTER TABLE learning_sessions ADD COLUMN updated_at TEXT")
+    if ls_cols and "course_code" not in ls_cols:
+        conn.execute("ALTER TABLE learning_sessions ADD COLUMN course_code TEXT DEFAULT 'CS201'")
+    if ls_cols and "socratic_note" not in ls_cols:
+        conn.execute("ALTER TABLE learning_sessions ADD COLUMN socratic_note TEXT DEFAULT ''")
+    if ls_cols and "time_spent_min" not in ls_cols:
+        conn.execute("ALTER TABLE learning_sessions ADD COLUMN time_spent_min INTEGER DEFAULT 20")
+    if ls_cols and "step_logs_json" not in ls_cols:
+        conn.execute("ALTER TABLE learning_sessions ADD COLUMN step_logs_json TEXT DEFAULT '[]'")
 
     # 3. concept_answers
     ca_cols = {col[1] for col in conn.execute("PRAGMA table_info(concept_answers)").fetchall()}
     if ca_cols and "answered_at" not in ca_cols:
         conn.execute("ALTER TABLE concept_answers ADD COLUMN answered_at TEXT DEFAULT ''")
+
+    # 4. users (mở rộng phục vụ RBAC & Admin Console)
+    if user_cols and "user_code" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN user_code TEXT DEFAULT ''")
+    if user_cols and "last_active_label" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN last_active_label TEXT DEFAULT 'Vừa xong'")
+    if user_cols and "last_device" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN last_device TEXT DEFAULT 'Web Session'")
+    if user_cols and "classes_count" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN classes_count INTEGER DEFAULT 3")
+
+    # 5. audit_events (mở rộng nhãn hiển thị Admin Console)
+    audit_cols = {col[1] for col in conn.execute("PRAGMA table_info(audit_events)").fetchall()}
+    if audit_cols and "actor_label" not in audit_cols:
+        conn.execute("ALTER TABLE audit_events ADD COLUMN actor_label TEXT")
+    if audit_cols and "target_label" not in audit_cols:
+        conn.execute("ALTER TABLE audit_events ADD COLUMN target_label TEXT")
+    if audit_cols and "category" not in audit_cols:
+        conn.execute("ALTER TABLE audit_events ADD COLUMN category TEXT DEFAULT 'security'")
+
+    # 6. student_profiles (mở rộng XP Shop & Quests)
+    sp_cols = {col[1] for col in conn.execute("PRAGMA table_info(student_profiles)").fetchall()}
+    if sp_cols and "owned_items_json" not in sp_cols:
+        conn.execute("ALTER TABLE student_profiles ADD COLUMN owned_items_json TEXT DEFAULT '{}'")
+    if sp_cols and "claimed_quests_json" not in sp_cols:
+        conn.execute("ALTER TABLE student_profiles ADD COLUMN claimed_quests_json TEXT DEFAULT '[\"q3\"]'")
+
+    # 7. student_notes (mở rộng ghi chú mốc thời gian video F8)
+    sn_cols = {col[1] for col in conn.execute("PRAGMA table_info(student_notes)").fetchall()}
+    if sn_cols and "subject_id" not in sn_cols:
+        conn.execute("ALTER TABLE student_notes ADD COLUMN subject_id TEXT DEFAULT 'oop'")
+    if sn_cols and "lesson_id" not in sn_cols:
+        conn.execute("ALTER TABLE student_notes ADD COLUMN lesson_id TEXT DEFAULT '1.1'")
+    if sn_cols and "time_sec" not in sn_cols:
+        conn.execute("ALTER TABLE student_notes ADD COLUMN time_sec INTEGER DEFAULT 0")
+    if sn_cols and "timestamp_label" not in sn_cols:
+        conn.execute("ALTER TABLE student_notes ADD COLUMN timestamp_label TEXT DEFAULT '00:00'")
+
+    # 8. users (bảo mật tài khoản: 2FA, Brute-Force Lockout, Lịch sử đổi mật khẩu)
+    if user_cols and "two_factor_enabled" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER DEFAULT 0")
+    if user_cols and "failed_login_attempts" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0")
+    if user_cols and "locked_until" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN locked_until TEXT")
+    if user_cols and "password_changed_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN password_changed_at TEXT")
+
+    # 9. jwt_sessions (quản lý phiên đăng nhập đa thiết bị & token rotation)
+    jwt_cols = {col[1] for col in conn.execute("PRAGMA table_info(jwt_sessions)").fetchall()}
+    if jwt_cols and "refresh_jti" not in jwt_cols:
+        conn.execute("ALTER TABLE jwt_sessions ADD COLUMN refresh_jti TEXT")
+    if jwt_cols and "token_hash" not in jwt_cols:
+        conn.execute("ALTER TABLE jwt_sessions ADD COLUMN token_hash TEXT")
+    if jwt_cols and "device_type" not in jwt_cols:
+        conn.execute("ALTER TABLE jwt_sessions ADD COLUMN device_type TEXT DEFAULT 'desktop'")
+    if jwt_cols and "browser" not in jwt_cols:
+        conn.execute("ALTER TABLE jwt_sessions ADD COLUMN browser TEXT DEFAULT 'Chrome'")
+    if jwt_cols and "os" not in jwt_cols:
+        conn.execute("ALTER TABLE jwt_sessions ADD COLUMN os TEXT DEFAULT 'Windows 11'")
+    if jwt_cols and "last_active_at" not in jwt_cols:
+        conn.execute("ALTER TABLE jwt_sessions ADD COLUMN last_active_at TEXT")
+    if jwt_cols and "created_at" not in jwt_cols:
+        conn.execute("ALTER TABLE jwt_sessions ADD COLUMN created_at TEXT")
+    if jwt_cols and "revoked_at" not in jwt_cols:
+        conn.execute("ALTER TABLE jwt_sessions ADD COLUMN revoked_at TEXT")
 
 
 def init_db() -> None:
@@ -260,10 +334,317 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             );
+
+            -- 9. Synchronized Multi-Role Platform Tables (Courses, Dual Grading, AI 3D Defense, Admin Governance)
+            CREATE TABLE IF NOT EXISTS courses (
+                id TEXT PRIMARY KEY,
+                subject_id TEXT NOT NULL,
+                code TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                semester TEXT NOT NULL,
+                teacher_name TEXT NOT NULL,
+                student_count INTEGER NOT NULL DEFAULT 40,
+                avg_progress_pct INTEGER NOT NULL DEFAULT 72,
+                pending_dual_reviews INTEGER NOT NULL DEFAULT 0,
+                health TEXT NOT NULL DEFAULT 'Ổn định',
+                room TEXT NOT NULL DEFAULT 'Lab A3-201',
+                docker_image TEXT NOT NULL,
+                sandbox_enabled INTEGER NOT NULL DEFAULT 1,
+                ai_defense_enabled INTEGER NOT NULL DEFAULT 1,
+                chapters_json TEXT NOT NULL DEFAULT '[]',
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS dual_submissions (
+                id TEXT PRIMARY KEY,
+                class_id TEXT NOT NULL,
+                user_id TEXT,
+                student_name TEXT NOT NULL,
+                student_code TEXT NOT NULL,
+                chapter_title TEXT NOT NULL,
+                repo_url TEXT NOT NULL,
+                submitted_at TEXT NOT NULL,
+                passed_tests INTEGER NOT NULL DEFAULT 0,
+                total_tests INTEGER NOT NULL DEFAULT 5,
+                exec_time_ms INTEGER NOT NULL DEFAULT 24,
+                memory_mb REAL NOT NULL DEFAULT 14.2,
+                commit_hash TEXT NOT NULL DEFAULT 'a1b2c3d',
+                commit_count INTEGER NOT NULL DEFAULT 4,
+                similarity_pct INTEGER NOT NULL DEFAULT 8,
+                test_details_json TEXT NOT NULL DEFAULT '[]',
+                defense_status TEXT NOT NULL DEFAULT 'completed',
+                defense_score INTEGER NOT NULL DEFAULT 80,
+                coherence_summary TEXT NOT NULL DEFAULT '',
+                transcript_json TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'pending',
+                final_score INTEGER,
+                instructor_feedback TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS defense_rubric_configs (
+                id TEXT PRIMARY KEY,
+                cicd_weight_pct INTEGER NOT NULL DEFAULT 60,
+                defense_weight_pct INTEGER NOT NULL DEFAULT 40,
+                strict_anti_copy_guardrail INTEGER NOT NULL DEFAULT 1,
+                auto_flag_discrepancy_threshold INTEGER NOT NULL DEFAULT 25,
+                mandatory_probes_json TEXT NOT NULL DEFAULT '[]',
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS defense_sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                class_id TEXT NOT NULL DEFAULT 'class-oop',
+                round_number INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL DEFAULT 'in_progress',
+                architecture_score INTEGER NOT NULL DEFAULT 86,
+                algorithm_score INTEGER NOT NULL DEFAULT 82,
+                production_score INTEGER NOT NULL DEFAULT 88,
+                final_defense_score INTEGER,
+                transcript_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS jwt_sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                jti TEXT,
+                user_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                device TEXT NOT NULL,
+                ip_location TEXT NOT NULL,
+                state TEXT NOT NULL DEFAULT 'Hợp lệ (JWT + Refresh)',
+                issued_at TEXT NOT NULL,
+                is_untrusted INTEGER NOT NULL DEFAULT 0,
+                revoked INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS pending_approvals (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                student_code TEXT NOT NULL,
+                email TEXT NOT NULL,
+                class_code TEXT NOT NULL,
+                class_name TEXT NOT NULL,
+                requested_role TEXT NOT NULL,
+                risk_note TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ai_service_units (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                engine TEXT NOT NULL,
+                usage_label TEXT NOT NULL,
+                requests INTEGER NOT NULL DEFAULT 0,
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                estimated_cost REAL NOT NULL DEFAULT 0.0,
+                quota_pct INTEGER NOT NULL DEFAULT 0,
+                bar_color TEXT NOT NULL DEFAULT '#14161a',
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS instructor_session_actions (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                instructor_id TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                note TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            -- 10. Student Learning Progress & Chapter Exercise Submissions (Nhánh 1 Fullstack)
+            CREATE TABLE IF NOT EXISTS student_lesson_progress (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                subject_id TEXT NOT NULL,
+                chapter_id TEXT NOT NULL,
+                lesson_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'done',
+                quiz_score INTEGER DEFAULT 0,
+                quiz_total INTEGER DEFAULT 0,
+                xp_earned INTEGER DEFAULT 0,
+                completed_at TEXT NOT NULL,
+                UNIQUE(user_id, subject_id, lesson_id),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS student_chapter_submissions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                subject_id TEXT NOT NULL,
+                chapter_number INTEGER NOT NULL,
+                exercise_id TEXT NOT NULL,
+                exercise_title TEXT NOT NULL,
+                repo_url TEXT NOT NULL,
+                student_note TEXT DEFAULT '',
+                score REAL NOT NULL,
+                max_score REAL NOT NULL DEFAULT 10.0,
+                tests_passed INTEGER NOT NULL,
+                tests_total INTEGER NOT NULL,
+                execution_time_ms INTEGER NOT NULL,
+                anti_plagiarism_score REAL NOT NULL,
+                rubric_json TEXT NOT NULL,
+                ai_feedback_json TEXT NOT NULL,
+                xp_awarded INTEGER NOT NULL DEFAULT 0,
+                dual_submission_id TEXT,
+                submitted_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+
+            -- 11. Engineering Projects & Kanban Workspace (Nhánh 2 Fullstack)
+            CREATE TABLE IF NOT EXISTS engineering_projects (
+                id TEXT PRIMARY KEY,
+                code TEXT NOT NULL,
+                name TEXT NOT NULL,
+                client TEXT NOT NULL,
+                course TEXT NOT NULL,
+                sprint TEXT NOT NULL DEFAULT 'Sprint 1 (Tuần 1 - 4)',
+                kind TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                fav INTEGER NOT NULL DEFAULT 0,
+                due_date TEXT NOT NULL,
+                due_text TEXT NOT NULL DEFAULT 'in 14 days',
+                story_points_budget INTEGER NOT NULL DEFAULT 600,
+                color_hex TEXT NOT NULL DEFAULT '#f29b23',
+                tl_start REAL NOT NULL DEFAULT 10.0,
+                tl_width REAL NOT NULL DEFAULT 36.0,
+                tl_color TEXT NOT NULL DEFAULT 'amber',
+                instructor_label TEXT NOT NULL DEFAULT 'Nguyễn Bá Hòa (Lead)',
+                team_json TEXT NOT NULL DEFAULT '[]',
+                created_by TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS engineering_tasks (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                code TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                column_id TEXT NOT NULL DEFAULT 'backlog',
+                priority TEXT NOT NULL DEFAULT 'medium',
+                moscow TEXT NOT NULL DEFAULT 'should',
+                points INTEGER NOT NULL DEFAULT 3,
+                assignee_json TEXT NOT NULL DEFAULT '{}',
+                estimate_hours REAL NOT NULL DEFAULT 4.0,
+                due_date TEXT NOT NULL DEFAULT '',
+                epic TEXT NOT NULL DEFAULT 'Sprint Goal',
+                epic_color TEXT NOT NULL DEFAULT 'bg-blue-50 text-blue-700 border-blue-200',
+                depends_on TEXT,
+                checklist_json TEXT NOT NULL DEFAULT '[]',
+                dod_json TEXT NOT NULL DEFAULT '[]',
+                user_story_json TEXT,
+                acceptance_criteria TEXT,
+                deliverable_json TEXT,
+                submission_requirement TEXT,
+                submission_url TEXT,
+                is_bonus INTEGER NOT NULL DEFAULT 0,
+                comments_count INTEGER NOT NULL DEFAULT 0,
+                attachments_count INTEGER NOT NULL DEFAULT 0,
+                audit_logs_json TEXT NOT NULL DEFAULT '[]',
+                position_order INTEGER NOT NULL DEFAULT 0,
+                xp_awarded INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
+            );
+
+            -- 12. Git Project Hub, Commits & 2-Tier Pull Requests (Nhánh 3 Fullstack)
+            CREATE TABLE IF NOT EXISTS git_repositories (
+                project_id TEXT PRIMARY KEY,
+                repo_url TEXT NOT NULL,
+                repo_slug TEXT NOT NULL,
+                target_branch TEXT NOT NULL DEFAULT 'main',
+                default_merge_strategy TEXT NOT NULL DEFAULT 'squash',
+                webhook_active INTEGER NOT NULL DEFAULT 1,
+                cadence_variance_hours REAL NOT NULL DEFAULT 4.8,
+                last_synced_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS git_commits (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                sha TEXT NOT NULL,
+                author_name TEXT NOT NULL,
+                author_role TEXT NOT NULL,
+                author_avatar TEXT NOT NULL,
+                author_color TEXT NOT NULL,
+                branch TEXT NOT NULL,
+                branch_color TEXT NOT NULL,
+                task_code TEXT,
+                message TEXT NOT NULL,
+                committed_at_label TEXT NOT NULL,
+                time_ago_label TEXT NOT NULL,
+                additions INTEGER NOT NULL DEFAULT 0,
+                deletions INTEGER NOT NULL DEFAULT 0,
+                files_changed_json TEXT NOT NULL DEFAULT '[]',
+                cx INTEGER NOT NULL DEFAULT 70,
+                cy INTEGER NOT NULL DEFAULT 225,
+                position_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS git_pull_requests (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                pr_number INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                source_branch TEXT NOT NULL,
+                target_branch TEXT NOT NULL DEFAULT 'develop',
+                task_code TEXT,
+                author_name TEXT NOT NULL,
+                author_role TEXT NOT NULL DEFAULT 'Developer',
+                author_avatar TEXT NOT NULL DEFAULT 'D',
+                author_color TEXT NOT NULL DEFAULT '#2563eb',
+                status TEXT NOT NULL DEFAULT 'open',
+                merge_strategy TEXT NOT NULL DEFAULT 'squash',
+                ai_review_score INTEGER NOT NULL DEFAULT 92,
+                ai_blast_radius TEXT NOT NULL DEFAULT 'Low (3 files)',
+                ai_summary TEXT NOT NULL DEFAULT '',
+                ai_findings_json TEXT NOT NULL DEFAULT '[]',
+                diff_preview_json TEXT NOT NULL DEFAULT '[]',
+                defense_questions_json TEXT NOT NULL DEFAULT '[]',
+                peer_reviewer TEXT,
+                peer_approved INTEGER NOT NULL DEFAULT 0,
+                peer_comment TEXT NOT NULL DEFAULT '',
+                one_click_fixed INTEGER NOT NULL DEFAULT 0,
+                dod_sha256 TEXT,
+                dual_submission_id TEXT,
+                xp_awarded INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                merged_at TEXT,
+                FOREIGN KEY(project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
+            );
+
+            -- 13. Security OTP & Password Recovery Challenges
+            CREATE TABLE IF NOT EXISTS security_otp_codes (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                email TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                code_hash TEXT NOT NULL,
+                challenge_token TEXT NOT NULL UNIQUE,
+                device_hint TEXT,
+                expires_at TEXT NOT NULL,
+                consumed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
             """
         )
         _migrate_existing_tables(conn)
         seed_data(conn)
+        from app.services.seed_platform import seed_platform_data
+        seed_platform_data(conn)
+        from app.services.seed_kanban import seed_kanban_workspace
+        seed_kanban_workspace(conn)
+        from app.services.seed_git_hub import seed_git_hub_workspace
+        seed_git_hub_workspace(conn)
 
 
 def seed_data(conn: sqlite3.Connection) -> None:

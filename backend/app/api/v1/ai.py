@@ -8,10 +8,40 @@ from app.api.deps import current_user, session_owned
 from app.core.database import db, row_dict
 from app.core.security import uid
 from app.core.timezone import now_utc
-from app.schemas.submission import AIInteractionIn
+from app.schemas.submission import AIInteractionIn, SocraticChatIn
+from app.services.ai_tutor import ask_socratic_with_policy
 from app.services.analytics import track_event
 
 router = APIRouter(tags=["AI Tutor"])
+
+
+@router.post("/ai/socratic-chat")
+def socratic_chat(
+    payload: SocraticChatIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Chat hỏi đáp Socratic AI Tutor trực tiếp trên LearningWorkspace, áp dụng Guardrail của Admin."""
+    strict_refuse = True
+    with db() as conn:
+        svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-socratic'").fetchone()
+        if svc and not svc["active"]:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Dịch vụ Socratic AI Tutor hiện đang tạm dừng bởi Quản trị viên.",
+            )
+        pol = conn.execute("SELECT value_json FROM system_settings WHERE key='policies'").fetchone()
+        if pol:
+            try:
+                pol_data = json.loads(pol["value_json"])
+                strict_refuse = bool(pol_data.get("guardrailRefuseAnswer", True))
+            except Exception:
+                strict_refuse = True
+        conn.execute(
+            "UPDATE ai_service_units SET requests = requests + 1, input_tokens = input_tokens + 680, output_tokens = output_tokens + 320 WHERE id='svc-socratic'"
+        )
+    res = ask_socratic_with_policy(payload.message, payload.code_context, strict_refuse=strict_refuse)
+    track_event(user["id"], payload.session_id, "socratic_chat", {"policy_decision": res["policy_decision"]})
+    return res
 
 
 @router.post("/sessions/{session_id}/ai-interactions")

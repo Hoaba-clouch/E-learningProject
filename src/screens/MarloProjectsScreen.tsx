@@ -14,6 +14,11 @@ import {
   animateMarloPill,
   animateMarloCards,
 } from "../utils/marloAnimations";
+import {
+  fetchKanbanWorkspace,
+  createWorkspaceProjectApi,
+  updateWorkspaceProjectApi,
+} from "../api";
 
 export interface CNTTMember {
   id: string;
@@ -357,6 +362,42 @@ export default function MarloProjectsScreen({ onOpenProject }: MarloProjectsScre
   const tlInnerRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
 
+  useEffect(() => {
+    let active = true;
+    fetchKanbanWorkspace().then((res) => {
+      if (!active || !res?.projects?.length) return;
+      setProjects(
+        res.projects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          client: p.client,
+          course: p.course,
+          kind: p.kind,
+          status: p.status,
+          progress: p.progress,
+          tasksDone: p.tasksDone,
+          tasksTotal: p.tasksTotal,
+          dueText: p.dueText,
+          storyPoints: p.storyPoints,
+          pointsBurned: p.pointsBurned,
+          budgetStr: p.budgetStr,
+          instructor: p.instructor,
+          instructorAvatar: p.instructorAvatar,
+          totalXp: p.totalXp,
+          members: p.members || [],
+          fav: p.fav,
+          colorHex: p.colorHex,
+          tlStart: p.tlStart,
+          tlWidth: p.tlWidth,
+          tlColor: p.tlColor,
+        }))
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Filtered projects for Slate view
   const filteredProjects = projects.filter((p) => {
     if (filterStatus === "all") return true;
@@ -375,14 +416,12 @@ export default function MarloProjectsScreen({ onOpenProject }: MarloProjectsScre
   const handleToggleFav = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setProjects((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const nextFav = !p.fav;
-        setToastMsg(nextFav ? `${p.name} pinned.` : `${p.name} unpinned.`);
-        return { ...p, fav: nextFav };
-      })
-    );
+    const target = projects.find((p) => p.id === id);
+    if (!target) return;
+    const nextFav = !target.fav;
+    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, fav: nextFav } : p)));
+    setToastMsg(nextFav ? `${target.name} pinned.` : `${target.name} unpinned.`);
+    void updateWorkspaceProjectApi(id, { fav: nextFav });
   };
 
   // ─── MARLO SLIDING UNDERLINE (tabs__line) ───
@@ -594,38 +633,77 @@ export default function MarloProjectsScreen({ onOpenProject }: MarloProjectsScre
   }, [filterStatus, displayedTab]);
 
   // Handle create project
-  const handleCreateProject = (newP: any) => {
+  const handleCreateProject = async (newP: any) => {
     const budgetNum = newP.budget ? Number(newP.budget) : 18000;
-    const created: CNTTProjectItem = {
-      id: "prj-" + Date.now(),
+    const storyPts = newP.storyPoints || Math.round(budgetNum / 100);
+    const saved = await createWorkspaceProjectApi({
       name: newP.name,
-      client: newP.client || "Ferro Cycles",
+      client: newP.client || "CodeMind Campus",
       course: newP.course || newP.client || "CNTT-2026 · Đồ án Chuyên ngành",
-      kind: (newP.kind || "COMMERCIAL").toUpperCase(),
+      kind: (newP.kind || "AI / FULLSTACK").toUpperCase(),
       status: "active",
-      progress: 0.1,
-      tasksDone: 0,
-      tasksTotal: 8,
-      dueText: newP.dueDate ? `due ${newP.dueDate}` : "in 30 days",
-      storyPoints: newP.storyPoints || Math.round(budgetNum / 100),
-      pointsBurned: 0,
-      budgetStr: newP.budgetStr || `£${budgetNum.toLocaleString()}`,
-      members:
-        newP.teamMembers && newP.teamMembers.length > 0
-          ? newP.teamMembers.map((mName: string, idx: number) => ({
-              id: `tm-${idx}-${Date.now()}`,
-              name: mName,
-              initials: mName.slice(0, 2).toUpperCase(),
-              role: "Team Member",
-              bg: ["#C7D2FE", "#FCD34D", "#FED7AA", "#A7F3D0", "#E9D5FF", "#CCFBF1"][idx % 6],
-              textColor: ["#312E81", "#78350F", "#7C2D12", "#064E3B", "#581C87", "#115E59"][idx % 6],
-            }))
-          : [CNTT_MEMBERS.vhuy, CNTT_MEMBERS.dnghi],
-      colorHex: "#f29b23",
-      tlStart: 45,
-      tlWidth: 28,
-      tlColor: "amber",
-    };
+      fav: true,
+      due_date: newP.dueDate || "15/12/2026",
+      due_text: newP.dueDate ? `due ${newP.dueDate}` : "in 30 days",
+      story_points: storyPts,
+      team_members: Array.isArray(newP.teamMembers) ? newP.teamMembers : [],
+    });
+
+    const created: CNTTProjectItem = saved
+      ? {
+          id: saved.id,
+          name: saved.name,
+          client: saved.client,
+          course: saved.course,
+          kind: saved.kind,
+          status: saved.status,
+          progress: saved.progress,
+          tasksDone: saved.tasksDone,
+          tasksTotal: saved.tasksTotal,
+          dueText: saved.dueText,
+          storyPoints: saved.storyPoints,
+          pointsBurned: saved.pointsBurned,
+          budgetStr: saved.budgetStr,
+          instructor: saved.instructor,
+          instructorAvatar: saved.instructorAvatar,
+          totalXp: saved.totalXp,
+          members: saved.members || [],
+          fav: saved.fav,
+          colorHex: saved.colorHex,
+          tlStart: saved.tlStart,
+          tlWidth: saved.tlWidth,
+          tlColor: saved.tlColor,
+        }
+      : {
+          id: "prj-" + Date.now(),
+          name: newP.name,
+          client: newP.client || "Ferro Cycles",
+          course: newP.course || newP.client || "CNTT-2026 · Đồ án Chuyên ngành",
+          kind: (newP.kind || "COMMERCIAL").toUpperCase(),
+          status: "active",
+          progress: 0,
+          tasksDone: 0,
+          tasksTotal: 1,
+          dueText: newP.dueDate ? `due ${newP.dueDate}` : "in 30 days",
+          storyPoints: storyPts,
+          pointsBurned: 0,
+          budgetStr: newP.budgetStr || `£${budgetNum.toLocaleString()}`,
+          members:
+            newP.teamMembers && newP.teamMembers.length > 0
+              ? newP.teamMembers.map((mName: string, idx: number) => ({
+                  id: `tm-${idx}-${Date.now()}`,
+                  name: mName,
+                  initials: mName.slice(0, 2).toUpperCase(),
+                  role: "Team Member",
+                  bg: ["#C7D2FE", "#FCD34D", "#FED7AA", "#A7F3D0", "#E9D5FF", "#CCFBF1"][idx % 6],
+                  textColor: ["#312E81", "#78350F", "#7C2D12", "#064E3B", "#581C87", "#115E59"][idx % 6],
+                }))
+              : [CNTT_MEMBERS.vhuy, CNTT_MEMBERS.dnghi],
+          colorHex: "#f29b23",
+          tlStart: 45,
+          tlWidth: 28,
+          tlColor: "amber",
+        };
     setProjects((prev) => [created, ...prev]);
     setIsNewProjectModalOpen(false);
     setToastMsg(`${created.name} created.`);

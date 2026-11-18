@@ -39,6 +39,11 @@ import type { Screen } from "../App";
 import { CNTT_PROJECTS, type CNTTProjectItem } from "./MarloProjectsScreen";
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
+import {
+  completeDefenseSession,
+  respondDefenseRound,
+  startDefenseSession,
+} from "../api";
 
 interface Props {
   onNavigate?: (screen: Screen) => void;
@@ -393,6 +398,7 @@ export default function AIDefenseRoomScreen({
   const [showCertificateModal, setShowCertificateModal] = useState<boolean>(false);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(true);
   const [defenseTimeRemaining, setDefenseTimeRemaining] = useState<number>(180);
+  const [liveDefenseId, setLiveDefenseId] = useState<string | null>(null);
 
   const [overallScores, setOverallScores] = useState({
     architecture: 9.4,
@@ -489,6 +495,19 @@ export default function AIDefenseRoomScreen({
     return () => ctx.revert();
   }, [selectedProjId, currentRoundIdx]);
 
+  // Start or restart backend 3D defense session on project change
+  useEffect(() => {
+    let active = true;
+    void startDefenseSession(selectedProjId, "class-oop").then((res) => {
+      if (active && res?.defense_id) {
+        setLiveDefenseId(res.defense_id);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [selectedProjId]);
+
   // Submit Oral Defense -> Moves to Council Deliberation & Drill-down Challenge
   const handleSubmitOralDefense = () => {
     if (!studentSpeech.trim()) {
@@ -497,6 +516,25 @@ export default function AIDefenseRoomScreen({
     }
 
     setStagePhase("council_deliberating");
+
+    if (liveDefenseId) {
+      void respondDefenseRound(
+        liveDefenseId,
+        currentRound.roundNumber,
+        studentSpeech.trim(),
+        "optimal",
+        90
+      ).then((res) => {
+        if (res?.scores) {
+          setOverallScores((prev) => ({
+            ...prev,
+            architecture: Number((res.scores.architecture / 10).toFixed(1)),
+            algorithm: Number((res.scores.algorithm / 10).toFixed(1)),
+            production: Number((res.scores.production / 10).toFixed(1)),
+          }));
+        }
+      });
+    }
 
     // Deliberate for 1.4s then fire Drill-Down Counter-Challenge!
     setTimeout(() => {
@@ -514,6 +552,17 @@ export default function AIDefenseRoomScreen({
   const handleSelectRebuttal = (rebId: string) => {
     setSelectedRebuttalId(rebId);
     setStagePhase("drilldown_evaluating");
+
+    const chosen = currentRound.drillDownChallenge.rebuttalOptions.find((o) => o.id === rebId);
+    if (liveDefenseId && chosen) {
+      void respondDefenseRound(
+        liveDefenseId,
+        currentRound.roundNumber + 10,
+        chosen.answer,
+        chosen.score >= 85 ? "optimal" : "flawed",
+        chosen.score
+      );
+    }
 
     setTimeout(() => {
       setStagePhase("verdict");
@@ -536,6 +585,14 @@ export default function AIDefenseRoomScreen({
       setShowMentorHint(false);
       setDefenseTimeRemaining(180);
     } else {
+      if (liveDefenseId) {
+        void completeDefenseSession(liveDefenseId, {
+          chapter_title: `${activeProject.name.split(" - ")[0]} · Phản biện 3D`,
+          repo_url: "https://github.com/nguyenvana/codemind-project-defense",
+          passed_tests: 5,
+          total_tests: 5,
+        });
+      }
       setShowCertificateModal(true);
     }
   };

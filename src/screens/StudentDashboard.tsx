@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import {
   ArrowRight,
@@ -35,6 +35,7 @@ import MarloActivityRing from "../components/MarloActivityRing";
 import MarloCapacityBar from "../components/MarloCapacityBar";
 import MarloToast from "../components/MarloToast";
 import { CNTT_PROJECTS, type CNTTProjectItem } from "./MarloProjectsScreen";
+import { fetchKanbanWorkspace, fetchStudentLearningOverview } from "../api";
 
 interface Props {
   avatarStyle: AvatarStyle;
@@ -68,6 +69,51 @@ export default function StudentDashboard({
   onOpenCommandPalette,
 }: Props) {
   const [totalXp, setTotalXp] = useState(3240);
+  const [streakDays, setStreakDays] = useState(14);
+  const [studentName, setStudentName] = useState("Nguyễn Văn A");
+  const [projectsList, setProjectsList] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
+
+  useEffect(() => {
+    let active = true;
+    fetchStudentLearningOverview().then((data) => {
+      if (!active || !data) return;
+      if (typeof data.profile?.exp_points === "number") setTotalXp(data.profile.exp_points);
+      if (typeof data.profile?.current_streak === "number") setStreakDays(data.profile.current_streak);
+      if (data.user?.name) setStudentName(data.user.name);
+    });
+    fetchKanbanWorkspace().then((ws) => {
+      if (!active || !ws?.projects?.length) return;
+      setProjectsList(
+        ws.projects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          client: p.client,
+          course: p.course,
+          kind: p.kind,
+          status: p.status,
+          progress: p.progress,
+          tasksDone: p.tasksDone,
+          tasksTotal: p.tasksTotal,
+          dueText: p.dueText,
+          storyPoints: p.storyPoints,
+          pointsBurned: p.pointsBurned,
+          budgetStr: p.budgetStr,
+          instructor: p.instructor,
+          instructorAvatar: p.instructorAvatar,
+          totalXp: p.totalXp,
+          members: p.members || [],
+          fav: p.fav,
+          colorHex: p.colorHex,
+          tlStart: p.tlStart,
+          tlWidth: p.tlWidth,
+          tlColor: p.tlColor,
+        }))
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // ─── ACTIVE FOCUSED PROJECT (Giải quyết triệt để: Biết chính xác tiến độ của dự án nào) ───
   const [selectedProjectId, setSelectedProjectId] = useState<string>("prj-codemind");
@@ -75,8 +121,8 @@ export default function StudentDashboard({
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
 
   const selectedProject = useMemo(() => {
-    return CNTT_PROJECTS.find((p) => p.id === selectedProjectId) || CNTT_PROJECTS[0];
-  }, [selectedProjectId]);
+    return projectsList.find((p) => p.id === selectedProjectId) || projectsList[0] || CNTT_PROJECTS[0];
+  }, [projectsList, selectedProjectId]);
 
   const selectedProgressPct = Math.round(selectedProject.progress * 100);
 
@@ -132,15 +178,15 @@ export default function StudentDashboard({
         },
       };
     } else {
-      // Aggregated for all 8 projects
-      const totalTasks = CNTT_PROJECTS.reduce((sum, p) => sum + p.tasksTotal, 0);
-      const doneTasks = CNTT_PROJECTS.reduce((sum, p) => sum + p.tasksDone, 0);
+      // Aggregated for all projects
+      const totalTasks = projectsList.reduce((sum, p) => sum + p.tasksTotal, 0);
+      const doneTasks = projectsList.reduce((sum, p) => sum + p.tasksDone, 0);
       const movingTasks = Math.round((totalTasks - doneTasks) * 0.6);
       const waitingTasks = Math.max(0, totalTasks - doneTasks - movingTasks);
 
-      const deliveredProjects = CNTT_PROJECTS.filter((p) => p.status === "delivered").length;
-      const movingProjects = CNTT_PROJECTS.filter((p) => p.status === "active" || p.status === "review").length;
-      const waitingProjects = CNTT_PROJECTS.filter((p) => p.status === "planning").length;
+      const deliveredProjects = projectsList.filter((p) => p.status === "delivered").length;
+      const movingProjects = projectsList.filter((p) => p.status === "active" || p.status === "review").length;
+      const waitingProjects = projectsList.filter((p) => p.status === "planning").length;
 
       return {
         subtitle: "Done, moving and waiting, across every live job",
@@ -157,12 +203,12 @@ export default function StudentDashboard({
         row2: {
           label: "Projects",
           icon: "folder" as const,
-          total: CNTT_PROJECTS.length,
+          total: projectsList.length,
           done: deliveredProjects,
           moving: movingProjects,
           waiting: waitingProjects,
           navigate: () => onNavigate("projects"),
-          navTitle: "Mở danh sách 8 đồ án",
+          navTitle: `Mở danh sách ${projectsList.length} đồ án`,
         },
         row3: {
           label: "Reviews",
@@ -176,7 +222,7 @@ export default function StudentDashboard({
         },
       };
     }
-  }, [workScope, selectedProject, onNavigate]);
+  }, [workScope, selectedProject, projectsList, onNavigate]);
 
   // ─── NEXT UP TASKS (Từng task có nhãn Dự án cụ thể) ───
   const [tasks, setTasks] = useState([
@@ -343,7 +389,7 @@ export default function StudentDashboard({
             <span>Khoa Công nghệ Thông tin & AI</span>
           </div>
           <MarloTitle
-            text={`${greeting}, Nguyễn Văn A`}
+            text={`${greeting}, ${studentName}`}
             className="mt-0.5 text-2xl sm:text-3xl font-black tracking-tight text-slate-950 dark:text-white leading-tight"
           />
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -366,7 +412,7 @@ export default function StudentDashboard({
               </div>
               <div>
                 <div className="text-xs font-black leading-none text-slate-900 dark:text-white">
-                  <MarloNumber value={14} durationMs={900} />
+                  <MarloNumber value={streakDays} durationMs={900} />
                 </div>
                 <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">ngày streak</div>
               </div>
@@ -665,9 +711,9 @@ export default function StudentDashboard({
                     {projectMenuOpen && (
                       <div className="absolute left-0 top-full mt-2 w-80 rounded-2xl bg-white dark:bg-[#1A1D28] border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-2 space-y-1">
                         <div className="px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
-                          Chọn 1 trong 8 Đồ án:
+                          Chọn 1 trong {projectsList.length} Đồ án:
                         </div>
-                        {CNTT_PROJECTS.map((p) => {
+                        {projectsList.map((p) => {
                           const isCur = p.id === selectedProjectId && workScope === "project";
                           return (
                             <button
@@ -758,7 +804,7 @@ export default function StudentDashboard({
                   <FolderKanban size={13} />
                   <span>Chọn đồ án:</span>
                 </span>
-                {CNTT_PROJECTS.map((p) => {
+                {projectsList.map((p) => {
                   const isActive = p.id === selectedProjectId;
                   return (
                     <button

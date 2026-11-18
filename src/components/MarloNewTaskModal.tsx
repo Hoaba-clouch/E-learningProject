@@ -139,8 +139,7 @@ export default function MarloNewTaskModal({
         { id: `dod-2-${Date.now()}`, text: "Test cases & API response pass", done: false },
       ],
       commentsCount: 0,
-      completedAt: null,
-      createdAt: new Date().toISOString(),
+      attachmentsCount: 0,
     };
 
     onAddTask(newTask);
