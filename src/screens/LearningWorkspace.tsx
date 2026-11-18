@@ -252,15 +252,35 @@ export default function LearningWorkspace({
   const currentMultiSubject: SubjectModuleData =
     resolvedSubjects.find((m) => m.id === selectedSubjectId) || resolvedSubjects[0];
 
-  let activeChapter: ChapterItem = currentMultiSubject.chapters[0];
-  let activeMultiLesson: LessonItem = activeChapter.lessons[0];
+  let activeChapter: ChapterItem = currentMultiSubject?.chapters?.[0] || {
+    id: "default-ch1",
+    number: 1,
+    title: "Chương 1: Tổng quan",
+    description: "Tổng quan học phần",
+    duration: "45 phút",
+    progressPct: 0,
+    lessons: [],
+  };
+  let activeMultiLesson: LessonItem = activeChapter.lessons?.[0] || {
+    id: "1.1",
+    title: "Bài học 1.1",
+    type: "lecture",
+    duration: "15 phút",
+    status: "active",
+    xp: 50,
+    lead: "Nội dung bài học chuẩn bị sẵn sàng.",
+    keyTakeaways: ["Nắm vững nguyên lý nền tảng", "Thực hành bài tập", "Kiểm tra kiến thức"],
+    resources: [["Tài liệu Tham khảo", "Đặc tả kỹ thuật chính thức.", "https://developer.mozilla.org"]],
+  };
 
-  for (const ch of currentMultiSubject.chapters) {
-    const found = ch.lessons.find((l) => l.id === activeLessonId);
-    if (found) {
-      activeChapter = ch;
-      activeMultiLesson = found;
-      break;
+  if (currentMultiSubject?.chapters) {
+    for (const ch of currentMultiSubject.chapters) {
+      const found = (ch.lessons || []).find((l) => l.id === activeLessonId);
+      if (found) {
+        activeChapter = ch;
+        activeMultiLesson = found;
+        break;
+      }
     }
   }
 
@@ -290,10 +310,28 @@ export default function LearningWorkspace({
   // Fallback to legacy subject data for quiz questions and audio
   const currentSubject =
     SUBJECT_MODULES.find((m) => m.id === selectedSubjectId) || SUBJECT_MODULES[0];
-  const activeQuizQuestions = currentMultiSubject.quizQuestions?.length
+  const fallbackQuiz = [
+    {
+      q: `Nguyên lý kiến trúc cốt lõi nào chi phối toàn bộ môn học ${currentMultiSubject?.name || "này"}?`,
+      options: [
+        { id: "a", text: "Trừu tượng hóa & Tách biệt mối quan tâm (Separation of Concerns)" },
+        { id: "b", text: "Ghép nối cứng (Tight Coupling) toàn bộ logic trong một module" },
+        { id: "c", text: "Bỏ qua các bước kiểm thử tự động và xử lý lỗi" },
+        { id: "d", text: "Sử dụng biến toàn cục cho toàn bộ trạng thái hệ thống" },
+      ],
+      correct: "a",
+      explanation: "Tách biệt mối quan tâm giúp giảm coupling và tăng khả năng bảo trì, mở rộng hệ thống phần mềm.",
+    },
+  ];
+  const activeQuizQuestions = currentMultiSubject?.quizQuestions?.length
     ? currentMultiSubject.quizQuestions
-    : currentSubject.quizQuestions;
-  const legacyLesson = currentSubject.lessons[0];
+    : (currentSubject?.quizQuestions?.length ? currentSubject.quizQuestions : fallbackQuiz);
+  const legacyLesson = currentSubject?.lessons?.[0] || {
+    objective: "Nắm vững nguyên lý và cấu trúc kiến trúc cốt lõi.",
+    resources: [
+      ["Tài liệu Tiêu chuẩn Kỹ thuật", "Tham khảo đặc tả chuẩn quốc tế cho chuyên đề này.", "https://developer.mozilla.org"],
+    ],
+  };
   const mentor = mentorConfig[mentorMascot];
 
   // Reset Quiz state whenever switching course or lesson
@@ -825,11 +863,15 @@ export default function LearningWorkspace({
                           Nguyên lý cốt lõi cần nhớ
                         </h4>
                         <span className="text-xs font-mono text-slate-500">
-                          {activeMultiLesson.keyTakeaways.length} điểm chính
+                          {(activeMultiLesson?.keyTakeaways?.length || 3)} điểm chính
                         </span>
                       </div>
                       <ul className="space-y-2.5 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                        {activeMultiLesson.keyTakeaways.map((point, pIdx) => (
+                        {(activeMultiLesson?.keyTakeaways?.length ? activeMultiLesson.keyTakeaways : [
+                          "Nắm vững nguyên lý và bố cục kiến trúc cốt lõi của bài học.",
+                          "Thực hành triển khai code sạch và kiểm chứng trên Docker Sandbox.",
+                          "Tối ưu hóa độ phức tạp thời gian/không gian theo chuẩn kỹ sư.",
+                        ]).map((point, pIdx) => (
                           <li key={pIdx} className="flex items-start gap-2.5">
                             <span className="font-mono text-xs font-bold text-slate-400 shrink-0 mt-0.5">0{pIdx + 1}.</span>
                             <span>{point}</span>
@@ -940,7 +982,11 @@ export default function LearningWorkspace({
                     <p className="text-xs text-slate-500">Tóm tắt ngắn gọn các nguyên lý then chốt cần ghi nhớ.</p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {activeMultiLesson.keyTakeaways.map((point, sIdx) => (
+                    {(activeMultiLesson?.keyTakeaways?.length ? activeMultiLesson.keyTakeaways : [
+                      "Nắm vững nguyên lý và bố cục kiến trúc cốt lõi của bài học.",
+                      "Thực hành triển khai code sạch và kiểm chứng trên Docker Sandbox.",
+                      "Tối ưu hóa độ phức tạp thời gian/không gian theo chuẩn kỹ sư.",
+                    ]).map((point, sIdx) => (
                       <div
                         key={sIdx}
                         className="animate-cascade-item rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4 space-y-2"
@@ -969,7 +1015,9 @@ export default function LearningWorkspace({
                     <p className="text-xs text-slate-500">Các nguồn tài liệu chính thống RFC, IEEE/ACM và tài liệu chính thức từ hãng.</p>
                   </div>
                   <div className="space-y-3">
-                    {(activeMultiLesson.resources && activeMultiLesson.resources.length > 0 ? activeMultiLesson.resources : legacyLesson.resources).map(([title, desc, url], rIdx) => (
+                    {(activeMultiLesson?.resources?.length ? activeMultiLesson.resources : (legacyLesson?.resources || [
+                      ["Tài liệu Kỹ thuật Chính thống", "Tham khảo đặc tả chuẩn quốc tế cho chuyên đề này.", "https://developer.mozilla.org"],
+                    ])).map(([title, desc, url], rIdx) => (
                       <a
                         key={rIdx}
                         href={url}

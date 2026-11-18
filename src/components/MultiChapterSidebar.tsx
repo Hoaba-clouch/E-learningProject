@@ -288,10 +288,10 @@ function ChapterLessonGroup({
           </div>
         </div>
         <span
-          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 ${
+          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 border-0 outline-none ring-0 ${
             activeKey === `exercise-${chapter.id}`
               ? "bg-[#EE8420] text-white"
-              : "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+              : "bg-amber-100/70 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300"
           }`}
         >
           +100 XP
@@ -358,10 +358,10 @@ function ChapterLessonGroup({
           </div>
         </div>
         <span
-          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 ${
+          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 border-0 outline-none ring-0 ${
             activeKey === `mindmap-${chapter.id}`
               ? "bg-[#EE8420] text-white"
-              : "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
+              : "bg-purple-100/70 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300"
           }`}
         >
           Toàn chương
@@ -384,7 +384,7 @@ export function MultiChapterSidebar({
 }: MultiChapterSidebarProps) {
   // Determine initially open chapters (open chapter containing active lesson)
   const initialOpenChapters = subject.chapters.reduce<Record<string, boolean>>((acc, chap) => {
-    const hasActive = chap.lessons.some((l) => l.id === activeLessonId);
+    const hasActive = (chap.lessons || []).some((l) => l.id === activeLessonId);
     acc[chap.id] = hasActive || chap.number === 1;
     return acc;
   }, {});
@@ -430,7 +430,7 @@ export function MultiChapterSidebar({
         {/* Chapter numbers rail */}
         <div className="flex-1 overflow-y-auto flex flex-col items-center gap-2 w-full px-2 py-1">
           {subject.chapters.map((chapter) => {
-            const isChapterActive = chapter.lessons.some((l) => l.id === activeLessonId);
+            const isChapterActive = (chapter.lessons || []).some((l) => l.id === activeLessonId);
             const isDone = chapter.progressPct === 100;
             return (
               <button
@@ -537,7 +537,7 @@ export function MultiChapterSidebar({
                     {chapter.title}
                   </h3>
                   <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-mono">
-                    <span>{chapter.lessons.length} bài học</span>
+                    <span>{(chapter.lessons?.length || 0)} bài học</span>
                     <span>•</span>
                     <span>{chapter.duration}</span>
                   </div>

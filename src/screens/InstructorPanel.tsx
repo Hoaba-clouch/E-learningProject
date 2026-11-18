@@ -1504,11 +1504,11 @@ export default function InstructorPanel({
 
 
 
-    const firstChap = activeClass.chapters[0];
+    const firstChap = activeClass?.chapters?.[0];
 
 
 
-    if (firstChap && !activeClass.chapters.some((ch) => ch.id === selectedMindmapChapterId)) {
+    if (firstChap && !(activeClass?.chapters || []).some((ch) => ch.id === selectedMindmapChapterId)) {
 
 
 
@@ -1528,7 +1528,7 @@ export default function InstructorPanel({
 
 
 
-    const ch = activeClass.chapters.find((item) => item.id === selectedMindmapChapterId);
+    const ch = (activeClass?.chapters || []).find((item) => item.id === selectedMindmapChapterId);
 
 
 
@@ -2240,7 +2240,7 @@ export default function InstructorPanel({
 
 
 
-    const ch = activeClass.chapters.find((item) => item.id === chapterId);
+    const ch = (activeClass?.chapters || []).find((item) => item.id === chapterId);
 
 
 
@@ -3204,11 +3204,11 @@ export default function InstructorPanel({
 
 
 
-    const ch = activeClass.chapters.find((c) => c.id === tcChapterId);
+    const ch = (activeClass?.chapters || []).find((c) => c.id === tcChapterId);
 
 
 
-    return ch?.assignments.find((a) => a.id === tcAssignmentId) || null;
+    return ch?.assignments?.find((a) => a.id === tcAssignmentId) || null;
 
 
 
@@ -3288,7 +3288,7 @@ export default function InstructorPanel({
 
 
 
-                      assignments: ch.assignments.map((a) =>
+                      assignments: (ch?.assignments || []).map((a) =>
 
 
 
@@ -3720,7 +3720,7 @@ export default function InstructorPanel({
 
 
 
-          const ch = activeClass.chapters.find((c) => c.id === selectedMindmapChapterId);
+          const ch = (activeClass?.chapters || []).find((c) => c.id === selectedMindmapChapterId);
 
 
 
@@ -4404,7 +4404,7 @@ export default function InstructorPanel({
 
 
 
-            { id: "syllabus", label: "Giáo trình & Test Cases", icon: <BookOpen size={14} />, badge: activeClass.chapters.length },
+            { id: "syllabus", label: "Giáo trình & Test Cases", icon: <BookOpen size={14} />, badge: activeClass?.chapters?.length || 0 },
 
 
 
@@ -5732,7 +5732,7 @@ export default function InstructorPanel({
 
 
 
-            {activeClass.chapters.map((chapter) => (
+            {(activeClass?.chapters || []).map((chapter) => (
 
 
 
@@ -5856,7 +5856,7 @@ export default function InstructorPanel({
 
 
 
-                      {chapter.lessons.length} bài học · {chapter.assignments.length} bài tập thực hành Docker
+                      {(chapter.lessons?.length || 0)} bài học · {(chapter.assignments?.length || 0)} bài tập thực hành Docker
 
 
 
@@ -6084,7 +6084,7 @@ export default function InstructorPanel({
 
 
 
-                    {chapter.lessons.length === 0 ? (
+                    {(chapter.lessons?.length || 0) === 0 ? (
 
 
 
@@ -6104,7 +6104,7 @@ export default function InstructorPanel({
 
 
 
-                      chapter.lessons.map((lesson) => (
+                      (chapter.lessons || []).map((lesson) => (
 
 
 
@@ -6256,7 +6256,7 @@ export default function InstructorPanel({
 
 
 
-                                  assignment: chapter.assignments[0],
+                                  assignment: chapter.assignments?.[0],
 
 
 
@@ -6364,7 +6364,7 @@ export default function InstructorPanel({
 
 
 
-                    {chapter.assignments.map((assign) => (
+                    {(chapter.assignments || []).map((assign) => (
 
 
 
@@ -7841,7 +7841,7 @@ export default function InstructorPanel({
 
 
 
-                  {activeClass.chapters.map((ch) => (
+                  {(activeClass?.chapters || []).map((ch) => (
 
 
 
@@ -9493,7 +9493,7 @@ export default function InstructorPanel({
 
 
 
-                    const ch = activeClass.chapters.find((c) => c.id === activeLessonChapterId);
+                    const ch = (activeClass?.chapters || []).find((c) => c.id === activeLessonChapterId);
 
 
 
@@ -9537,7 +9537,7 @@ export default function InstructorPanel({
 
 
 
-                      assignment: ch?.assignments[0],
+                      assignment: ch?.assignments?.[0],
 
 
 
