@@ -2109,7 +2109,7 @@ export default function GitProjectHub({
                 onClick={handleGenerateArchitecture}
                 disabled={isGeneratingArch}
                 title="AI quét mã nguồn Repo và tự động sinh sơ đồ kiến trúc phân tầng động"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition cursor-pointer disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/50 dark:text-purple-300 dark:hover:bg-purple-900/60 transition cursor-pointer disabled:opacity-60"
               >
                 <Sparkles size={13} className={isGeneratingArch ? "animate-spin text-purple-600" : "text-purple-500"} />
                 {isGeneratingArch ? "AI đang quét..." : "AI Trích xuất Kiến trúc"}
@@ -2119,9 +2119,9 @@ export default function GitProjectHub({
                 onClick={handleSaveArchitecture}
                 disabled={isSavingArch}
                 title="Lưu vị trí component và cấu hình sơ đồ vào CSDL MySQL"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 transition cursor-pointer disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition cursor-pointer disabled:opacity-60"
               >
-                <Save size={13} className="text-blue-600" />
+                <Save size={13} className="text-slate-600 dark:text-slate-400" />
                 {isSavingArch ? "Đang lưu..." : "Lưu vào CSDL"}
               </button>
 
