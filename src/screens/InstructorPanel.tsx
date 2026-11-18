@@ -4360,95 +4360,19 @@ export default function InstructorPanel({
 
 
 
-        </div>
+          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-xs font-mono text-slate-500 dark:text-slate-400">
 
 
 
-      </header>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
 
 
 
-      {/* Seamless Connector 1 */}
+            <span>Trọng số: CI/CD {rubric.cicdWeightPct}% · Phản biện AI {rubric.defenseWeightPct}%</span>
 
 
 
-      <LiquidCardConnector />
-
-
-
-      {/* ─── CARD 2: FLOATING SEGMENTED TAB BAR ─────────────────────────────── */}
-
-
-
-      <div className="relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-2 shadow-xs flex flex-wrap items-center justify-between gap-3">
-
-
-
-        <MarloSegmentedControl<InstructorTab>
-
-
-
-          value={tab}
-
-
-
-          onChange={handleTabSwitch}
-
-
-
-          options={[
-
-
-
-            { id: "overview", label: "Tổng quan lớp", icon: <Columns3 size={14} /> },
-
-
-
-            { id: "syllabus", label: "Giáo trình & Test Cases", icon: <BookOpen size={14} />, badge: activeClass?.chapters?.length || 0 },
-
-
-
-            { id: "grading", label: "Chấm CI/CD & Phản biện AI", icon: <ShieldCheck size={14} />, badge: overviewStats.pendingCount + overviewStats.flaggedCount },
-
-
-
-            { id: "students", label: "Học viên & Đánh giá", icon: <Users size={14} /> },
-
-
-
-            { id: "mindmap", label: "Master Mindmap", icon: <Network size={14} /> },
-
-
-
-            { id: "evidence", label: "Bằng chứng Tự học", icon: <History size={14} />, badge: evidenceSessions.length },
-
-
-
-          ]}
-
-
-
-        />
-
-
-
-        <div className="hidden xl:flex items-center gap-2.5 px-3 text-xs font-mono text-slate-500 dark:text-slate-400">
-
-
-
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-
-
-
-          <span>
-
-
-
-            Trọng số hiện hành: CI/CD {rubric.cicdWeightPct}% · Phản biện AI {rubric.defenseWeightPct}%
-
-
-
-          </span>
+          </div>
 
 
 
@@ -4456,15 +4380,7 @@ export default function InstructorPanel({
 
 
 
-      </div>
-
-
-
-      {/* Seamless Connector 2 */}
-
-
-
-      <LiquidCardConnector />
+      </header>
 
 
 
