@@ -1,0 +1,462 @@
+/* =====================================================================
+   MARLO ENGINE COMPLETE STYLES
+   Ported directly from D:\C++\quản lí dự án\marlo-app
+   ===================================================================== */
+
+/* Base Root Variables & Theming for Marlo Components */
+.marlo-scope {
+  --font: "Urbanist", system-ui, -apple-system, sans-serif;
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 12.5px;
+  --fs-md: 13.5px;
+  --fs-base: 14px;
+  --fs-lg: 15px;
+  --fs-xl: 17px;
+  --fs-2xl: 20px;
+  --fs-3xl: 22px;
+  --fs-4xl: 26px;
+  --fs-display: 34px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --r-xl: 26px;
+  --gap: 16px;
+  --pad: 28px;
+  --bg: #e6e7ea;
+  --card: #f5f5f6;
+  --card-2: #ecedef;
+  --card-3: #e1e2e5;
+  --well: #14161a0d;
+  --ink: #161718;
+  --ink-2: #393b3f;
+  --muted: #62656b;
+  --line: #14161a14;
+  --line-2: #14161a26;
+  --shadow-sm: 0 1px 2px #14161a0d;
+  --shadow: 0 1px 2px #14161a0a, 0 14px 32px -22px #14161a47;
+  --accent: #f29b23;
+  --accent-from: #f8bd57;
+  --accent-to: #ee8420;
+  --accent-ink: #1c1304;
+  --accent-soft: #f29b232b;
+  --accent-text: #8f5404;
+  --good: #1c7046;
+  --warn: #8a5208;
+  --bad: #ad3622;
+  --info: #285b91;
+  --good-soft: #1e825021;
+  --warn-soft: #d28c1e2e;
+  --bad-soft: #c83c281f;
+  --info-soft: #2864aa1f;
+  --grad: linear-gradient(135deg, var(--accent-from), var(--accent) 52%, var(--accent-to));
+  --c1: #f29b23;
+  --c2: #e8712a;
+  --c3: #2a2c2f;
+  --c4: #9a9da3;
+  --c5: #d6ad6e;
+  --c6: #b4581d;
+}
+
+.dark .marlo-scope, [data-theme="dark"] .marlo-scope {
+  --bg: #111213;
+  --card: #1b1c1e;
+  --card-2: #222326;
+  --card-3: #2c2d31;
+  --well: #ffffff0a;
+  --ink: #f0f0f1;
+  --ink-2: #d2d3d6;
+  --muted: #a0a3a9;
+  --line: #ffffff12;
+  --line-2: #ffffff24;
+  --shadow-sm: 0 1px 2px #0000004d;
+  --shadow: 0 1px 2px #0000004d, 0 18px 40px -24px #000000b3;
+  --accent: #f4a43a;
+  --accent-from: #f8c062;
+  --accent-to: #ef8a2a;
+  --accent-ink: #1c1304;
+  --accent-soft: #f4a43a29;
+  --accent-text: #f6b95e;
+  --good: #7fd6a2;
+  --warn: #f3c27a;
+  --bad: #f59b86;
+  --info: #9fc4ee;
+  --good-soft: #7fd6a224;
+  --warn-soft: #f3c27a24;
+  --bad-soft: #f59b8624;
+  --info-soft: #9fc4ee21;
+}
+
+/* Common Marlo Core Classes */
+.marlo-scope .card {
+  background: var(--card);
+  border-radius: var(--r-lg);
+  padding: 18px 20px 20px;
+  position: relative;
+  border: 1px solid var(--line);
+}
+
+.marlo-scope .btn {
+  height: 40px;
+  font-size: var(--fs-md);
+  white-space: nowrap;
+  background: var(--card-2);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  border-radius: 12px;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  font-weight: 600;
+  display: inline-flex;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.marlo-scope .btn:hover {
+  background: var(--card-3);
+}
+
+.marlo-scope .btn--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+
+.marlo-scope .btn--primary:hover {
+  filter: brightness(1.05);
+}
+
+.marlo-scope .backlink {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.marlo-scope .backlink:hover {
+  color: var(--ink);
+}
+
+.marlo-scope .linkbtn {
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.marlo-scope .linkbtn:hover {
+  text-decoration: underline;
+}
+
+.marlo-scope .chead {
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  margin-bottom: 14px;
+  display: flex;
+}
+
+.marlo-scope .chead__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.marlo-scope .chead h2 {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+  margin: 0;
+}
+
+.marlo-scope .chead p {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+
+.marlo-scope .pill {
+  height: 24px;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  background: var(--card-3);
+  color: var(--ink-2);
+  border-radius: 99px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  font-weight: 600;
+  display: inline-flex;
+}
+
+.marlo-scope .pill:before {
+  content: "";
+  background: currentColor;
+  border-radius: 50%;
+  width: 6px;
+  height: 6px;
+}
+
+.marlo-scope .pill--good { background: var(--good-soft); color: var(--good); }
+.marlo-scope .pill--warn { background: var(--warn-soft); color: var(--warn); }
+.marlo-scope .pill--bad  { background: var(--bad-soft); color: var(--bad); }
+.marlo-scope .pill--info { background: var(--info-soft); color: var(--info); }
+.marlo-scope .pill--accent { background: var(--accent-soft); color: var(--accent-text); }
+.marlo-scope .pill--plain:before { display: none; }
+
+.marlo-scope .badge {
+  min-width: 20px;
+  height: 20px;
+  font-size: var(--fs-2xs);
+  background: var(--card-3);
+  color: var(--ink-2);
+  border-radius: 99px;
+  place-items: center;
+  padding: 0 6px;
+  font-weight: 700;
+  display: inline-grid;
+}
+
+.marlo-scope .av {
+  width: 34px;
+  height: 34px;
+  font-size: var(--fs-xs);
+  border-radius: 50%;
+  flex: none;
+  place-items: center;
+  font-weight: 700;
+  display: grid;
+  position: relative;
+  user-select: none;
+}
+
+.marlo-scope .av--sm { width: 26px; height: 26px; font-size: var(--fs-2xs); }
+.marlo-scope .av--lg { width: 48px; height: 48px; font-size: var(--fs-lg); }
+.marlo-scope .av--xl { width: 72px; height: 72px; font-size: var(--fs-3xl); }
+
+.marlo-scope .av__dot {
+  background: var(--good);
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 0 0 2px var(--card);
+  border-radius: 50%;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+}
+
+.marlo-scope .avstack {
+  display: flex;
+}
+
+.marlo-scope .avstack > * + * {
+  margin-left: -8px;
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+.marlo-scope .projtag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.marlo-scope .projtag i {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.marlo-scope .projtag.c--1 i { background: #f29b23; }
+.marlo-scope .projtag.c--2 i { background: #e8712a; }
+.marlo-scope .projtag.c--3 i { background: #2a2c2f; }
+.marlo-scope .projtag.c--4 i { background: #9a9da3; }
+.marlo-scope .projtag.c--5 i { background: #d6ad6e; }
+.marlo-scope .projtag.c--6 i { background: #b4581d; }
+
+/* Status dot in Task Column Header */
+.marlo-scope .st--todo { background: #9a9da3; width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.marlo-scope .st--doing { background: #f29b23; width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.marlo-scope .st--review { background: #285b91; width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.marlo-scope .st--done { background: #1c7046; width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* Level progress meter */
+.marlo-scope .level {
+  background: var(--card-3);
+  border-radius: 6px;
+  min-width: 70px;
+  height: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.marlo-scope .level i {
+  border-radius: inherit;
+  background: var(--good);
+  transform-origin: 0;
+  position: absolute;
+  inset: 0;
+}
+
+.marlo-scope .level.is-low i { background: var(--warn); }
+.marlo-scope .level.is-out i { background: var(--bad); }
+
+/* Search Toolbar */
+.marlo-scope .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.marlo-scope .toolbar .inwrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 280px;
+}
+
+.marlo-scope .toolbar .inwrap .ico {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.marlo-scope .toolbar .input {
+  width: 100%;
+  height: 40px;
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 0 12px 0 38px;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  outline: none;
+}
+
+.marlo-scope .toolbar .input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Hours by Week Bar Chart */
+.marlo-scope .bars {
+  position: relative;
+  padding: 8px 0 24px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 180px;
+}
+
+.marlo-scope .bars__cols {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 140px;
+  position: relative;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.marlo-scope .bars__col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.marlo-scope .bars__track {
+  width: 100%;
+  max-width: 38px;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.marlo-scope .bars__bar {
+  width: 70%;
+  background: var(--ink);
+  border-radius: 6px 6px 2px 2px;
+  transition: height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.marlo-scope .bars__col.is-hi .bars__bar {
+  background: var(--accent);
+}
+
+.marlo-scope .bars__ghost {
+  position: absolute;
+  width: 100%;
+  background: var(--card-3);
+  border-radius: 6px 6px 2px 2px;
+}
+
+.marlo-scope .bars__label {
+  position: absolute;
+  bottom: -24px;
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.marlo-scope .bars__col.is-hi .bars__label {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+/* Segmented Control Tabs */
+.marlo-scope .seg {
+  background: var(--card-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: 12px;
+  padding: 3px;
+  display: inline-flex;
+  gap: 2px;
+}
+
+.marlo-scope .seg button {
+  height: 32px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  border-radius: 9px;
+  padding: 0 14px;
+  font-weight: 600;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.marlo-scope .seg button.is-on {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* Original Marlo Projects CSS */
+/*! Marlo — the task desk of Northbank Post — © 2026 Hasib (OVERSHOOT). All rights reserved. Licensed, not sold: see LICENSE.md. */
+.pgrid{gap:var(--gap);grid-template-columns:repeat(auto-fill,minmax(290px,1fr));display:grid}.pcard{flex-direction:column;gap:14px;display:flex}.pcard__top{justify-content:space-between;align-items:center;display:flex}.pcard__kind{font-size:var(--fs-xs);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);align-items:center;gap:8px;font-weight:700;display:inline-flex}.pcard__kind:before{content:"";background:var(--cc);border-radius:3px;width:8px;height:8px}.pcard__pin{width:32px;height:32px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line);border-radius:10px;place-items:center;display:grid}.pcard__pin.is-on{background:var(--thumb);color:var(--on-thumb);box-shadow:none}.pcard__mid{align-items:center;gap:14px;display:flex}.pcard__mid .ring__in b{font-size:var(--fs-sm)}.pcard__name{min-width:0}.pcard__name b{font-size:var(--fs-xl);letter-spacing:-.01em;font-weight:600;line-height:1.2;display:block}.pcard__name small{color:var(--muted);font-weight:600}.pcard__meta{font-size:var(--fs-xs);color:var(--muted);flex-wrap:wrap;align-items:center;gap:12px;font-weight:600;display:flex}.pcard__meta>span:not(.pill){align-items:center;gap:4px;display:inline-flex}.pcard__meta .ico{width:14px;height:14px}.pcard__burn{font-size:var(--fs-sm);color:var(--muted);justify-content:space-between;margin-bottom:-8px;font-weight:600;display:flex}.pcard__burn b{color:var(--ink)}.pcard__foot{border-top:1px solid var(--line);justify-content:space-between;align-items:center;padding-top:12px;display:flex}.pcard__budget{font-weight:700}.pd__stats{gap:var(--gap);margin-bottom:var(--gap);grid-template-columns:1.4fr 1fr 1fr 1fr;display:grid}.pd__stat{flex-direction:column;gap:6px;display:flex}.pd__stat>small,.pd__stat div>small{color:var(--muted);font-weight:600;font-size:var(--fs-sm)}.pd__stat--hero{flex-direction:row;align-items:center;gap:16px}.pd__stat--hero div{flex-direction:column;gap:2px;display:flex}.pd__stat--hero div b{font-size:var(--fs-xl);font-weight:600}.pd__stat--hero .ring__in b{font-size:var(--fs-lg)}.pd__grid{gap:var(--gap);grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start;display:grid}.pd__cols{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;display:grid}.pd__col{flex-direction:column;gap:6px;min-width:0;display:flex}.pd__colhead{font-size:var(--fs-sm);align-items:center;gap:6px;padding-bottom:6px;font-weight:700;display:flex}.pd__colhead .badge{margin-left:auto}.pd__task{background:var(--card-2);font-size:var(--fs-sm);border-radius:12px;align-items:center;gap:8px;min-width:0;padding:8px;font-weight:600;display:flex}.pd__task span{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}.pd__task:hover{background:var(--card-3)}.pd__team{flex-direction:column;display:flex}.pd__person,.pd__inv{border-top:1px solid var(--line);align-items:center;gap:10px;padding:9px 0;display:flex}.pd__person:first-child,.pd__inv:first-of-type{border-top:0}.pd__person .cell__text,.pd__inv .cell__text{flex:1}.pd__inv>b{text-align:right;min-width:90px}.tl .chead{flex-wrap:wrap}.tl__scroll{padding:4px 0 0;overflow-x:auto}.tl__inner{--namew:200px;min-width:920px;padding:0 22px 8px}.tl__axis{grid-template-columns:var(--namew) minmax(0, 1fr);border-bottom:1px solid var(--line-2);align-items:end;height:34px;display:grid}.tl__namehead{font-size:var(--fs-xs);color:var(--muted);padding-bottom:8px;font-weight:600}.tl__weeks{grid-template-columns:repeat(16,1fr);display:grid}.tl__weeks span{font-size:var(--fs-2xs);color:var(--muted);border-left:1px solid var(--line);white-space:nowrap;padding:0 0 8px 4px;font-weight:600}.tl__weeks span.is-now{color:var(--accent-text);font-weight:700}.tl__body{position:relative}.tl__body:before{content:"";left:var(--namew);background:repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px calc(100% / 16));pointer-events:none;position:absolute;top:0;bottom:0;right:0}.tl__row{grid-template-columns:var(--namew) minmax(0, 1fr);border-bottom:1px solid var(--line);cursor:pointer;align-items:center;height:58px;display:grid}.tl__row:hover{background:var(--well)}.tl__name{min-width:0;padding-right:12px}.tl__name b{white-space:nowrap;text-overflow:ellipsis;font-weight:600;display:block;overflow:hidden}.tl__name small{color:var(--muted);font-weight:600}.tl__lane{height:100%;position:relative}.tl__bar{background:var(--card-3);box-shadow:inset 0 0 0 1px var(--line);transform-origin:0;border-radius:99px;position:absolute;top:14px;bottom:14px;overflow:hidden}.tl__fill{border-radius:inherit;background:var(--ink);transform-origin:0;position:absolute;inset:0;transform:scaleX(0)}.tl__bar.c--1 .tl__fill,.tl__bar.c--2 .tl__fill,.tl__bar.c--6 .tl__fill{background:var(--grad)}.tl__bar.is-done .tl__fill{background:var(--data-2)}.tl__label{font-size:var(--fs-2xs);color:var(--ink);mix-blend-mode:normal;background:var(--card);border-radius:99px;padding:1px 6px;font-weight:700;position:absolute;top:50%;right:10px;transform:translateY(-50%)}.tl__today{z-index:2;background:var(--accent);pointer-events:none;width:2px;position:absolute;top:-8px;bottom:0}.tl__today em{background:var(--grad);color:var(--accent-ink);font-style:normal;font-size:var(--fs-2xs);white-space:nowrap;border-radius:99px;padding:2px 8px;font-weight:700;position:absolute;top:-18px;left:50%;transform:translate(-50%)}.tl__foot{font-size:var(--fs-sm);padding:12px 22px 18px}@media (width<=1279px){.pd__stats{grid-template-columns:1fr 1fr}.pd__grid{grid-template-columns:minmax(0,1fr)}}@media (width<=760px){.pd__stats{grid-template-columns:1fr}.pd__cols{grid-template-columns:1fr 1fr}.tl__inner{--namew:140px;min-width:760px;padding:0 16px 8px}.tl__name{z-index:3;background:var(--card);flex-direction:column;justify-content:center;height:100%;display:flex;position:sticky;left:0}.pd__stats{grid-template-columns:1fr 1fr;gap:10px}.pd__stat--hero,.pd__stats>.pd__stat:last-child{grid-column:1/-1}.pd__stat .big{font-size:var(--fs-2xl)}.pcard__name b{font-size:var(--fs-lg)}.tl__weeks span:nth-child(2n):not(.is-now){color:#0000}.tl__scroll{scroll-behavior:auto;overscroll-behavior-x:contain}}
+
+
+/* Original Marlo Team CSS */
+/*! Marlo — the task desk of Northbank Post — © 2026 Hasib (OVERSHOOT). All rights reserved. Licensed, not sold: see LICENSE.md. */
+.people{gap:var(--gap);grid-template-columns:repeat(auto-fill,minmax(250px,1fr));display:grid}.person{flex-direction:column;gap:4px;display:flex}.person__top{justify-content:space-between;align-items:flex-start;margin-bottom:10px;display:flex}.person__name{font-size:var(--fs-xl);letter-spacing:-.01em;font-weight:600}.person__role{color:var(--muted);margin-bottom:12px;font-weight:600}.person__load{font-size:var(--fs-sm);color:var(--muted);justify-content:space-between;margin-bottom:6px;font-weight:600;display:flex}.person__load b{color:var(--ink)}.person__foot{border-top:1px solid var(--line);font-size:var(--fs-sm);color:var(--muted);gap:16px;margin-top:12px;padding-top:12px;font-weight:600;display:flex}.person__foot span{align-items:center;gap:5px;display:inline-flex}.prof__head{margin-bottom:var(--gap);grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px 22px;display:grid}.prof__who h1{letter-spacing:-.025em;font-size:clamp(26px,2.3vw,34px);font-weight:600;line-height:1.05}.prof__who p{color:var(--muted);margin:4px 0;font-weight:600}.prof__stats{gap:22px;display:flex}.prof__stats small{color:var(--muted);font-weight:600;font-size:var(--fs-sm);display:block}.prof__stats b{font-size:var(--fs-3xl);letter-spacing:-.01em;font-weight:600}.prof__actions{border-top:1px solid var(--line);grid-column:1/-1;justify-content:flex-end;gap:8px;padding-top:12px;display:flex}.prof__grid{gap:var(--gap);grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start;display:grid}.prow{border-top:1px solid var(--line);align-items:center;gap:12px;padding:10px 0;display:flex}.chead+.prow{border-top:0}.prow .cell__text{flex:1}.prow .projtag{flex:1;min-width:0;overflow:hidden}.wl{gap:var(--gap);flex-direction:column;display:flex}.wl__sum{grid-template-columns:repeat(3,1fr);gap:16px;display:grid}.wl__sum small{color:var(--muted);font-weight:600;font-size:var(--fs-sm);display:block}.wl__sum .muted{font-size:var(--fs-sm);display:block}.wl__grid{gap:var(--gap);grid-template-columns:1fr 1fr;display:grid}.wl__heat{overflow-x:auto}.wl__heat .heat{min-width:560px}@media (width<=999px){.prof__head{grid-template-columns:auto minmax(0,1fr)}.prof__stats{grid-column:1/-1}.prof__grid,.wl__grid{grid-template-columns:1fr}}@media (width<=760px){.wl__sum{grid-template-columns:1fr 1fr}.prof__actions{flex-direction:column}.prof__actions .btn{width:100%}.prof__stats b{font-size:var(--fs-xl)}}
+

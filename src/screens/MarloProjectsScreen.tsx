@@ -361,11 +361,13 @@ import type { Role } from "../App";
 
 interface MarloProjectsScreenProps {
   onOpenProject?: (project: CNTTProjectItem) => void;
+  onOpenProjectDetail?: (projectId: string) => void;
   role?: Role;
 }
 
 export default function MarloProjectsScreen({
   onOpenProject,
+  onOpenProjectDetail,
   role = "student",
 }: MarloProjectsScreenProps) {
   const [activeTab, setActiveTab] = useState<"slate" | "timeline">("slate");
@@ -925,8 +927,15 @@ export default function MarloProjectsScreen({
                   return (
                     <div
                       key={p.id}
-                      onClick={() => onOpenProject?.(p)}
-                      className="pcard"
+                      onClick={() => {
+                        if (onOpenProjectDetail) {
+                          onOpenProjectDetail(p.id);
+                        } else {
+                          onOpenProject?.(p);
+                        }
+                      }}
+                      className="pcard cursor-pointer group"
+                      title="Nhấn để xem trang Chi Tiết Đồ Án"
                     >
                       {/* Top row: Kind + Pin Button */}
                       <div className="pcard__top">

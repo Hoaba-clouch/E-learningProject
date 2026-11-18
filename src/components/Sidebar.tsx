@@ -88,6 +88,7 @@ const navGroups: NavGroup[] = [
       { id: "instructor-grading", label: "Grading & AI", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["instructor"], badge: "5", badgeDot: true },
       { id: "instructor-students", label: "Students", icon: <Users size={18} strokeWidth={1.85} />, roles: ["instructor"], badge: "42" },
       { id: "projects", label: "Projects", icon: <FolderKanban size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
+      { id: "team", label: "Team", icon: <Users size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"], badge: "8" },
       { id: "kanban", label: "Kanban", icon: <Columns3 size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"], badge: "9" },
       { id: "schedule", label: "Calendar", icon: <CalendarDays size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"], badge: "4" },
     ],

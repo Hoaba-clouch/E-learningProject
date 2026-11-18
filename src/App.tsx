@@ -18,6 +18,9 @@ import MarloGlobalHeader from "./components/MarloGlobalHeader";
 import CodeMindIntroLandingPage from "./screens/CodeMindIntroLandingPage";
 import AIDefenseRoomScreen from "./screens/AIDefenseRoomScreen";
 import SecurityDevicesScreen from "./screens/SecurityDevicesScreen";
+import MarloProjectDetailScreen from "./screens/MarloProjectDetailScreen";
+import MarloTeamScreen from "./screens/MarloTeamScreen";
+import MarloPersonDetailScreen from "./screens/MarloPersonDetailScreen";
 import { logoutUser } from "./api";
 
 export type Screen =
@@ -44,6 +47,9 @@ export type Screen =
   | "kanban"
   | "schedule"
   | "projects"
+  | "project-detail"
+  | "team"
+  | "person-detail"
   | "defense-room";
 
 export type Role = "student" | "admin" | "instructor";
@@ -66,6 +72,8 @@ export default function App() {
     return "login";
   });
   const [selectedKanbanProjectId, setSelectedKanbanProjectId] = useState<string>("prj-codemind");
+  const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>("kestrel");
+  const [selectedMarloPersonId, setSelectedMarloPersonId] = useState<string>("dara");
   const mainRef = useRef<HTMLElement>(null);
 
   const setScreen = (nextScreen: Screen) => {
@@ -369,6 +377,46 @@ export default function App() {
           onOpenProject={(p) => {
             if (p?.id) setSelectedKanbanProjectId(p.id);
             setScreen("kanban");
+          }}
+          onOpenProjectDetail={(pId) => {
+            if (pId) setSelectedMarloProjectId(pId);
+            setScreen("project-detail");
+          }}
+        />
+      );
+      case "project-detail": return (
+        <MarloProjectDetailScreen
+          projectId={selectedMarloProjectId}
+          onNavigateBack={() => setScreen("projects")}
+          onNavigateToPerson={(personId) => {
+            setSelectedMarloPersonId(personId);
+            setScreen("person-detail");
+          }}
+          onNavigateToKanban={(prjId) => {
+            setSelectedKanbanProjectId(prjId);
+            setScreen("kanban");
+          }}
+        />
+      );
+      case "team": return (
+        <MarloTeamScreen
+          onSelectPerson={(personId) => {
+            setSelectedMarloPersonId(personId);
+            setScreen("person-detail");
+          }}
+          onNavigateToProject={(prjId) => {
+            setSelectedMarloProjectId(prjId);
+            setScreen("project-detail");
+          }}
+        />
+      );
+      case "person-detail": return (
+        <MarloPersonDetailScreen
+          personId={selectedMarloPersonId}
+          onNavigateBack={() => setScreen("team")}
+          onNavigateToProject={(prjId) => {
+            setSelectedMarloProjectId(prjId);
+            setScreen("project-detail");
           }}
         />
       );
