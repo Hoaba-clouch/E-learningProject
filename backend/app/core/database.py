@@ -88,6 +88,8 @@ class MySQLCursorWrapper:
         # 2. Thay thế các cú pháp đặc thù SQLite sang chuẩn MySQL 8.0
         s = re.sub(r"\bINSERT\s+OR\s+IGNORE\s+INTO\b", "INSERT IGNORE INTO", s, flags=re.IGNORECASE)
         s = re.sub(r"\bINSERT\s+OR\s+REPLACE\s+INTO\b", "REPLACE INTO", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bORDER\s+BY\s+rowid\s+DESC\b", "ORDER BY created_at DESC, id DESC", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bORDER\s+BY\s+rowid\s+ASC\b", "ORDER BY created_at ASC, id ASC", s, flags=re.IGNORECASE)
         s = re.sub(r"\browid\b", "id", s, flags=re.IGNORECASE)
         s = re.sub(r"\bSELECT\s+key\b", "SELECT `key`", s, flags=re.IGNORECASE)
         s = re.sub(r"\bWHERE\s+key\b", "WHERE `key`", s, flags=re.IGNORECASE)

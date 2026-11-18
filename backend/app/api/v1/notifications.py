@@ -9,7 +9,7 @@ from app.core.database import db, row_dict
 from app.core.security import uid
 from app.core.timezone import now_utc
 
-router = APIRouter(prefix="/v1/notifications", tags=["notifications"])
+router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 class BroadcastIn(BaseModel):

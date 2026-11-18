@@ -9,7 +9,7 @@ from app.core.database import db, row_dict
 from app.core.security import uid
 from app.core.timezone import now_utc
 
-router = APIRouter(prefix="/v1/schedules", tags=["schedules"])
+router = APIRouter(prefix="/schedules", tags=["schedules"])
 
 
 class CreateScheduleIn(BaseModel):

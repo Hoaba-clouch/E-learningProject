@@ -314,7 +314,7 @@ def get_students_analytics(
     with db() as conn:
         students_query = """
             SELECT u.id, u.user_code, u.display_name, u.email,
-                   sp.level, sp.exp_points, sp.current_streak, sp.longest_streak
+                   sp.exp_points, sp.current_streak, sp.longest_streak
             FROM users u
             LEFT JOIN student_profiles sp ON sp.user_id = u.id
             WHERE u.role = 'student'
@@ -327,7 +327,7 @@ def get_students_analytics(
             uid_val = st["id"]
             prog_row = conn.execute(
                 """SELECT COUNT(DISTINCT ls.lesson_id) as lessons_done,
-                          AVG(sub.score) as avg_quiz,
+                          AVG(CASE WHEN sub.total_count > 0 THEN (sub.passed_count * 10.0 / sub.total_count) ELSE 8.0 END) as avg_quiz,
                           COUNT(sub.id) as total_submissions
                    FROM learning_sessions ls
                    LEFT JOIN submissions sub ON sub.learning_session_id = ls.id
@@ -348,9 +348,9 @@ def get_students_analytics(
             avg_def = round(float(def_row["avg_def"] or 85.0), 1) if def_row and def_row["avg_def"] else 82.5
 
             kb_row = conn.execute(
-                """SELECT COUNT(*) as tasks_done, SUM(story_points) as sp_done
-                   FROM kanban_workspace_tasks
-                   WHERE assignee_id = ? AND column_id IN ('done', 'verified')""",
+                """SELECT COUNT(*) as tasks_done, COALESCE(SUM(points), 0) as sp_done
+                   FROM engineering_tasks
+                   WHERE assignee_user_id = ? AND column_id IN ('done', 'verified')""",
                 (uid_val,),
             ).fetchone()
             tasks_done = kb_row["tasks_done"] or 0

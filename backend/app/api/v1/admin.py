@@ -756,8 +756,8 @@ def get_admin_analytics_overview(_: dict[str, Any] = Depends(require_admin)) -> 
         course_cnt = conn.execute("SELECT COUNT(*) as c FROM courses").fetchone()["c"]
 
         # 3. Đếm đồ án & Kanban SP
-        prj_cnt = conn.execute("SELECT COUNT(*) as c FROM kanban_workspace_projects").fetchone()["c"]
-        kb_tasks = conn.execute("SELECT COUNT(*) as c, COALESCE(SUM(story_points), 0) as sp FROM kanban_workspace_tasks WHERE column_id IN ('done', 'verified')").fetchone()
+        prj_cnt = conn.execute("SELECT COUNT(*) as c FROM engineering_projects").fetchone()["c"]
+        kb_tasks = conn.execute("SELECT COUNT(*) as c, COALESCE(SUM(points), 0) as sp FROM engineering_tasks WHERE column_id IN ('done', 'verified')").fetchone()
 
         # 4. Thống kê nộp bài & CI/CD
         sub_stats = conn.execute("SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN status='passed' THEN 1 ELSE 0 END), 0) as passed FROM submissions").fetchone()
@@ -770,9 +770,9 @@ def get_admin_analytics_overview(_: dict[str, Any] = Depends(require_admin)) -> 
         def_avg = round(float(def_stats["avg_score"] or 86.5), 1)
 
         # 6. Dịch vụ AI & Token
-        ai_units = conn.execute("SELECT id, name, requests, input_tokens, output_tokens, cost_estimate FROM ai_service_units").fetchall()
+        ai_units = conn.execute("SELECT id, name, requests, input_tokens, output_tokens, estimated_cost FROM ai_service_units").fetchall()
         total_tokens = sum((u["input_tokens"] or 0) + (u["output_tokens"] or 0) for u in ai_units)
-        total_cost = round(sum(float(u["cost_estimate"] or 0.0) for u in ai_units), 2)
+        total_cost = round(sum(float(u["estimated_cost"] or 0.0) for u in ai_units), 2)
 
         # 7. Phiên bảo mật JWT
         jwt_cnt = conn.execute("SELECT COUNT(*) as c FROM jwt_sessions WHERE revoked=0").fetchone()["c"]
