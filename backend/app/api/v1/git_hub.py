@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 
-from app.api.deps import current_user, record_audit_log
+from app.api.deps import current_user, get_optional_current_user, record_audit_log
 from app.core.database import db
 from app.core.security import sha256, uid
 from app.core.timezone import now_utc
@@ -410,7 +410,7 @@ def _compute_analytics_and_metrics(
 @router.get("/workspace")
 def get_git_hub_workspace(
     project_id: str = Query(default="prj-codemind"),
-    user: dict[str, Any] = Depends(current_user),
+    user: dict[str, Any] | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """Lấy trọn gói dữ liệu Git Project Hub đồng bộ SQLite: Repo, Commits Graph, Pull Requests, Tasks & Team Analytics."""
     with db() as conn:
@@ -1239,7 +1239,7 @@ def sync_github_live(
 @router.get("/projects/{project_id}/architecture")
 def get_project_architecture(
     project_id: str,
-    user: dict[str, Any] = Depends(current_user),
+    user: dict[str, Any] | None = Depends(get_optional_current_user),
 ):
     """
     Lấy sơ đồ kiến trúc phân tầng động từ CSDL MySQL `project_architectures`.

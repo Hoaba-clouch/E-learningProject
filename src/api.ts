@@ -1758,6 +1758,13 @@ export interface StudentChapterSubmissionDto {
     improvements: string;
     cleanCodeAnalysis: string;
   };
+  status?: "pending" | "graded" | "revision_requested" | "flagged";
+  instructor_grade?: number | null;
+  instructor_feedback?: string;
+  graded_by?: string;
+  graded_at?: string;
+  student_name?: string;
+  student_code?: string;
   xp_awarded: number;
   dual_submission_id: string;
   submitted_at: string;
@@ -3300,6 +3307,118 @@ export async function fetchAdminAnalyticsApi(): Promise<AdminAnalyticsData | nul
     return null;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎓 GIẢNG VIÊN: THẨM ĐỊNH & CHẤM BÀI TẬP THỰC HÀNH TỪNG CHƯƠNG (16 MÔN HỌC)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ChapterSubmissionItem {
+  id: string;
+  userId: string;
+  studentName: string;
+  studentCode: string;
+  subjectId: string;
+  chapterNumber: number;
+  exerciseId: string;
+  exerciseTitle: string;
+  repoUrl: string;
+  studentNote: string;
+  score: number;
+  maxScore: number;
+  testsPassed: number;
+  testsTotal: number;
+  executionTimeMs: number;
+  antiPlagiarismScore: number;
+  status: "pending" | "graded" | "revision_requested" | "flagged";
+  instructorGrade?: number | null;
+  instructorFeedback?: string;
+  gradedBy?: string;
+  gradedAt?: string;
+  rubric: { title: string; score: number; max: number; note: string }[];
+  aiFeedback: { strengths: string; improvements: string };
+  xpAwarded: number;
+  submittedAt: string;
+}
+
+export interface ChapterSubmissionsOverview {
+  submissions: ChapterSubmissionItem[];
+  total: number;
+  summary: {
+    total: number;
+    pendingCount: number;
+    gradedCount: number;
+    flaggedCount: number;
+    avgScore: number;
+  };
+}
+
+export async function fetchInstructorChapterSubmissions(
+  subjectId?: string,
+  chapterNumber?: number,
+  statusFilter?: string
+): Promise<ChapterSubmissionsOverview> {
+  const token = getToken();
+  const params = new URLSearchParams();
+  if (subjectId) params.set("subject_id", subjectId);
+  if (typeof chapterNumber === "number") params.set("chapter_number", String(chapterNumber));
+  if (statusFilter && statusFilter !== "all") params.set("status_filter", statusFilter);
+  const q = params.toString() ? `?${params.toString()}` : "";
+  try {
+    const res = await fetch(`${API_BASE}/v1/instructor/chapter-submissions${q}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      return {
+        submissions: [],
+        total: 0,
+        summary: { total: 0, pendingCount: 0, gradedCount: 0, flaggedCount: 0, avgScore: 0 },
+      };
+    }
+    const data = await res.json();
+    const subs = (data.submissions || []).map((s: any) => ({
+      ...s,
+      score: typeof s.score === "number" ? s.score : (s.aiScore || 0),
+    }));
+    return {
+      submissions: subs,
+      total: data.total || subs.length,
+      summary: {
+        total: data.total || data.summary?.total || subs.length,
+        pendingCount: data.pendingCount ?? data.summary?.pendingCount ?? 0,
+        gradedCount: data.gradedCount ?? data.summary?.gradedCount ?? 0,
+        flaggedCount: data.flaggedCount ?? data.summary?.flaggedCount ?? 0,
+        avgScore: data.avgScore ?? data.summary?.avgScore ?? 0,
+      },
+    };
+  } catch {
+    return {
+      submissions: [],
+      total: 0,
+      summary: { total: 0, pendingCount: 0, gradedCount: 0, flaggedCount: 0, avgScore: 0 },
+    };
+  }
+}
+
+export async function gradeInstructorChapterSubmission(
+  subId: string,
+  payload: { action: string; instructor_grade?: number; instructor_feedback?: string }
+): Promise<any> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/v1/instructor/chapter-submissions/${subId}/grade`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể lưu điểm chấm bài tập chương");
+  }
+  return await res.json();
+}
+
 
 
 

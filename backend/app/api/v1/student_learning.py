@@ -92,6 +92,9 @@ def _ensure_profile(conn: Any, user_id: str) -> Any:
 def _serialize_chapter_submission(row: Any) -> dict[str, Any]:
     return {
         "id": row["id"],
+        "user_id": row.get("user_id", ""),
+        "student_name": row.get("student_name") or "Học viên",
+        "student_code": row.get("student_code") or "",
         "subject_id": row["subject_id"],
         "chapter_number": row["chapter_number"],
         "exercise_id": row["exercise_id"],
@@ -108,6 +111,11 @@ def _serialize_chapter_submission(row: Any) -> dict[str, Any]:
         "gradeLabel": "LOẠI XUẤT SẮC (TIÊU CHUẨN ABET)" if row["score"] >= 9.0 else "ĐẠT YÊU CẦU KỸ THUẬT",
         "rubric": json.loads(row["rubric_json"] or "[]"),
         "aiFeedback": json.loads(row["ai_feedback_json"] or "{}"),
+        "status": row.get("status") or "pending",
+        "instructor_grade": row.get("instructor_grade"),
+        "instructor_feedback": row.get("instructor_feedback") or "",
+        "graded_by": row.get("graded_by") or "",
+        "graded_at": row.get("graded_at") or "",
         "xp_awarded": row["xp_awarded"],
         "dual_submission_id": row["dual_submission_id"],
         "submitted_at": row["submitted_at"],
@@ -444,13 +452,16 @@ def submit_chapter_exercise(
 
         sub_id = f"chsub-{uid()[:8]}"
         dual_id = f"sub-stu-{user_id[-6:]}-{payload.exercise_id}"
+        stu_name = user.get("full_name") or user.get("display_name") or "Học viên"
+        stu_code = user.get("user_code") or f"HV{abs(hash(user_id)) % 89999 + 10000}"
+
         conn.execute(
             """INSERT INTO student_chapter_submissions(
                    id, user_id, subject_id, chapter_number, exercise_id, exercise_title,
                    repo_url, student_note, score, max_score, tests_passed, tests_total,
                    execution_time_ms, anti_plagiarism_score, rubric_json, ai_feedback_json,
-                   xp_awarded, dual_submission_id, submitted_at
-               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   xp_awarded, dual_submission_id, submitted_at, status, student_name, student_code
+               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 sub_id,
                 user_id,
@@ -471,6 +482,9 @@ def submit_chapter_exercise(
                 xp_awarded,
                 dual_id,
                 now,
+                "pending",
+                stu_name,
+                stu_code,
             ),
         )
 

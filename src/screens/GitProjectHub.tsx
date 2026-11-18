@@ -2109,7 +2109,7 @@ export default function GitProjectHub({
                 onClick={handleGenerateArchitecture}
                 disabled={isGeneratingArch}
                 title="AI quét mã nguồn Repo và tự động sinh sơ đồ kiến trúc phân tầng động"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/50 dark:text-purple-300 dark:hover:bg-purple-900/60 transition cursor-pointer disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-100/80 hover:bg-purple-200/80 dark:bg-purple-950/60 dark:text-purple-300 dark:hover:bg-purple-900/80 transition cursor-pointer disabled:opacity-60 border-0 border-none outline-none ring-0 shadow-none"
               >
                 <Sparkles size={13} className={isGeneratingArch ? "animate-spin text-purple-600" : "text-purple-500"} />
                 {isGeneratingArch ? "AI đang quét..." : "AI Trích xuất Kiến trúc"}
@@ -2119,7 +2119,7 @@ export default function GitProjectHub({
                 onClick={handleSaveArchitecture}
                 disabled={isSavingArch}
                 title="Lưu vị trí component và cấu hình sơ đồ vào CSDL MySQL"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition cursor-pointer disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition cursor-pointer disabled:opacity-60 border-0 border-none outline-none ring-0 shadow-none"
               >
                 <Save size={13} className="text-slate-600 dark:text-slate-400" />
                 {isSavingArch ? "Đang lưu..." : "Lưu vào CSDL"}
@@ -2776,18 +2776,30 @@ export default function GitProjectHub({
                     {/* Inner core dot */}
                     <circle cx={c.cx} cy={c.cy} r={2.5} fill="#ffffff" />
 
-                    {/* Clean Short SHA label placed alternately above and below to prevent text overlap */}
+                    {/* Crisp Short SHA Pill / Halo so curved rail lines never cut through the text */}
+                    <rect
+                      x={c.cx - 24}
+                      y={idx % 2 === 0 ? c.cy - 24 : c.cy + 12}
+                      width={48}
+                      height={15}
+                      rx={4}
+                      fill="#ffffff"
+                      opacity={0.94}
+                      className="dark:fill-slate-900 pointer-events-none"
+                    />
                     <text
                       x={c.cx}
-                      y={idx % 2 === 0 ? c.cy - 14 : c.cy + 22}
+                      y={idx % 2 === 0 ? c.cy - 13 : c.cy + 23}
                       textAnchor="middle"
                       fontSize={10}
                       fontFamily="monospace"
                       fontWeight={isSelected ? "bold" : "600"}
                       fill={isSelected ? "#0f172a" : "#475569"}
-                      style={{
-                        animation: `topoFadeIn 0.35s ease-out ${0.1 + Math.min(idx * 0.04, 1.2)}s both`,
-                      }}
+                      className="dark:fill-slate-200 pointer-events-none select-none"
+                      paintOrder="stroke"
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                      strokeLinejoin="round"
                     >
                       {c.sha}
                     </text>

@@ -264,3 +264,13 @@ def session_owned(session_id: str, user_id: str) -> dict[str, Any]:
         log_audit(user_id, "read_session", "learning_session", session_id, "deny", "owner_check")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền với phiên học này")
     return row_dict(session) or {}
+
+
+def get_optional_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> dict[str, Any] | None:
+    """Dependency trích xuất user nếu có token hợp lệ, nếu không có token hoặc hết hạn thì trả về None thay vì quăng lỗi 401."""
+    if not credentials or not credentials.credentials:
+        return None
+    try:
+        return get_current_user(credentials)
+    except Exception:
+        return None

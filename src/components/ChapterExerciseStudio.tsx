@@ -531,6 +531,56 @@ export default function ChapterExerciseStudio({
               </div>
             </div>
 
+            {/* 🎓 KẾT QUẢ ĐÁNH GIÁ CHÍNH THỨC CỦA GIẢNG VIÊN */}
+            {savedSubmission?.status === "graded" && (
+              <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
+                    <span>✓ Giảng viên đã thẩm định & công nhận điểm chính thức</span>
+                  </div>
+                  {savedSubmission.instructor_grade !== null && savedSubmission.instructor_grade !== undefined && (
+                    <span className="text-sm font-mono font-black text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700">
+                      Điểm GV: {savedSubmission.instructor_grade.toFixed(1)} / 10
+                    </span>
+                  )}
+                </div>
+                {savedSubmission.instructor_feedback && (
+                  <p className="text-xs text-slate-700 dark:text-slate-300 pl-6 leading-relaxed">
+                    <strong>Lời phê:</strong> "{savedSubmission.instructor_feedback}"
+                  </p>
+                )}
+                {savedSubmission.graded_at && (
+                  <span className="text-[10px] text-slate-400 pl-6 block font-mono">
+                    Thời gian chấm: {savedSubmission.graded_at} {savedSubmission.graded_by ? `bởi ${savedSubmission.graded_by}` : ""}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {savedSubmission?.status === "revision_requested" && (
+              <div className="p-4 rounded-2xl bg-rose-50/60 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-800/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-rose-800 dark:text-rose-300">
+                    <AlertTriangle size={16} className="text-rose-600 dark:text-rose-400" />
+                    <span>⚠️ Giảng viên yêu cầu sửa lỗi & nộp lại bài tập</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition cursor-pointer"
+                  >
+                    Nộp lại phiên bản mới
+                  </button>
+                </div>
+                {savedSubmission.instructor_feedback && (
+                  <p className="text-xs text-slate-700 dark:text-slate-300 pl-6 leading-relaxed">
+                    <strong>Yêu cầu chỉnh sửa:</strong> "{savedSubmission.instructor_feedback}"
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Submitted Repo Link Bar */}
             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
               <FileCode size={16} className="text-blue-500 shrink-0" />

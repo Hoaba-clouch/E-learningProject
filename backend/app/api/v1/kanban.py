@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import current_user, record_audit_log
+from app.api.deps import current_user, get_optional_current_user, record_audit_log
 from app.core.database import db, row_dict
 from app.core.security import uid
 from app.core.timezone import now_utc
@@ -994,7 +994,7 @@ def review_workspace_task(
 @router.get("/kanban/workspace/projects/{project_id}/evaluation")
 def get_project_evaluation(
     project_id: str,
-    user: dict[str, Any] = Depends(current_user),
+    user: dict[str, Any] | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """Lấy kết quả đánh giá đồ án hoặc tính toán đề xuất điểm số Anti-Freerider trực tiếp từ tiến độ thực tế."""
     with db() as conn:
@@ -1034,17 +1034,28 @@ def get_project_evaluation(
             dods = json.loads(t["dod_json"] or "[]")
             m_id = assignee.get("id")
 
+            # Ghép nối linh hoạt theo ID hoặc Họ tên thành viên
+            matched_mid = None
             if m_id and m_id in member_stats:
-                member_stats[m_id]["total_tasks"] += 1
-                member_stats[m_id]["total_points"] += pts
-                member_stats[m_id]["dod_total"] += len(dods)
-                member_stats[m_id]["dod_completed"] += sum(1 for d in dods if d.get("done"))
+                matched_mid = m_id
+            else:
+                assignee_name = (assignee.get("name") or "").strip().lower()
+                for mem_id, s in member_stats.items():
+                    if s["name"].strip().lower() == assignee_name:
+                        matched_mid = mem_id
+                        break
+
+            if matched_mid:
+                member_stats[matched_mid]["total_tasks"] += 1
+                member_stats[matched_mid]["total_points"] += pts
+                member_stats[matched_mid]["dod_total"] += len(dods)
+                member_stats[matched_mid]["dod_completed"] += sum(1 for d in dods if d.get("done"))
                 if col in ("done", "verified"):
-                    member_stats[m_id]["done_tasks"] += 1
-                    member_stats[m_id]["completed_points"] += pts
+                    member_stats[matched_mid]["done_tasks"] += 1
+                    member_stats[matched_mid]["completed_points"] += pts
                     total_done_points += pts
                 if col == "verified":
-                    member_stats[m_id]["verified_tasks"] += 1
+                    member_stats[matched_mid]["verified_tasks"] += 1
 
         num_members = max(1, len(team))
         expected_share = 100.0 / num_members
