@@ -121,45 +121,69 @@ export default function InstructorStudentsTab({ onNotify }: InstructorStudentsTa
     <div className="space-y-4">
       {/* ─── THỐNG KÊ NHANH 3 CHỈ SỐ HỌC VỤ ─────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-2xl border border-red-200/80 dark:border-red-900/40 bg-gradient-to-br from-red-50/70 to-red-100/30 dark:from-red-950/20 dark:to-transparent p-4 flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
-            <AlertTriangle size={20} />
+        <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs hover:shadow-xs transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+              Cần hỗ trợ (Nguy cơ rớt)
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/40 flex items-center justify-center shrink-0">
+              <AlertTriangle size={15} />
+            </div>
           </div>
-          <div>
-            <div className="text-2xl font-black text-red-700 dark:text-red-400 font-mono">
-              {countAtRisk}
+          <div className="mt-2 flex items-baseline justify-between">
+            <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono flex items-baseline gap-1.5">
+              <span>{countAtRisk}</span>
+              <span className="text-xs font-sans font-medium text-slate-400">học viên</span>
             </div>
-            <div className="text-xs font-semibold text-red-900/80 dark:text-red-300">
-              Học viên cần hỗ trợ (Nguy cơ rớt)
-            </div>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                countAtRisk > 0
+                  ? "bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+              }`}
+            >
+              {countAtRisk > 0 ? "Cần can thiệp" : "An toàn"}
+            </span>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50/70 to-emerald-100/30 dark:from-emerald-950/20 dark:to-transparent p-4 flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-            <Award size={20} />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono">
-              {countTop}
-            </div>
-            <div className="text-xs font-semibold text-emerald-900/80 dark:text-emerald-300">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs hover:shadow-xs transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
               Học viên Xuất sắc (Top 5%)
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/40 flex items-center justify-center shrink-0">
+              <Award size={15} />
             </div>
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono flex items-baseline gap-1.5">
+              <span>{countTop}</span>
+              <span className="text-xs font-sans font-medium text-slate-400">học viên</span>
+            </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+              Top 5% lớp
+            </span>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-blue-200/80 dark:border-blue-900/40 bg-gradient-to-br from-blue-50/70 to-blue-100/30 dark:from-blue-950/20 dark:to-transparent p-4 flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-            <TrendingUp size={20} />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-blue-700 dark:text-blue-400 font-mono">
-              {countOnTrack}
-            </div>
-            <div className="text-xs font-semibold text-blue-900/80 dark:text-blue-300">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs hover:shadow-xs transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
               Đúng tiến độ & Ổn định
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/40 flex items-center justify-center shrink-0">
+              <TrendingUp size={15} />
             </div>
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono flex items-baseline gap-1.5">
+              <span>{countOnTrack}</span>
+              <span className="text-xs font-sans font-medium text-slate-400">học viên</span>
+            </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20">
+              Đạt chuẩn
+            </span>
           </div>
         </div>
       </div>

@@ -206,9 +206,11 @@ export default function ProjectGradingModal({
                       Đo lường Đóng góp Anti-Freerider (Dựa trên Story Points & DoD thực tế)
                     </h4>
                   </div>
-                  <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-800">
-                    Tổng: {totalPoints} SP hoàn thành
-                  </span>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 border border-amber-300/70 dark:border-amber-700/60 text-xs font-medium shadow-2xs font-sans shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    <span>Tổng tích lũy:</span>
+                    <span className="font-mono font-bold text-amber-900 dark:text-amber-200">{totalPoints} SP</span>
+                  </div>
                 </div>
 
                 <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
@@ -426,16 +428,16 @@ export default function ProjectGradingModal({
               type="button"
               onClick={handleSubmit}
               disabled={loading || submitting}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-[#ee8420] hover:from-amber-600 hover:to-[#d97706] text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-97 transition cursor-pointer disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-bold text-xs inline-flex items-center gap-2 shadow-sm hover:shadow transition active:scale-98 cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               {submitting ? (
                 <>
                   <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  <span>Đang lưu...</span>
+                  <span>Đang lưu điểm số...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={16} />
+                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" strokeWidth={2.5} />
                   <span>Xác nhận Nghiệm thu & Chấm điểm</span>
                 </>
               )}
