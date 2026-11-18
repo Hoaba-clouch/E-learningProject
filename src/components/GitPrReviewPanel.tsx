@@ -524,6 +524,34 @@ export function GitPrReviewPanel({
   );
 }
 
+const COMMIT_TYPES = [
+  { id: "feat", label: "feat: Tính năng", color: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" },
+  { id: "fix", label: "fix: Sửa lỗi", color: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" },
+  { id: "refactor", label: "refactor: Tối ưu", color: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300" },
+  { id: "test", label: "test: Kiểm thử", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" },
+  { id: "docs", label: "docs: Tài liệu", color: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
+];
+
+const SUGGESTED_PROJECT_FILES = [
+  "backend/app/main.py",
+  "backend/app/api/v1/git_hub.py",
+  "backend/app/services/evaluator.py",
+  "backend/app/core/security.py",
+  "src/screens/GitProjectHub.tsx",
+  "src/components/GitPrReviewPanel.tsx",
+  "tests/test_api_endpoints.py",
+  "docker-compose.yml",
+];
+
+const BRANCH_COLOR_MAP: Record<string, string> = {
+  "main": "#2563eb",
+  "develop": "#6366f1",
+  "feature/auth": "#f59e0b",
+  "feature/evaluator": "#10b981",
+  "hotfix/cve": "#f43f5e",
+  "release/v1.2": "#a855f7",
+};
+
 export function GitNewCommitModal({
   isOpen,
   onClose,
@@ -543,18 +571,95 @@ export function GitNewCommitModal({
   members: GitMemberAnalytics[];
   tasks: GitProjectTaskRef[];
 }) {
+  const [commitType, setCommitType] = useState("feat");
   const [branch, setBranch] = useState("feature/auth");
   const [taskCode, setTaskCode] = useState(tasks[0]?.code || "TE35D77");
   const [authorName, setAuthorName] = useState(members[0]?.name || "Nguyễn Bá Hòa");
   const [message, setMessage] = useState(
     `feat(#${tasks[0]?.code || "TE35D77"}): Tối ưu hóa xử lý bất đồng bộ & kiểm thử đơn vị`
   );
-  const [filesText, setFilesText] = useState(
-    "backend/app/api/v1/git_hub.py, tests/test_git_hub.py"
-  );
+  const [filesList, setFilesList] = useState<string[]>([
+    "backend/app/api/v1/git_hub.py",
+    "tests/test_git_hub.py",
+  ]);
+  const [newFileInput, setNewFileInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
+
+  // Tự động nhận diện và điền form khi chọn Task Kanban
+  const handleTaskChange = (code: string) => {
+    setTaskCode(code);
+    const found = tasks.find((t) => t.code === code);
+    if (!found) return;
+
+    // 1. Tự động đề xuất nhánh thông minh
+    const titleLow = (found.title || "").toLowerCase();
+    let nextBranch = "develop";
+    if (titleLow.includes("auth") || titleLow.includes("login") || titleLow.includes("jwt") || titleLow.includes("user")) {
+      nextBranch = "feature/auth";
+    } else if (titleLow.includes("eval") || titleLow.includes("sandbox") || titleLow.includes("docker") || titleLow.includes("runner")) {
+      nextBranch = "feature/evaluator";
+    } else if (titleLow.includes("fix") || titleLow.includes("bug") || titleLow.includes("lỗ hổng") || titleLow.includes("cve")) {
+      nextBranch = "hotfix/cve";
+    } else if (titleLow.includes("release") || titleLow.includes("ci") || titleLow.includes("deploy")) {
+      nextBranch = "release/v1.2";
+    }
+    setBranch(nextBranch);
+
+    // 2. Tự động sinh message
+    setMessage(`${commitType}(#${code}): ${found.title}`);
+
+    // 3. Tự động đề xuất tệp phù hợp
+    if (nextBranch === "feature/auth") {
+      setFilesList(["backend/app/api/v1/auth.py", "backend/app/core/security.py"]);
+    } else if (nextBranch === "feature/evaluator") {
+      setFilesList(["backend/app/services/evaluator.py", "docker/sandbox.Dockerfile"]);
+    } else if (nextBranch === "hotfix/cve") {
+      setFilesList(["backend/app/core/database.py", "tests/test_security.py"]);
+    } else {
+      setFilesList(["backend/app/main.py", "src/screens/GitProjectHub.tsx"]);
+    }
+  };
+
+  // Đổi loại commit (feat, fix, refactor...)
+  const handleCommitTypeChange = (type: string) => {
+    setCommitType(type);
+    const regex = /^(feat|fix|refactor|test|docs)(\(#[^)]+\)|:|\s)/;
+    if (regex.test(message)) {
+      setMessage(message.replace(regex, `${type}$2`));
+    } else {
+      setMessage(`${type}(#${taskCode}): ${message}`);
+    }
+    if (type === "fix") {
+      setBranch("hotfix/cve");
+    }
+  };
+
+  // AI Gợi ý nội dung Commit Message chuẩn kỹ nghệ
+  const handleAiSuggestMessage = () => {
+    const curTask = tasks.find((t) => t.code === taskCode);
+    const title = curTask?.title || "Tối ưu hóa kiến trúc module";
+    const suggestions = [
+      `${commitType}(#${taskCode}): Hoàn thiện tiêu chuẩn DoD & 100% test cases cho ${title}`,
+      `${commitType}(#${taskCode}): Chuẩn hóa xử lý ngoại lệ và luồng dữ liệu của ${title}`,
+      `${commitType}(#${taskCode}): Tối ưu hóa hiệu năng và đóng gói sandbox cho ${title}`,
+    ];
+    setMessage(suggestions[Math.floor(Math.random() * suggestions.length)]);
+  };
+
+  // Thêm tệp vào danh sách
+  const handleAddFile = (fileName: string) => {
+    const clean = fileName.trim();
+    if (!clean || filesList.includes(clean)) return;
+    setFilesList((prev) => [...prev, clean]);
+    setNewFileInput("");
+  };
+
+  // Xóa tệp khỏi danh sách
+  const handleRemoveFile = (fileName: string) => {
+    setFilesList((prev) => prev.filter((f) => f !== fileName));
+  };
 
   const handleSave = async () => {
     if (!message.trim()) return;
@@ -565,16 +670,15 @@ export function GitNewCommitModal({
         task_code: taskCode || undefined,
         author_name: authorName || undefined,
         message: message.trim(),
-        files_changed: filesText
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
+        files_changed: filesList.length > 0 ? filesList : ["backend/app/main.py"],
       });
       onClose();
     } finally {
       setSubmitting(false);
     }
   };
+
+  const currentBranchColor = BRANCH_COLOR_MAP[branch] || "#6366f1";
 
   return (
     <div
@@ -583,77 +687,49 @@ export function GitNewCommitModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-lg w-full p-5 space-y-4 marlo-modal"
+        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full p-5 space-y-4 marlo-modal"
       >
+        {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <GitCommit size={18} className="text-blue-600" />
-              Ghi Nhận & Push Commit Mới (+10 XP)
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Commit mới sẽ vẽ trực tiếp lên Cây phân nhánh Git & liên kết Task Kanban.
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <GitCommit size={16} strokeWidth={2.5} />
+              </span>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Ghi Nhận & Push Commit Mới
+              </h3>
+              <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-0">
+                +10 XP
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Hệ thống tự động vẽ commit lên Cây phân nhánh Git và đồng bộ mã Task Kanban.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-md transition cursor-pointer"
           >
             <X size={16} />
           </button>
         </div>
 
-        <div className="space-y-3 text-xs">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                Nhánh Git (Branch)
+        {/* Modal Form Body */}
+        <div className="space-y-3.5 text-xs">
+          {/* 1. LIÊN KẾT TASK KANBAN (TRUNG TÂM TỰ ĐỘNG HÓA) */}
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/80 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <CheckCircle2 size={13} className="text-blue-600 dark:text-blue-400" />
+                <span>Liên kết Task Kanban (Tự động điền)</span>
               </label>
-              <select
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs"
-              >
-                <option value="feature/auth">feature/auth</option>
-                <option value="feature/evaluator">feature/evaluator</option>
-                <option value="develop">develop</option>
-                <option value="release/v1.2">release/v1.2</option>
-                <option value="hotfix/cve">hotfix/cve</option>
-                <option value="main">main</option>
-              </select>
+              <span className="text-[10px] text-slate-400 font-sans">Đổi task = tự động cập nhật form</span>
             </div>
-            <div>
-              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                Thành viên thực hiện
-              </label>
-              <select
-                value={authorName}
-                onChange={(e) => setAuthorName(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-              >
-                {members.map((m) => (
-                  <option key={m.name} value={m.name}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-              Liên kết Task Kanban
-            </label>
             <select
               value={taskCode}
-              onChange={(e) => {
-                const next = e.target.value;
-                setTaskCode(next);
-                if (next && !message.includes(next)) {
-                  setMessage(`feat(#${next}): Cập nhật xử lý module và unit tests`);
-                }
-              }}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs"
+              onChange={(e) => handleTaskChange(e.target.value)}
+              className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-900 dark:text-slate-100 cursor-pointer shadow-2xs"
             >
               {tasks.map((t) => (
                 <option key={t.id} value={t.code}>
@@ -663,45 +739,225 @@ export function GitNewCommitModal({
             </select>
           </div>
 
-          <div>
-            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-              Thông điệp Commit (Conventional Commits)
+          {/* 2. CHỌN NHANH LOẠI COMMIT (CONVENTIONAL COMMITS) */}
+          <div className="space-y-1.5">
+            <label className="font-semibold text-slate-700 dark:text-slate-300 block">
+              Loại Commit (Chuẩn Conventional Commits)
             </label>
+            <div className="flex flex-wrap gap-1.5">
+              {COMMIT_TYPES.map((ct) => (
+                <button
+                  key={ct.id}
+                  type="button"
+                  onClick={() => handleCommitTypeChange(ct.id)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer border-0 outline-none ring-0 ${
+                    commitType === ct.id
+                      ? `${ct.color} font-bold shadow-2xs scale-102`
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200"
+                  }`}
+                >
+                  {ct.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 3. NHÁNH GIT VÀ THÀNH VIÊN */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Nhánh Git (Branch)
+              </label>
+              <div className="relative">
+                <select
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  className="w-full pl-7 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs cursor-pointer"
+                >
+                  <option value="feature/auth">feature/auth (Cam)</option>
+                  <option value="feature/evaluator">feature/evaluator (Lục)</option>
+                  <option value="develop">develop (Chàm)</option>
+                  <option value="release/v1.2">release/v1.2 (Tím)</option>
+                  <option value="hotfix/cve">hotfix/cve (Đỏ)</option>
+                  <option value="main">main (Lam)</option>
+                </select>
+                <span
+                  className="absolute left-2.5 top-3 w-2 h-2 rounded-full"
+                  style={{ backgroundColor: currentBranchColor }}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Thành viên thực hiện
+              </label>
+              <select
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs cursor-pointer"
+              >
+                {members.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name} ({m.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 4. THÔNG ĐIỆP COMMIT + NÚT AI GỢI Ý */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="font-semibold text-slate-700 dark:text-slate-300">
+                Thông điệp Commit
+              </label>
+              <button
+                type="button"
+                onClick={handleAiSuggestMessage}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 hover:underline cursor-pointer"
+                title="AI tự động tạo thông điệp chuẩn chỉ theo task"
+              >
+                <Sparkles size={12} />
+                <span>AI Gợi ý thông điệp</span>
+              </button>
+            </div>
             <input
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs"
+              placeholder="feat(#TE...): Mô tả công việc đã hoàn thành"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
-          <div>
-            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-              Danh sách tệp thay đổi (cách nhau dấu phẩy)
+          {/* 5. DANH SÁCH TỆP THAY ĐỔI (CHỌN QUA TAGS THAY VÌ GÕ TAY) */}
+          <div className="space-y-1.5">
+            <label className="font-semibold text-slate-700 dark:text-slate-300 block">
+              Danh sách tệp thay đổi ({filesList.length} tệp)
             </label>
-            <input
-              type="text"
-              value={filesText}
-              onChange={(e) => setFilesText(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs"
-            />
+
+            {/* Các tệp đã chọn */}
+            <div className="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-slate-50 dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700">
+              {filesList.map((file) => (
+                <span
+                  key={file}
+                  className="inline-flex items-center gap-1 font-mono text-[10.5px] px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs"
+                >
+                  <Code2 size={11} className="text-slate-500" />
+                  <span>{file}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFile(file)}
+                    className="text-slate-400 hover:text-rose-500 ml-0.5 cursor-pointer"
+                    title="Xóa tệp"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+              {filesList.length === 0 && (
+                <span className="text-slate-400 text-xs italic">Chưa chọn tệp nào (click bên dưới để chọn nhanh)</span>
+              )}
+            </div>
+
+            {/* Click chọn nhanh tệp dự án mẫu */}
+            <div className="flex flex-wrap items-center gap-1 pt-1">
+              <span className="text-[10px] text-slate-400 font-sans mr-1">Gợi ý tệp nhanh:</span>
+              {SUGGESTED_PROJECT_FILES.slice(0, 5).map((f) => {
+                const isSelected = filesList.includes(f);
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => (isSelected ? handleRemoveFile(f) : handleAddFile(f))}
+                    className={`font-mono text-[10px] px-2 py-0.5 rounded transition cursor-pointer border-0 outline-none ring-0 ${
+                      isSelected
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-bold"
+                        : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200"
+                    }`}
+                  >
+                    {isSelected ? "✓ " : "+ "}
+                    {f.split("/").pop()}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Ô nhập thêm file tùy biến */}
+            <div className="flex gap-1.5 pt-1">
+              <input
+                type="text"
+                value={newFileInput}
+                onChange={(e) => setNewFileInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddFile(newFileInput);
+                  }
+                }}
+                placeholder="Gõ đường dẫn tệp khác và nhấn Enter..."
+                className="flex-1 px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-[11px]"
+              />
+              <button
+                type="button"
+                onClick={() => handleAddFile(newFileInput)}
+                disabled={!newFileInput.trim()}
+                className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-40"
+              >
+                + Thêm
+              </button>
+            </div>
+          </div>
+
+          {/* 6. XEM TRƯỚC COMMIT NODE TRÊN GRAPH (LIVE PREVIEW) */}
+          <div className="p-2.5 rounded-xl bg-slate-950 text-white border border-slate-800 space-y-1.5 shadow-sm">
+            <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: currentBranchColor }} />
+                <span>Xem trước Commit Node trên Graph:</span>
+              </span>
+              <span className="text-emerald-400 font-bold">+{filesList.length * 15} / -2 dòng ({filesList.length} tệp)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-bold text-white font-mono"
+                style={{ backgroundColor: currentBranchColor }}
+              >
+                {branch}
+              </span>
+              <span className="text-slate-300 font-mono text-xs truncate flex-1">
+                {message || "Chưa nhập thông điệp"}
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                bởi {authorName.split(" ").slice(-1)[0]}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-          <button
-            onClick={onClose}
-            className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 rounded-lg cursor-pointer"
-          >
-            Hủy
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={submitting}
-            className="btn-marlo-primary btn--primary text-xs px-4 py-1.5 cursor-pointer"
-          >
-            {submitting ? "Đang Push..." : "Push Commit Lên Graph"}
-          </button>
+        {/* Modal Actions */}
+        <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-[11px] text-slate-400">
+            Nhấn <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-[10px]">Esc</kbd> để hủy
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3.5 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={submitting || !message.trim()}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-bold text-xs rounded-xl inline-flex items-center gap-1.5 shadow-xs transition active:scale-98 cursor-pointer disabled:opacity-50"
+            >
+              <GitCommit size={14} />
+              <span>{submitting ? "Đang Push Commit..." : "Push Commit Lên Graph (+10 XP)"}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
