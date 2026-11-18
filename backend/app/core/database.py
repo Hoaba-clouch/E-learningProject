@@ -921,6 +921,14 @@ CREATE TABLE IF NOT EXISTS git_pull_requests (
     FOREIGN KEY (project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS project_architectures (
+    project_id VARCHAR(64) PRIMARY KEY,
+    architecture_json LONGTEXT NOT NULL,
+    generated_from_repo VARCHAR(255) DEFAULT '',
+    updated_at VARCHAR(64) NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 8. Academic Schedules & 1-on-1 Bookings
 CREATE TABLE IF NOT EXISTS academic_schedules (
     id VARCHAR(64) PRIMARY KEY,

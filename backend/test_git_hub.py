@@ -176,5 +176,36 @@ def test_git_hub_full_pipeline_and_cross_module_sync() -> None:
     assert ws_reloaded["repository"]["targetBranch"] == "develop"
     assert len(ws_reloaded["commits"]) == 19  # 16 seed + 1 push + 1 ai-fix + 1 merge
 
+    # 8. Test Dynamic Architecture & Live GitHub Sync APIs
+    arch_get = client.get("/v1/git-hub/projects/prj-codemind/architecture", headers=stu_headers)
+    assert arch_get.status_code == 200, arch_get.text
+    arch_json = arch_get.json()
+    assert arch_json["projectId"] == "prj-codemind"
+    assert len(arch_json["subsystems"]) == 4
+    assert len(arch_json["nodes"]) >= 15
+    assert len(arch_json["flows"]) >= 3
+
+    # Test update architecture
+    arch_json["title"] = "CodeMind AI - Sơ đồ kiến trúc cập nhật"
+    arch_put = client.put("/v1/git-hub/projects/prj-codemind/architecture", json=arch_json, headers=stu_headers)
+    assert arch_put.status_code == 200, arch_put.text
+    assert arch_put.json()["success"] is True
+
+    # Test AI Generate Architecture
+    arch_gen = client.post("/v1/git-hub/projects/prj-ecommerce/generate-architecture", json={}, headers=stu_headers)
+    assert arch_gen.status_code == 200, arch_gen.text
+    assert arch_gen.json()["projectId"] == "prj-ecommerce"
+
+    # Test Live GitHub Sync endpoint
+    gh_sync = client.post(
+        "/v1/git-hub/projects/prj-codemind/sync-github",
+        json={"repoUrl": "https://github.com/Hoaba-clouch/E-learningProject"},
+        headers=stu_headers,
+    )
+    assert gh_sync.status_code == 200, gh_sync.text
+    sync_res = gh_sync.json()
+    assert sync_res["synced"] is True
+    assert sync_res["repoSlug"] == "hoaba-clouch/e-learningproject"
+
     # Clean up back to baseline demo state
     assert client.post("/v1/admin/reset-demo", headers=adm_headers).status_code == 200

@@ -39,13 +39,16 @@ def record_audit_log(
     decision: str = "allow",
 ) -> None:
     """Ghi nhật ký kiểm toán chi tiết phục vụ Admin Audit Console."""
+    safe_action = (action or "")[:64]
+    safe_target = (target or "")[:190]
+    safe_actor_name = (actor_name or "")[:190]
     with db() as conn:
         conn.execute(
             """INSERT INTO audit_events(
                    id, actor_user_id, actor_label, action, resource_type, resource_id,
                    target_label, decision, reason_code, category, created_at
                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-            (uid(), actor_id, actor_name, action, resource_type, resource_id, target, decision, log_type, log_type, now_utc()),
+            (uid(), actor_id, safe_actor_name, safe_action, resource_type, resource_id, safe_target, decision, log_type, log_type, now_utc()),
         )
 
 

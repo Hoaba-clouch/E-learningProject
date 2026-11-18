@@ -2712,6 +2712,106 @@ export async function mergeGitPullRequestApi(
   }
 }
 
+export async function syncGitHubLiveApi(
+  projectId: string,
+  repoUrl?: string
+): Promise<{
+  synced?: boolean;
+  repoSlug?: string;
+  repoUrl?: string;
+  commitsSynced?: number;
+  prsSynced?: number;
+  lastSyncedAt?: string;
+  isRemoteLive?: boolean;
+  error?: string;
+}> {
+  const token = await getWorkspaceAuthToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/sync-github`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(repoUrl ? { repoUrl } : {}),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối Backend" };
+  }
+}
+
+export async function fetchProjectArchitectureApi(projectId: string): Promise<any> {
+  const token = await getWorkspaceAuthToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/architecture`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function saveProjectArchitectureApi(
+  projectId: string,
+  payload: any
+): Promise<{ success?: boolean; error?: string }> {
+  const token = await getWorkspaceAuthToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/architecture`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối Backend" };
+  }
+}
+
+export async function generateProjectArchitectureApi(
+  projectId: string,
+  repoUrl?: string
+): Promise<any> {
+  const token = await getWorkspaceAuthToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/generate-architecture`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(repoUrl ? { repoUrl } : {}),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối Backend" };
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // NHÁNH 4 FULLSTACK API: SECURITY OVERVIEW & MULTI-DEVICE SESSIONS
 // ═════════════════════════════════════════════════════════════════════════════

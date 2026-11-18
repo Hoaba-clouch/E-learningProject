@@ -14,8 +14,12 @@ import {
   approvePrPeerReviewApi,
   createGitPullRequestApi,
   fetchGitHubWorkspaceApi,
+  fetchProjectArchitectureApi,
+  generateProjectArchitectureApi,
   mergeGitPullRequestApi,
   pushGitCommitApi,
+  saveProjectArchitectureApi,
+  syncGitHubLiveApi,
   updateGitHubRepoApi,
   type GitHubProjectSummary,
   type GitMemberAnalytics,
@@ -70,6 +74,8 @@ import {
   Activity,
   Database,
   Zap,
+  Save,
+  CloudDownload,
   X,
 } from "lucide-react";
 
@@ -1359,6 +1365,44 @@ export default function GitProjectHub({
   const [drawerToast, setDrawerToast] = useState<string | null>(null);
   const [copiedMermaid, setCopiedMermaid] = useState<boolean>(false);
 
+  // Dynamic Architecture & ReactFlow States (Stored in MySQL project_architectures)
+  const [archNodes, setArchNodes, onNodesChange] = useNodesState(INITIAL_ARCH_NODES);
+  const [archEdges, setArchEdges, onEdgesChange] = useEdgesState(INITIAL_ARCH_EDGES);
+  const [diagramAnimKey, setDiagramAnimKey] = useState<number>(0);
+  const [activeArchFlow, setActiveArchFlow] = useState<string>("all");
+  const [dynamicArchTitle, setDynamicArchTitle] = useState<string>("CodeMind AI - Hệ thống Gia sư Lập trình Socratic & Docker Sandbox");
+  const [dynamicTechStack, setDynamicTechStack] = useState<string>("React 18 + Tailwind CSS + FastAPI + Docker Seccomp + MySQL 8.0");
+  const [dynamicFlows, setDynamicFlows] = useState<ArchFlowItem[]>(ARCH_FLOWS);
+  const [dynamicSubsystems, setDynamicSubsystems] = useState<any[]>([]);
+  const [isSyncingLive, setIsSyncingLive] = useState<boolean>(false);
+  const [isSavingArch, setIsSavingArch] = useState<boolean>(false);
+  const [isGeneratingArch, setIsGeneratingArch] = useState<boolean>(false);
+  const [archLastUpdated, setArchLastUpdated] = useState<string>("");
+
+  const loadArchitecture = useCallback(async (pid: string) => {
+    const data = await fetchProjectArchitectureApi(pid);
+    if (!data) return;
+    if (Array.isArray(data.nodes) && data.nodes.length > 0) {
+      setArchNodes(data.nodes);
+    }
+    if (Array.isArray(data.edges) && data.edges.length > 0) {
+      setArchEdges(data.edges);
+    }
+    if (Array.isArray(data.flows) && data.flows.length > 0) {
+      setDynamicFlows(data.flows);
+      if (!data.flows.some((f: any) => f.id === activeArchFlow)) {
+        setActiveArchFlow("all");
+      }
+    }
+    if (Array.isArray(data.subsystems)) {
+      setDynamicSubsystems(data.subsystems);
+    }
+    if (data.title) setDynamicArchTitle(data.title);
+    if (data.techStack) setDynamicTechStack(data.techStack);
+    if (data.updatedAt) setArchLastUpdated(data.updatedAt);
+    setDiagramAnimKey((k) => k + 1);
+  }, [activeArchFlow, setArchNodes, setArchEdges]);
+
   // GitHub Repo Connection State
   const [showRepoModal, setShowRepoModal] = useState<boolean>(false);
   const [isRepoModalClosing, setIsRepoModalClosing] = useState(false);
@@ -1436,7 +1480,78 @@ export default function GitProjectHub({
       const targetId = preserveSelectedPrId || prev?.id;
       return prs.find((p) => p.id === targetId) || prs[0] || null;
     });
-  }, []);
+    void loadArchitecture(pid);
+  }, [loadArchitecture]);
+
+  const handleSyncGitHubLive = async () => {
+    setIsSyncingLive(true);
+    try {
+      const res = await syncGitHubLiveApi(activeProjectId, repoUrl);
+      if (res.error) {
+        showToast(res.error);
+      } else if (res.synced) {
+        showToast(
+          `Đã đồng bộ Live GitHub [${res.repoSlug}]: ${res.commitsSynced || 0} commits, ${
+            res.prsSynced || 0
+          } PRs vào MySQL!`
+        );
+        await loadGitWorkspace(activeProjectId, selectedPr?.id);
+        await loadArchitecture(activeProjectId);
+        setTopoAnimKey((k) => k + 1);
+      }
+    } finally {
+      setIsSyncingLive(false);
+    }
+  };
+
+  const handleSaveArchitecture = async () => {
+    setIsSavingArch(true);
+    try {
+      const payload = {
+        title: dynamicArchTitle,
+        techStack: dynamicTechStack,
+        subsystems: dynamicSubsystems.length > 0 ? dynamicSubsystems : [
+          { id: "group-campus-app", label: "Client UI Layer" },
+          { id: "group-project-ws", label: "Project Workspace" },
+          { id: "group-api-core", label: "API Core & Socratic Engine" },
+          { id: "group-infra-data", label: "Execution Sandbox & MySQL 8.0" },
+        ],
+        flows: dynamicFlows,
+        nodes: archNodes,
+        edges: archEdges,
+        repoUrl,
+      };
+      const res = await saveProjectArchitectureApi(activeProjectId, payload);
+      if (res.error) {
+        showToast(res.error);
+      } else {
+        showToast("Đã lưu sơ đồ kiến trúc động thành công vào CSDL MySQL!");
+      }
+    } finally {
+      setIsSavingArch(false);
+    }
+  };
+
+  const handleGenerateArchitecture = async () => {
+    setIsGeneratingArch(true);
+    try {
+      const res = await generateProjectArchitectureApi(activeProjectId, repoUrl);
+      if (res.error) {
+        showToast(res.error);
+      } else if (res) {
+        if (Array.isArray(res.nodes)) setArchNodes(res.nodes);
+        if (Array.isArray(res.edges)) setArchEdges(res.edges);
+        if (Array.isArray(res.flows)) setDynamicFlows(res.flows);
+        if (Array.isArray(res.subsystems)) setDynamicSubsystems(res.subsystems);
+        if (res.title) setDynamicArchTitle(res.title);
+        if (res.techStack) setDynamicTechStack(res.techStack);
+        setDiagramAnimKey((k) => k + 1);
+        showToast("AI đã quét và tái cấu trúc sơ đồ kiến trúc từ Repo thành công!");
+      }
+    } finally {
+      setIsGeneratingArch(false);
+    }
+  };
 
   useEffect(() => {
     setActiveProjectId(initialProjectId || "prj-codemind");
@@ -1592,15 +1707,9 @@ export default function GitProjectHub({
     return Math.max(1420, maxCx + 110);
   }, [commits]);
 
-  // ReactFlow state & Branch-Tree Flow Simulation
-  const [archNodes, , onNodesChange] = useNodesState(INITIAL_ARCH_NODES);
-  const [archEdges, , onEdgesChange] = useEdgesState(INITIAL_ARCH_EDGES);
-  const [diagramAnimKey, setDiagramAnimKey] = useState<number>(0);
-  const [activeArchFlow, setActiveArchFlow] = useState<string>("all");
-
   const currentFlow = useMemo(() => {
-    return ARCH_FLOWS.find((f) => f.id === activeArchFlow) || ARCH_FLOWS[0];
-  }, [activeArchFlow]);
+    return dynamicFlows.find((f) => f.id === activeArchFlow) || dynamicFlows[0] || ARCH_FLOWS[0];
+  }, [dynamicFlows, activeArchFlow]);
 
   // Compute display nodes with spring pop delay & flow filtering
   const displayNodes = useMemo(() => {
@@ -1959,16 +2068,70 @@ export default function GitProjectHub({
       {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS (FULL-WIDTH 100% EXPANSIVE VIEW) */}
       {viewMode === "gitdiagram" && (
         <div key={`mode-gitdiagram-${diagramAnimKey}`} className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 space-y-4 flex flex-col relative animate-fade-in">
-          {/* Ultra-compact Top Toolbar: Header + Replay Animation Button */}
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div className="flex items-center gap-2">
-              <Boxes size={18} className="text-blue-600 dark:text-blue-400 shrink-0" />
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                Sơ đồ Kiến trúc Phân tầng Hệ thống (GitDiagram ReactFlow Canvas 100% Rộng Toàn Diện)
-              </h2>
-              <span className="hidden md:inline-block text-[11px] text-slate-400 dark:text-slate-500 font-normal">
-                (22 Components & 4 Subsystems - Nhấp vào bất kỳ component nào để mở bảng điều khiển chi tiết)
-              </span>
+          {/* Top Dynamic Toolbar: Dynamic Project Title + MySQL Badge + Action Buttons */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Boxes size={18} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  {dynamicArchTitle}
+                </h2>
+                <span className="pill pill--good pill--plain text-[10px] font-mono font-bold flex items-center gap-1">
+                  <Database size={11} className="text-emerald-500" />
+                  MySQL 8.0: project_architectures
+                </span>
+                {archLastUpdated && (
+                  <span className="text-[10px] text-slate-400 font-mono hidden xl:inline-block">
+                    (Cập nhật: {archLastUpdated})
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Công nghệ:</span>
+                <span className="font-mono text-blue-600 dark:text-blue-400">{dynamicTechStack || "Fullstack Architecture"}</span>
+                <span>• {archNodes.filter(n => n.type !== "containerBox").length} Components & {archEdges.length} Connections</span>
+              </p>
+            </div>
+
+            {/* Action Buttons Toolbar */}
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <button
+                onClick={handleSyncGitHubLive}
+                disabled={isSyncingLive}
+                title="Đồng bộ commit & PRs từ link GitHub thật"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 transition shadow-2xs cursor-pointer disabled:opacity-60"
+              >
+                <RotateCw size={13} className={isSyncingLive ? "animate-spin text-blue-400" : "text-emerald-400"} />
+                {isSyncingLive ? "Đang đồng bộ..." : "Live Sync GitHub"}
+              </button>
+
+              <button
+                onClick={handleGenerateArchitecture}
+                disabled={isGeneratingArch}
+                title="AI quét mã nguồn Repo và tự động sinh sơ đồ kiến trúc phân tầng động"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition cursor-pointer disabled:opacity-60"
+              >
+                <Sparkles size={13} className={isGeneratingArch ? "animate-spin text-purple-600" : "text-purple-500"} />
+                {isGeneratingArch ? "AI đang quét..." : "AI Trích xuất Kiến trúc"}
+              </button>
+
+              <button
+                onClick={handleSaveArchitecture}
+                disabled={isSavingArch}
+                title="Lưu vị trí component và cấu hình sơ đồ vào CSDL MySQL"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 transition cursor-pointer disabled:opacity-60"
+              >
+                <Save size={13} className="text-blue-600" />
+                {isSavingArch ? "Đang lưu..." : "Lưu vào CSDL"}
+              </button>
+
+              <button
+                onClick={() => setDiagramAnimKey((k) => k + 1)}
+                title="Kích hoạt lại animation pop-in"
+                className="p-1.5 rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 transition cursor-pointer"
+              >
+                <RotateCw size={13} />
+              </button>
             </div>
           </div>
 
@@ -2019,9 +2182,9 @@ export default function GitProjectHub({
           <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/90 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-2 flex items-center gap-1 font-mono">
               <Network size={12} className="text-blue-600 dark:text-blue-400" />
-              Mô phỏng luồng:
+              Mô phỏng luồng ({dynamicFlows.length}):
             </span>
-            {ARCH_FLOWS.map((flow) => {
+            {dynamicFlows.map((flow) => {
               const isActive = activeArchFlow === flow.id;
               return (
                 <button
@@ -2070,10 +2233,24 @@ export default function GitProjectHub({
           <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 font-mono gap-2">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mr-1">Phân tầng:</span>
-              <span className="pill pill--info pill--plain text-[10px] font-mono font-semibold">Campus App</span>
-              <span className="pill pill--good pill--plain text-[10px] font-mono font-semibold">Project WS</span>
-              <span className="pill pill--bad pill--plain text-[10px] font-mono font-semibold">API Platform</span>
-              <span className="pill pill--warn pill--plain text-[10px] font-mono font-semibold">Learning</span>
+              {dynamicSubsystems.length > 0 ? (
+                dynamicSubsystems.map((sub: any, idx: number) => (
+                  <span
+                    key={sub.id || idx}
+                    className="pill pill--plain text-[10px] font-mono font-semibold"
+                    style={{ color: sub.stroke || "#2563eb", borderColor: `${sub.stroke || "#2563eb"}40` }}
+                  >
+                    {sub.label || sub.title || sub.id}
+                  </span>
+                ))
+              ) : (
+                <>
+                  <span className="pill pill--info pill--plain text-[10px] font-mono font-semibold">Client UI</span>
+                  <span className="pill pill--good pill--plain text-[10px] font-mono font-semibold">Workspace</span>
+                  <span className="pill pill--bad pill--plain text-[10px] font-mono font-semibold">API Gateway</span>
+                  <span className="pill pill--warn pill--plain text-[10px] font-mono font-semibold">Persistence</span>
+                </>
+              )}
             </div>
             <a
               href={`https://gitdiagram.com/${repoSlug}`}
@@ -2232,6 +2409,16 @@ export default function GitProjectHub({
 
             {/* Member & Branch Filter Controls + Push Commit + Replay Animation */}
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleSyncGitHubLive}
+                disabled={isSyncingLive}
+                title="Kéo các commit thật từ GitHub REST API công khai về lưu vào CSDL MySQL"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 transition shadow-2xs cursor-pointer disabled:opacity-60"
+              >
+                <RotateCw size={13} className={isSyncingLive ? "animate-spin text-blue-400" : "text-emerald-400"} />
+                {isSyncingLive ? "Đang đồng bộ..." : "Live Sync GitHub"}
+              </button>
+
               <button
                 onClick={() => setShowNewCommitModal(true)}
                 className="btn-marlo-primary btn--primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-2xs cursor-pointer"
