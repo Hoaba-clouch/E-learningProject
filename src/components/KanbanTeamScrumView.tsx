@@ -27,6 +27,7 @@ interface Props {
   };
   onManageMembers: () => void;
   onFilterByMember: (memberName: string) => void;
+  role?: string;
 }
 
 export default function KanbanTeamScrumView({
@@ -35,6 +36,7 @@ export default function KanbanTeamScrumView({
   sprintStats,
   onManageMembers,
   onFilterByMember,
+  role = "student",
 }: Props) {
   // Compute per-member statistics
   const memberAnalytics = useMemo(() => {
@@ -168,22 +170,36 @@ export default function KanbanTeamScrumView({
 
       {/* ─── 2. MEMBER SPECIALIZATION & CONTRIBUTION CARDS (MARLO .people GRID) ─── */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h3 className="text-base font-bold text-slate-900">
-              Phân Vai Kỹ Thuật & Đóng Góp Chi Tiết Từng Thành Viên
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <span>{role === "instructor" ? "Đo Lường Đóng Góp Cá Nhân (Anti-Freerider & Ma Trận RASCI)" : "Phân Vai Kỹ Thuật & Đóng Góp Chi Tiết Từng Thành Viên"}</span>
+              {role === "instructor" && (
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-slate-200/80 dark:border-slate-800">
+                  Góc nhìn Thẩm định
+                </span>
+              )}
             </h3>
-            <p className="text-xs text-slate-500">
-              Đáp ứng chuẩn khảo thí Rikkei Education: rõ ràng ai phụ trách Frontend, Backend, Database và tỷ lệ hoàn thành.
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {role === "instructor"
+                ? "Thẩm định khối lượng công việc thực tế, phân bổ Story Points và số lượt Commit để đảm bảo tính công bằng, triệt tiêu nguy cơ ỷ lại."
+                : "Đáp ứng chuẩn khảo thí Kỹ nghệ phần mềm: phân công rõ ràng Frontend, Backend, Database và tỷ lệ hoàn thành."}
             </p>
           </div>
-          <button
-            onClick={onManageMembers}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition cursor-pointer"
-          >
-            <Plus size={14} />
-            <span>Quản lý thành viên</span>
-          </button>
+          {role === "instructor" ? (
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-slate-200/80 dark:border-slate-800 text-xs font-semibold shadow-2xs">
+              <ShieldCheck size={14} className="text-amber-600 dark:text-amber-400" />
+              <span>Hội đồng Thẩm định: Giám sát công bằng</span>
+            </div>
+          ) : (
+            <button
+              onClick={onManageMembers}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Quản lý thành viên</span>
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

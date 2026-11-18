@@ -5,7 +5,13 @@ import {
   Pin,
   Check,
   Clock,
+  ShieldCheck,
+  ExternalLink,
+  Award,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
+import ProjectGradingModal from "../components/ProjectGradingModal";
 import MarloTitle from "../components/MarloTitle";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import { MarloNewProjectModal } from "../components/MarloProjectModals";
@@ -360,6 +366,7 @@ export default function MarloProjectsScreen({
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [projects, setProjects] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [gradingProject, setGradingProject] = useState<CNTTProjectItem | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const tabsNavRef = useRef<HTMLElement>(null);
@@ -719,23 +726,63 @@ export default function MarloProjectsScreen({
     <div
       className="min-h-screen bg-transparent text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans select-none relative overflow-x-hidden transition-colors duration-200"
     >
-      {/* ─── TOP HEADER (EXACT MARLO APP DESIGN) ─── */}
+      {/* ─── TOP HEADER (ROLE-ADAPTIVE MARLO DESIGN) ─── */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div>
-          <MarloTitle text="Dự án" className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E1D1B] dark:text-white font-sans" />
+          <div className="flex items-center gap-2.5">
+            <MarloTitle
+              text={role === "instructor" ? "Hội Đồng Quản Lý & Chấm Điểm Đồ Án" : "Không Gian Đồ Án Nhóm"}
+              className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E1D1B] dark:text-white font-sans"
+            />
+            {role === "instructor" && (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-slate-200/80 dark:border-slate-800">
+                Góc nhìn Giảng viên
+              </span>
+            )}
+          </div>
           <p className="text-sm text-[#62656b] dark:text-[#a0a3a9] mt-1 font-normal max-w-3xl leading-relaxed">
-            {activeJobs} dự án đang triển khai, {totalStoryPoints} Story Points trên tiến độ Scrum.
+            {role === "instructor"
+              ? `Giám sát tiến độ ${projects.length} nhóm đồ án Capstone, thẩm định Definition of Done (DoD) và thực hiện đánh giá Hội đồng.`
+              : `${activeJobs} dự án đang triển khai, ${totalStoryPoints} Story Points trên tiến độ Scrum.`}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsNewProjectModalOpen(true)}
-            className="flex items-center gap-2 px-4.5 py-2.5 rounded-2xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 font-bold text-sm shadow-xs transition active:scale-95 cursor-pointer"
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            <span>New project</span>
-          </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {role === "instructor" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  if (projects.length > 0) {
+                    setGradingProject(projects[0]);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-[#EE8420] hover:from-amber-600 hover:to-[#d97316] text-white font-bold text-sm shadow-xs transition active:scale-95 cursor-pointer"
+                title="Mở bảng thẩm định chấm điểm đồ án theo rubric 5 tiêu chí"
+              >
+                <ShieldCheck size={16} strokeWidth={2.5} />
+                <span>Chấm Điểm Đồ Án (DoD)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setToastMsg("Đã tạo báo cáo thẩm định tiến độ 4 nhóm đồ án.")}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-white dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200/90 dark:border-slate-700/80 shadow-2xs transition cursor-pointer"
+                title="Xuất báo cáo tiến độ và mức độ đóng góp cá nhân của từng nhóm"
+              >
+                <Download size={14} />
+                <span>Báo Cáo Tiến Độ</span>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setIsNewProjectModalOpen(true)}
+              className="flex items-center gap-2 px-4.5 py-2.5 rounded-2xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 font-bold text-sm shadow-xs transition active:scale-95 cursor-pointer"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              <span>New project</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -908,6 +955,35 @@ export default function MarloProjectsScreen({
                           {p.storyPoints} SP
                         </span>
                       </div>
+
+                      {/* Instructor Action Strip */}
+                      {role === "instructor" && (
+                        <div
+                          className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setGradingProject(p);
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 text-xs font-bold transition shadow-2xs cursor-pointer active:scale-97"
+                          >
+                            <ShieldCheck size={13} />
+                            <span>Chấm điểm</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onOpenProject?.(p)}
+                            className="flex items-center gap-1 py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition cursor-pointer"
+                            title="Mở Bảng Kanban để giám sát task nhóm"
+                          >
+                            <span>Kanban</span>
+                            <ExternalLink size={12} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1032,6 +1108,22 @@ export default function MarloProjectsScreen({
         <MarloToast
           message={toastMsg}
           showUndo={false}
+        />
+      )}
+
+      {/* ─── INSTRUCTOR PROJECT GRADING MODAL ─── */}
+      {gradingProject && (
+        <ProjectGradingModal
+          isOpen={Boolean(gradingProject)}
+          onClose={() => setGradingProject(null)}
+          projectId={gradingProject.id}
+          projectName={gradingProject.name}
+          projectCode={gradingProject.id.toUpperCase()}
+          courseName={gradingProject.course}
+          onGradingSuccess={(score) => {
+            setToastMsg(`Đã lưu điểm Hội đồng ${score}/100 cho ${gradingProject.name}`);
+            setGradingProject(null);
+          }}
         />
       )}
     </div>

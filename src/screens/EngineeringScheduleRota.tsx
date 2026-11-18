@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import gsap from "gsap";
-import { Role } from "../types";
+import type { Role } from "../App";
 import { fetchSchedulesApi, bookScheduleApi } from "../api";
 import MarloTitle from "../components/MarloTitle";
 import MarloToast from "../components/MarloToast";
@@ -754,9 +754,21 @@ export default function EngineeringScheduleRota({ role = "student" }: Engineerin
       {/* ─── TOP HEADER (EXACT CODE_AND_CHILL / LEVENA REFERENCE STYLE) ─── */}
       <div className="marlo-card flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-7">
         <div>
-          <MarloTitle text="Lịch thi & Hẹn gặp Giảng viên" className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E1D1B] dark:text-white font-sans" />
+          <div className="flex items-center gap-2.5">
+            <MarloTitle
+              text={role === "instructor" ? "Lịch Giảng Dạy & Hội Đồng Đồ Án" : "Lịch Học Vụ & Hạn Nộp Sprint"}
+              className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E1D1B] dark:text-white font-sans"
+            />
+            {role === "instructor" && (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-slate-200/80 dark:border-slate-800">
+                Góc nhìn Giảng viên
+              </span>
+            )}
+          </div>
           <p className="text-sm text-[#62656b] dark:text-[#a0a3a9] mt-1 font-normal max-w-3xl leading-relaxed">
-            Hôm nay có 2 ca thi kiểm tra năng lực cuối khóa và 4 khung giờ hẹn trước giảng viên đang mở để hỏi bài đồ án.
+            {role === "instructor"
+              ? "Quản lý ca trực phòng Lab, lịch hội đồng chấm thi vấn đáp AI Council và phê duyệt lịch hẹn 1-1 với các nhóm sinh viên."
+              : "Hôm nay có 2 ca thi kiểm tra năng lực cuối khóa và 4 khung giờ hẹn trước giảng viên đang mở để hỏi bài đồ án."}
           </p>
         </div>
 
@@ -779,7 +791,7 @@ export default function EngineeringScheduleRota({ role = "student" }: Engineerin
           {/* Kudos Button */}
           <button
             onClick={() => showToast("Đã gửi lời cảm ơn và Kudos tới Thầy Phước!")}
-            className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+            className={role === "instructor" ? "hidden" : "btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"}
           >
             <Award size={14} className="text-[#E5A023]" />
             <span>Kudos Thầy Cô</span>
@@ -789,10 +801,10 @@ export default function EngineeringScheduleRota({ role = "student" }: Engineerin
           <button
             onClick={() => setShowBookingModal(true)}
             className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5"
-            title="Đặt lịch hẹn giảng viên hoặc ca thi mới"
+            title={role === "instructor" ? "Mở thêm khung giờ hướng dẫn 1-1 cho sinh viên" : "Đặt lịch hẹn giảng viên hoặc ca thi mới"}
           >
             <Plus size={16} strokeWidth={2.5} />
-            <span>Book a session</span>
+            <span>{role === "instructor" ? "+ Mở Slot Hướng Dẫn" : "Book a session"}</span>
           </button>
         </div>
       </div>
@@ -1396,10 +1408,10 @@ export default function EngineeringScheduleRota({ role = "student" }: Engineerin
             <div className="flex items-center justify-between pb-3 border-b border-[#F0EDE8] dark:border-[#2C2B28]">
               <div>
                 <h3 className="text-base font-bold text-[#1E1D1B] dark:text-white">
-                  Đặt lịch hẹn trước với Giảng viên 1-on-1
+                  {role === "instructor" ? "Mở Khung Giờ Tư Vấn & Hướng Dẫn 1-1" : "Đặt lịch hẹn trước với Giảng viên 1-on-1"}
                 </h3>
                 <p className="text-xs text-[#7A7873] dark:text-[#A3A099] mt-0.5">
-                  Hỏi bài, giải đáp code hoặc review đồ án môn học
+                  {role === "instructor" ? "Mở thêm slot tiếp sinh viên giải đáp kiến trúc, debug và nghiệm thu Sprint" : "Hỏi bài, giải đáp code hoặc review đồ án môn học"}
                 </p>
               </div>
               <button
@@ -1457,7 +1469,7 @@ export default function EngineeringScheduleRota({ role = "student" }: Engineerin
                 onClick={handleConfirmNewAppointment}
                 className="px-5 py-2 bg-[#E5A023] hover:bg-[#D49118] text-white rounded-xl text-xs font-bold transition shadow-xs"
               >
-                Gửi yêu cầu hẹn
+                {role === "instructor" ? "Mở Khung Giờ Hướng Dẫn" : "Gửi yêu cầu hẹn"}
               </button>
             </div>
           </div>

@@ -114,6 +114,8 @@ import KanbanTeamScrumView from "../components/KanbanTeamScrumView";
 
 import KanbanActivityStreamView from "../components/KanbanActivityStreamView";
 
+import KanbanInstructorReviewView from "../components/KanbanInstructorReviewView";
+
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
 
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
@@ -158,7 +160,7 @@ export type Priority = "low" | "medium" | "high";
 
 export type MoscowPriority = "must" | "should" | "could" | "wont";
 
-export type TabView = "board" | "my-tasks" | "team" | "activity" | "dependencies" | "analytics";
+export type TabView = "board" | "my-tasks" | "review" | "team" | "activity" | "dependencies" | "analytics";
 
 export type TechStackKey =
 
@@ -2162,6 +2164,13 @@ export default function KanbanBoard({
 
   const [activeTab, setActiveTab] = useState<TabView>("board");
 
+  // Automatically switch tab for instructor
+  useEffect(() => {
+    if (role === "instructor" && activeTab === "my-tasks") {
+      setActiveTab("review");
+    }
+  }, [role, activeTab]);
+
   const [kanbanAnimKey, setKanbanAnimKey] = useState<number>(0);
 
   const [analyticsAnimTrigger, setAnalyticsAnimTrigger] = useState(false);
@@ -3319,14 +3328,15 @@ export default function KanbanBoard({
 
 
   // Helper count for My Tasks tab badge
-
   const myOpenTasksCount = useMemo(() => {
-
     const currentName = teamMembers[0]?.name || "Nguyễn Bá Hòa";
-
-    return tasks.filter((t) => t.assignee.name === currentName && t.column !== "done").length;
-
+    return tasks.filter((t) => t.assignee.name === currentName && t.column !== "done" && t.column !== "verified").length;
   }, [tasks, teamMembers]);
+
+  // Helper count for Instructor Review tab badge (tasks in "done" awaiting teacher verification)
+  const tasksInReviewCount = useMemo(() => {
+    return tasks.filter((t) => t.column === "done").length;
+  }, [tasks]);
 
 
 
@@ -5080,25 +5090,29 @@ export default function KanbanBoard({
 
 
 
-              {/* + New task Button */}
+              {/* + New task Button (Hidden for Instructor, who inspects/grades rather than creating tasks for themselves) */}
 
-              <button
+              {role !== "instructor" && (
 
-                type="button"
+                <button
 
-                onClick={() => setIsNewTaskModalOpen(true)}
+                  type="button"
 
-                className="px-4 py-2 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-97 transition cursor-pointer"
+                  onClick={() => setIsNewTaskModalOpen(true)}
 
-                title="Tạo công việc mới (Marlo Task) có checklist"
+                  className="px-4 py-2 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-97 transition cursor-pointer"
 
-              >
+                  title="Tạo công việc mới (Marlo Task) có checklist"
 
-                <Plus size={15} className="stroke-[2.5]" />
+                >
 
-                <span>New task</span>
+                  <Plus size={15} className="stroke-[2.5]" />
 
-              </button>
+                  <span>New task</span>
+
+                </button>
+
+              )}
 
 
 
@@ -5158,45 +5172,91 @@ export default function KanbanBoard({
 
             value={activeTab}
 
-            options={[
+            options={
 
-              { id: "board", label: "Bảng Kanban", icon: <Columns3 size={14} /> },
+              role === "instructor"
 
-              {
+                ? [
 
-                id: "my-tasks",
+                    { id: "board", label: "Bảng Giám sát Kanban", icon: <Columns3 size={14} /> },
 
-                label: "Của mình",
+                    {
 
-                icon: <UserCheck size={14} />,
+                      id: "review",
 
-                badge: myOpenTasksCount > 0 ? myOpenTasksCount : undefined,
+                      label: "Chờ Nghiệm Thu",
 
-              },
+                      icon: <ShieldCheck size={14} />,
 
-              {
+                      badge: tasksInReviewCount > 0 ? tasksInReviewCount : undefined,
 
-                id: "team",
+                    },
 
-                label: `Phân vai & Team (${teamMembers.length})`,
+                    {
 
-                icon: <Users size={14} />,
+                      id: "team",
 
-              },
+                      label: "Đo Lường Đóng Góp (Anti-Freerider)",
 
-              {
+                      icon: <Users size={14} />,
 
-                id: "activity",
+                    },
 
-                label: "Nhật ký & Git Stream",
+                    {
 
-                icon: <Activity size={14} />,
+                      id: "activity",
 
-              },
+                      label: "Nhật ký & Git Stream",
 
-              { id: "dependencies", label: "Cây Phụ thuộc (H2)", icon: <Link2 size={14} /> },
+                      icon: <Activity size={14} />,
 
-            ]}
+                    },
+
+                    { id: "dependencies", label: "Cây Phụ thuộc (H2)", icon: <Link2 size={14} /> },
+
+                  ]
+
+                : [
+
+                    { id: "board", label: "Bảng Kanban", icon: <Columns3 size={14} /> },
+
+                    {
+
+                      id: "my-tasks",
+
+                      label: "Của mình",
+
+                      icon: <UserCheck size={14} />,
+
+                      badge: myOpenTasksCount > 0 ? myOpenTasksCount : undefined,
+
+                    },
+
+                    {
+
+                      id: "team",
+
+                      label: `Phân vai & Team (${teamMembers.length})`,
+
+                      icon: <Users size={14} />,
+
+                    },
+
+                    {
+
+                      id: "activity",
+
+                      label: "Nhật ký & Git Stream",
+
+                      icon: <Activity size={14} />,
+
+                    },
+
+                    { id: "dependencies", label: "Cây Phụ thuộc (H2)", icon: <Link2 size={14} /> },
+
+                  ]
+
+            }
 
             onChange={(val) => handleTabChange(val as TabView)}
 
@@ -5214,27 +5274,41 @@ export default function KanbanBoard({
 
           <div className="flex items-center gap-2">
 
-            {/* View Mode: Team vs My with Marlo Liquid Segmented Pill */}
+            {/* View Mode: Team vs My (Student only) or Teacher Perspective Badge */}
 
-            <MarloSegmentedControl
+            {role !== "instructor" ? (
 
-              value={viewMode}
+              <MarloSegmentedControl
 
-              options={[
+                value={viewMode}
 
-                { id: "team", label: `Toàn nhóm (${teamMembers.length})`, icon: <Users size={13} /> },
+                options={[
 
-                { id: "my", label: "Task của tôi", icon: <UserCheck size={13} /> },
+                  { id: "team", label: `Toàn nhóm (${teamMembers.length})`, icon: <Users size={13} /> },
 
-              ]}
+                  { id: "my", label: "Task của tôi", icon: <UserCheck size={13} /> },
 
-              onChange={(val) => setViewMode(val as "team" | "my")}
+                ]}
 
-              size="sm"
+                onChange={(val) => setViewMode(val as "team" | "my")}
 
-              tone="dark"
+                size="sm"
 
-            />
+                tone="dark"
+
+              />
+
+            ) : (
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-slate-200/80 dark:border-slate-800 text-amber-800 dark:text-amber-300 text-xs font-semibold shadow-2xs">
+
+                <ShieldCheck size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+
+                <span>Giám sát & Thẩm định Tiến độ</span>
+
+              </div>
+
+            )}
 
 
 
@@ -6018,6 +6092,28 @@ export default function KanbanBoard({
 
 
 
+      {/* ── TAB: INSTRUCTOR REVIEW (CHỜ NGHIỆM THU) ────────────────────── */}
+
+      {activeTab === "review" && (
+
+        <KanbanInstructorReviewView
+
+          tasks={tasks}
+
+          teamMembers={teamMembers}
+
+          onReviewTask={handleInstructorReview}
+
+          onSelectTask={(task) => setSelectedTask(task)}
+
+          onGoToBoard={() => setActiveTab("board")}
+
+        />
+
+      )}
+
+
+
       {/* ── TAB: MY TASKS (VIỆC CỦA TÔI) ─────────────────────────────────── */}
 
       {activeTab === "my-tasks" && (
@@ -6055,6 +6151,8 @@ export default function KanbanBoard({
           onManageMembers={() => setMemberModalOpen(true)}
 
           onFilterByMember={handleFilterByMember}
+
+          role={role}
 
         />
 
