@@ -6,7 +6,6 @@ import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
 import {
   GitPrReviewPanel,
-  GitNewCommitModal,
   GitNewPrModal,
 } from "../components/GitPrReviewPanel";
 import {
@@ -2403,28 +2402,25 @@ export default function GitProjectHub({
                 Cây Phân Nhánh Git & Giám Sát Commit Trực Quan (GitKraken / Git Graph)
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Rê chuột (hover) vào từng điểm commit để xem ai commit, commit nội dung gì và số dòng code thay đổi.
+                Hệ thống tự động ghi nhận commit từ git push &amp; Webhook và liên kết mã Task Kanban. Rê chuột (hover) vào từng điểm commit để xem chi tiết.
               </p>
             </div>
 
-            {/* Member & Branch Filter Controls + Push Commit + Replay Animation */}
+            {/* Member & Branch Filter Controls + Live Sync + Replay Animation */}
             <div className="flex flex-wrap items-center gap-2">
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Tự động ghi nhận từ Git
+              </span>
+
               <button
                 onClick={handleSyncGitHubLive}
                 disabled={isSyncingLive}
-                title="Kéo các commit thật từ GitHub REST API công khai về lưu vào CSDL MySQL"
+                title="Hệ thống tự động ghi nhận qua Webhook. Bấm để đồng bộ tức thì các commit mới nhất từ Git repo về CSDL MySQL & Git Graph"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 transition shadow-2xs cursor-pointer disabled:opacity-60"
               >
                 <RotateCw size={13} className={isSyncingLive ? "animate-spin text-blue-400" : "text-emerald-400"} />
-                {isSyncingLive ? "Đang đồng bộ..." : "Live Sync GitHub"}
-              </button>
-
-              <button
-                onClick={() => setShowNewCommitModal(true)}
-                className="btn-marlo-primary btn--primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-2xs cursor-pointer"
-              >
-                <Plus size={13} />
-                Ghi nhận Commit
+                {isSyncingLive ? "Đang đồng bộ..." : "Đồng Bộ Git Live"}
               </button>
 
               <button
@@ -3589,14 +3585,6 @@ export default function GitProjectHub({
           </div>
         </div>
       )}
-
-      <GitNewCommitModal
-        isOpen={showNewCommitModal}
-        onClose={() => setShowNewCommitModal(false)}
-        onSubmit={handlePushNewCommit}
-        members={memberAnalytics}
-        tasks={projectTasks}
-      />
 
       <GitNewPrModal
         isOpen={showNewPrModal}
