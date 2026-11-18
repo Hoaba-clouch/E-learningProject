@@ -570,39 +570,6 @@ export function MultiChapterSidebar({
           );
         })}
       </div>
-
-      {/* ─── SIDEBAR FOOTER ACTIONS ──────────────────────────────── */}
-      <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5">
-        <button
-          onClick={onOpenMindmap}
-          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
-            activeTab === "mindmap"
-              ? "bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 font-bold"
-              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-amber-200 hover:text-amber-600"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-amber-500" />
-            <span>Mindmap Cây Tri Thức</span>
-          </div>
-          <span className="text-[10px] font-mono text-slate-400">Toàn môn</span>
-        </button>
-
-        <button
-          onClick={() => onOpenExercise?.()}
-          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
-            activeTab === "exercise"
-              ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-bold"
-              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-200 hover:text-emerald-600"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Code2 size={14} className="text-emerald-600" />
-            <span>Bài tập Thực hành Chương</span>
-          </div>
-          <span className="text-xs font-mono font-bold text-amber-600">+100 XP</span>
-        </button>
-      </div>
     </aside>
   );
 }
