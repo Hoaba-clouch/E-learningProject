@@ -4,7 +4,7 @@ import json
 import re
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
@@ -1105,43 +1105,67 @@ def sync_github_live(
                 raw_msg = (commit_info.get("message") or "Update repository from GitHub").split("\n")[0]
                 task_code = _extract_task_code(None, raw_msg) or f"TE{((idx * 17 + 101) % 899 + 100):03d}A{(idx % 9)}"
 
-                # Phân giải làn Metro chuẩn xác theo loại commit (Khớp 6 làn trên SVG)
+                # Phân giải làn Metro chuẩn xác theo danh sách nhánh THẬT của Repository
+                # ['main', 'feature/ci-cd-pipeline', 'TE9CA7A-JWT', 'feature/te9ca74-kien-truc-3-tang', 'feature/te9ca79-khoi-tao-Backend-FastAPI', 'huy']
                 msg_low = raw_msg.lower()
-                if "merge" in msg_low or "release" in msg_low:
+                login_low = raw_login.lower()
+                if "te9ca7a" in msg_low or "jwt" in msg_low or "auth" in msg_low or "login" in msg_low or "user" in msg_low:
+                    branch = "TE9CA7A-JWT"
+                    branch_color = "#f59e0b"
+                    cy = 165
+                elif "te9ca74" in msg_low or "kien-truc" in msg_low or "layered" in msg_low or "3-tang" in msg_low or "ast" in msg_low or "architecture" in msg_low:
+                    branch = "feature/te9ca74-kien-truc-3-tang"
+                    branch_color = "#06b6d4"
+                    cy = 225
+                elif "te9ca79" in msg_low or "backend" in msg_low or "fastapi" in msg_low:
+                    branch = "feature/te9ca79-khoi-tao-Backend-FastAPI"
+                    branch_color = "#10b981"
+                    cy = 285
+                elif "te9ca75" in msg_low or "so-do" in msg_low or "sequence" in msg_low:
+                    branch = "feature/te9ca75-so-do-tuan-tu"
+                    branch_color = "#0284c7"
+                    cy = 225
+                elif "te9ca7c" in msg_low or "alembic" in msg_low or "migration" in msg_low:
+                    branch = "feature/te9ca7c-cau-hinh-Alembic-Database-Migrations"
+                    branch_color = "#f97316"
+                    cy = 285
+                elif "huy" in login_low or "vonhathuy" in login_low or "kanban" in msg_low or "trello" in msg_low:
+                    branch = "huy"
+                    branch_color = "#ec4899"
+                    cy = 345
+                elif "ci" in msg_low or "deploy" in msg_low or "pipeline" in msg_low or "docker" in msg_low or "pnpm" in msg_low or "vercel" in msg_low or "workflow" in msg_low:
+                    branch = "feature/ci-cd-pipeline"
+                    branch_color = "#8b5cf6"
+                    cy = 105
+                elif "merge" in msg_low or "release" in msg_low or "init" in msg_low:
                     branch = "main"
                     branch_color = "#2563eb"
                     cy = 45
-                elif "fix" in msg_low or "hotfix" in msg_low or "bug" in msg_low:
-                    branch = "hotfix/cve"
-                    branch_color = "#f43f5e"
-                    cy = 105
-                elif "ci" in msg_low or "deploy" in msg_low or "workflow" in msg_low or "pnpm" in msg_low or "vercel" in msg_low:
-                    branch = "release/v1.2"
-                    branch_color = "#a855f7"
-                    cy = 165
-                elif "auth" in msg_low or "jwt" in msg_low or "login" in msg_low or "user" in msg_low:
-                    branch = "feature/auth"
-                    branch_color = "#f59e0b"
-                    cy = 285
-                elif "eval" in msg_low or "score" in msg_low or "ai" in msg_low or "student" in msg_low or "course" in msg_low:
-                    branch = "feature/evaluator"
-                    branch_color = "#10b981"
-                    cy = 345
                 else:
-                    branch = "develop"
-                    branch_color = "#6366f1"
-                    cy = 225
+                    branch = "feature/ci-cd-pipeline"
+                    branch_color = "#8b5cf6"
+                    cy = 105
 
-                # Format ngày giờ cam kết thực tế
+                # Format ngày giờ cam kết thực tế theo giờ địa phương Việt Nam (UTC+7)
                 commit_date_str = author_commit.get("date") or now
                 try:
-                    dt = datetime.fromisoformat(commit_date_str.replace("Z", "+00:00"))
-                    date_label = dt.strftime("%d/%m/%Y %H:%M")
-                    days_diff = (datetime.now(timezone.utc) - dt).days
-                    time_ago = f"{days_diff} ngày trước" if days_diff > 0 else "Hôm nay"
+                    dt_utc = datetime.fromisoformat(commit_date_str.replace("Z", "+00:00"))
+                    dt_vn = dt_utc.astimezone(timezone(timedelta(hours=7)))
+                    date_label = dt_vn.strftime("%d/%m/%Y %H:%M")
+                    now_utc_dt = datetime.now(timezone.utc)
+                    diff_sec = int((now_utc_dt - dt_utc).total_seconds())
+                    if diff_sec < 60:
+                        time_ago = "Vừa xong"
+                    elif diff_sec < 3600:
+                        time_ago = f"{diff_sec // 60} phút trước"
+                    elif diff_sec < 86400:
+                        time_ago = f"{diff_sec // 3600} giờ trước"
+                    else:
+                        days = diff_sec // 86400
+                        time_ago = f"{days} ngày trước"
                 except Exception:
-                    date_label = now_label
-                    time_ago = "Live Sync"
+                    date_label = commit_date_str[:16].replace("T", " ")
+                    time_ago = "Gần đây"
 
                 commit_id = f"gh-c-{sha_short}-{idx}"
                 conn.execute(

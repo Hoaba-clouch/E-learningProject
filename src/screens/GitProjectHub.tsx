@@ -1017,121 +1017,121 @@ const GIT_COMMITS: GitCommitItem[] = [
     id: "c-2",
     sha: "14b98c2",
     author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "develop",
-    branchLabel: "develop",
-    branchColor: "#6366f1",
-    message: "TE9CA72: Tách nhánh develop từ main, cấu hình CI/CD và môi trường staging",
+    branch: "feature/ci-cd-pipeline",
+    branchLabel: "feature/ci-cd-pipeline",
+    branchColor: "#8b5cf6",
+    message: "TE9CA72: Tách nhánh feature/ci-cd-pipeline từ main, cấu hình CI/CD và môi trường staging",
     date: "29/10/2026 10:30",
-    timeAgo: "9 ngày trước",
+    timeAgo: "21 ngày trước",
     stats: { additions: 110, deletions: 5, files: 2 },
     filesChanged: [".github/workflows/ci.yml", "package.json"],
     cx: 170,
-    cy: 225,
+    cy: 105,
   },
   {
     id: "c-3",
     sha: "b579f87",
     author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "feature/auth",
-    branchLabel: "feature/auth",
+    branch: "TE9CA7A-JWT",
+    branchLabel: "TE9CA7A-JWT",
     branchColor: "#f59e0b",
     message: "TE22C19: Khởi tạo module Auth, schemas User và bảng cơ sở dữ liệu users",
     date: "30/10/2026 14:20",
-    timeAgo: "8 ngày trước",
+    timeAgo: "20 ngày trước",
     stats: { additions: 185, deletions: 4, files: 3 },
     filesChanged: ["backend/app/models/user.py", "backend/app/schemas/auth.py", "backend/app/core/security.py"],
     cx: 260,
-    cy: 285,
+    cy: 165,
   },
   {
     id: "c-4",
     sha: "89f3a12",
     author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "feature/evaluator",
-    branchLabel: "feature/evaluator",
-    branchColor: "#10b981",
-    message: "TE35D77: Xây dựng sandbox Docker isolated runner cho C++ và Python",
+    branch: "feature/te9ca74-kien-truc-3-tang",
+    branchLabel: "feature/te9ca74-kien-truc-3-tang",
+    branchColor: "#06b6d4",
+    message: "TE35D77: Xây dựng cấu trúc kiến trúc 3-tier FastAPI + React",
     date: "31/10/2026 11:00",
-    timeAgo: "7 ngày trước",
+    timeAgo: "19 ngày trước",
     stats: { additions: 230, deletions: 12, files: 4 },
     filesChanged: ["backend/app/services/evaluator.py", "docker/sandbox.Dockerfile", "backend/app/core/config.py"],
     cx: 340,
-    cy: 345,
+    cy: 225,
   },
   {
     id: "c-5",
     sha: "5149fb7",
     author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "feature/auth",
-    branchLabel: "feature/auth",
+    branch: "TE9CA7A-JWT",
+    branchLabel: "TE9CA7A-JWT",
     branchColor: "#f59e0b",
     message: "TE22C19: Xây dựng JWT authentication, hash Passlib Bcrypt 12 rounds và endpoint /login",
     date: "01/11/2026 16:40",
-    timeAgo: "6 ngày trước",
+    timeAgo: "18 ngày trước",
     stats: { additions: 295, deletions: 8, files: 5 },
     filesChanged: ["backend/app/api/v1/endpoints/auth.py", "backend/app/core/security.py", "src/screens/LoginScreen.tsx"],
     cx: 420,
-    cy: 285,
+    cy: 165,
   },
   {
     id: "c-6",
     sha: "9c23b81",
     author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "develop",
-    branchLabel: "develop",
-    branchColor: "#6366f1",
-    message: "TE14F82: Cấu hình Redis Cache connection pool và Logger middleware trên develop",
+    branch: "feature/te9ca79-khoi-tao-Backend-FastAPI",
+    branchLabel: "feature/te9ca79-khoi-tao-Backend-FastAPI",
+    branchColor: "#10b981",
+    message: "TE14F82: Cấu hình Redis Cache connection pool và Logger middleware trên backend",
     date: "02/11/2026 09:30",
-    timeAgo: "5 ngày trước",
+    timeAgo: "17 ngày trước",
     stats: { additions: 74, deletions: 3, files: 2 },
     filesChanged: ["backend/app/core/redis.py", "backend/app/middlewares/logging.py"],
     cx: 490,
-    cy: 225,
+    cy: 285,
   },
   {
     id: "c-7",
     sha: "3a78c10",
     author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "feature/evaluator",
-    branchLabel: "feature/evaluator",
-    branchColor: "#10b981",
+    branch: "feature/te9ca74-kien-truc-3-tang",
+    branchLabel: "feature/te9ca74-kien-truc-3-tang",
+    branchColor: "#06b6d4",
     message: "TE35D77: Thiết lập giới hạn cgroups v2 (RAM 256MB, CPU 1 core) và 5 test cases ẩn",
     date: "02/11/2026 15:15",
-    timeAgo: "5 ngày trước",
+    timeAgo: "17 ngày trước",
     stats: { additions: 145, deletions: 6, files: 3 },
     filesChanged: ["backend/app/services/evaluator.py", "backend/app/models/testcases.py"],
     cx: 560,
-    cy: 345,
+    cy: 225,
   },
   {
     id: "c-8",
     sha: "c8e41a9",
     author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "develop",
-    branchLabel: "develop",
-    branchColor: "#6366f1",
-    message: "TE22C19: Merge PR #04 'feature/auth' vào develop sau khi vượt qua CI audit",
+    branch: "feature/ci-cd-pipeline",
+    branchLabel: "feature/ci-cd-pipeline",
+    branchColor: "#8b5cf6",
+    message: "TE22C19: Merge PR #04 'TE9CA7A-JWT' vào pipeline sau khi vượt qua CI audit",
     date: "03/11/2026 11:20",
-    timeAgo: "4 ngày trước",
+    timeAgo: "16 ngày trước",
     stats: { additions: 85, deletions: 2, files: 2 },
     filesChanged: ["backend/app/api/v1/router.py", "backend/app/core/database.py"],
     cx: 640,
-    cy: 225,
+    cy: 105,
   },
   {
     id: "c-9",
     sha: "d4bdc7d",
     author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "develop",
-    branchLabel: "develop",
-    branchColor: "#6366f1",
-    message: "TE35D77: Merge PR #05 'feature/evaluator' vào develop (Đạt 100% test coverage)",
+    branch: "feature/ci-cd-pipeline",
+    branchLabel: "feature/ci-cd-pipeline",
+    branchColor: "#8b5cf6",
+    message: "TE35D77: Merge PR #05 vào feature/ci-cd-pipeline (Đạt 100% test coverage)",
     date: "03/11/2026 18:00",
-    timeAgo: "4 ngày trước",
+    timeAgo: "16 ngày trước",
     stats: { additions: 92, deletions: 5, files: 3 },
     filesChanged: ["backend/app/api/v1/router.py", "backend/app/services/analytics.py"],
     cx: 720,
-    cy: 225,
+    cy: 105,
   },
   {
     id: "c-10",
@@ -1142,7 +1142,7 @@ const GIT_COMMITS: GitCommitItem[] = [
     branchColor: "#2563eb",
     message: "TE9CA72: Release v1.0.0: Nghiệm thu Sprint 1 & 2 lên Production Staging",
     date: "04/11/2026 09:00",
-    timeAgo: "3 ngày trước",
+    timeAgo: "15 ngày trước",
     stats: { additions: 140, deletions: 10, files: 4 },
     filesChanged: ["dist/index.html", "vercel.json", "docker-compose.prod.yml"],
     cx: 810,
@@ -1151,17 +1151,17 @@ const GIT_COMMITS: GitCommitItem[] = [
   {
     id: "c-11",
     sha: "a41b782",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "hotfix/cve",
-    branchLabel: "hotfix/cve",
-    branchColor: "#f43f5e",
+    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
+    branch: "huy",
+    branchLabel: "huy",
+    branchColor: "#ec4899",
     message: "HOTFIX-01: Vá lỗ hổng bảo mật CVE-2026-8812 SQL parameter escape tại tầng repository",
     date: "04/11/2026 14:15",
-    timeAgo: "3 ngày trước",
+    timeAgo: "15 ngày trước",
     stats: { additions: 28, deletions: 6, files: 2 },
     filesChanged: ["backend/app/core/database.py", "backend/app/api/deps.py"],
     cx: 890,
-    cy: 105,
+    cy: 345,
   },
   {
     id: "c-12",
@@ -1170,9 +1170,9 @@ const GIT_COMMITS: GitCommitItem[] = [
     branch: "main",
     branchLabel: "main",
     branchColor: "#2563eb",
-    message: "HOTFIX-01: Merge hotfix/cve vào main (Đóng gói phát hành khẩn cấp Tag v1.0.1)",
+    message: "HOTFIX-01: Merge bản vá vào main (Đóng gói phát hành khẩn cấp Tag v1.0.1)",
     date: "04/11/2026 16:30",
-    timeAgo: "3 ngày trước",
+    timeAgo: "15 ngày trước",
     stats: { additions: 35, deletions: 4, files: 2 },
     filesChanged: ["CHANGELOG.md", "backend/app/core/database.py"],
     cx: 970,
@@ -1182,46 +1182,46 @@ const GIT_COMMITS: GitCommitItem[] = [
     id: "c-13",
     sha: "3d91cf4",
     author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "develop",
-    branchLabel: "develop",
-    branchColor: "#6366f1",
-    message: "HOTFIX-01: Đồng bộ bản vá CVE từ hotfix/cve về develop (Gitflow dual-merge)",
+    branch: "feature/ci-cd-pipeline",
+    branchLabel: "feature/ci-cd-pipeline",
+    branchColor: "#8b5cf6",
+    message: "HOTFIX-01: Đồng bộ bản vá về feature/ci-cd-pipeline",
     date: "04/11/2026 17:00",
-    timeAgo: "3 ngày trước",
+    timeAgo: "15 ngày trước",
     stats: { additions: 22, deletions: 2, files: 2 },
     filesChanged: ["backend/app/core/database.py", "tests/test_sql_injection.py"],
     cx: 1030,
-    cy: 225,
+    cy: 105,
   },
   {
     id: "c-14",
     sha: "2103bbf",
     author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "release/v1.2",
-    branchLabel: "release/v1.2",
-    branchColor: "#a855f7",
-    message: "TE61A04: Cắt nhánh release/v1.2 từ develop: chuẩn bị đóng gói nghiệm thu Sprint 3",
+    branch: "feature/ci-cd-pipeline",
+    branchLabel: "feature/ci-cd-pipeline",
+    branchColor: "#8b5cf6",
+    message: "TE61A04: Cắt nhánh chuẩn bị đóng gói nghiệm thu Sprint 3 trên pipeline",
     date: "05/11/2026 10:45",
-    timeAgo: "2 ngày trước",
+    timeAgo: "14 ngày trước",
     stats: { additions: 180, deletions: 14, files: 5 },
     filesChanged: ["backend/app/version.py", "package.json", "docs/release_notes.md"],
     cx: 1110,
-    cy: 165,
+    cy: 105,
   },
   {
     id: "c-15",
     sha: "62e08ab",
     author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "release/v1.2",
-    branchLabel: "release/v1.2",
-    branchColor: "#a855f7",
+    branch: "huy",
+    branchLabel: "huy",
+    branchColor: "#ec4899",
     message: "TE61A04: Tinh chỉnh UI, cập nhật manifest và chạy trọn bộ 48 ca kiểm thử E2E Cypress",
     date: "05/11/2026 16:30",
-    timeAgo: "2 ngày trước",
+    timeAgo: "14 ngày trước",
     stats: { additions: 115, deletions: 8, files: 4 },
     filesChanged: ["cypress/e2e/auth.cy.ts", "cypress/e2e/editor.cy.ts", "src/App.tsx"],
     cx: 1200,
-    cy: 165,
+    cy: 345,
   },
   {
     id: "c-16",
@@ -1688,14 +1688,19 @@ export default function GitProjectHub({
   const filteredCommits = useMemo(() => {
     return commits.filter((c) => {
       const matchMember = memberFilter === "all" || c.author.name === memberFilter;
+      const bLow = (c.branch || "").toLowerCase();
       const matchBranch =
         branchFilter === "all" ||
-        (branchFilter === "feature"
-          ? c.branch.startsWith("feature")
-          : branchFilter === "hotfix"
-          ? c.branch.startsWith("hotfix")
-          : branchFilter === "release"
-          ? c.branch.startsWith("release")
+        (branchFilter === "pipeline"
+          ? bLow.includes("pipeline") || bLow.includes("ci")
+          : branchFilter === "jwt"
+          ? bLow.includes("jwt") || bLow.includes("auth")
+          : branchFilter === "te9ca74"
+          ? bLow.includes("te9ca74") || bLow.includes("kien-truc") || bLow.includes("3-tang")
+          : branchFilter === "te9ca79"
+          ? bLow.includes("te9ca79") || bLow.includes("backend") || bLow.includes("fastapi")
+          : branchFilter === "huy"
+          ? bLow === "huy"
           : c.branch === branchFilter);
       return matchMember && matchBranch;
     });
@@ -2488,36 +2493,44 @@ export default function GitProjectHub({
                   main
                 </button>
                 <button
-                  onClick={() => setBranchFilter("hotfix")}
+                  onClick={() => setBranchFilter("pipeline")}
                   className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "hotfix" ? "bg-rose-100 text-rose-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                    branchFilter === "pipeline" ? "bg-purple-100 text-purple-800 font-bold" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  hotfix/*
+                  feature/ci-cd-pipeline
                 </button>
                 <button
-                  onClick={() => setBranchFilter("release")}
+                  onClick={() => setBranchFilter("jwt")}
                   className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "release" ? "bg-purple-100 text-purple-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                    branchFilter === "jwt" ? "bg-amber-100 text-amber-800 font-bold" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  release/*
+                  TE9CA7A-JWT
                 </button>
                 <button
-                  onClick={() => setBranchFilter("develop")}
+                  onClick={() => setBranchFilter("te9ca74")}
                   className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "develop" ? "bg-indigo-100 text-indigo-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                    branchFilter === "te9ca74" ? "bg-cyan-100 text-cyan-800 font-bold" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  develop
+                  feature/te9ca74*
                 </button>
                 <button
-                  onClick={() => setBranchFilter("feature")}
+                  onClick={() => setBranchFilter("te9ca79")}
                   className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "feature" ? "bg-emerald-100 text-emerald-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                    branchFilter === "te9ca79" ? "bg-emerald-100 text-emerald-800 font-bold" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  feature/*
+                  feature/te9ca79*
+                </button>
+                <button
+                  onClick={() => setBranchFilter("huy")}
+                  className={`px-2 py-1 rounded-md transition text-xs ${
+                    branchFilter === "huy" ? "bg-pink-100 text-pink-800 font-bold" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  huy
                 </button>
               </div>
             </div>
@@ -2593,24 +2606,24 @@ export default function GitProjectHub({
                 }
               `}</style>
 
-              {/* 6 Lane Guides & Branch Labels */}
+              {/* 6 Lane Guides & Branch Labels - Khớp 100% với Nhánh Thật của Repository */}
               <line x1="50" y1="45" x2={svgWidth - 40} y2="45" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
               <text x="10" y="49" fill="#2563eb" fontSize="11" fontFamily="monospace" fontWeight="bold">main</text>
 
               <line x1="50" y1="105" x2={svgWidth - 40} y2="105" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="109" fill="#f43f5e" fontSize="11" fontFamily="monospace" fontWeight="bold">hotfix/cve</text>
+              <text x="10" y="109" fill="#8b5cf6" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/ci-cd-pipeline</text>
 
               <line x1="50" y1="165" x2={svgWidth - 40} y2="165" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="169" fill="#a855f7" fontSize="11" fontFamily="monospace" fontWeight="bold">release/v1.2</text>
+              <text x="10" y="169" fill="#f59e0b" fontSize="11" fontFamily="monospace" fontWeight="bold">TE9CA7A-JWT</text>
 
               <line x1="50" y1="225" x2={svgWidth - 40} y2="225" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="229" fill="#6366f1" fontSize="11" fontFamily="monospace" fontWeight="bold">develop</text>
+              <text x="10" y="229" fill="#06b6d4" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/te9ca74-kien-truc</text>
 
               <line x1="50" y1="285" x2={svgWidth - 40} y2="285" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="289" fill="#f59e0b" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/auth</text>
+              <text x="10" y="289" fill="#10b981" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/te9ca79-backend</text>
 
               <line x1="50" y1="345" x2={svgWidth - 40} y2="345" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="349" fill="#10b981" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/evaluator</text>
+              <text x="10" y="349" fill="#ec4899" fontSize="11" fontFamily="monospace" fontWeight="bold">huy</text>
 
               {/* Branch Connecting Lines (Smooth Bézier curves with drawing animations) */}
               {/* 1. Main trunk */}
@@ -3104,7 +3117,7 @@ export default function GitProjectHub({
                   Sơ Đồ Phân Nhánh Metro Git Flow (Branch Lifecycle Architecture)
                 </h3>
               </div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Strict Model (No Direct Push to main/develop)</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Repository Branching Model (Hoaba-clouch/E-learningProject)</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
@@ -3112,55 +3125,55 @@ export default function GitProjectHub({
               <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-purple-500" />
+                    <span className="w-2 h-2 rounded-full bg-blue-600" />
                     main (Production)
                   </span>
                   <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">LOCKED</span>
                 </div>
                 <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Nhánh chính thức dùng để bảo vệ và demo đồ án. Chỉ nhận merge từ nhánh <code className="text-purple-600 dark:text-purple-400 font-mono font-medium">release/*</code> khi kết thúc Sprint. Gắn thẻ Git Tag <code className="text-emerald-600 dark:text-emerald-400 font-mono font-medium">v1.0.0</code>.
+                  Nhánh chính thức dùng để bảo vệ và demo đồ án. Chỉ nhận PR kiểm duyệt và hợp nhất qua quy trình CI/CD. Gắn thẻ Git Tag phiên bản chính thức.
                 </p>
               </div>
 
-              {/* Lane 2: develop */}
+              {/* Lane 2: feature/ci-cd-pipeline */}
               <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    develop (Integration)
+                    <span className="w-2 h-2 rounded-full bg-purple-500" />
+                    feature/ci-cd-pipeline
                   </span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">PR ONLY</span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">PIPELINE</span>
                 </div>
                 <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Trục tích hợp trung tâm của cả nhóm trong Sprint. Mọi tính năng hoàn thành đều phải mở PR hợp nhất vào đây qua cơ chế <strong className="text-slate-800 dark:text-slate-200 font-semibold">Squash and Merge</strong>.
+                  Trục tích hợp CI/CD tự động, Docker Sandbox isolated runner, kiểm thử tự động pytest và đồng bộ trạng thái đồ án với CSDL MySQL.
                 </p>
               </div>
 
-              {/* Lane 3: feature/* */}
+              {/* Lane 3: TE9CA7A-JWT */}
               <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    feature/* (Developer)
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    TE9CA7A-JWT (Auth & Security)
+                  </span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">FEATURE</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Module xác thực JWT, mã hóa Bcrypt, bảo vệ đa phiên thiết bị và cơ chế phân quyền RBAC 3 vai trò (Admin, Giảng viên, Sinh viên).
+                </p>
+              </div>
+
+              {/* Lane 4: feature/te9ca74 & huy */}
+              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-cyan-500" />
+                    feature/te9ca74 & huy
                   </span>
                   <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">ACTIVE</span>
                 </div>
                 <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Nhánh làm việc cá nhân của từng sinh viên, tách ra từ <code className="text-blue-600 dark:text-blue-400 font-mono font-medium">develop</code>. Đặt tên chuẩn: <code className="text-emerald-600 dark:text-emerald-400 font-mono font-medium">feature/TASK-ID_ten-task</code>. Tự do commit và test.
-                </p>
-              </div>
-
-              {/* Lane 4: hotfix/* */}
-              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    hotfix/* (Urgent Patch)
-                  </span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">EMERGENCY</span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Tách trực tiếp từ <code className="text-purple-600 dark:text-purple-400 font-mono font-medium">main</code> khi phát hiện lỗ hổng bảo mật nghiêm trọng (P0) cần vá ngay. Sau khi fix xong, merge đồng thời vào cả <code className="text-purple-600 dark:text-purple-400 font-mono font-medium">main</code> và <code className="text-blue-600 dark:text-blue-400 font-mono font-medium">develop</code>.
+                  Nhánh kiến trúc 3 tầng FastAPI + React (TE9CA74) và nhánh frontend Kanban tương tác kéo thả chuẩn Trello của thành viên nhóm.
                 </p>
               </div>
             </div>

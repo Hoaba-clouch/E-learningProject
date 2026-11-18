@@ -61,27 +61,30 @@ REPO_SEEDS: dict[str, tuple[str, str, str, float]] = {
 
 BRANCH_LANE_STYLE: dict[str, tuple[int, str]] = {
     "main": (45, "#2563eb"),
-    "hotfix": (105, "#f43f5e"),
-    "release": (165, "#a855f7"),
-    "develop": (225, "#6366f1"),
-    "feature/auth": (285, "#f59e0b"),
-    "feature/": (345, "#10b981"),
+    "feature/ci-cd-pipeline": (105, "#8b5cf6"),
+    "TE9CA7A-JWT": (165, "#f59e0b"),
+    "feature/te9ca74-kien-truc-3-tang": (225, "#06b6d4"),
+    "feature/te9ca79-khoi-tao-Backend-FastAPI": (285, "#10b981"),
+    "huy": (345, "#ec4899"),
 }
 
 
 def resolve_branch_lane(branch: str) -> tuple[int, str]:
-    b = (branch or "develop").strip().lower()
-    if b == "main" or b == "master":
+    b = (branch or "main").strip()
+    b_low = b.lower()
+    if b_low in ("main", "master"):
         return BRANCH_LANE_STYLE["main"]
-    if b.startswith("hotfix"):
-        return BRANCH_LANE_STYLE["hotfix"]
-    if b.startswith("release"):
-        return BRANCH_LANE_STYLE["release"]
-    if b == "develop" or b == "dev":
-        return BRANCH_LANE_STYLE["develop"]
-    if b.startswith("feature/auth"):
-        return BRANCH_LANE_STYLE["feature/auth"]
-    return BRANCH_LANE_STYLE["feature/"]
+    if "ci" in b_low or "pipeline" in b_low:
+        return BRANCH_LANE_STYLE["feature/ci-cd-pipeline"]
+    if "jwt" in b_low or "auth" in b_low or "te9ca7a" in b_low:
+        return BRANCH_LANE_STYLE["TE9CA7A-JWT"]
+    if "te9ca74" in b_low or "kien-truc" in b_low or "3-tang" in b_low:
+        return BRANCH_LANE_STYLE["feature/te9ca74-kien-truc-3-tang"]
+    if "te9ca79" in b_low or "backend" in b_low or "fastapi" in b_low:
+        return BRANCH_LANE_STYLE["feature/te9ca79-khoi-tao-Backend-FastAPI"]
+    if "huy" in b_low:
+        return BRANCH_LANE_STYLE["huy"]
+    return BRANCH_LANE_STYLE["feature/ci-cd-pipeline"]
 
 
 def _build_codemind_commits() -> list[dict[str, Any]]:
