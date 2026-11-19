@@ -131,7 +131,27 @@ export default function Sidebar({
     }))
     .filter((g) => g.items.length > 0);
   const visible = visibleGroups.flatMap((g) => g.items);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(screen === "workspace");
+
+  // Tự động thu gọn thanh điều hướng (navbar) khi vào phần học để không gian bài học hiển thị tối đa
+  useEffect(() => {
+    if (screen === "workspace") {
+      setCollapsed(true);
+    } else {
+      setCollapsed(false);
+    }
+  }, [screen]);
+
+  // Lắng nghe sự kiện tuỳ biến collapse-sidebar (ví dụ khi vào / ra player học tập trong LearningWorkspace)
+  useEffect(() => {
+    const handleCollapseEvent = (e: CustomEvent<{ collapse: boolean }>) => {
+      if (typeof e.detail?.collapse === "boolean") {
+        setCollapsed(e.detail.collapse);
+      }
+    };
+    window.addEventListener("collapse-sidebar" as any, handleCollapseEvent as any);
+    return () => window.removeEventListener("collapse-sidebar" as any, handleCollapseEvent as any);
+  }, []);
 
   // Keyboard shortcut Ctrl+B / Cmd+B to toggle sidebar collapse
   useEffect(() => {

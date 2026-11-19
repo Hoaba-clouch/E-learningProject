@@ -534,6 +534,11 @@ export default function LearningWorkspace({
             setActiveLessonId("1.1");
             setWorkspaceView("player");
             window.dispatchEvent(
+              new CustomEvent("collapse-sidebar", {
+                detail: { collapse: true },
+              })
+            );
+            window.dispatchEvent(
               new CustomEvent("pet-state-change", {
                 detail: { state: "happy", text: `Đã mở môn học ${courseId.toUpperCase()}!` },
               })
@@ -549,14 +554,21 @@ export default function LearningWorkspace({
   // ═════════════════════════════════════════════════════════════════════════
 
   return (
-    <div ref={workspaceRef} className="flex h-full min-h-full w-full flex-col bg-transparent text-slate-800 dark:text-slate-100 p-3 sm:p-5 lg:p-6 overflow-hidden font-sans space-y-4">
+    <div ref={workspaceRef} className="flex h-full min-h-full w-full flex-col bg-transparent text-slate-800 dark:text-slate-100 p-2.5 sm:p-4 lg:p-4 overflow-hidden font-sans space-y-2.5">
       {/* ── TOP F8 CLEAN WORKSPACE HEADER (SEPARATE FLOATING CARD) ── */}
-      <header className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-5 py-3.5 shrink-0 shadow-xs z-20">
+      <header className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-5 py-3 shrink-0 shadow-xs z-20">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Back button & Course identity */}
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setWorkspaceView("catalog")}
+              onClick={() => {
+                setWorkspaceView("catalog");
+                window.dispatchEvent(
+                  new CustomEvent("collapse-sidebar", {
+                    detail: { collapse: false },
+                  })
+                );
+              }}
               className="group flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs active:scale-95"
               title="Quay lại danh sách môn học"
             >
@@ -621,7 +633,7 @@ export default function LearningWorkspace({
       </header>
 
       {/* ── WORKSPACE BODY WITH DUAL VIEW ── */}
-      <div className={`flex flex-1 min-h-0 gap-4 lg:gap-5 overflow-hidden transition-all duration-500 ${
+      <div className={`flex flex-1 min-h-0 gap-2.5 lg:gap-3 overflow-hidden transition-all duration-500 ${
         isCinemaMode
           ? "bg-[#161822] bg-[radial-gradient(ellipse_at_top,_rgba(40,49,70,0.55)_0%,_rgba(22,25,35,0.98)_65%,_rgba(18,20,28,1)_100%)] -m-3 sm:-m-5 lg:-m-6 p-4 sm:p-6 lg:p-8 fixed inset-0 z-50 overflow-y-auto"
           : ""

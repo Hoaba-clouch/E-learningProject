@@ -287,10 +287,10 @@ export function LessonVideoStudio({
 
       {/* ─── VIDEO DETAILS & INTERACTIVE TABS (F8 LAYOUT) ─────────────── */}
       {/* ─── VIDEO METADATA & SIDEBAR (CLEAN ENGINEERING GRADE) ─────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-2.5">
         {/* Col 1 & 2: Video Info, Chapters, Notes, Resources */}
         <div
-          className="animate-cascade-item lg:col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-5 shadow-2xs"
+          className="animate-cascade-item lg:col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-4 shadow-2xs"
           style={{ animationDelay: "120ms" }}
         >
           <div>
