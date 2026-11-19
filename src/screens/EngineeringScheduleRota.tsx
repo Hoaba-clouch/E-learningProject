@@ -255,12 +255,9 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
   const [activeTab, setActiveTab] = useState<ScheduleTab>(role === "instructor" ? "exams" : "week");
   const [displayedTab, setDisplayedTab] = useState<ScheduleTab>(role === "instructor" ? "exams" : "week");
 
-  // Keep tab synced if role changes
+  // Keep tab synced if role changes (students cannot access exams tab)
   useEffect(() => {
-    if (role === "instructor" && activeTab === "week") {
-      setActiveTab("exams");
-      setDisplayedTab("exams");
-    } else if (role === "student" && (activeTab === "exams" || displayedTab === "exams")) {
+    if (role === "student" && (activeTab === "exams" || displayedTab === "exams")) {
       setActiveTab("week");
       setDisplayedTab("week");
     }
