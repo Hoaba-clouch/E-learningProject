@@ -115,7 +115,7 @@ export default function LearningWorkspace({
   const [workspaceView, setWorkspaceView] = useState<"catalog" | "player">("catalog");
   const [selectedSubjectId, setSelectedSubjectId] = useState<SubjectId>("oop");
   const [activeLessonId, setActiveLessonId] = useState<string>("1.1");
-  const [tab, setTab] = useState<Tab>("lecture");
+  const [tab, setTab] = useState<Tab>("video");
 
   const workspaceRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -538,6 +538,7 @@ export default function LearningWorkspace({
           onSelectCourse={(courseId) => {
             setSelectedSubjectId(courseId);
             setActiveLessonId("1.1");
+            setTab("video");
             setWorkspaceView("player");
             window.dispatchEvent(
               new CustomEvent("collapse-sidebar", {
@@ -664,11 +665,9 @@ export default function LearningWorkspace({
             activeTab={tab}
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-            onSelectLesson={(lessonId, lessonType) => {
+            onSelectLesson={(lessonId) => {
               setActiveLessonId(lessonId);
-              if (lessonType) {
-                setTab(lessonType);
-              }
+              setTab("video");
             }}
             onOpenMindmap={(chapterId) => {
               if (chapterId) {
@@ -741,7 +740,7 @@ export default function LearningWorkspace({
 
               {tab === "mindmap" || tab === "exercise" ? (
                 <button
-                  onClick={() => setTab("lecture")}
+                  onClick={() => setTab("video")}
                   className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer active:scale-95 shadow-2xs"
                 >
                   <ArrowLeft size={14} />
@@ -1228,7 +1227,7 @@ export default function LearningWorkspace({
                   });
                 }}
                 onEarnXp={(xp) => setTotalXpEarned((prev) => prev + xp)}
-                onBackToLecture={() => setTab("lecture")}
+                onBackToLecture={() => setTab("video")}
               />
             </div>
           )}
@@ -1255,7 +1254,7 @@ export default function LearningWorkspace({
                 </div>
 
                 <button
-                  onClick={() => setTab("lecture")}
+                  onClick={() => setTab("video")}
                   className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                 >
                   <ArrowLeft size={13} />
