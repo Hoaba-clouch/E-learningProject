@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, Check, Sparkles, ChevronDown } from "lucide-react";
+import { Play, Pause, Check, ChevronDown, CheckCircle2 } from "lucide-react";
+import "../marlo-engine/marloStyles.css";
 
 interface Props {
   collapsed?: boolean;
@@ -7,7 +8,7 @@ interface Props {
 }
 
 const COURSES = [
-  { id: "cs201", name: "Lập trình Hướng đối tượng", color: "#EE8420" },
+  { id: "cs201", name: "Lập trình Hướng đối tượng", color: "#F29B23" },
   { id: "cs304", name: "Hội đồng Đồ án RESTful API", color: "#3B82F6" },
   { id: "cs202", name: "Thuật toán Nâng cao & Cấu trúc Dữ liệu", color: "#10B981" },
   { id: "cs205", name: "Kiến trúc Máy tính, HĐH & Mạng TCP/IP", color: "#8B5CF6" },
@@ -15,10 +16,11 @@ const COURSES = [
 
 export default function MarloFocusTimer({ collapsed = false, onSessionComplete }: Props) {
   const [isRunning, setIsRunning] = useState(false);
-  const [seconds, setSeconds] = useState(0); // Stopwatch starts at 00:00:00
-  const [todayTrackedMins, setTodayTrackedMins] = useState(90); // 1.5h default
+  const [seconds, setSeconds] = useState(0);
+  const [todayTrackedMins, setTodayTrackedMins] = useState(90); // 1.5h
   const goalHours = 4.0;
-  const [showCelebration, setShowCelebration] = useState(false);
+  const [showLogToast, setShowLogToast] = useState(false);
+  const [lastLoggedMins, setLastLoggedMins] = useState(0);
   const [selectedCourse, setSelectedCourse] = useState(COURSES[0]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -43,14 +45,16 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
     if (seconds > 0) {
       const elapsedMins = Math.max(1, Math.round(seconds / 60));
       setTodayTrackedMins((m) => m + elapsedMins);
+      setLastLoggedMins(elapsedMins);
       setIsRunning(false);
       setSeconds(0);
-      setShowCelebration(true);
-      setTimeout(() => setShowCelebration(false), 3000);
+      setShowLogToast(true);
+      setTimeout(() => setShowLogToast(false), 3200);
       onSessionComplete?.(elapsedMins);
     } else {
-      setShowCelebration(true);
-      setTimeout(() => setShowCelebration(false), 2000);
+      setLastLoggedMins(0);
+      setShowLogToast(true);
+      setTimeout(() => setShowLogToast(false), 2200);
     }
   };
 
@@ -62,128 +66,143 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
   };
 
   const todayHoursFormatted = (Math.round((todayTrackedMins / 60) * 10) / 10).toFixed(1);
+  const progressRatio = Math.max(0.12, Math.min(1, (todayTrackedMins / 60 + seconds / 3600) / goalHours));
 
-  // Collapsed Mode (fits inside collapsed rail - matches Marlo .timer 1:1)
+  // Collapsed Mode (fits inside collapsed 72px rail - 1:1 with Marlo .timer rail mode)
   if (collapsed) {
     return (
-      <div className="w-[72px] h-[56px] rounded-[22px] bg-white dark:bg-[#14161F] border border-black/[0.06] dark:border-white/[0.08] shadow-[0_1px_2px_rgba(20,22,26,0.04),0_14px_32px_-22px_rgba(20,22,26,0.28)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] flex items-center justify-center p-2 select-none">
-        <button
-          onClick={togglePlay}
-          title={isRunning ? `Đang học: ${formatClock(seconds)} (Click để tạm dừng)` : "Bắt đầu tính giờ học tập (Marlo Focus)"}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-[0_1px_2px_rgba(20,22,26,0.08)] ${
-            isRunning
-              ? "bg-[#EE8420] text-white shadow-xs"
-              : "bg-white dark:bg-[#1B1C1E] text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
-          }`}
+      <div className="marlo-scope w-[72px] flex justify-center select-none">
+        <section
+          className={`timer timer--rail${isRunning ? " is-on" : ""}`}
+          aria-label="Time tracking"
         >
-          {isRunning ? <Pause size={17} /> : <Play size={17} className="ml-0.5" strokeWidth={1.8} />}
-        </button>
+          <div className="timer__pill">
+            <button
+              type="button"
+              className="timer__play"
+              onClick={togglePlay}
+              aria-label={isRunning ? "Tạm dừng bấm giờ" : "Bắt đầu tính giờ học"}
+              title={isRunning ? `Đang học: ${formatClock(seconds)} (Click để tạm dừng)` : "Bắt đầu tính giờ học tập (Marlo Focus)"}
+            >
+              {isRunning ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+            </button>
+          </div>
+        </section>
       </div>
     );
   }
 
   return (
-    <section className="relative rounded-[28px] sm:rounded-[32px] bg-white dark:bg-[#14161F] border border-black/[0.05] dark:border-white/[0.07] shadow-xs p-3.5 select-none" aria-label="Time tracking">
-      {/* Celebration Overlay */}
-      {showCelebration && (
-        <div className="absolute inset-0 rounded-[28px] bg-gradient-to-r from-[#D97D1A] to-[#EE8420] text-white flex flex-col items-center justify-center p-3 text-center animate-in zoom-in-95 z-30 shadow-lg">
-          <Sparkles size={22} className="animate-spin" />
-          <span className="text-sm font-black mt-1 tracking-tight">+50 XP Ghi Nhận!</span>
-          <span className="text-[11px] opacity-95">Đã lưu giờ học vào hồ sơ học phần</span>
+    <div className="marlo-scope relative select-none w-full">
+      {/* Toast Notification when logged */}
+      {showLogToast && (
+        <div className="absolute -top-12 left-0 right-0 z-50 flex items-center justify-center pointer-events-none animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="bg-[#161718] dark:bg-[#F0F0F1] text-white dark:text-[#161718] text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 border border-white/10 dark:border-black/10">
+            <CheckCircle2 size={13} className="text-[#F29B23]" />
+            <span>
+              {lastLoggedMins > 0 ? `+${lastLoggedMins} phút • Ghi nhận vào hồ sơ!` : "Giờ học hôm nay đã đồng bộ!"}
+            </span>
+          </div>
         </div>
       )}
 
-      {/* Timer Top Row */}
-      <div className="flex items-center justify-between mb-1">
-        <small className="font-semibold text-xs text-[#62656B] dark:text-[#A0A3A9]">Tracked today</small>
-        <button
-          type="button"
-          className="w-7 h-7 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center text-[#62656B] dark:text-[#A0A3A9] hover:bg-black/5 dark:hover:bg-white/5 hover:text-[#161718] dark:hover:text-[#F0F0F1] transition cursor-pointer"
-          title="Log session (+50 XP)"
-          onClick={handleStopAndLog}
-        >
-          <Check size={13} strokeWidth={2.6} />
-        </button>
-      </div>
-
-      {/* Today Stats */}
-      <div className="flex items-baseline gap-1.5 my-1">
-        <b className="font-extrabold text-[22px] tracking-tight text-[#161718] dark:text-[#F0F0F1] leading-none">
-          {todayHoursFormatted} h
-        </b>
-        <span className="text-xs font-medium text-[#62656B] dark:text-[#A0A3A9]">
-          of {goalHours.toFixed(1)} h
-        </span>
-      </div>
-
-      {/* Project selector dropdown matching Marlo authentic UI */}
-      <div className="relative my-2.5">
-        <button
-          type="button"
-          onClick={() => setIsDropdownOpen((v) => !v)}
-          className="w-full flex items-center justify-between text-left py-1 px-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
-          title="Đổi học phần / dự án theo dõi"
-        >
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span
-              className="w-2.5 h-2.5 rounded-[3px] shrink-0"
-              style={{ backgroundColor: selectedCourse.color }}
-            />
-            <span className="truncate text-xs font-semibold text-[#393B3F] dark:text-[#D2D3D6]">
-              {selectedCourse.name}
-            </span>
-          </div>
-          <ChevronDown size={13} className="text-[#62656B] dark:text-[#A0A3A9] shrink-0 ml-1" />
-        </button>
-
-        {isDropdownOpen && (
-          <div className="absolute bottom-full left-0 mb-1 w-full rounded-xl bg-white dark:bg-[#222326] border border-slate-200 dark:border-white/10 shadow-lg p-1 z-30">
-            {COURSES.map((course) => (
-              <button
-                key={course.id}
-                type="button"
-                onClick={() => {
-                  setSelectedCourse(course);
-                  setIsDropdownOpen(false);
-                }}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition cursor-pointer ${
-                  selectedCourse.id === course.id
-                    ? "bg-[#F5F5F6] dark:bg-white/10 font-bold text-[#161718] dark:text-[#F0F0F1]"
-                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
-                }`}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-[3px] shrink-0"
-                  style={{ backgroundColor: course.color }}
-                />
-                <span className="truncate">{course.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* The Iconic Marlo Pill: Warm amber gradient with 00:00:00 and white Play button */}
-      <div
-        style={{ background: "linear-gradient(to right, #FBBF24 0%, #F59E0B 50%, #EA580C 100%)" }}
-        className="h-12 rounded-full p-1 pl-4 flex items-center justify-between shadow-2xs"
+      <section
+        className={`timer${isRunning ? " is-on" : ""}`}
+        aria-label="Time tracking"
       >
-        <b className="font-bold text-sm tracking-wide text-slate-950 font-mono">
-          {formatClock(seconds)}
-        </b>
-        <button
-          type="button"
-          onClick={togglePlay}
-          className="w-9 h-9 rounded-full bg-white hover:bg-slate-50 text-slate-900 shadow-sm flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0"
-          title={isRunning ? "Tạm dừng" : "Bắt đầu tính giờ"}
-        >
-          {isRunning ? (
-            <Pause size={15} strokeWidth={2.6} className="text-slate-900" />
-          ) : (
-            <Play size={15} strokeWidth={2.6} className="ml-0.5 text-slate-900 fill-slate-900" />
-          )}
-        </button>
-      </div>
-    </section>
+        <div className="timer__body">
+          {/* Top row: Tracked today label + Stop/Log check button */}
+          <div className="timer__top">
+            <small>Tracked today</small>
+            <button
+              type="button"
+              className="timer__stop"
+              aria-label="Stop and log the time"
+              title="Lưu phiên học (+XP & Log)"
+              onClick={handleStopAndLog}
+            >
+              <Check size={14} strokeWidth={2.4} />
+            </button>
+          </div>
+
+          {/* Today logged stats */}
+          <b className="timer__today">
+            {todayHoursFormatted} h<small> of {goalHours.toFixed(1)} h</small>
+          </b>
+
+          {/* Project / Subject Selector */}
+          <div className="relative">
+            <button
+              type="button"
+              className="timer__proj"
+              onClick={() => setIsDropdownOpen((v) => !v)}
+              aria-label={`Môn học: ${selectedCourse.name}. Thay đổi`}
+              title="Đổi môn học / đồ án đang theo dõi"
+            >
+              <i style={{ backgroundColor: selectedCourse.color }} />
+              <span className="truncate">{selectedCourse.name}</span>
+              <ChevronDown size={14} className="shrink-0 ml-auto opacity-70" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isDropdownOpen && (
+              <div
+                className="absolute bottom-full left-0 mb-2 w-full rounded-2xl bg-[var(--card)] border border-[var(--line-2)] shadow-[var(--shadow-lg)] p-1.5 z-40 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+              >
+                <div className="text-[10px] uppercase font-bold tracking-wider text-[var(--muted)] px-2.5 py-1">
+                  Đổi môn / đồ án theo dõi
+                </div>
+                {COURSES.map((course) => (
+                  <button
+                    key={course.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCourse(course);
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-xs font-semibold transition cursor-pointer ${
+                      selectedCourse.id === course.id
+                        ? "bg-[var(--card-2)] text-[var(--ink)] font-bold shadow-xs"
+                        : "text-[var(--ink-2)] hover:bg-[var(--card-2)] hover:text-[var(--ink)]"
+                    }`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-[2px] shrink-0"
+                      style={{ backgroundColor: course.color }}
+                    />
+                    <span className="truncate flex-1">{course.name}</span>
+                    {selectedCourse.id === course.id && (
+                      <Check size={13} className="text-[var(--accent)] shrink-0 ml-1" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* The Authentic Marlo Pill */}
+        <div className="timer__pill">
+          <i
+            className="timer__fill"
+            style={{ transform: `scaleX(${progressRatio})` }}
+          />
+          <b className="timer__clock">{formatClock(seconds)}</b>
+          <button
+            type="button"
+            className="timer__play"
+            onClick={togglePlay}
+            aria-label={isRunning ? "Pause the timer" : "Start the timer"}
+            title={isRunning ? "Tạm dừng bấm giờ" : "Bắt đầu tính giờ học"}
+          >
+            {isRunning ? (
+              <Pause size={17} strokeWidth={2.4} />
+            ) : (
+              <Play size={17} strokeWidth={2.4} className="ml-0.5" fill="currentColor" />
+            )}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
