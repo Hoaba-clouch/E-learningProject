@@ -252,8 +252,8 @@ export interface EngineeringScheduleRotaProps {
 
 export default function EngineeringScheduleRota({ role = "student", onNavigate, onRoleChange }: EngineeringScheduleRotaProps) {
 
-  const [activeTab, setActiveTab] = useState<ScheduleTab>(role === "instructor" ? "exams" : "week");
-  const [displayedTab, setDisplayedTab] = useState<ScheduleTab>(role === "instructor" ? "exams" : "week");
+  const [activeTab, setActiveTab] = useState<ScheduleTab>("week");
+  const [displayedTab, setDisplayedTab] = useState<ScheduleTab>("week");
 
   // Keep tab synced if role changes (students cannot access exams tab)
   useEffect(() => {
@@ -1641,6 +1641,20 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
           <>
             <button
               type="button"
+              aria-current={activeTab === "week" ? "page" : undefined}
+              onClick={() => switchTab("week")}
+            >
+              Lịch Tuần & Phòng Thi
+            </button>
+            <button
+              type="button"
+              aria-current={activeTab === "agenda" ? "page" : undefined}
+              onClick={() => switchTab("agenda")}
+            >
+              Agenda
+            </button>
+            <button
+              type="button"
               aria-current={activeTab === "exams" ? "page" : undefined}
               onClick={() => switchTab("exams")}
               className="flex items-center gap-1.5"
@@ -1662,20 +1676,6 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                   {mentoringRequests.filter((r) => r.status === "pending").length}
                 </span>
               )}
-            </button>
-            <button
-              type="button"
-              aria-current={activeTab === "week" ? "page" : undefined}
-              onClick={() => switchTab("week")}
-            >
-              Lịch Tuần & Phòng Thi
-            </button>
-            <button
-              type="button"
-              aria-current={activeTab === "agenda" ? "page" : undefined}
-              onClick={() => switchTab("agenda")}
-            >
-              Agenda
             </button>
           </>
         ) : (
