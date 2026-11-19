@@ -5016,69 +5016,43 @@ export default function KanbanBoard({
 
 
 
-            {/* Engineering & Agile Scrum Handbook Button */}
+            {/* Student-only project tools (Hidden for Instructors to keep clean evaluation workspace) */}
+            {role !== "instructor" && (
+              <>
+                {/* Engineering & Agile Scrum Handbook Button */}
+                <button
+                  onClick={() => setHandbookOpen(true)}
+                  className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+                  title="Cẩm nang quy chuẩn Kỹ nghệ phần mềm & Agile/Scrum"
+                >
+                  <BookOpen size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
+                  <span>Cẩm nang Kỹ nghệ</span>
+                </button>
 
-            <button
+                {/* Teacher CSV Format Button */}
+                <button
+                  onClick={() => setCsvModalOpen(true)}
+                  className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+                  title="Nhập / Xuất task chuẩn định dạng 8 cột của Hội đồng Phản biện"
+                >
+                  <FileSpreadsheet size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
+                  <span>CSV Mẫu Task</span>
+                </button>
 
-              onClick={() => setHandbookOpen(true)}
-
-              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
-
-              title="Cẩm nang quy chuẩn Kỹ nghệ phần mềm & Agile/Scrum"
-
-            >
-
-              <BookOpen size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
-
-              <span>Cẩm nang Kỹ nghệ</span>
-
-            </button>
-
-
-
-            {/* Teacher CSV Format Button */}
-
-            <button
-
-              onClick={() => setCsvModalOpen(true)}
-
-              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
-
-              title="Nhập / Xuất task chuẩn định dạng 8 cột của Hội đồng Phản biện"
-
-            >
-
-              <FileSpreadsheet size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
-
-              <span>CSV Mẫu Task</span>
-
-            </button>
-
-
-
-            {/* AI WBS Generator - Authentic Marlo Golden Primary Pill */}
-
-            <button
-
-              onClick={() => {
-
-                setAiModalOpen(true);
-
-                setAiStage("input");
-
-              }}
-
-              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
-
-              title="Khởi tạo cây phân rã công việc tự động bằng AI Socratic"
-
-            >
-
-              <Sparkles size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
-
-              <span>AI Phân rã WBS</span>
-
-            </button>
+                {/* AI WBS Generator - Authentic Marlo Golden Primary Pill */}
+                <button
+                  onClick={() => {
+                    setAiModalOpen(true);
+                    setAiStage("input");
+                  }}
+                  className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+                  title="Khởi tạo cây phân rã công việc tự động bằng AI Socratic"
+                >
+                  <Sparkles size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
+                  <span>AI Phân rã WBS</span>
+                </button>
+              </>
+            )}
 
 
 
@@ -6106,94 +6080,52 @@ export default function KanbanBoard({
 
 
 
-                {/* Inline Quick Add Card - Trello Style */}
-
-                {inlineAddingCol === col.id ? (
-
-                  <div className="mt-1.5 rounded-xl border border-amber-400/80 bg-white dark:bg-slate-800 p-2 shadow-xs">
-
-                    <textarea
-
-                      autoFocus
-
-                      value={inlineTitle}
-
-                      onChange={(e) => setInlineTitle(e.target.value)}
-
-                      onKeyDown={(e) => {
-
-                        if (e.key === "Enter" && !e.shiftKey) {
-
-                          e.preventDefault();
-
-                          handleInlineAdd(col.id);
-
-                        }
-
-                        if (e.key === "Escape") setInlineAddingCol(null);
-
-                      }}
-
-                      rows={2}
-
-                      placeholder="Nhập tiêu đề cho thẻ này..."
-
-                      className="w-full resize-none border-none text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden bg-transparent"
-
-                    />
-
-                    <div className="flex items-center gap-1.5 pt-1">
-
-                      <button
-
-                        onClick={() => handleInlineAdd(col.id)}
-
-                        className="rounded-lg bg-[#14161a] dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-slate-950 hover:bg-slate-800 dark:hover:bg-slate-100 shadow-xs"
-
-                      >
-
-                        Thêm thẻ
-
-                      </button>
-
-                      <button
-
-                        onClick={() => setInlineAddingCol(null)}
-
-                        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-
-                      >
-
-                        <X size={16} />
-
-                      </button>
-
+                {/* Inline Quick Add Card - Trello Style (Only for Students, Instructors only evaluate) */}
+                {role !== "instructor" && (
+                  inlineAddingCol === col.id ? (
+                    <div className="mt-1.5 rounded-xl border border-amber-400/80 bg-white dark:bg-slate-800 p-2 shadow-xs">
+                      <textarea
+                        autoFocus
+                        value={inlineTitle}
+                        onChange={(e) => setInlineTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleInlineAdd(col.id);
+                          }
+                          if (e.key === "Escape") setInlineAddingCol(null);
+                        }}
+                        rows={2}
+                        placeholder="Nhập tiêu đề cho thẻ này..."
+                        className="w-full resize-none border-none text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden bg-transparent"
+                      />
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <button
+                          onClick={() => handleInlineAdd(col.id)}
+                          className="rounded-lg bg-[#14161a] dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-slate-950 hover:bg-slate-800 dark:hover:bg-slate-100 shadow-xs"
+                        >
+                          Thêm thẻ
+                        </button>
+                        <button
+                          onClick={() => setInlineAddingCol(null)}
+                          className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
                     </div>
-
-                  </div>
-
-                ) : (
-
-                  <button
-
-                    onClick={() => {
-
-                      setInlineAddingCol(col.id);
-
-                      setInlineTitle("");
-
-                    }}
-
-                    className="mt-1 flex w-full items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 transition hover:bg-slate-200/70 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer"
-
-                  >
-
-                    <Plus size={15} />
-
-                    <span>Thêm thẻ</span>
-
-                  </button>
-
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setInlineAddingCol(col.id);
+                        setInlineTitle("");
+                      }}
+                      className="mt-1 flex w-full items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 transition hover:bg-slate-200/70 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      <Plus size={15} />
+                      <span>Thêm thẻ</span>
+                    </button>
+                  )
                 )}
 
               </div>
