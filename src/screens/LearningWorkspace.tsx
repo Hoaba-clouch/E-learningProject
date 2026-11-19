@@ -118,12 +118,18 @@ export default function LearningWorkspace({
   const [tab, setTab] = useState<Tab>("lecture");
 
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   const [readingMode, setReadingMode] = useState<ReadingMode>("full");
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mentorCollapsed, setMentorCollapsed] = useState<boolean>(false);
   const [isCinemaMode, setIsCinemaMode] = useState<boolean>(false);
   const [copiedCodeIndex, setCopiedCodeIndex] = useState<number | null>(null);
+
+  // Cuộn lên đỉnh mượt mà khi chuyển tab hoặc đổi bài học (không bị trôi vị trí hoặc che video)
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [tab, activeLessonId]);
 
 
 
@@ -687,6 +693,7 @@ export default function LearningWorkspace({
 
         {/* ── MAIN STAGE ── */}
         <main
+          ref={mainRef}
           className={`flex flex-1 flex-col min-w-0 overflow-y-auto space-y-4 pr-1 relative transition-all duration-300 ${
             isCinemaMode ? "max-w-6xl mx-auto w-full pt-2" : ""
           }`}
@@ -755,8 +762,14 @@ export default function LearningWorkspace({
             {/* 🌊 DÒNG CHẤT LỎNG CHẢY TỪ CARD 1 XUỐNG CARD 2 */}
             <LiquidCardConnector />
 
-            {/* ── CARD 2: STANDALONE FLOATING TAB BAR ── */}
-            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-1.5 sm:p-2 shadow-xs flex items-center justify-between flex-wrap gap-2 shrink-0 relative z-10">
+            {/* ── CARD 2: STANDALONE FLOATING TAB BAR (FIXED TRÊN ĐẦU KHI XEM BÀI ĐỌC, KHÔNG CHE VIDEO) ── */}
+            <div
+              className={`w-full rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-1.5 sm:p-2 shadow-xs flex items-center justify-between flex-wrap gap-2 shrink-0 transition-all duration-200 ${
+                tab === "lecture"
+                  ? "sticky top-1 z-30 backdrop-blur-md shadow-md"
+                  : "relative z-10"
+              }`}
+            >
               <MarloSegmentedControl
                 value={tab}
                 options={[
