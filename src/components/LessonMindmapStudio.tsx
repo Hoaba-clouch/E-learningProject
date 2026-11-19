@@ -176,11 +176,13 @@ export function LessonMindmapStudio({
 }: LessonMindmapStudioProps) {
   const [showMiniMap, setShowMiniMap] = useState(false);
   const hasInstructorMap = Boolean(instructorMindmapNodes && instructorMindmapNodes.length > 0);
-  const [mindmapSource, setMindmapSource] = useState<"standard" | "instructor">("standard");
+  const [mindmapSource, setMindmapSource] = useState<"standard" | "instructor">(
+    hasInstructorMap ? "instructor" : "standard"
+  );
 
   // Mặc định ban đầu chỉ mở root -> Chỉ hiện các nốt chính (Bài 1.1, Bài 1.2...)
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
-    () => new Set(["root"])
+    () => new Set([instructorMindmapNodes?.[0]?.id || "root"])
   );
 
   const baseData: SubjectTreeData =
@@ -203,7 +205,7 @@ export function LessonMindmapStudio({
           : "in-progress") as "completed" | "in-progress"),
         progressPct: Number(n.data?.masteryPct ?? 75),
         xp: n.data?.xp ? Number(n.data.xp) : undefined,
-        nodeType: (n.data?.nodeType === "root" ? "root" : "branch") as "root" | "branch",
+        nodeType: (n.data?.nodeType === "root" ? "root" : n.data?.nodeType === "leaf" ? "leaf" : "branch") as "root" | "branch" | "leaf",
         tone: "blue",
       },
     }));
@@ -221,15 +223,19 @@ export function LessonMindmapStudio({
   }, [baseData, hasInstructorMap, instructorMindmapEdges, instructorMindmapNodes, mindmapSource]);
 
   useEffect(() => {
-    if (!hasInstructorMap && mindmapSource === "instructor") {
+    if (hasInstructorMap) {
+      setMindmapSource("instructor");
+    } else {
       setMindmapSource("standard");
     }
-  }, [hasInstructorMap, mindmapSource, subjectId]);
+  }, [hasInstructorMap, subjectId]);
 
-  // Khi đổi môn học, reset về trạng thái chỉ mở root
+  // Khi đổi môn học hoặc rootNodeId thay đổi, mở nốt root tương ứng
   useEffect(() => {
-    setExpandedNodeIds(new Set(["root"]));
-  }, [subjectId]);
+    if (rootNodeId) {
+      setExpandedNodeIds((prev) => (prev.has(rootNodeId) ? prev : new Set([rootNodeId])));
+    }
+  }, [rootNodeId, subjectId]);
 
   // Xây dựng bản đồ quan hệ cha - con
   const { childrenMap, parentMap, nodeMap, rootNodeId } = useMemo(() => {

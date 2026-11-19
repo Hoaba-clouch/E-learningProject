@@ -39,6 +39,10 @@ export interface LessonItem {
     solution: string;
   };
   resources?: [string, string, string][];
+  youtubeId?: string;
+  youtubeUrl?: string;
+  quizzes?: any[];
+  videoScenes?: any[];
 }
 
 export interface ChapterItem {

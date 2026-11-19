@@ -235,17 +235,9 @@ import {
 
 
   Upload,
-
-
-
   Users,
-
-
-
+  Video,
   WandSparkles,
-
-
-
   X,
 
 
@@ -452,6 +444,14 @@ import {
 
 
 export type InstructorTab = "overview" | "syllabus" | "grading" | "students" | "mindmap" | "evidence";
+
+export function extractYoutubeId(url?: string): string {
+  if (!url) return "M6FwepHC6vM";
+  const clean = url.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+  const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  return match ? match[1] : "M6FwepHC6vM";
+}
 
 
 
@@ -1240,19 +1240,34 @@ export default function InstructorPanel({
 
 
 
-  const [drawerTab, setDrawerTab] = useState<"upload" | "reading" | "video" | "quiz">("upload");
-
-
+  const [drawerTab, setDrawerTab] = useState<"upload" | "video" | "reading" | "quiz" | "mindmap">("video");
 
   const [editReading, setEditReading] = useState("");
 
-
-
   const [editScenes, setEditScenes] = useState<VideoScene[]>([]);
 
-
-
   const [editQuizzes, setEditQuizzes] = useState<QuizQuestion[]>([]);
+
+  const [editYoutubeUrl, setEditYoutubeUrl] = useState("https://www.youtube.com/watch?v=M6FwepHC6vM");
+
+  const [editObjective, setEditObjective] = useState("");
+
+  const [editLead, setEditLead] = useState("");
+
+  const [editCodeSnippet, setEditCodeSnippet] = useState<{ lang: string; code: string; caption: string }>({
+    lang: "cpp",
+    code: "",
+    caption: "",
+  });
+
+  const [editKeyTakeaways, setEditKeyTakeaways] = useState<string[]>([]);
+
+  const [editAntiPattern, setEditAntiPattern] = useState<{ badDesc: string; solution: string }>({
+    badDesc: "",
+    solution: "",
+  });
+
+  const [editStatus, setEditStatus] = useState<"Đã phát hành" | "Bản nháp">("Đã phát hành");
 
 
 
@@ -2573,37 +2588,69 @@ export default function InstructorPanel({
 
 
   const openLessonStudio = (chapterId: string, lesson: Lesson) => {
-
-
-
     setActiveLessonChapterId(chapterId);
-
-
-
     setSelectedLesson(lesson);
-
-
-
-    setEditReading(lesson.content.reading);
-
-
-
-    setEditScenes(lesson.content.videoScenes);
-
-
-
-    setEditQuizzes(lesson.content.quizzes);
-
-
-
-    setDrawerTab(lesson.isGenerated ? "reading" : "upload");
-
-
-
+    const content = (lesson.content || {}) as any;
+    setEditReading(content.reading || "");
+    setEditScenes(
+      content.videoScenes && content.videoScenes.length > 0
+        ? content.videoScenes
+        : [
+            { id: "s1", title: "Phân cảnh 1: Đặt vấn đề & Tổng quan", text: lesson.title, script: "Giới thiệu bản chất bài học", time: "00:00" },
+            { id: "s2", title: "Phân cảnh 2: Demo mã nguồn & vtable", text: "Minh họa kiến trúc C++", script: "Phân tích bộ nhớ", time: "05:20" },
+            { id: "s3", title: "Phân cảnh 3: Cạm bẫy thiết kế & Tổng kết", text: "Lưu ý khi biên dịch", script: "Thực hành trên Docker Sandbox", time: "12:15" },
+          ]
+    );
+    setEditQuizzes(
+      content.quizzes && content.quizzes.length > 0
+        ? content.quizzes.map((q: any, qi: number) => ({
+            id: q.id || `q-${qi + 1}`,
+            question: q.question || q.q || `Câu hỏi ${qi + 1}`,
+            options: Array.isArray(q.options) && q.options.length > 0 ? q.options : ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
+            answer: q.answer || (q.options ? q.options[0] : "Phương án A"),
+            correctIndex: typeof q.correctIndex === "number" ? q.correctIndex : 0,
+            explanation: q.explanation || "Giải thích chi tiết: Tuân thủ quy chuẩn kiến trúc và bộ nhớ C++.",
+          }))
+        : [
+            {
+              id: `q-1`,
+              question: `Trong chuyên đề ${lesson.title}, cơ chế cốt lõi nào chi phối hành vi hệ thống?`,
+              options: [
+                "Đóng gói an toàn tài nguyên và quản lý vòng đời bộ nhớ",
+                "Cấp phát raw pointer tự do không kiểm soát",
+                "Ghép nối cứng toàn bộ logic trong một hàm duy nhất",
+                "Bỏ qua bước giải phóng bộ nhớ heap",
+              ],
+              answer: "Đóng gói an toàn tài nguyên và quản lý vòng đời bộ nhớ",
+              correctIndex: 0,
+              explanation: "Nguyên lý đóng gói và an toàn bộ nhớ là chuẩn mực bắt buộc trong lập trình C++ hiện đại.",
+            },
+          ]
+    );
+    setEditYoutubeUrl(content.youtubeUrl || (content.youtubeId ? `https://www.youtube.com/watch?v=${content.youtubeId}` : "https://www.youtube.com/watch?v=M6FwepHC6vM"));
+    setEditObjective(content.objective || `Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${lesson.title}`);
+    setEditLead(content.lead || content.reading || `Bài học tập trung giải thích cặn kẽ bản chất kỹ thuật của ${lesson.title}, phân tích cấu trúc bộ nhớ và các mẫu thiết kế thực tế.`);
+    setEditCodeSnippet(content.codeSnippet || {
+      lang: "cpp",
+      code: `// Minh họa: ${lesson.title}\n#include <iostream>\n#include <memory>\n\nclass CoreEngine {\npublic:\n    virtual void execute() {\n        std::cout << "[Engine] Executing core architecture\\n";\n    }\n    virtual ~CoreEngine() = default;\n};\n\nint main() {\n    std::unique_ptr<CoreEngine> engine = std::make_unique<CoreEngine>();\n    engine->execute();\n    return 0;\n}`,
+      caption: `Mã nguồn C++ minh họa kiến trúc chuẩn cho bài học ${lesson.title}`,
+    });
+    setEditKeyTakeaways(
+      content.keyTakeaways && content.keyTakeaways.length > 0
+        ? content.keyTakeaways
+        : [
+            `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${lesson.title}.`,
+            "Đảm bảo an toàn bộ nhớ (Memory Safety) và tuân thủ nguyên tắc RAII.",
+            "Tối ưu hóa hiệu năng, giảm thiểu chi phí runtime và phân mảnh bộ nhớ.",
+          ]
+    );
+    setEditAntiPattern(content.antiPattern || {
+      badDesc: "Khởi tạo tài nguyên thủ công bằng con trỏ thô (raw pointer) mà không giải phóng bằng delete hoặc dùng sai phạm vi kế thừa.",
+      solution: "Đóng gói vòng đời tài nguyên vào smart pointer (unique_ptr/shared_ptr) tuân thủ chặt chẽ nguyên tắc RAII.",
+    });
+    setEditStatus(lesson.status || "Đã phát hành");
+    setDrawerTab("video");
     setLessonModalOpen(true);
-
-
-
   };
 
 
@@ -2752,154 +2799,118 @@ export default function InstructorPanel({
 
 
 
-          const genReading = `Tóm tắt học thuật chuẩn hóa cho bài "${selectedLesson.title}":\n\n1. Nguyên lý kiến trúc và lý do tồn tại của cơ chế này trong thực tế.\n2. Quy tắc viết mã an toàn, phòng tránh lỗi biên (Edge Cases).\n3. Bài học chuẩn bị cho kiểm thử Docker Sandbox & Vấn đáp AI 3D.`;
-
-
-
-          const genScenes: VideoScene[] = [
-
-
-
-            {
-
-
-
-              id: "ai-s1",
-
-
-
-              title: "Phân cảnh 1: Đặt vấn đề",
-
-
-
-              text: selectedLesson.title,
-
-
-
-              script: `Xin chào các bạn, hôm nay chúng ta sẽ đi sâu vào bản chất của ${selectedLesson.title}.`,
-
-
-
-            },
-
-
-
-            {
-
-
-
-              id: "ai-s2",
-
-
-
-              title: "Phân cảnh 2: Demo & Edge Case",
-
-
-
-              text: "Các lỗi biên thường gặp khi chạy Docker Test",
-
-
-
-              script: "Hãy chú ý kiểm tra điều kiện biên trước khi nộp bài lên hệ thống CI/CD.",
-
-
-
-            },
-
-
-
-          ];
-
-
-
-          const genQuizzes: QuizQuestion[] = [
-
-
-
-            {
-
-
-
-              id: `q-${Date.now()}`,
-
-
-
-              question: `Trọng tâm cần chú ý nhất trong bài "${selectedLesson.title}" là gì?`,
-
-
-
-              options: [
-
-
-
-                "Kiểm soát điều kiện biên & vòng đời bộ nhớ",
-
-
-
-                "Chỉ cần chạy đúng trên một bộ test mẫu",
-
-
-
-                "Bỏ qua cảnh báo của trình biên dịch",
-
-
-
-                "Gộp toàn bộ logic vào một hàm main",
-
-
-
-              ],
-
-
-
-              answer: "Kiểm soát điều kiện biên & vòng đời bộ nhớ",
-
-
-
-            },
-
-
-
-          ];
-
-
-
-          const nextLesson: Lesson = {
-
-
-
-            ...selectedLesson,
-
-
-
-            isGenerated: true,
-
-
-
-            status: "Đã phát hành",
-
-
-
-            content: { reading: genReading, videoScenes: genScenes, quizzes: genQuizzes },
-
-
-
+          const genObjective = `Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${selectedLesson.title}`;
+          const genLead = `Bài học giải thích cặn kẽ bản chất kỹ thuật của ${selectedLesson.title}, phân tích cấu trúc bộ nhớ, kiểm soát con trỏ và tối ưu hóa hiệu năng theo chuẩn C++ hiện đại.`;
+          const genReading = `# Chuyên Đề: ${selectedLesson.title}
+
+## 1. Cơ Chế Kiến Trúc & Lý Do Tồn Tại
+Trong kiến trúc phần mềm hướng đối tượng C++, việc kiểm soát chặt chẽ vòng đời của đối tượng là điều kiện tiên quyết để đảm bảo tính an toàn bộ nhớ (Memory Safety) và tránh hiện tượng rò rỉ (Memory Leak). Cơ chế ${selectedLesson.title} giúp lập trình viên phân định ranh giới sở hữu tài nguyên rõ ràng giữa các module.
+
+## 2. Quy Tắc Triển Khai Mã Nguồn An Toàn
+1. Luôn tuân thủ nguyên tắc RAII (Resource Acquisition Is Initialization).
+2. Không truyền con trỏ thô (raw pointer) qua các lớp dịch vụ nếu không có cơ chế quản lý vòng đời rõ ràng.
+3. Đảm bảo hàm hủy (destructor) là virtual khi xây dựng các lớp cơ sở (Base Class) có tính kế thừa và đa hình.
+
+## 3. Sẵn Sàng Kiểm Thử Docker Sandbox
+Mã nguồn của bài học này được thiết kế để vượt qua 100% các bộ Test Cases trong môi trường Docker Container cô lập, kiểm tra nghiêm ngặt với Valgrind memory leak checker.`;
+
+          const genCodeSnippet = {
+            lang: "cpp",
+            code: `// Minh họa: ${selectedLesson.title}\n#include <iostream>\n#include <memory>\n\nclass SystemService {\npublic:\n    virtual void execute() {\n        std::cout << "[Service] Executing: ${selectedLesson.title}\\n";\n    }\n    virtual ~SystemService() = default;\n};\n\nint main() {\n    std::unique_ptr<SystemService> svc = std::make_unique<SystemService>();\n    svc->execute();\n    return 0;\n}`,
+            caption: `Mã nguồn C++ minh họa kiến trúc chuẩn cho bài học ${selectedLesson.title}`,
           };
 
+          const genKeyTakeaways = [
+            `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${selectedLesson.title}.`,
+            "Đảm bảo an toàn bộ nhớ (Memory Safety) và tuân thủ nguyên tắc RAII.",
+            "Tối ưu hóa hiệu năng, giảm thiểu chi phí runtime và phân mảnh bộ nhớ.",
+          ];
 
+          const genAntiPattern = {
+            badDesc: "Khởi tạo tài nguyên thủ công bằng con trỏ thô (raw pointer) mà không giải phóng bằng delete hoặc dùng sai phạm vi kế thừa.",
+            solution: "Đóng gói vòng đời tài nguyên vào smart pointer (unique_ptr/shared_ptr) tuân thủ chặt chẽ nguyên tắc RAII.",
+          };
+
+          const genScenes: VideoScene[] = [
+            {
+              id: "ai-s1",
+              title: "Phân cảnh 1: Đặt vấn đề & Mục tiêu cốt lõi",
+              text: selectedLesson.title,
+              script: `Xin chào các bạn, hôm nay chúng ta sẽ đi sâu vào bản chất của ${selectedLesson.title}.`,
+              time: "00:00",
+            },
+            {
+              id: "ai-s2",
+              title: "Phân cảnh 2: Demo mã nguồn & Cấu trúc bộ nhớ",
+              text: "Các lưu ý khi biên dịch mã nguồn và kiểm tra memory leak",
+              script: "Hãy chú ý kiểm tra điều kiện biên trước khi nộp bài lên hệ thống CI/CD.",
+              time: "05:15",
+            },
+            {
+              id: "ai-s3",
+              title: "Phân cảnh 3: Cạm bẫy thiết kế & Hướng dẫn làm Lab",
+              text: "Phân tích Anti-Pattern và phương pháp khắc phục",
+              script: "Đảm bảo tuân thủ nguyên tắc RAII trong toàn bộ dự án đồ án.",
+              time: "11:40",
+            },
+          ];
+
+          const genQuizzes: QuizQuestion[] = [
+            {
+              id: `q-1`,
+              question: `Trong ${selectedLesson.title}, nguyên tắc kiến trúc nào bắt buộc phải tuân theo để triệt tiêu memory leak?`,
+              options: [
+                "Áp dụng nguyên tắc RAII và quản lý con trỏ thông minh (Smart Pointers)",
+                "Cấp phát raw pointer tự do không giải phóng bằng delete",
+                "Gộp toàn bộ logic vào một hàm main duy nhất",
+                "Bỏ qua bước kiểm tra bộ nhớ với Valgrind",
+              ],
+              answer: "Áp dụng nguyên tắc RAII và quản lý con trỏ thông minh (Smart Pointers)",
+              correctIndex: 0,
+              explanation: "RAII đảm bảo tài nguyên luôn được giải phóng khi ra khỏi scope, chống memory leak.",
+            },
+            {
+              id: `q-2`,
+              question: `Tại sao hàm hủy (Destructor) của lớp cơ sở phải khai báo là virtual khi có tính kế thừa?`,
+              options: [
+                "Để đảm bảo hàm hủy của lớp dẫn xuất được gọi đúng thứ tự, tránh rò rỉ tài nguyên",
+                "Để tăng kích thước của bảng vtable lên gấp đôi",
+                "Để ngăn chặn các lớp con override hàm thành viên",
+                "Không cần thiết, C++ tự động xử lý mọi trường hợp",
+              ],
+              answer: "Để đảm bảo hàm hủy của lớp dẫn xuất được gọi đúng thứ tự, tránh rò rỉ tài nguyên",
+              correctIndex: 0,
+              explanation: "Virtual destructor đảm bảo khi xóa đối tượng qua con trỏ lớp cha thì hàm hủy của lớp con vẫn được thực thi đầy đủ.",
+            },
+          ];
+
+          const nextLesson: Lesson = {
+            ...selectedLesson,
+            isGenerated: true,
+            status: "Đã phát hành",
+            content: {
+              reading: genReading,
+              videoScenes: genScenes,
+              quizzes: genQuizzes,
+              youtubeUrl: editYoutubeUrl || "https://www.youtube.com/watch?v=M6FwepHC6vM",
+              youtubeId: "M6FwepHC6vM",
+              objective: genObjective,
+              lead: genLead,
+              codeSnippet: genCodeSnippet,
+              keyTakeaways: genKeyTakeaways,
+              antiPattern: genAntiPattern,
+            },
+          };
 
           setEditReading(genReading);
-
-
-
+          setEditObjective(genObjective);
+          setEditLead(genLead);
+          setEditCodeSnippet(genCodeSnippet);
+          setEditKeyTakeaways(genKeyTakeaways);
+          setEditAntiPattern(genAntiPattern);
           setEditScenes(genScenes);
-
-
-
           setEditQuizzes(genQuizzes);
-
-
-
+          setEditStatus("Đã phát hành");
           setSelectedLesson(nextLesson);
 
 
@@ -3032,162 +3043,78 @@ export default function InstructorPanel({
 
 
 
-  const saveLessonEdits = async () => {
-
-
-
+  const saveLessonEdits = async (targetStatus?: "Đã phát hành" | "Bản nháp") => {
     if (!selectedLesson || !activeLessonChapterId) return;
 
+    const finalStatus = targetStatus || editStatus || "Đã phát hành";
+    let ytId = "M6FwepHC6vM";
+    if (editYoutubeUrl) {
+      const clean = editYoutubeUrl.trim();
+      if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) {
+        ytId = clean;
+      } else {
+        const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+        if (match) ytId = match[1];
+      }
+    }
 
-
-    const nextContent = {
-
-
-
-      reading: editReading,
-
-
-
+    const nextContent: LessonContent = {
+      reading: editReading || editLead,
       videoScenes: editScenes,
-
-
-
       quizzes: editQuizzes,
-
-
-
+      youtubeUrl: editYoutubeUrl,
+      youtubeId: ytId,
+      objective: editObjective,
+      lead: editLead,
+      codeSnippet: editCodeSnippet,
+      keyTakeaways: editKeyTakeaways,
+      antiPattern: editAntiPattern,
     };
 
-
-
     setClasses((prev) =>
-
-
-
       prev.map((c) =>
-
-
-
         c.id !== selectedClassId
-
-
-
           ? c
-
-
-
           : {
-
-
-
               ...c,
-
-
-
               chapters: c.chapters.map((ch) =>
-
-
-
                 ch.id !== activeLessonChapterId
-
-
-
                   ? ch
-
-
-
                   : {
-
-
-
                       ...ch,
-
-
-
                       lessons: ch.lessons.map((l) =>
-
-
-
                         l.id === selectedLesson.id
-
-
-
                           ? {
-
-
-
                               ...l,
-
-
-
+                              status: finalStatus,
+                              isGenerated: true,
                               content: nextContent,
-
-
-
                             }
-
-
-
                           : l
-
-
-
                       ),
-
-
-
                     }
-
-
-
               ),
-
-
-
             }
-
-
-
       )
-
-
-
     );
-
-
 
     await saveInstructorLesson(
-
-
-
       selectedClassId,
-
-
-
       activeLessonChapterId,
-
-
-
       selectedLesson.id,
-
-
-
-      { content: nextContent }
-
-
-
+      {
+        status: finalStatus,
+        isGenerated: true,
+        content: nextContent as any,
+      }
     );
 
-
+    try {
+      window.dispatchEvent(new CustomEvent("codemind-courses-updated", { detail: { courseId: selectedClassId } }));
+    } catch (_) {}
 
     setLessonModalOpen(false);
-
-
-
-    notify("Đã lưu thay đổi nội dung bài học.");
-
-
-
+    notify(finalStatus === "Đã phát hành" ? "Đã lưu & PHÁT HÀNH bài học cho học viên thành công!" : "Đã lưu bản nháp bài học.");
   };
 
 
@@ -9342,857 +9269,858 @@ export default function InstructorPanel({
 
 
           <div
-
-
-
             onClick={(e) => e.stopPropagation()}
-
-
-
-            className="w-full max-w-2xl max-h-[85vh] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden"
-
-
-
+            className="w-[95vw] max-w-5xl xl:max-w-6xl max-h-[92vh] rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
           >
-
-
-
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-
-
-
-              <div>
-
-
-
-                <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
-
-
-
-                  Biên soạn Bài học AIGC
-
-
-
+            {/* ── MODAL HEADER ──────────────────────────────────────────────── */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                    Biên soạn Bài học AIGC · Studio
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      editStatus === "Đã phát hành"
+                        ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                        : "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                    }`}
+                  >
+                    {editStatus}
+                  </span>
                 </div>
-
-
-
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-
-
-
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate">
                   {selectedLesson.title}
-
-
-
                 </h3>
-
-
-
               </div>
 
-
-
-              <div className="flex items-center gap-2">
-
-
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Toggle Trạng thái phát hành */}
+                <button
+                  type="button"
+                  onClick={() => setEditStatus((prev) => (prev === "Đã phát hành" ? "Bản nháp" : "Đã phát hành"))}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border flex items-center gap-1.5 ${
+                    editStatus === "Đã phát hành"
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700"
+                  }`}
+                  title="Chuyển đổi trạng thái giữa Bản nháp và Đã phát hành cho học viên"
+                >
+                  <CheckCircle2 size={13} className={editStatus === "Đã phát hành" ? "text-emerald-500" : "text-slate-400"} />
+                  <span>{editStatus === "Đã phát hành" ? "Đang phát hành" : "Đang để nháp"}</span>
+                </button>
 
                 <button
-
-
-
                   type="button"
-
-
-
                   onClick={() => {
-
-
-
                     const ch = (activeClass?.chapters || []).find((c) => c.id === activeLessonChapterId);
-
-
-
                     setPreviewLesson({
-
-
-
                       chapterTitle: ch?.title || activeClass.name,
-
-
-
                       lesson: {
-
-
-
                         ...selectedLesson,
-
-
-
+                        status: editStatus,
                         content: {
-
-
-
                           reading: editReading,
-
-
-
                           videoScenes: editScenes,
-
-
-
                           quizzes: editQuizzes,
-
-
-
+                          youtubeUrl: editYoutubeUrl,
+                          youtubeId: extractYoutubeId(editYoutubeUrl),
+                          objective: editObjective,
+                          lead: editLead,
+                          codeSnippet: editCodeSnippet,
+                          keyTakeaways: editKeyTakeaways,
+                          antiPattern: editAntiPattern,
                         },
-
-
-
                       },
-
-
-
                       assignment: ch?.assignments?.[0],
-
-
-
                     });
-
-
-
                     setPreviewTab("reading");
-
-
-
                   }}
-
-
-
-                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer"
-
-
-
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                 >
-
-
-
                   <Eye size={13} />
-
-
-
                   <span>Xem thử Học viên</span>
-
-
-
                 </button>
-
-
 
                 <button
-
-
-
                   type="button"
-
-
-
                   onClick={() => setLessonModalOpen(false)}
-
-
-
-                  className="p-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 cursor-pointer"
-
-
-
+                  className="p-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                 >
-
-
-
                   <X size={15} />
-
-
-
                 </button>
-
-
-
               </div>
-
-
-
             </div>
 
-
-
-            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center">
-
-
-
-              <MarloSegmentedControl<"upload" | "reading" | "video" | "quiz">
-
-
-
-                size="sm"
-
-
-
-                className="w-full"
-
-
-
-                value={drawerTab}
-
-
-
-                onChange={setDrawerTab}
-
-
-
-                options={[
-
-
-
-                  { id: "upload", label: "1. Tài liệu & AI" },
-
-
-
-                  { id: "reading", label: "2. Bài đọc" },
-
-
-
-                  { id: "video", label: "3. Video Script" },
-
-
-
-                  { id: "quiz", label: "4. Bộ Quiz" },
-
-
-
-                ]}
-
-
-
-              />
-
-
-
+            {/* ── MODAL SUBNAV TABS (5 TABS) ─────────────────────────────────── */}
+            <div className="px-4 sm:px-5 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { id: "video" as const, label: "1. Video & YouTube Link", icon: Video },
+                  { id: "reading" as const, label: "2. Bài đọc (Chuẩn học thuật)", icon: BookOpen },
+                  { id: "quiz" as const, label: `3. Bộ Quiz (${editQuizzes.length} câu)`, icon: HelpCircle },
+                  { id: "mindmap" as const, label: "4. Sơ đồ Tư duy (Mindmap)", icon: GitBranch },
+                  { id: "upload" as const, label: "5. Tài liệu & AI", icon: WandSparkles },
+                ].map((t) => {
+                  const Icon = t.icon;
+                  const isActive = drawerTab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setDrawerTab(t.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        isActive
+                          ? "bg-[#141619] dark:bg-white text-white dark:text-slate-900 shadow-xs"
+                          : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800/60"
+                      }`}
+                    >
+                      <Icon size={13} />
+                      <span>{t.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-
-
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-
-
-
-              {drawerTab === "upload" && (
-
-
-
-                <div className="space-y-4">
-
-
-
-                  <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-5 text-center space-y-2">
-
-
-
-                    <Upload size={22} className="mx-auto text-slate-400" />
-
-
-
-                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-
-
-
-                      {selectedLesson.documents[0]
-
-
-
-                        ? `Đang dùng tài liệu: ${selectedLesson.documents[0].name}`
-
-
-
-                        : "Chọn tài liệu giáo trình để AI biên soạn bài giảng"}
-
-
-
-                    </div>
-
-
-
-                    <div className="flex flex-wrap justify-center gap-2 pt-1">
-
-
-
-                      <button
-
-
-
-                        type="button"
-
-
-
-                        onClick={() =>
-
-
-
-                          attachLessonDocument(`${activeClass.code}_Slide_Chuan.pdf`, "480 KB")
-
-
-
-                        }
-
-
-
-                        className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold cursor-pointer"
-
-
-
-                      >
-
-
-
-                        Đính kèm Slide Chuẩn
-
-
-
-                      </button>
-
-
-
-                      <button
-
-
-
-                        type="button"
-
-
-
-                        onClick={runLessonAigc}
-
-
-
-                        disabled={isAigcRunning}
-
-
-
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-4 py-1.5 text-xs font-bold cursor-pointer"
-
-
-
-                      >
-
-
-
-                        {isAigcRunning ? (
-
-
-
-                          <>
-
-
-
-                            <Loader2 size={13} className="animate-spin" />
-
-
-
-                            <span>Đang biên soạn ({aigcStep}/4)...</span>
-
-
-
-                          </>
-
-
-
-                        ) : (
-
-
-
-                          <>
-
-
-
-                            <WandSparkles size={13} />
-
-
-
-                            <span>Kích hoạt AI biên soạn</span>
-
-
-
-                          </>
-
-
-
-                        )}
-
-
-
-                      </button>
-
-
-
-                    </div>
-
-
-
-                  </div>
-
-
-
-                </div>
-
-
-
-              )}
-
-
-
-              {drawerTab === "reading" && (
-
-
-
-                <textarea
-
-
-
-                  rows={12}
-
-
-
-                  value={editReading}
-
-
-
-                  onChange={(e) => setEditReading(e.target.value)}
-
-
-
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3.5 text-xs leading-6 text-slate-800 dark:text-slate-200 outline-none"
-
-
-
-                  placeholder="Nội dung bài đọc cho học viên..."
-
-
-
-                />
-
-
-
-              )}
-
-
-
+            {/* ── MODAL BODY CONTENT ────────────────────────────────────────── */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+              {/* ── TAB 1: VIDEO & YOUTUBE LINK ── */}
               {drawerTab === "video" && (
-
-
-
-                <div className="space-y-3">
-
-
-
-                  {editScenes.length === 0 ? (
-
-
-
-                    <p className="text-xs text-slate-400 text-center py-6">
-
-
-
-                      Chưa có kịch bản phân cảnh. Chạy AI biên soạn ở tab 1 để tự sinh script.
-
-
-
-                    </p>
-
-
-
-                  ) : (
-
-
-
-                    editScenes.map((scene, idx) => (
-
-
-
-                      <div
-
-
-
-                        key={scene.id}
-
-
-
-                        className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3 space-y-2"
-
-
-
-                      >
-
-
-
-                        <div className="text-[11px] font-bold text-slate-500">
-
-
-
-                          Phân cảnh {idx + 1}: {scene.title}
-
-
-
-                        </div>
-
-
-
-                        <input
-
-
-
-                          type="text"
-
-
-
-                          value={scene.text}
-
-
-
-                          onChange={(e) =>
-
-
-
-                            setEditScenes((prev) =>
-
-
-
-                              prev.map((s) =>
-
-
-
-                                s.id === scene.id ? { ...s, text: e.target.value } : s
-
-
-
-                              )
-
-
-
-                            )
-
-
-
-                          }
-
-
-
-                          className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs font-semibold"
-
-
-
-                        />
-
-
-
-                        <textarea
-
-
-
-                          rows={2}
-
-
-
-                          value={scene.script}
-
-
-
-                          onChange={(e) =>
-
-
-
-                            setEditScenes((prev) =>
-
-
-
-                              prev.map((s) =>
-
-
-
-                                s.id === scene.id ? { ...s, script: e.target.value } : s
-
-
-
-                              )
-
-
-
-                            )
-
-
-
-                          }
-
-
-
-                          className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs"
-
-
-
-                        />
-
-
-
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-4 sm:p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          <Video size={14} className="text-blue-500" />
+                          <span>Liên kết Video Bài giảng YouTube</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Nhập URL YouTube hoặc mã video 11 ký tự để phát trực tiếp trên tab "Video bài giảng" của học viên.
+                        </p>
                       </div>
 
-
-
-                    ))
-
-
-
-                  )}
-
-
-
-                </div>
-
-
-
-              )}
-
-
-
-              {drawerTab === "quiz" && (
-
-
-
-                <div className="space-y-3">
-
-
-
-                  <button
-
-
-
-                    type="button"
-
-
-
-                    onClick={() =>
-
-
-
-                      setEditQuizzes((prev) => [
-
-
-
-                        ...prev,
-
-
-
-                        {
-
-
-
-                          id: `q-${Date.now()}`,
-
-
-
-                          question: "Câu hỏi kiểm tra mới...",
-
-
-
-                          options: ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
-
-
-
-                          answer: "Phương án A",
-
-
-
-                        },
-
-
-
-                      ])
-
-
-
-                    }
-
-
-
-                    className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-bold cursor-pointer"
-
-
-
-                  >
-
-
-
-                    + Thêm câu hỏi Quiz
-
-
-
-                  </button>
-
-
-
-                  {editQuizzes.map((q, qi) => (
-
-
-
-                    <div
-
-
-
-                      key={q.id}
-
-
-
-                      className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2"
-
-
-
-                    >
-
-
-
-                      <div className="text-[11px] font-bold text-slate-500">Câu hỏi {qi + 1}</div>
-
-
-
-                      <input
-
-
-
-                        type="text"
-
-
-
-                        value={q.question}
-
-
-
-                        onChange={(e) =>
-
-
-
-                          setEditQuizzes((prev) =>
-
-
-
-                            prev.map((item) =>
-
-
-
-                              item.id === q.id ? { ...item, question: e.target.value } : item
-
-
-
-                            )
-
-
-
-                          )
-
-
-
-                        }
-
-
-
-                        className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5 text-xs font-bold"
-
-
-
-                      />
-
-
-
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-mono text-slate-400">YouTube ID:</span>
+                        <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-900">
+                          {extractYoutubeId(editYoutubeUrl)}
+                        </span>
+                      </div>
                     </div>
 
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={editYoutubeUrl}
+                        onChange={(e) => setEditYoutubeUrl(e.target.value)}
+                        placeholder="https://www.youtube.com/watch?v=M6FwepHC6vM hoặc mã video..."
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3.5 py-2 text-xs font-mono font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                      />
 
+                      {/* Gợi ý video chuẩn */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Chọn nhanh:</span>
+                        {[
+                          { title: "Kế thừa C++ (F8 Official)", id: "M6FwepHC6vM" },
+                          { title: "Đa hình & Bảng ảo vtable", id: "0QUZ3w6U9-I" },
+                          { title: "Smart Pointers (unique/shared)", id: "UOBHzG63UDA" },
+                        ].map((v) => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setEditYoutubeUrl(`https://www.youtube.com/watch?v=${v.id}`)}
+                            className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-blue-400 cursor-pointer"
+                          >
+                            {v.title}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-                  ))}
+                    {/* Live Preview Iframe */}
+                    <div className="space-y-2 pt-2">
+                      <div className="text-[11px] font-bold text-slate-500 flex items-center justify-between">
+                        <span>Khung xem trước Video (16:9 Live Preview):</span>
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">Đồng bộ học viên 100%</span>
+                      </div>
+                      <div className="relative aspect-video w-full max-w-2xl mx-auto rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-black shadow-sm">
+                        <iframe
+                          src={`https://www.youtube-nocookie.com/embed/${extractYoutubeId(editYoutubeUrl)}?rel=0&modestbranding=1`}
+                          title="YouTube Preview"
+                          className="w-full h-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  </div>
 
+                  {/* Video Scenes / Chapters */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                          Danh sách Phân cảnh Video (Video Chapters · {editScenes.length} mốc)
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Các mốc thời gian giúp học viên nhảy nhanh đến đoạn kiến thức cần xem.
+                        </p>
+                      </div>
 
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditScenes((prev) => [
+                            ...prev,
+                            {
+                              id: `scene-${Date.now()}`,
+                              title: `Phân cảnh ${prev.length + 1}`,
+                              text: "Tóm tắt phân cảnh...",
+                              script: "Kịch bản bài giảng...",
+                              time: `${String(prev.length * 4).padStart(2, "0")}:00`,
+                            },
+                          ])
+                        }
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-xs font-bold cursor-pointer flex items-center gap-1"
+                      >
+                        <Plus size={13} />
+                        <span>Thêm phân cảnh</span>
+                      </button>
+                    </div>
 
+                    <div className="space-y-2.5">
+                      {editScenes.map((sc, idx) => (
+                        <div
+                          key={sc.id}
+                          className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 p-3.5 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                #{idx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={sc.time || "00:00"}
+                                onChange={(e) =>
+                                  setEditScenes((prev) =>
+                                    prev.map((item) => (item.id === sc.id ? { ...item, time: e.target.value } : item))
+                                  )
+                                }
+                                placeholder="00:00"
+                                className="w-16 font-mono text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 py-1 text-center"
+                              />
+                              <input
+                                type="text"
+                                value={sc.title}
+                                onChange={(e) =>
+                                  setEditScenes((prev) =>
+                                    prev.map((item) => (item.id === sc.id ? { ...item, title: e.target.value } : item))
+                                  )
+                                }
+                                placeholder="Tiêu đề phân cảnh..."
+                                className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1 text-xs font-bold text-slate-900 dark:text-white"
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setEditScenes((prev) => prev.filter((item) => item.id !== sc.id))}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-500 cursor-pointer transition"
+                              title="Xóa phân cảnh"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+
+                          <input
+                            type="text"
+                            value={sc.text}
+                            onChange={(e) =>
+                              setEditScenes((prev) =>
+                                prev.map((item) => (item.id === sc.id ? { ...item, text: e.target.value } : item))
+                              )
+                            }
+                            placeholder="Tóm tắt phân cảnh..."
+                            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-300"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-
-
-
               )}
 
+              {/* ── TAB 2: BÀI ĐỌC (CHUẨN HỌC THUẬT) ── */}
+              {drawerTab === "reading" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                        Cấu trúc Bài đọc Học thuật theo Mẫu Chuẩn
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Tuân theo mẫu: Mục tiêu · Tóm tắt · Code mẫu C++ · Nguyên lý cốt lõi · Anti-Pattern.
+                      </p>
+                    </div>
 
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditObjective(`Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${selectedLesson.title}`);
+                        setEditLead(`Bài học giải thích cặn kẽ bản chất kỹ thuật của ${selectedLesson.title}, phân tích cấu trúc bộ nhớ và các mẫu thiết kế thực tế.`);
+                        setEditCodeSnippet({
+                          lang: "cpp",
+                          code: `// Minh họa: ${selectedLesson.title}\n#include <iostream>\n#include <memory>\n\nclass CoreEngine {\npublic:\n    virtual void execute() {\n        std::cout << "[Engine] Executing: ${selectedLesson.title}\\n";\n    }\n    virtual ~CoreEngine() = default;\n};\n\nint main() {\n    std::unique_ptr<CoreEngine> engine = std::make_unique<CoreEngine>();\n    engine->execute();\n    return 0;\n}`,
+                          caption: `Mã nguồn C++ minh họa kiến trúc chuẩn cho bài học ${selectedLesson.title}`,
+                        });
+                        setEditKeyTakeaways([
+                          `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${selectedLesson.title}.`,
+                          "Đảm bảo an toàn bộ nhớ (Memory Safety) và tuân thủ nguyên tắc RAII.",
+                          "Tối ưu hóa hiệu năng, giảm thiểu chi phí runtime và phân mảnh bộ nhớ.",
+                        ]);
+                        setEditAntiPattern({
+                          badDesc: "Khởi tạo tài nguyên thủ công bằng con trỏ thô (raw pointer) mà không giải phóng bằng delete hoặc dùng sai phạm vi kế thừa.",
+                          solution: "Đóng gói vòng đời tài nguyên vào smart pointer (unique_ptr/shared_ptr) tuân thủ chặt chẽ nguyên tắc RAII.",
+                        });
+                        notify("Đã nạp mẫu bài đọc C++ chuẩn hóa.");
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold cursor-pointer hover:bg-blue-100 flex items-center gap-1.5"
+                    >
+                      <Sparkles size={13} />
+                      <span>Áp dụng mẫu bài giảng C++ chuẩn</span>
+                    </button>
+                  </div>
 
+                  {/* Mục tiêu & Tóm tắt */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        <span>Mục tiêu bài học (Objective)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editObjective}
+                        onChange={(e) => setEditObjective(e.target.value)}
+                        placeholder="Mục tiêu cốt lõi của bài giảng..."
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span>Tóm tắt mở đầu (Lead)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editLead}
+                        onChange={(e) => setEditLead(e.target.value)}
+                        placeholder="Đoạn văn dẫn nhập bài học..."
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Code Snippet Box */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 bg-slate-50/40 dark:bg-slate-950/40">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Code2 size={14} className="text-amber-500" />
+                        <span>Mã nguồn C++ Minh họa (Code Snippet)</span>
+                      </label>
+                      <span className="text-[10px] font-mono text-slate-400">Hiển thị trong khung code có nút sao chép</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Ngôn ngữ:</span>
+                        <input
+                          type="text"
+                          value={editCodeSnippet.lang}
+                          onChange={(e) => setEditCodeSnippet((prev) => ({ ...prev, lang: e.target.value }))}
+                          className="w-full mt-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs font-mono font-bold"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Chú thích mã:</span>
+                        <input
+                          type="text"
+                          value={editCodeSnippet.caption}
+                          onChange={(e) => setEditCodeSnippet((prev) => ({ ...prev, caption: e.target.value }))}
+                          placeholder="Mô tả ngắn cho đoạn mã..."
+                          className="w-full mt-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <textarea
+                      rows={6}
+                      value={editCodeSnippet.code}
+                      onChange={(e) => setEditCodeSnippet((prev) => ({ ...prev, code: e.target.value }))}
+                      placeholder="// Nhập code C++ minh họa..."
+                      className="w-full font-mono text-xs leading-relaxed rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-950 text-slate-100 p-3.5 outline-none"
+                    />
+                  </div>
+
+                  {/* Nguyên lý cốt lõi (Key Takeaways) */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <CheckCircle2 size={13} className="text-emerald-500" />
+                        <span>Nguyên lý cốt lõi cần nhớ (Key Takeaways)</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setEditKeyTakeaways((prev) => [...prev, "Nguyên lý bổ sung..."])}
+                        className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px] font-bold cursor-pointer"
+                      >
+                        + Thêm gạch đầu dòng
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {editKeyTakeaways.map((point, pIdx) => (
+                        <div key={pIdx} className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-slate-400 w-6">0{pIdx + 1}.</span>
+                          <input
+                            type="text"
+                            value={point}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditKeyTakeaways((prev) => prev.map((item, idx) => (idx === pIdx ? val : item)));
+                            }}
+                            className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditKeyTakeaways((prev) => prev.filter((_, idx) => idx !== pIdx))}
+                            className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Anti-Pattern & Clean Architecture */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20 p-3.5 space-y-1.5">
+                      <label className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                        <AlertTriangle size={13} />
+                        <span>Sai lầm thường gặp (Anti-Pattern)</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={editAntiPattern.badDesc}
+                        onChange={(e) => setEditAntiPattern((prev) => ({ ...prev, badDesc: e.target.value }))}
+                        placeholder="Mô tả sai lầm hoặc cạm bẫy thiết kế..."
+                        className="w-full rounded-lg border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-950 p-2.5 text-xs text-slate-800 dark:text-slate-200"
+                      />
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 p-3.5 space-y-1.5">
+                      <label className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                        <ShieldCheck size={13} />
+                        <span>Giải pháp chuẩn Kiến trúc</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={editAntiPattern.solution}
+                        onChange={(e) => setEditAntiPattern((prev) => ({ ...prev, solution: e.target.value }))}
+                        placeholder="Mô tả giải pháp kiến trúc tối ưu..."
+                        className="w-full rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-950 p-2.5 text-xs text-slate-800 dark:text-slate-200"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Nội dung chi tiết Markdown */}
+                  <div className="space-y-1.5 pt-2">
+                    <label className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                      <span>Nội dung Lý thuyết Chuyên sâu (Markdown)</span>
+                      <span className="text-[10px] font-mono text-slate-400">Hỗ trợ định dạng tiêu đề, danh sách, mã nguồn</span>
+                    </label>
+                    <textarea
+                      rows={8}
+                      value={editReading}
+                      onChange={(e) => setEditReading(e.target.value)}
+                      placeholder="# Tiêu đề bài giảng..."
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3.5 text-xs leading-6 text-slate-800 dark:text-slate-200 outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ── TAB 3: BỘ QUIZ (TRẮC NGHIỆM 4 PHƯƠNG ÁN) ── */}
+              {drawerTab === "quiz" && (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                        Bộ Câu Hỏi Trắc Nghiệm ({editQuizzes.length} câu)
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Mỗi câu hỏi gồm 4 phương án A, B, C, D kèm đáp án đúng và lời giải thích chuyên sâu.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditQuizzes([
+                            {
+                              id: `q-1`,
+                              question: `Trong ${selectedLesson.title}, nguyên tắc kiến trúc nào bắt buộc phải tuân theo để triệt tiêu memory leak?`,
+                              options: [
+                                "Áp dụng nguyên tắc RAII và quản lý con trỏ thông minh (Smart Pointers)",
+                                "Cấp phát raw pointer tự do không giải phóng bằng delete",
+                                "Gộp toàn bộ logic vào một hàm main duy nhất",
+                                "Bỏ qua bước kiểm tra bộ nhớ với Valgrind",
+                              ],
+                              answer: "Áp dụng nguyên tắc RAII và quản lý con trỏ thông minh (Smart Pointers)",
+                              correctIndex: 0,
+                              explanation: "RAII đảm bảo tài nguyên luôn được giải phóng khi ra khỏi scope, chống memory leak.",
+                            },
+                            {
+                              id: `q-2`,
+                              question: `Tại sao hàm hủy (Destructor) của lớp cơ sở phải khai báo là virtual khi có tính kế thừa?`,
+                              options: [
+                                "Để đảm bảo hàm hủy của lớp dẫn xuất được gọi đúng thứ tự, tránh rò rỉ tài nguyên",
+                                "Để tăng kích thước của bảng vtable lên gấp đôi",
+                                "Để ngăn chặn các lớp con override hàm thành viên",
+                                "Không cần thiết, C++ tự động xử lý mọi trường hợp",
+                              ],
+                              answer: "Để đảm bảo hàm hủy của lớp dẫn xuất được gọi đúng thứ tự, tránh rò rỉ tài nguyên",
+                              correctIndex: 0,
+                              explanation: "Virtual destructor đảm bảo khi xóa đối tượng qua con trỏ lớp cha thì hàm hủy của lớp con vẫn được thực thi đầy đủ.",
+                            },
+                            {
+                              id: `q-3`,
+                              question: `Độ phức tạp tra cứu phương thức thông qua con trỏ vptr tới bảng ảo vtable trong runtime là bao nhiêu?`,
+                              options: [
+                                "O(1) - Chi phí tra cứu chỉ là một phép dịch offset trong mảng con trỏ hàm",
+                                "O(N) - Phải duyệt tuần tự qua toàn bộ cây phả hệ các lớp",
+                                "O(log N) - Tra cứu theo thuật toán cây nhị phân",
+                                "Không xác định tùy thuộc vào dung lượng RAM",
+                              ],
+                              answer: "O(1) - Chi phí tra cứu chỉ là một phép dịch offset trong mảng con trỏ hàm",
+                              correctIndex: 0,
+                              explanation: "vtable là mảng các con trỏ hàm cố định, compiler tính toán offset từ lúc biên dịch nên tra cứu luôn là O(1).",
+                            },
+                          ]);
+                          notify("Đã nạp 3 câu hỏi trắc nghiệm C++ chuẩn.");
+                        }}
+                        className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold cursor-pointer hover:bg-blue-100 flex items-center gap-1.5"
+                      >
+                        <Sparkles size={13} />
+                        <span>Nạp bộ câu hỏi mẫu C++</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditQuizzes((prev) => [
+                            ...prev,
+                            {
+                              id: `q-${Date.now()}`,
+                              question: "Câu hỏi trắc nghiệm mới...",
+                              options: [
+                                "Phương án A (Đáp án đúng)",
+                                "Phương án B",
+                                "Phương án C",
+                                "Phương án D",
+                              ],
+                              answer: "Phương án A (Đáp án đúng)",
+                              correctIndex: 0,
+                              explanation: "Giải thích chi tiết vì sao phương án này chính xác...",
+                            },
+                          ])
+                        }
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white dark:bg-white dark:text-slate-900 text-xs font-bold cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Plus size={13} />
+                        <span>+ Thêm câu hỏi</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {editQuizzes.map((q, qi) => {
+                      const letters = ["A", "B", "C", "D"];
+                      const currentCorrectIdx =
+                        typeof q.correctIndex === "number"
+                          ? q.correctIndex
+                          : q.options?.findIndex((opt) => opt === q.answer) >= 0
+                          ? q.options.findIndex((opt) => opt === q.answer)
+                          : 0;
+
+                      return (
+                        <div
+                          key={q.id}
+                          className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-4 sm:p-5 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                              CÂU HỎI {qi + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setEditQuizzes((prev) => prev.filter((item) => item.id !== q.id))}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-500 cursor-pointer transition flex items-center gap-1 text-xs"
+                            >
+                              <Trash2 size={13} />
+                              <span>Xóa câu hỏi</span>
+                            </button>
+                          </div>
+
+                          {/* Tiêu đề câu hỏi */}
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 uppercase mb-1 block">
+                              Nội dung câu hỏi:
+                            </label>
+                            <input
+                              type="text"
+                              value={q.question}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditQuizzes((prev) =>
+                                  prev.map((item) => (item.id === q.id ? { ...item, question: val } : item))
+                                );
+                              }}
+                              placeholder="Nhập nội dung câu hỏi trắc nghiệm..."
+                              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-bold text-slate-900 dark:text-white"
+                            />
+                          </div>
+
+                          {/* 4 Phương án A, B, C, D */}
+                          <div className="space-y-2 pt-1">
+                            <label className="text-[11px] font-bold text-slate-500 uppercase flex items-center justify-between">
+                              <span>4 Phương án trả lời:</span>
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
+                                * Bấm vào chữ [A], [B], [C], [D] để chọn đáp án đúng
+                              </span>
+                            </label>
+
+                            {letters.map((letter, optIdx) => {
+                              const isCorrect = currentCorrectIdx === optIdx;
+                              const optVal = q.options?.[optIdx] || "";
+
+                              return (
+                                <div key={optIdx} className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditQuizzes((prev) =>
+                                        prev.map((item) => {
+                                          if (item.id !== q.id) return item;
+                                          return {
+                                            ...item,
+                                            correctIndex: optIdx,
+                                            answer: item.options?.[optIdx] || `Phương án ${letter}`,
+                                          };
+                                        })
+                                      );
+                                    }}
+                                    className={`w-8 h-8 rounded-lg font-mono text-xs font-bold flex items-center justify-center shrink-0 transition cursor-pointer border ${
+                                      isCorrect
+                                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                        : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400"
+                                    }`}
+                                    title={`Bấm để đặt [${letter}] là đáp án đúng`}
+                                  >
+                                    {letter}
+                                  </button>
+
+                                  <input
+                                    type="text"
+                                    value={optVal}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditQuizzes((prev) =>
+                                        prev.map((item) => {
+                                          if (item.id !== q.id) return item;
+                                          const nextOpts = [...(item.options || ["", "", "", ""])];
+                                          nextOpts[optIdx] = val;
+                                          const updatedAnswer = item.correctIndex === optIdx ? val : item.answer;
+                                          return {
+                                            ...item,
+                                            options: nextOpts,
+                                            answer: updatedAnswer,
+                                          };
+                                        })
+                                      );
+                                    }}
+                                    placeholder={`Nhập nội dung phương án ${letter}...`}
+                                    className={`flex-1 rounded-xl border px-3 py-1.5 text-xs ${
+                                      isCorrect
+                                        ? "border-emerald-400 dark:border-emerald-700 bg-emerald-50/30 dark:bg-emerald-950/20 text-slate-900 dark:text-white font-medium"
+                                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200"
+                                    }`}
+                                  />
+
+                                  {isCorrect && (
+                                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-mono shrink-0 px-2">
+                                      ✓ ĐÁP ÁN ĐÚNG
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Lời giải thích */}
+                          <div className="pt-1">
+                            <label className="text-[11px] font-bold text-slate-500 uppercase mb-1 block">
+                              Giải thích đáp án (Hiển thị khi học viên trả lời xong):
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={q.explanation || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditQuizzes((prev) =>
+                                  prev.map((item) => (item.id === q.id ? { ...item, explanation: val } : item))
+                                );
+                              }}
+                              placeholder="Giải thích tại sao phương án này chính xác..."
+                              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── TAB 4: SƠ ĐỒ TƯ DUY (MINDMAP) ── */}
+              {drawerTab === "mindmap" && (
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 bg-slate-50/40 dark:bg-slate-900/30">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shrink-0">
+                        <GitBranch size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Sơ Đồ Tư Duy (Master Mindmap) Của Bài Học & Chương
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Cây tri thức chuẩn hóa do Giảng viên xây dựng được đồng bộ tự động sang tab Mindmap của học viên.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLessonModalOpen(false);
+                        handleTabSwitch("mindmap");
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black text-white dark:bg-white dark:text-slate-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                    >
+                      <GitBranch size={13} />
+                      <span>Mở Studio Master Mindmap để chỉnh sửa Nodes</span>
+                    </button>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-2 text-xs">
+                    <div className="font-bold text-slate-900 dark:text-white">Trạng thái đồng bộ Master Mindmap:</div>
+                    <ul className="space-y-1.5 text-slate-600 dark:text-slate-300 pl-4 list-disc">
+                      <li>Khái niệm bài học: <strong className="text-slate-900 dark:text-white">{selectedLesson.title}</strong></li>
+                      <li>Học phần áp dụng: <span className="font-mono">{activeClass.code} · {activeClass.name}</span></li>
+                      <li>Khi Giảng viên cập nhật các nút tại Tab "Master Mindmap", hệ thống lập tức lưu vào SQLite và hiển thị trực tiếp cho học viên.</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* ── TAB 5: TÀI LIỆU & AI ── */}
+              {drawerTab === "upload" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/30">
+                    <Upload size={24} className="mx-auto text-slate-400" />
+                    <div>
+                      <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                        {selectedLesson.documents[0]
+                          ? `Đang dùng tài liệu: ${selectedLesson.documents[0].name}`
+                          : "Chọn tài liệu giáo trình để AI biên soạn bài giảng"}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Hỗ trợ định dạng PDF, PPTX, Docx giáo trình chuẩn ABET
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap justify-center gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => attachLessonDocument(`${activeClass.code}_Slide_Chuan.pdf`, "480 KB")}
+                        className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs font-semibold cursor-pointer hover:bg-slate-50"
+                      >
+                        Đính kèm Slide Chuẩn {activeClass.code}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={runLessonAigc}
+                        disabled={isAigcRunning}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-4 py-2 text-xs font-bold cursor-pointer shadow-xs"
+                      >
+                        {isAigcRunning ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" />
+                            <span>Đang biên soạn ({aigcStep}/4)...</span>
+                          </>
+                        ) : (
+                          <>
+                            <WandSparkles size={13} />
+                            <span>Kích hoạt AI biên soạn toàn bộ</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
+            {/* ── MODAL FOOTER ──────────────────────────────────────────────── */}
+            <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-slate-500 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>Trạng thái lưu: <strong className="text-slate-800 dark:text-slate-200">{editStatus}</strong></span>
+              </div>
 
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLessonModalOpen(false)}
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Đóng
+                </button>
 
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => saveLessonEdits("Bản nháp")}
+                  className="rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Lưu bản nháp
+                </button>
 
-
-
-              <button
-
-
-
-                type="button"
-
-
-
-                onClick={() => setLessonModalOpen(false)}
-
-
-
-                className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-semibold cursor-pointer"
-
-
-
-              >
-
-
-
-                Đóng
-
-
-
-              </button>
-
-
-
-              <button
-
-
-
-                type="button"
-
-
-
-                onClick={saveLessonEdits}
-
-
-
-                className="rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-4 py-2 text-xs font-bold cursor-pointer"
-
-
-
-              >
-
-
-
-                Lưu bài học
-
-
-
-              </button>
-
-
-
+                <button
+                  type="button"
+                  onClick={() => saveLessonEdits("Đã phát hành")}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 text-xs font-bold cursor-pointer shadow-md transition flex items-center gap-1.5"
+                >
+                  <CheckCircle2 size={14} />
+                  <span>LƯU & PHÁT HÀNH CHO HỌC VIÊN</span>
+                </button>
+              </div>
             </div>
-
-
-
           </div>
 
 

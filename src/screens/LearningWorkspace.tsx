@@ -148,15 +148,24 @@ export default function LearningWorkspace({
   // Hydrate student learning overview (XP, completed lessons, chapter submissions, DB courses)
   useEffect(() => {
     let active = true;
-    fetchStudentLearningOverview().then((data) => {
-      if (!active || !data) return;
-      setLearningOverview(data);
-      if (typeof data.profile?.exp_points === "number") {
-        setTotalXpEarned(data.profile.exp_points);
-      }
-    });
+    const hydrateOverview = () => {
+      fetchStudentLearningOverview().then((data) => {
+        if (!active || !data) return;
+        setLearningOverview(data);
+        if (typeof data.profile?.exp_points === "number") {
+          setTotalXpEarned(data.profile.exp_points);
+        }
+      });
+    };
+
+    hydrateOverview();
+
+    // Lắng nghe cập nhật bài giảng thời gian thực từ Giảng viên
+    window.addEventListener("codemind-courses-updated", hydrateOverview);
+
     return () => {
       active = false;
+      window.removeEventListener("codemind-courses-updated", hydrateOverview);
     };
   }, []);
 
@@ -169,6 +178,15 @@ export default function LearningWorkspace({
       text: "Chào bạn! Mình là trợ lý AI Socratic. Mình sẽ cùng bạn phản biện bản chất kỹ thuật của môn học này, gợi mở tư duy chứ tuyệt đối không mớm sẵn lời giải nhé!",
     },
   ]);
+
+  // Helper trích xuất mã YouTube Video từ URL hoặc ID
+  const extractYoutubeId = (url?: string): string | undefined => {
+    if (!url) return undefined;
+    const clean = url.trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+    const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    return match ? match[1] : undefined;
+  };
 
   // Merge SQLite courses, AIGC lessons, and completed lesson progress into MULTI_CHAPTER_SUBJECTS
   const resolvedSubjects: SubjectModuleData[] = useMemo(() => {
@@ -190,37 +208,67 @@ export default function LearningWorkspace({
         const updatedBaseLessons: LessonItem[] = chap.lessons.map((lesson, lIdx) => {
           const isDoneInDb = completedSet.has(`${sub.id}:${lesson.id}`);
           const dbL = dbLessons[lIdx];
-          const dbReading =
-            dbL?.isInstructorEdited && dbL?.status === "Đã phát hành" && dbL?.content?.reading
-              ? String(dbL.content.reading)
-              : null;
+          const dbContent = dbL?.content || {};
+          const isEdited = Boolean(
+            dbL?.isInstructorEdited ||
+            (dbContent && (dbContent.reading || dbContent.youtubeUrl || dbContent.youtubeId || (dbContent.quizzes && dbContent.quizzes.length > 0)))
+          );
+
+          const reading = isEdited && dbContent?.reading ? String(dbContent.reading) : lesson.lead;
+          const objective = isEdited && dbContent?.objective ? String(dbContent.objective) : lesson.objective;
+          const lead = isEdited && dbContent?.lead ? String(dbContent.lead) : (reading || lesson.lead);
+          const codeSnippet = isEdited && dbContent?.codeSnippet ? dbContent.codeSnippet : lesson.codeSnippet;
+          const keyTakeaways =
+            isEdited && Array.isArray(dbContent?.keyTakeaways) && dbContent.keyTakeaways.length > 0
+              ? dbContent.keyTakeaways
+              : lesson.keyTakeaways;
+          const antiPattern = isEdited && dbContent?.antiPattern ? dbContent.antiPattern : lesson.antiPattern;
+          const youtubeId = isEdited ? (dbContent?.youtubeId || extractYoutubeId(dbContent?.youtubeUrl)) : undefined;
+          const youtubeUrl = isEdited ? dbContent?.youtubeUrl : undefined;
+          const quizzes = isEdited && Array.isArray(dbContent?.quizzes) && dbContent.quizzes.length > 0 ? dbContent.quizzes : undefined;
+          const videoScenes = isEdited && Array.isArray(dbContent?.videoScenes) && dbContent.videoScenes.length > 0 ? dbContent.videoScenes : undefined;
+
           return {
             ...lesson,
             status: isDoneInDb ? "done" : lesson.status,
-            lead: dbReading || lesson.lead,
+            lead,
+            objective,
+            codeSnippet,
+            keyTakeaways,
+            antiPattern,
+            youtubeId,
+            youtubeUrl,
+            quizzes,
+            videoScenes,
           };
         });
 
         const extraPublished: LessonItem[] = dbLessons
           .slice(chap.lessons.length)
-          .filter((l: any) => l?.status === "Đã phát hành")
           .map((l: any, extraIdx: number) => {
             const extraId = `${chap.number}.${chap.lessons.length + extraIdx + 1}`;
             const isDone = completedSet.has(`${sub.id}:${extraId}`);
+            const dbContent = l?.content || {};
+            const ytId = dbContent?.youtubeId || extractYoutubeId(dbContent?.youtubeUrl);
             return {
               id: extraId,
-              title: l.title || `Bài bổ sung ${extraId}`,
+              title: l.title || `Bài ${extraId}`,
               type: "lecture" as const,
-              duration: l.duration || "12 phút",
+              duration: l.duration || "15 phút",
               status: isDone ? "done" : "active",
               xp: 50,
-              objective: l.title || "Nội dung bổ sung do Giảng viên phát hành",
-              lead:
-                l?.content?.reading ||
-                "Nội dung bài giảng mới được Giảng viên biên soạn và phát hành trên SQLite.",
-              keyTakeaways: [
-                "Hoàn thành phần đọc lý thuyết và thực hành theo hướng dẫn giảng viên.",
-              ],
+              objective: dbContent?.objective || l.title || "Nội dung bài học do Giảng viên phát hành",
+              lead: dbContent?.lead || dbContent?.reading || "Nội dung bài giảng mới được Giảng viên cập nhật.",
+              codeSnippet: dbContent?.codeSnippet,
+              keyTakeaways:
+                Array.isArray(dbContent?.keyTakeaways) && dbContent.keyTakeaways.length > 0
+                  ? dbContent.keyTakeaways
+                  : ["Nắm vững kiến thức trọng tâm của bài học."],
+              antiPattern: dbContent?.antiPattern,
+              youtubeId: ytId,
+              youtubeUrl: dbContent?.youtubeUrl,
+              quizzes: dbContent?.quizzes,
+              videoScenes: dbContent?.videoScenes,
             };
           });
 
@@ -329,9 +377,46 @@ export default function LearningWorkspace({
       explanation: "Tách biệt mối quan tâm giúp giảm coupling và tăng khả năng bảo trì, mở rộng hệ thống phần mềm.",
     },
   ];
-  const activeQuizQuestions = currentMultiSubject?.quizQuestions?.length
-    ? currentMultiSubject.quizQuestions
-    : (currentSubject?.quizQuestions?.length ? currentSubject.quizQuestions : fallbackQuiz);
+  const activeQuizQuestions = useMemo(() => {
+    if (activeMultiLesson?.quizzes && activeMultiLesson.quizzes.length > 0) {
+      const optionLetters = ["a", "b", "c", "d"];
+      return activeMultiLesson.quizzes.map((q: any, qIdx: number) => {
+        const rawOpts =
+          Array.isArray(q.options) && q.options.length > 0
+            ? q.options
+            : ["Phương án A", "Phương án B", "Phương án C", "Phương án D"];
+        const mappedOpts = rawOpts.map((text: string, oIdx: number) => ({
+          id: optionLetters[oIdx] || `opt-${oIdx}`,
+          text: String(text),
+        }));
+
+        let correctId = "a";
+        if (q.correct && ["a", "b", "c", "d"].includes(String(q.correct).toLowerCase())) {
+          correctId = String(q.correct).toLowerCase();
+        } else if (typeof q.correctIndex === "number" && optionLetters[q.correctIndex]) {
+          correctId = optionLetters[q.correctIndex];
+        } else if (q.answer) {
+          const matchIdx = rawOpts.findIndex(
+            (optStr: string) => optStr.trim().toLowerCase() === String(q.answer).trim().toLowerCase()
+          );
+          if (matchIdx !== -1) {
+            correctId = optionLetters[matchIdx];
+          }
+        }
+
+        return {
+          q: q.question || q.q || `Câu hỏi ${qIdx + 1}`,
+          options: mappedOpts,
+          correct: correctId,
+          explanation: q.explanation || "Giải thích chi tiết: Tuân thủ quy chuẩn kiến trúc và bộ nhớ C++.",
+        };
+      });
+    }
+
+    return currentMultiSubject?.quizQuestions?.length
+      ? currentMultiSubject.quizQuestions
+      : (currentSubject?.quizQuestions?.length ? currentSubject.quizQuestions : fallbackQuiz);
+  }, [activeMultiLesson, currentMultiSubject, currentSubject]);
   const legacyLesson = currentSubject?.lessons?.[0] || {
     objective: "Nắm vững nguyên lý và cấu trúc kiến trúc cốt lõi.",
     resources: [
@@ -1074,6 +1159,8 @@ export default function LearningWorkspace({
                 lessonId={activeMultiLesson.id}
                 lessonTitle={activeMultiLesson.title}
                 mentorMascot={mentorMascot}
+                customYoutubeId={activeMultiLesson.youtubeId}
+                customScenes={activeMultiLesson.videoScenes}
                 onNavigateToTab={(targetTab) => {
                   if (targetTab !== "code") {
                     setTab(targetTab as Tab);

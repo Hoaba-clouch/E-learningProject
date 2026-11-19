@@ -5,6 +5,8 @@ export interface QuizQuestion {
   question: string;
   options: string[];
   answer: string;
+  correctIndex?: number;
+  explanation?: string;
 }
 
 export interface VideoScene {
@@ -12,12 +14,27 @@ export interface VideoScene {
   title: string;
   text: string;
   script: string;
+  time?: string;
 }
 
 export interface LessonContent {
   reading: string;
   videoScenes: VideoScene[];
   quizzes: QuizQuestion[];
+  youtubeUrl?: string;
+  youtubeId?: string;
+  objective?: string;
+  lead?: string;
+  codeSnippet?: {
+    lang: string;
+    code: string;
+    caption: string;
+  };
+  keyTakeaways?: string[];
+  antiPattern?: {
+    badDesc: string;
+    solution: string;
+  };
 }
 
 export interface DocumentFile {

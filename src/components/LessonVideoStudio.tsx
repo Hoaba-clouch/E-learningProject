@@ -41,6 +41,8 @@ interface LessonVideoStudioProps {
   lessonTitle?: string;
   mentorMascot: MentorMascot;
   onNavigateToTab?: (tab: "lecture" | "quiz" | "code" | "mindmap") => void;
+  customYoutubeId?: string;
+  customScenes?: { id?: string; title: string; text?: string; script?: string; time?: string }[];
 }
 
 export function LessonVideoStudio({
@@ -49,9 +51,20 @@ export function LessonVideoStudio({
   lessonTitle,
   mentorMascot,
   onNavigateToTab,
+  customYoutubeId,
+  customScenes,
 }: LessonVideoStudioProps) {
   const currentVideo: VideoLectureInfo = getF8VideoLecture(subjectId, lessonId, lessonTitle);
   const resolvedLessonId = lessonId || currentVideo.lessonId || "1.1";
+  const effectiveYoutubeId = (customYoutubeId && customYoutubeId.trim()) ? customYoutubeId.trim() : currentVideo.youtubeId;
+  const effectiveChapters: VideoChapter[] = (customScenes && customScenes.length > 0)
+    ? customScenes.map((s, idx) => ({
+        timeSec: idx * 180,
+        timestamp: s.time || `${String(idx * 3).padStart(2, "0")}:00`,
+        title: s.title || `Phân cảnh ${idx + 1}`,
+        description: s.text || s.script || "",
+      }))
+    : currentVideo.chapters;
 
   const [activeTab, setActiveTab] = useState<"chapters" | "notes" | "resources">("chapters");
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
@@ -81,7 +94,7 @@ export function LessonVideoStudio({
       clearTimeout(timer);
       window.removeEventListener("resize", updateIndicator);
     };
-  }, [activeTab, currentVideo.chapters.length, notes.length, currentVideo.resources.length]);
+  }, [activeTab, effectiveChapters.length, notes.length, currentVideo.resources.length]);
 
   useEffect(() => {
     let active = true;
@@ -171,7 +184,7 @@ export function LessonVideoStudio({
     <div key={`video-studio-${subjectId}`} className="flex flex-col w-full">
       {/* ─── VIDEO PLAYER CONTAINER (16:9 F8 STYLE) ─────────────────── */}
       <div
-        key={`video-screen-${currentVideo.subjectCode}-${currentVideo.youtubeId}`}
+        key={`video-screen-${currentVideo.subjectCode}-${effectiveYoutubeId}`}
         className="animate-fade-in rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-950 overflow-hidden shadow-sm h-auto"
       >
         {/* Top bar of video */}
@@ -196,8 +209,8 @@ export function LessonVideoStudio({
         {/* Video Screen */}
         <div className="relative aspect-video w-full max-h-[500px] bg-black">
           <iframe
-            key={`${currentVideo.youtubeId}-${videoTimestamp}`}
-            src={`https://www.youtube-nocookie.com/embed/${currentVideo.youtubeId}?autoplay=${videoTimestamp > 0 ? 1 : 0}&start=${videoTimestamp}&rel=0&modestbranding=1`}
+            key={`${effectiveYoutubeId}-${videoTimestamp}`}
+            src={`https://www.youtube-nocookie.com/embed/${effectiveYoutubeId}?autoplay=${videoTimestamp > 0 ? 1 : 0}&start=${videoTimestamp}&rel=0&modestbranding=1`}
             title={currentVideo.title}
             className="w-full h-full border-0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -340,7 +353,7 @@ export function LessonVideoStudio({
               {[
                 {
                   id: "chapters" as const,
-                  label: `Mục lục Video (${currentVideo.chapters.length})`,
+                  label: `Mục lục Video (${effectiveChapters.length})`,
                   icon: ListOrdered,
                 },
                 {
@@ -381,7 +394,7 @@ export function LessonVideoStudio({
               {/* Tab 1: Chapters */}
               {activeTab === "chapters" && (
                 <div className="pt-3 space-y-2">
-                  {currentVideo.chapters.map((chap, idx) => (
+                  {effectiveChapters.map((chap, idx) => (
                     <div
                       key={idx}
                       onClick={() => handleSeek(chap.timeSec)}
