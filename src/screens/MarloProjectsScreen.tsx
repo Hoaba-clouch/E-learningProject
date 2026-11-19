@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   Sparkles,
   FolderGit2,
+  Crown,
 } from "lucide-react";
 import ProjectGradingModal from "../components/ProjectGradingModal";
 import MarloTitle from "../components/MarloTitle";
@@ -1019,22 +1020,34 @@ export default function MarloProjectsScreen({
 
                       {/* Footer: Project lead/members + Story Points */}
                       <div className="pcard__foot">
-                        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
                           <div className="avstack">
-                            {p.members?.slice(0, 3).map((m) => (
+                            {p.members?.slice(0, 3).map((m, mIdx) => (
                               <span
                                 key={m.id}
-                                className="av av--sm font-bold shadow-2xs"
+                                className="av av--sm font-bold shadow-2xs relative"
                                 style={{ background: m.bg, color: m.textColor }}
                                 title={`${m.name} (${m.role})`}
                               >
                                 {m.initials}
+                                {mIdx === 0 && (
+                                  <span
+                                    className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-500 flex items-center justify-center text-[7px] text-slate-950 font-black shadow-xs ring-1 ring-white dark:ring-slate-900"
+                                    title="Nhóm trưởng (Team Lead)"
+                                  >
+                                    ★
+                                  </span>
+                                )}
                               </span>
                             ))}
                           </div>
-                          <span className="text-xs text-slate-600 dark:text-slate-300 font-medium truncate" title={`${p.instructor || p.client}`}>
-                            {p.instructor || p.client}
-                          </span>
+                          <div className="min-w-0 flex flex-col justify-center">
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate flex items-center gap-1">
+                              <Crown size={11} className="text-amber-500 fill-amber-500 shrink-0" />
+                              <span className="truncate">{p.instructor?.replace(" (Lead)", "") || "Nguyễn Bá Hòa"}</span>
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-mono font-bold shrink-0">(Lead)</span>
+                            </span>
+                          </div>
                         </div>
 
                         <span className="pcard__budget font-bold" title={`Tổng Story Points: ${p.storyPoints} SP`}>

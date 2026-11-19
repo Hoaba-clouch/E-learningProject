@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Plus, Clock, ExternalLink, X, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, Plus, Clock, ExternalLink, X, CheckCircle2, Crown } from "lucide-react";
 import gsap from "gsap";
 import {
   getMarloProject,
@@ -360,9 +360,42 @@ export default function MarloProjectDetailScreen({
                 ))}
               </select>
             </div>
-            <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
-              Trưởng dự án: {leadMember?.name || "Nguyễn Bá Hòa"}
-            </span>
+            {leadMember && (
+              <div
+                onClick={() => onNavigateToPerson(leadMember.id)}
+                className="mt-1 pt-2 border-t border-[#14161a14] dark:border-[#ffffff12] flex items-center justify-between gap-2 cursor-pointer group"
+                title={`Xem hồ sơ Nhóm trưởng: ${leadMember.name}`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="relative shrink-0">
+                    <div
+                      className="av av--xs font-bold shadow-2xs text-[10px]"
+                      style={{
+                        background: (MARLO_HUES[leadMember.hue] || { bg: "#e6d6c4", text: "#161718" }).bg,
+                        color: (MARLO_HUES[leadMember.hue] || { bg: "#e6d6c4", text: "#161718" }).text,
+                      }}
+                    >
+                      {leadMember.initials}
+                    </div>
+                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-[7px] font-black shadow-xs">
+                      ★
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1">
+                      <Crown size={10} className="text-amber-500 fill-amber-500 shrink-0" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 font-mono">
+                        Nhóm trưởng
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-amber-600 transition truncate block">
+                      {leadMember.name}
+                    </span>
+                  </div>
+                </div>
+                <ExternalLink size={12} className="text-slate-400 group-hover:text-amber-500 shrink-0 transition" />
+              </div>
+            )}
           </section>
         </div>
 
@@ -516,43 +549,66 @@ export default function MarloProjectDetailScreen({
               </div>
 
               <div className="pd__team flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
-                {project.team.map((memId) => {
-                  const m = getMarloMember(memId);
-                  if (!m) return null;
-                  const hue = MARLO_HUES[m.hue] || { bg: "#e6d6c4", text: "#161718" };
+                {[...project.team]
+                  .sort((a, b) => (a === project.lead ? -1 : b === project.lead ? 1 : 0))
+                  .map((memId) => {
+                    const m = getMarloMember(memId);
+                    if (!m) return null;
+                    const hue = MARLO_HUES[m.hue] || { bg: "#e6d6c4", text: "#161718" };
+                    const isLead = project.lead === m.id;
 
-                  return (
-                    <div
-                      key={m.id}
-                      onClick={() => onNavigateToPerson(m.id)}
-                      className="pd__person py-2.5 px-1.5 flex items-center justify-between gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/60 rounded-xl transition cursor-pointer"
-                      title={`Xem chi tiết hồ sơ thành viên ${m.name}`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="av av--sm font-bold flex-none shadow-2xs"
-                          style={{ background: hue.bg, color: hue.text }}
-                        >
-                          {m.initials}
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={() => onNavigateToPerson(m.id)}
+                        className={`pd__person py-2.5 px-2 flex items-center justify-between gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/60 rounded-xl transition cursor-pointer ${
+                          isLead ? "bg-amber-50/60 dark:bg-amber-950/20" : ""
+                        }`}
+                        title={`Xem chi tiết hồ sơ thành viên ${m.name}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative shrink-0">
+                            <div
+                              className="av av--sm font-bold shadow-2xs"
+                              style={{ background: hue.bg, color: hue.text }}
+                            >
+                              {m.initials}
+                            </div>
+                            {isLead && (
+                              <span
+                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-xs"
+                                title="Nhóm trưởng đồ án (Team Lead)"
+                              >
+                                <Crown size={9} className="fill-slate-950 text-slate-950" />
+                              </span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <b className="text-sm font-semibold text-slate-900 dark:text-slate-100 block truncate">
+                                {m.name}
+                              </b>
+                              {isLead && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono flex items-center gap-1">
+                                  <Crown size={9} className="fill-amber-500 text-amber-500" />
+                                  <span>Nhóm trưởng (Lead)</span>
+                                </span>
+                              )}
+                            </div>
+                            <small className="text-xs text-slate-500 dark:text-slate-400 block truncate">
+                              {m.role}
+                            </small>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <b className="text-sm font-semibold text-slate-900 dark:text-slate-100 block truncate">
-                            {m.name}
-                          </b>
-                          <small className="text-xs text-slate-500 dark:text-slate-400 block truncate">
-                            {m.role}
-                          </small>
+
+                        <div className="text-right flex-none">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-200/70 dark:bg-slate-800 px-2.5 py-1 rounded-full">
+                            {m.capacity} h/tuần
+                          </span>
                         </div>
                       </div>
-
-                      <div className="text-right flex-none">
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-200/70 dark:bg-slate-800 px-2.5 py-1 rounded-full">
-                          {m.capacity} h/tuần
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </section>
           </div>

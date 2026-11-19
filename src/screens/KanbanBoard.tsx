@@ -64,6 +64,8 @@ import {
 
   PieChart,
 
+  Crown,
+
   TrendingDown,
 
   TrendingUp,
@@ -4794,9 +4796,19 @@ export default function KanbanBoard({
 
 
 
-              <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-1">
+              <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-1 flex items-center gap-1.5 flex-wrap">
 
-                {currentProject.course} • #{currentProject.code} • Nhóm {teamMembers.length} thành viên • Ràng buộc cứng H2 & Anti-Freerider
+                <span>{currentProject.course} • #{currentProject.code} • Nhóm {teamMembers.length} thành viên</span>
+
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold font-mono text-[10.5px]">
+
+                  <Crown size={10} className="fill-amber-500 text-amber-500" />
+
+                  <span>Nhóm trưởng: {currentProject.lead || teamMembers[0]?.name || "Nguyễn Bá Hòa"}</span>
+
+                </span>
+
+                <span>• Ràng buộc cứng H2 & Anti-Freerider</span>
 
               </p>
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Search, Check, Folder, Users } from "lucide-react";
+import { Search, Check, Folder, Users, Crown } from "lucide-react";
 import gsap from "gsap";
 import {
   getMarloMembers,
@@ -200,9 +200,20 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
                     </div>
 
                     {/* Member Name */}
-                    <b className="person__name text-base font-bold text-slate-900 dark:text-slate-100 block truncate">
-                      {member.name}
-                    </b>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <b className="person__name text-base font-bold text-slate-900 dark:text-slate-100 truncate">
+                        {member.name}
+                      </b>
+                      {allProjects.some((p) => p.lead === member.id) && (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 text-[10px] font-bold font-mono flex items-center gap-0.5 shrink-0"
+                          title="Nhóm trưởng đề tài kỹ thuật (Team Lead)"
+                        >
+                          <Crown size={9} className="fill-amber-500 text-amber-500" />
+                          Lead
+                        </span>
+                      )}
+                    </div>
 
                     {/* Member Role & Skill */}
                     <small className="person__role text-xs text-slate-500 dark:text-slate-400 font-medium block truncate mb-3">

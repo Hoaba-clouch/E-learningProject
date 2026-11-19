@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Plus, RefreshCw, Mail, Check, Calendar, ExternalLink, X, CheckCircle2, Phone } from "lucide-react";
+import { ChevronLeft, Plus, RefreshCw, Mail, Check, Calendar, ExternalLink, X, CheckCircle2, Phone, Crown } from "lucide-react";
 import gsap from "gsap";
 import {
   getMarloMember,
@@ -53,6 +53,7 @@ export default function MarloPersonDetailScreen({
   const openTasks = getMemberOpenTasks(member.id);
   const jobs = getMemberProjects(member.id); // 1 Person has multiple Projects!
   const allProjects = getMarloProjects();
+  const ledProjects = allProjects.filter((p) => p.lead === member.id);
 
   const hue = MARLO_HUES[member.hue] || { bg: "#f7d593", text: "#633806" };
   const maxWeeklyHours = Math.max(...stats.values, member.capacity, 40);
@@ -211,9 +212,17 @@ export default function MarloPersonDetailScreen({
 
           {/* Name & Role & Email */}
           <div className="prof__who min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">
-              {member.name}
-            </h1>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">
+                {member.name}
+              </h1>
+              {ledProjects.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 font-mono text-xs font-bold shrink-0">
+                  <Crown size={12} className="fill-amber-500 text-amber-500" />
+                  <span>Nhóm trưởng ({ledProjects.length} đồ án)</span>
+                </span>
+              )}
+            </div>
             <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 mt-1">
               {member.role} · {MARLO_SKILLS[member.skill]?.name}
             </p>
@@ -401,26 +410,39 @@ export default function MarloPersonDetailScreen({
               </div>
 
               <div className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
-                {jobs.map((job) => (
-                  <div
-                    key={job.id}
-                    onClick={() => onNavigateToProject(job.id)}
-                    className="prow py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl px-2 transition cursor-pointer"
-                    title={`Mở chi tiết đồ án ${job.name}`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#f29b23] flex-none" />
-                      <b className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
-                        {job.name}
-                      </b>
-                    </div>
+                {jobs.map((job) => {
+                  const isLeadOfJob = job.lead === member.id;
+                  return (
+                    <div
+                      key={job.id}
+                      onClick={() => onNavigateToProject(job.id)}
+                      className="prow py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl px-2 transition cursor-pointer"
+                      title={`Mở chi tiết đồ án ${job.name}`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#f29b23] flex-none" />
+                        <b className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          {job.name}
+                        </b>
+                        {isLeadOfJob ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono flex items-center gap-1 shrink-0">
+                            <Crown size={9} className="fill-amber-500 text-amber-500" />
+                            <span>Nhóm trưởng</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono shrink-0">
+                            Thành viên
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="flex items-center gap-1.5 flex-none text-xs text-slate-500 font-semibold">
-                      <span>{MARLO_PROJECT_STATUS[job.status]}</span>
-                      <ExternalLink size={12} />
+                      <div className="flex items-center gap-1.5 flex-none text-xs text-slate-500 font-semibold">
+                        <span>{MARLO_PROJECT_STATUS[job.status]}</span>
+                        <ExternalLink size={12} />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </div>
