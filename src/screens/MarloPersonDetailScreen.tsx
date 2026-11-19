@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { ChevronLeft, Plus, RefreshCw, Mail, Check, Calendar, ExternalLink } from "lucide-react";
+import gsap from "gsap";
 import {
   getMarloMember,
   getMarloProject,
@@ -27,6 +28,8 @@ export default function MarloPersonDetailScreen({
   onNavigateBack,
   onNavigateToProject,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const member = getMarloMember(personId) || MARLO_MEMBERS[0];
   const [memberStatus, setMemberStatus] = useState(member.status);
 
@@ -44,8 +47,85 @@ export default function MarloPersonDetailScreen({
     setMemberStatus(statuses[nextIdx]);
   };
 
+  // ─── AUTHENTIC MARLO GSAP ENTRANCE ANIMATION ───
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ctx = gsap.context(() => {
+      // 1. Backlink
+      gsap.fromTo(
+        ".backlink",
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }
+      );
+
+      // 2. Member Hero Header Card
+      gsap.fromTo(
+        ".prof__head",
+        { opacity: 0, y: 20, scale: 0.98 },
+        {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          duration: 0.5,
+          ease: "back.out(1.2)",
+          delay: 0.08,
+          clearProps: "transform,opacity",
+        }
+      );
+
+      // 3. Grid Sections (Left Tasks & Right Charts/Jobs)
+      gsap.fromTo(
+        ".prof__grid > section",
+        { opacity: 0, y: 22 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.55,
+          ease: "power3.out",
+          stagger: 0.08,
+          delay: 0.2,
+          clearProps: "transform,opacity",
+        }
+      );
+
+      // 4. Bar Chart Growing Upwards
+      gsap.fromTo(
+        ".bars__bar",
+        { scaleY: 0, transformOrigin: "bottom center" },
+        {
+          scaleY: 1,
+          duration: 0.7,
+          ease: "back.out(1.4)",
+          stagger: 0.035,
+          delay: 0.35,
+          clearProps: "transform",
+        }
+      );
+
+      // 5. Open Task Rows Stagger
+      gsap.fromTo(
+        ".prow",
+        { opacity: 0, y: 10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+          stagger: 0.025,
+          delay: 0.3,
+          clearProps: "transform,opacity",
+        }
+      );
+    }, containerRef);
+
+    return () => ctx.revert();
+  }, [personId]);
+
   return (
-    <div className="marlo-scope min-h-screen bg-[#e6e7ea] dark:bg-[#111213] text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans transition-colors duration-200">
+    <div
+      ref={containerRef}
+      className="marlo-scope min-h-screen bg-transparent text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans transition-colors duration-200"
+    >
       <div className="max-w-[1560px] mx-auto prof">
         {/* Backlink */}
         <button
@@ -98,35 +178,40 @@ export default function MarloPersonDetailScreen({
                 {stats.last7Days} h
               </b>
             </div>
+
             <div>
               <small className="text-xs text-slate-500 font-semibold block">8 weeks</small>
               <b className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                {stats.eightWeeks} h
+                {stats.eightWeeksTotal} h
               </b>
             </div>
+
             <div>
               <small className="text-xs text-slate-500 font-semibold block">Open work</small>
               <b className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                {stats.openWork} h
+                {openTasks.length * 2.5} h
               </b>
             </div>
           </div>
 
-          {/* Action Row */}
+          {/* Profile Actions: Status Pill & Assign task */}
           <div className="prof__actions col-span-full flex items-center justify-end gap-3 pt-3 border-t border-[#14161a14] dark:border-[#ffffff12]">
             <button
               type="button"
               onClick={handleCycleStatus}
               className="btn flex items-center gap-2"
-              title="Đổi trạng thái làm việc"
+              title="Nhấp để đổi trạng thái làm việc (In studio / Remote / On leave)"
             >
-              <RefreshCw size={14} />
-              <span>{MARLO_MEMBER_STATUS_LABEL[memberStatus]}</span>
+              <RefreshCw size={14} className="text-[#f29b23]" />
+              <span className={`pill pill--${MARLO_MEMBER_STATUS_TONE[memberStatus]} text-xs`}>
+                {MARLO_MEMBER_STATUS_LABEL[memberStatus]}
+              </span>
             </button>
+
             <button
               type="button"
               className="btn btn--primary flex items-center gap-2"
-              onClick={() => alert(`Giao việc mới cho ${member.name}`)}
+              onClick={() => alert(`Giao task mới cho ${member.name}`)}
             >
               <Plus size={16} />
               <span>Assign a task</span>
@@ -134,71 +219,67 @@ export default function MarloPersonDetailScreen({
           </div>
         </section>
 
-        {/* Main Grid: Left Open Tasks vs Right Stack (Hours by week + Jobs) */}
+        {/* 2-Column Grid: Left Open Tasks vs Right Hours & Jobs */}
         <div className="prof__grid grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-6 items-start">
           {/* Left: Open Tasks */}
           <section className="card">
-            <div className="chead mb-4">
+            <div className="chead flex items-center justify-between mb-4">
               <div className="chead__text">
                 <h2 className="text-lg font-bold">Open tasks</h2>
                 <p className="text-xs text-slate-500">{openTasks.length} on their list</p>
               </div>
             </div>
 
-            {openTasks.length === 0 ? (
-              <div className="text-center py-8 text-slate-400">
-                <Check size={28} className="mx-auto mb-2 text-emerald-500" />
-                <b className="block text-sm">All clear</b>
-                <p className="text-xs">Nothing open for them right now.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col divide-y divide-[#14161a14] dark:divide-[#ffffff12]">
-                {openTasks.map((task) => {
-                  const prj = getMarloProject(task.projectId);
-                  const statusTone =
-                    task.status === "doing"
-                      ? "accent"
-                      : task.status === "review"
-                      ? "info"
-                      : "plain";
+            <div className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
+              {openTasks.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs italic">
+                  Không có công việc mở nào đang chờ xử lý.
+                </div>
+              ) : (
+                openTasks.map((t) => {
+                  const p = getMarloProject(t.projectId);
                   return (
                     <div
-                      key={task.id}
-                      className="prow py-3 flex items-center justify-between gap-4 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-xl px-2 transition"
+                      key={t.id}
+                      className="prow py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl px-2 transition"
                     >
                       <div className="cell__text min-w-0 flex-1">
                         <b className="text-sm font-semibold text-slate-900 dark:text-slate-100 block truncate">
-                          {task.title}
+                          {t.title}
                         </b>
                         <small className="text-xs text-slate-500 dark:text-slate-400 block truncate mt-0.5">
-                          {prj?.name || task.projectId} · due{" "}
-                          {new Date(task.due).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "short",
-                          })}
+                          {p?.name || "Dự án"} · {t.dueText}
                         </small>
                       </div>
 
-                      <span className={`pill pill--${statusTone} text-xs flex-none`}>
-                        {MARLO_TASK_STATUS[task.status] || task.status}
-                      </span>
+                      <div className="flex items-center gap-2 flex-none">
+                        <span
+                          className={`pill ${
+                            t.status === "in-review"
+                              ? "pill--info"
+                              : t.status === "in-progress"
+                              ? "pill--warn"
+                              : "pill--plain"
+                          } text-[11px]`}
+                        >
+                          {MARLO_TASK_STATUS[t.status]}
+                        </span>
+                      </div>
                     </div>
                   );
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
           </section>
 
-          {/* Right Stack: Hours by week & Jobs (1 person -> multiple projects) */}
-          <div className="stack flex flex-col gap-6">
+          {/* Right Stack: Hours by week & Jobs */}
+          <div className="flex flex-col gap-6">
             {/* Hours by week chart */}
             <section className="card">
               <div className="chead mb-3">
                 <div className="chead__text">
                   <h2 className="text-lg font-bold">Hours by week</h2>
-                  <p className="text-xs text-slate-500">
-                    Against {member.capacity} h a week
-                  </p>
+                  <p className="text-xs text-slate-500">Against {member.capacity} h a week</p>
                 </div>
               </div>
 
@@ -207,19 +288,19 @@ export default function MarloPersonDetailScreen({
                   {stats.labels.map((lbl, idx) => {
                     const val = stats.values[idx] || 0;
                     const heightPercent = (val / maxWeeklyHours) * 100;
-                    const isLast = idx === stats.labels.length - 1;
+                    const isCurrentWeek = idx === stats.labels.length - 1; // 9 Nov amber
 
                     return (
                       <div
                         key={lbl}
                         className={`bars__col flex-1 flex flex-col items-center justify-end h-full relative group ${
-                          isLast ? "is-hi" : ""
+                          isCurrentWeek ? "is-hi" : ""
                         }`}
                       >
                         <div className="bars__track w-full flex items-end justify-center h-full relative">
                           <div
                             className={`bars__bar w-full max-w-[28px] rounded-t-sm transition-all duration-500 ${
-                              isLast
+                              isCurrentWeek
                                 ? "bg-[#f29b23]"
                                 : val > 0
                                 ? "bg-[#161718] dark:bg-[#f0f0f1]"
@@ -231,7 +312,7 @@ export default function MarloPersonDetailScreen({
                         </div>
                         <span
                           className={`bars__label text-[10px] font-semibold mt-2 whitespace-nowrap ${
-                            isLast ? "text-[#f29b23] font-bold" : "text-slate-400"
+                            isCurrentWeek ? "text-[#f29b23] font-bold" : "text-slate-400"
                           }`}
                         >
                           {lbl}
@@ -243,42 +324,38 @@ export default function MarloPersonDetailScreen({
               </div>
             </section>
 
-            {/* Jobs List (1 person has multiple projects) */}
+            {/* Jobs List (Projects member is assigned to) */}
             <section className="card">
               <div className="chead mb-3">
                 <div className="chead__text">
                   <h2 className="text-lg font-bold">Jobs</h2>
                   <p className="text-xs text-slate-500">
-                    {jobs.length} dự án {member.name} đang trực tiếp tham gia
+                    {jobs.length} dự án {member.name} đang trực tiếp thực hiện
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-col divide-y divide-[#14161a14] dark:divide-[#ffffff12]">
-                {jobs.map((p) => {
-                  // Mock hours spent on this project
-                  const prjHours = p.id === "kestrel" ? 24 : p.id === "harbour" ? 48 : 16;
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => onNavigateToProject(p.id)}
-                      className="prow py-3 flex items-center justify-between gap-3 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-xl px-2 transition cursor-pointer"
-                      title={`Xem chi tiết đồ án ${p.name}`}
-                    >
-                      <span className={`projtag c--${p.c} flex items-center gap-2 font-semibold text-sm truncate`}>
-                        <i />
-                        <span className="truncate">{p.name}</span>
-                      </span>
-
-                      <div className="flex items-center gap-2 flex-none">
-                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                          {prjHours} h
-                        </span>
-                        <ExternalLink size={13} className="text-slate-400" />
-                      </div>
+              <div className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
+                {jobs.map((job) => (
+                  <div
+                    key={job.id}
+                    onClick={() => onNavigateToProject(job.id)}
+                    className="prow py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl px-2 transition cursor-pointer"
+                    title={`Mở chi tiết dự án ${job.name}`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#f29b23] flex-none" />
+                      <b className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                        {job.name}
+                      </b>
                     </div>
-                  );
-                })}
+
+                    <div className="flex items-center gap-1.5 flex-none text-xs text-slate-500">
+                      <span>48 h</span>
+                      <ExternalLink size={12} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           </div>

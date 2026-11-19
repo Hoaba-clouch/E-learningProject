@@ -23,7 +23,7 @@
   --r-xl: 26px;
   --gap: 16px;
   --pad: 28px;
-  --bg: #e6e7ea;
+  --bg: transparent;
   --card: #f5f5f6;
   --card-2: #ecedef;
   --card-3: #e1e2e5;
@@ -59,7 +59,7 @@
 }
 
 .dark .marlo-scope, [data-theme="dark"] .marlo-scope {
-  --bg: #111213;
+  --bg: transparent;
   --card: #1b1c1e;
   --card-2: #222326;
   --card-3: #2c2d31;
@@ -88,12 +88,24 @@
 }
 
 /* Common Marlo Core Classes */
+.marlo-scope {
+  background: transparent !important;
+}
+
 .marlo-scope .card {
-  background: var(--card);
+  background: rgba(255, 255, 255, 0.96);
   border-radius: var(--r-lg);
   padding: 18px 20px 20px;
   position: relative;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(20, 22, 26, 0.08);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(8px);
+}
+
+.dark .marlo-scope .card, [data-theme="dark"] .marlo-scope .card {
+  background: rgba(27, 28, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4);
 }
 
 .marlo-scope .btn {

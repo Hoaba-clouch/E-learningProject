@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Search, Check, Folder, Users } from "lucide-react";
+import gsap from "gsap";
 import {
   MARLO_MEMBERS,
   MARLO_PROJECTS,
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"people" | "workload">("people");
 
@@ -37,8 +39,42 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
     );
   });
 
+  // ─── AUTHENTIC MARLO GSAP ENTRANCE ANIMATION ───
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ctx = gsap.context(() => {
+      // 1. Header & Controls
+      gsap.fromTo(
+        ".phead, .toolbar",
+        { opacity: 0, y: -12 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power2.out", stagger: 0.06 }
+      );
+
+      // 2. Member Cards (Wave / Staggered Entrance)
+      gsap.fromTo(
+        ".people .person",
+        { opacity: 0, y: 24, scale: 0.96 },
+        {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          duration: 0.5,
+          ease: "back.out(1.2)",
+          stagger: 0.045,
+          delay: 0.1,
+          clearProps: "transform,opacity",
+        }
+      );
+    }, containerRef);
+
+    return () => ctx.revert();
+  }, [activeTab, searchQuery]);
+
   return (
-    <div className="marlo-scope min-h-screen bg-[#e6e7ea] dark:bg-[#111213] text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans transition-colors duration-200">
+    <div
+      ref={containerRef}
+      className="marlo-scope min-h-screen bg-transparent text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans transition-colors duration-200"
+    >
       <div className="max-w-[1560px] mx-auto tm">
         {/* Page Title & Subtitle */}
         <div className="phead mb-4">

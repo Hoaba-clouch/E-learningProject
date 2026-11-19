@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { ChevronLeft, Plus, Clock, ExternalLink } from "lucide-react";
+import gsap from "gsap";
 import {
   getMarloProject,
   getMarloMember,
@@ -27,6 +28,9 @@ export default function MarloProjectDetailScreen({
   onNavigateToPerson,
   onNavigateToKanban,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const progressCircleRef = useRef<SVGCircleElement>(null);
+
   const project = getMarloProject(projectId) || getMarloProject("kestrel")!;
   const [currentStatus, setCurrentStatus] = useState(project.status);
   const tasks = getProjectTasks(project.id);
@@ -40,13 +44,105 @@ export default function MarloProjectDetailScreen({
   const strokeWidth = 8;
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
+  const targetStrokeDashoffset = circumference - (progressPercent / 100) * circumference;
 
   // Max value for hours by week bar chart
   const maxBarValue = Math.max(...stats.values, 45);
 
+  // ─── AUTHENTIC MARLO GSAP ENTRANCE ANIMATION ───
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ctx = gsap.context(() => {
+      // 1. Backlink & Page Header
+      gsap.fromTo(
+        ".backlink, .phead",
+        { opacity: 0, y: -12 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power2.out", stagger: 0.08 }
+      );
+
+      // 2. 4 Stat Cards
+      gsap.fromTo(
+        ".pd__stat",
+        { opacity: 0, y: 22, scale: 0.97 },
+        {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          duration: 0.5,
+          ease: "back.out(1.2)",
+          stagger: 0.06,
+          delay: 0.1,
+          clearProps: "transform,opacity",
+        }
+      );
+
+      // 3. Main Grid Sections (Left Tasks & Right Stack)
+      gsap.fromTo(
+        ".pd__tasks, .stack > section",
+        { opacity: 0, y: 24 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.55,
+          ease: "power3.out",
+          stagger: 0.08,
+          delay: 0.25,
+          clearProps: "transform,opacity",
+        }
+      );
+
+      // 4. Bar Chart Columns Growing Upwards
+      gsap.fromTo(
+        ".bars__bar",
+        { scaleY: 0, transformOrigin: "bottom center" },
+        {
+          scaleY: 1,
+          duration: 0.7,
+          ease: "back.out(1.4)",
+          stagger: 0.035,
+          delay: 0.35,
+          clearProps: "transform",
+        }
+      );
+
+      // 5. SVG Progress Circle Animation
+      if (progressCircleRef.current) {
+        gsap.fromTo(
+          progressCircleRef.current,
+          { strokeDashoffset: circumference },
+          {
+            strokeDashoffset: targetStrokeDashoffset,
+            duration: 1.1,
+            ease: "power2.out",
+            delay: 0.2,
+          }
+        );
+      }
+
+      // 6. Task Chips inside Columns
+      gsap.fromTo(
+        ".pd__task",
+        { opacity: 0, y: 8 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+          stagger: 0.02,
+          delay: 0.4,
+          clearProps: "transform,opacity",
+        }
+      );
+    }, containerRef);
+
+    return () => ctx.revert();
+  }, [projectId]);
+
   return (
-    <div className="marlo-scope min-h-screen bg-[#e6e7ea] dark:bg-[#111213] text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans transition-colors duration-200">
+    <div
+      ref={containerRef}
+      className="marlo-scope min-h-screen bg-transparent text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans transition-colors duration-200"
+    >
       <div className="max-w-[1560px] mx-auto pd">
         {/* Backlink */}
         <button
@@ -111,16 +207,17 @@ export default function MarloProjectDetailScreen({
                   fill="transparent"
                 />
                 <circle
+                  ref={progressCircleRef}
                   cx="48"
                   cy="48"
                   r={radius}
                   stroke="#f29b23"
                   strokeWidth={strokeWidth}
                   strokeDasharray={circumference}
-                  strokeDashoffset={strokeDashoffset}
+                  strokeDashoffset={targetStrokeDashoffset}
                   strokeLinecap="round"
                   fill="transparent"
-                  className="transition-all duration-700 ease-out"
+                  className="transition-all duration-300"
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
@@ -234,7 +331,9 @@ export default function MarloProjectDetailScreen({
                       ) : (
                         colTasks.map((task) => {
                           const whoMember = getMarloMember(task.who);
-                          const hue = whoMember ? MARLO_HUES[whoMember.hue] || { bg: "#e6d6c4", text: "#161718" } : { bg: "#e6d6c4", text: "#161718" };
+                          const hue = whoMember
+                            ? MARLO_HUES[whoMember.hue] || { bg: "#e6d6c4", text: "#161718" }
+                            : { bg: "#e6d6c4", text: "#161718" };
                           return (
                             <div
                               key={task.id}
