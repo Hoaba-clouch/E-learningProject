@@ -56,20 +56,20 @@ export default function KanbanTeamScrumView({
       let stacks = ["TypeScript", "RESTful API"];
       let gitCommits = 45;
 
-      if (m.name.includes("Hòa")) {
-        domain = "Frontend Lead & UI/UX Architect";
+      if (m.name.includes("Hòa") || m.name.includes("Minh Anh")) {
+        domain = "Leader & Systems Architect";
         modules = ["UI Component System", "Marlo Micro-interactions", "Code Lab IDE"];
-        stacks = ["React 19", "Tailwind CSS", "Vite", "Canvas Mindmap"];
+        stacks = ["React 19", "Tailwind CSS", "FastAPI", "Canvas Mindmap"];
         gitCommits = 58;
-      } else if (m.name.includes("Huy")) {
+      } else if (m.name.includes("Huy") || m.name.includes("Quốc Huy")) {
         domain = "Frontend & AI Socratic Dev";
         modules = ["AI Socratic Tutor", "Quiz Engine", "Tech Reels Player"];
         stacks = ["Gemini API", "WebSockets", "React Flow"];
         gitCommits = 48;
-      } else if (m.name.includes("Nghị")) {
+      } else if (m.name.includes("Nghị") || m.name.includes("Hoàng Long")) {
         domain = "Backend & Database Architect";
         modules = ["Schema 8 bảng 3NF", "Docker Sandbox Runner", "JWT Auth Filter"];
-        stacks = ["Spring Boot", "PostgreSQL", "Docker", "JUnit 5"];
+        stacks = ["FastAPI", "PostgreSQL / SQLite", "Docker", "Pytest"];
         gitCommits = 52;
       }
 

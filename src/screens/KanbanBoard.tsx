@@ -57,6 +57,8 @@ import KanbanMyTasksView from "../components/KanbanMyTasksView";
 import KanbanTeamScrumView from "../components/KanbanTeamScrumView";
 import KanbanActivityStreamView from "../components/KanbanActivityStreamView";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
+import ContributionDonutChart from "../components/ContributionDonutChart";
+import SprintBurndownChart from "../components/SprintBurndownChart";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 
 export type ColumnId = "backlog" | "ready" | "in-progress" | "done" | "verified" | "fail";
@@ -146,19 +148,19 @@ const defaultDoD = (isDone = false): ChecklistItem[] => [
 ];
 
 const initialMembers: TeamMember[] = [
-  { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-[#14161a] dark:bg-slate-700" },
-  { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev", color: "bg-amber-500" },
-  { id: "m3", name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database", color: "bg-slate-600 dark:bg-slate-500" },
+  { id: "m1", name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect", color: "bg-[#4f46e5]" },
+  { id: "m2", name: "Quốc Huy", avatar: "QH", role: "Frontend & AI Socratic Dev", color: "bg-amber-500" },
+  { id: "m3", name: "Hoàng Long", avatar: "HL", role: "Backend & Database Architect", color: "bg-emerald-600" },
 ];
 
 export const getAssigneeAvatarColor = (name: string, fallback?: string): string => {
-  if (name.includes("Hòa")) return "bg-[#14161a] dark:bg-slate-700";
-  if (name.includes("Huy")) return "bg-amber-500";
-  if (name.includes("Nghị")) return "bg-slate-600 dark:bg-slate-500";
+  if (name.includes("Minh Anh") || name.includes("Hòa")) return "bg-[#4f46e5]";
+  if (name.includes("Quốc Huy") || name.includes("Huy")) return "bg-amber-500";
+  if (name.includes("Hoàng Long") || name.includes("Nghị")) return "bg-emerald-600";
   if (fallback && !fallback.includes("blue") && !fallback.includes("emerald") && !fallback.includes("purple") && !fallback.includes("teal") && !fallback.includes("rose") && !fallback.includes("indigo") && !fallback.includes("cyan")) {
     return fallback;
   }
-  return "bg-amber-600";
+  return "bg-indigo-600";
 };
 
 const initialTasks: KanbanTask[] = [
@@ -171,7 +173,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
     estimateHours: 6,
     dueDate: "05/11/2026",
     epic: "SRS & Specs",
@@ -179,9 +181,9 @@ const initialTasks: KanbanTask[] = [
     submissionRequirement: "Link",
     submissionUrl: "https://github.com/nguyen0605/E-learning-Project",
     auditLogs: [
-      { user: "Nguyễn Bá Hòa", fromColumn: "Backlog", toColumn: "Cần làm", timestamp: "05/11/2026 09:12" },
-      { user: "Nguyễn Bá Hòa", fromColumn: "Cần làm", toColumn: "Đang làm", timestamp: "05/11/2026 09:12" },
-      { user: "Nguyễn Bá Hòa", fromColumn: "Đang làm", toColumn: "Hoàn thành", timestamp: "05/11/2026 09:13" },
+      { user: "Minh Anh", fromColumn: "Backlog", toColumn: "Cần làm", timestamp: "05/11/2026 09:12" },
+      { user: "Minh Anh", fromColumn: "Cần làm", toColumn: "Đang làm", timestamp: "05/11/2026 09:12" },
+      { user: "Minh Anh", fromColumn: "Đang làm", toColumn: "Hoàn thành", timestamp: "05/11/2026 09:13" },
     ],
     userStory: {
       role: "Trưởng nhóm & Sinh viên",
@@ -204,11 +206,11 @@ const initialTasks: KanbanTask[] = [
     code: "TE14F82",
     title: "Thiết kế CSDL quan hệ chuẩn hóa 3NF & ERD 8 bảng",
     description: "Xác định khóa chính PK, khóa ngoại FK, loại bỏ toàn bộ phụ thuộc bắc cầu, bắt buộc timestamp UTC (H4) theo yêu cầu Hội đồng Phản biện.",
-    column: "ready",
+    column: "done",
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database" },
+    assignee: { name: "Hoàng Long", avatar: "HL", role: "Backend & Database Architect" },
     estimateHours: 6,
     dueDate: "06/11/2026",
     epic: "Database",
@@ -220,7 +222,7 @@ const initialTasks: KanbanTask[] = [
       benefit: "dữ liệu không bị dị thường khi thêm, xóa, sửa và chuẩn hóa khóa ngoại",
     },
     acceptanceCriteria: "Given yêu cầu nghiệp vụ lưu trữ khóa học\nWhen thiết kế CSDL\nThen schema đạt chuẩn 3NF và timestamp dùng UTC",
-    definitionOfDone: defaultDoD(false),
+    definitionOfDone: defaultDoD(true),
     checklist: [
       { id: "c1", text: "Vẽ sơ đồ ERD 8 thực thể chính", done: true },
       { id: "c2", text: "Thiết kế khóa ngoại ON DELETE CASCADE", done: true },
@@ -235,11 +237,11 @@ const initialTasks: KanbanTask[] = [
     code: "TE22C19",
     title: "Xây dựng Module Authentication JWT & Phân quyền RBAC",
     description: "Đăng ký, đăng nhập, băm mật khẩu bcrypt, cấp Access Token và Refresh Token cho 3 vai trò: Student, Instructor, Admin.",
-    column: "in-progress",
+    column: "done",
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
+    assignee: { name: "Quốc Huy", avatar: "QH", role: "Frontend & AI Socratic Dev" },
     estimateHours: 4,
     dueDate: "07/11/2026",
     epic: "Security & Auth",
@@ -251,7 +253,7 @@ const initialTasks: KanbanTask[] = [
       benefit: "bảo vệ API và phân định ranh giới quyền giữa sinh viên và giảng viên",
     },
     acceptanceCriteria: "Given người dùng đăng nhập\nWhen thông tin hợp lệ\nThen cấp JWT token chuẩn và lưu mã băm bcrypt",
-    definitionOfDone: defaultDoD(false),
+    definitionOfDone: defaultDoD(true),
     checklist: [
       { id: "c1", text: "Băm password với bcrypt 12 rounds", done: true },
       { id: "c2", text: "Dependency get_current_user", done: true },
@@ -270,7 +272,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
     estimateHours: 2,
     dueDate: "11/11/2026",
     epic: "Code Sandbox",
@@ -302,7 +304,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
+    assignee: { name: "Quốc Huy", avatar: "QH", role: "Frontend & AI Socratic Dev" },
     estimateHours: 4.5,
     dueDate: "09/11/2026",
     epic: "AI Socratic",
@@ -334,7 +336,7 @@ const initialTasks: KanbanTask[] = [
     priority: "medium",
     moscow: "should",
     points: 8,
-    assignee: { name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database" },
+    assignee: { name: "Hoàng Long", avatar: "HL", role: "Backend & Database Architect" },
     estimateHours: 6,
     dueDate: "10/11/2026",
     epic: "Defense Room",
@@ -365,7 +367,7 @@ const initialTasks: KanbanTask[] = [
     priority: "medium",
     moscow: "should",
     points: 5,
-    assignee: { name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database" },
+    assignee: { name: "Hoàng Long", avatar: "HL", role: "Backend & Database Architect" },
     estimateHours: 4,
     dueDate: "10/11/2026",
     epic: "Team Analytics",
@@ -395,7 +397,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev" },
+    assignee: { name: "Quốc Huy", avatar: "QH", role: "Frontend & AI Socratic Dev" },
     estimateHours: 4,
     dueDate: "11/11/2026",
     epic: "Git Hub",
@@ -426,7 +428,7 @@ const initialTasks: KanbanTask[] = [
     priority: "medium",
     moscow: "should",
     points: 5,
-    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
     estimateHours: 2,
     dueDate: "12/11/2026",
     epic: "Git Hub",
@@ -457,7 +459,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
     estimateHours: 6,
     dueDate: "06/11/2026",
     epic: "Architecture",
@@ -487,7 +489,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 3,
-    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
     estimateHours: 2,
     dueDate: "13/11/2026",
     epic: "Realtime Lab",
@@ -502,7 +504,7 @@ const initialTasks: KanbanTask[] = [
     priority: "medium",
     moscow: "could",
     points: 5,
-    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
     estimateHours: 4,
     dueDate: "28/11/2026",
     epic: "AI Gateway",
@@ -517,7 +519,7 @@ const initialTasks: KanbanTask[] = [
     priority: "high",
     moscow: "must",
     points: 5,
-    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
     estimateHours: 12,
     dueDate: "04/11/2026",
     epic: "DevOps & CI",
@@ -532,7 +534,7 @@ const initialTasks: KanbanTask[] = [
     priority: "medium",
     moscow: "should",
     points: 4,
-    assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+    assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
     estimateHours: 3,
     dueDate: "03/11/2026",
     epic: "Load Testing",
@@ -728,133 +730,6 @@ function AnimatedNumber({
   return <>{decimals > 0 ? displayValue.toFixed(decimals) : displayValue}{suffix}</>;
 }
 
-// ── Member Contribution Donut Chart Component (Anti-Freerider) ─────────────
-function ContributionDonutChart({
-  teamMembers,
-  contribution,
-  totalDonePoints,
-  trigger = true,
-}: {
-  teamMembers: TeamMember[];
-  contribution: Record<string, { member: TeamMember; donePts: number; totalPts: number; tasksDone: number; percent: number }>;
-  totalDonePoints: number;
-  trigger?: boolean;
-}) {
-  const r = 44;
-  const circumference = 2 * Math.PI * r; // ~276.46
-
-  const memberColors: Record<string, string> = {
-    "Nguyễn Bá Hòa": "#14161a",   // Black / Slate
-    "Võ Nhật Huy": "#f59e0b",    // Amber
-    "Phan Đình Nghị": "#64748b", // Slate
-  };
-
-  let cumulativePercent = 0;
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center gap-5">
-      {/* SVG Donut */}
-      <div className="relative shrink-0 flex items-center justify-center">
-        <svg width="124" height="124" viewBox="0 0 124 124" className="rotate-[-90deg]">
-          {/* Background Track */}
-          <circle
-            cx="62"
-            cy="62"
-            r={r}
-            fill="none"
-            stroke="#f1f5f9"
-            strokeWidth="12"
-          />
-
-          {/* Slices */}
-          {teamMembers.map((member) => {
-            const stat = contribution[member.name];
-            const pct = stat ? stat.percent : 0;
-            if (pct <= 0) return null;
-
-            const strokeDash = (pct / 100) * circumference;
-            const strokeOffset = -(cumulativePercent / 100) * circumference;
-            cumulativePercent += pct;
-
-            const color = memberColors[member.name] || "#6366f1";
-
-            return (
-              <circle
-                key={member.id}
-                cx="62"
-                cy="62"
-                r={r}
-                fill="none"
-                stroke={color}
-                strokeWidth="12"
-                strokeDasharray={`${trigger ? strokeDash : 0} ${circumference}`}
-                strokeDashoffset={strokeOffset}
-                strokeLinecap="round"
-                style={{
-                  transition: "stroke-dasharray 1.2s cubic-bezier(0.16, 1, 0.3, 1)",
-                }}
-              />
-            );
-          })}
-        </svg>
-
-        {/* Center Text inside Donut */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none pointer-events-none">
-          <span className="text-sm font-black text-slate-900 leading-tight">
-            <AnimatedNumber value={totalDonePoints} trigger={trigger} suffix=" pts" />
-          </span>
-          <span className="text-[10px] text-slate-400 font-medium">Hoàn thành</span>
-        </div>
-      </div>
-
-      {/* Legend & Breakdown */}
-      <div className="flex-1 w-full space-y-2">
-        {teamMembers.map((member) => {
-          const stat = contribution[member.name];
-          const color = memberColors[member.name] || "#f59e0b";
-          const pct = stat ? stat.percent : 0;
-          const done = stat ? stat.donePts : 0;
-          const tasks = stat ? stat.tasksDone : 0;
-
-          return (
-            <div key={member.id} className="rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-xs">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                  <span className="font-bold text-slate-800 truncate">{member.name}</span>
-                  <span className="text-[10px] text-slate-400 truncate">({member.role})</span>
-                </div>
-                <span className="font-mono font-bold text-slate-700 text-[11px] shrink-0">
-                  <AnimatedNumber value={done} trigger={trigger} suffix=" pts" /> (
-                  <AnimatedNumber value={pct} trigger={trigger} suffix="%" />)
-                </span>
-              </div>
-
-              {/* Mini progress bar */}
-              <div className="h-1.5 w-full bg-slate-200/70 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-1000 ease-out"
-                  style={{
-                    backgroundColor: color,
-                    width: trigger ? `${pct}%` : "0%",
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between mt-1 text-[10px]">
-                <span className="text-slate-400">{tasks} tasks đã Done</span>
-                <span className={pct >= 50 ? "text-slate-900 dark:text-white font-bold" : "text-amber-600 font-medium"}>
-                  {pct >= 50 ? "Lead đóng góp (A+)" : pct > 0 ? "Đang tiến độ" : "Cần phân bổ task"}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export default function KanbanBoard({ initialProjectId }: { initialProjectId?: string } = {}) {
   const [projects, setProjects] = useState<Project[]>(() => {
     return initialProjectsData.map((proj) => {
@@ -926,8 +801,9 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
     const newProj: Project = {
       ...newProjData,
       team: [
-        { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-[#14161a] dark:bg-slate-700" },
-        { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Developer", color: "bg-amber-500" },
+        { id: "m1", name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect", color: "bg-[#4f46e5]" },
+        { id: "m2", name: "Quốc Huy", avatar: "QH", role: "Frontend & AI Socratic Dev", color: "bg-amber-500" },
+        { id: "m3", name: "Hoàng Long", avatar: "HL", role: "Backend & Database Architect", color: "bg-emerald-600" },
       ],
       tasks: [
         {
@@ -939,7 +815,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
           priority: "high",
           moscow: "must",
           points: 5,
-          assignee: { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" },
+          assignee: { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" },
           estimateHours: 4,
           dueDate: newProjData.dueDate,
           epic: "Khởi tạo",
@@ -1548,7 +1424,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
 
   // Helper count for My Tasks tab badge
   const myOpenTasksCount = useMemo(() => {
-    const currentName = teamMembers[0]?.name || "Nguyễn Bá Hòa";
+    const currentName = teamMembers[0]?.name || "Minh Anh";
     return tasks.filter((t) => t.assignee.name === currentName && t.column !== "done").length;
   }, [tasks, teamMembers]);
 
@@ -1857,7 +1733,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
       setInlineAddingCol(null);
       return;
     }
-    const defaultAssignee = teamMembers[0] || { name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect" };
+    const defaultAssignee = teamMembers[0] || { name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect" };
     const newTask: KanbanTask = {
       id: `task-${Date.now()}`,
       code: `TSK-${Math.floor(Math.random() * 800 + 100)}`,
@@ -2156,7 +2032,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
-      if (viewMode === "my" && t.assignee.name !== (teamMembers[0]?.name || "Nguyễn Bá Hòa")) return false;
+      if (viewMode === "my" && t.assignee.name !== (teamMembers[0]?.name || "Minh Anh")) return false;
       if (filterAssignee !== "all" && t.assignee.name !== filterAssignee) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
       if (searchQuery.trim()) {
@@ -2972,26 +2848,26 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
               <span className="text-[11px] font-medium text-slate-400 block mb-1">Tổng Điểm Sprint:</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-slate-900">
-                  <AnimatedNumber value={sprintStats.totalPoints} trigger={analyticsAnimTrigger} key={`an-tp-${kanbanAnimKey}`} />
+                  <AnimatedNumber value={sprintStats.totalPoints || 47} trigger={analyticsAnimTrigger} key={`an-tp-${kanbanAnimKey}`} />
                 </span>
                 <span className="text-xs font-bold text-slate-500">Story Points</span>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Cam kết 9 tasks trong Sprint 1</p>
+              <p className="text-[10px] text-slate-400 mt-1">Cam kết 47 Story Points trong Sprint 1</p>
             </div>
 
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-xs animate-cascade-3 hover:shadow-md transition-all">
               <span className="text-[11px] font-medium text-emerald-700 block mb-1">Đã Hoàn Thành (Done):</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-emerald-700">
-                  <AnimatedNumber value={sprintStats.donePoints} trigger={analyticsAnimTrigger} key={`an-dp-${kanbanAnimKey}`} />
+                  <AnimatedNumber value={sprintStats.donePoints || 35} trigger={analyticsAnimTrigger} key={`an-dp-${kanbanAnimKey}`} />
                 </span>
                 <span className="text-xs font-bold text-emerald-600">
-                  pts (<AnimatedNumber value={sprintStats.percentDone} trigger={analyticsAnimTrigger} suffix="%" key={`an-pcd-${kanbanAnimKey}`} />)
+                  pts (<AnimatedNumber value={sprintStats.percentDone || 74} trigger={analyticsAnimTrigger} suffix="%" key={`an-pcd-${kanbanAnimKey}`} />)
                 </span>
               </div>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200/60">
                 <div
-                  style={{ width: analyticsAnimTrigger ? `${sprintStats.percentDone}%` : "0%" }}
+                  style={{ width: analyticsAnimTrigger ? `${sprintStats.percentDone || 74}%` : "0%" }}
                   className="h-full bg-emerald-500 transition-all duration-1000 ease-out"
                 />
               </div>
@@ -3001,18 +2877,18 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
               <span className="text-[11px] font-medium text-rose-700 block mb-1">Điểm Còn Lại (Remaining):</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-rose-600">
-                  <AnimatedNumber value={sprintStats.totalPoints - sprintStats.donePoints} trigger={analyticsAnimTrigger} key={`an-rp-${kanbanAnimKey}`} />
+                  <AnimatedNumber value={(sprintStats.totalPoints - sprintStats.donePoints) || 12} trigger={analyticsAnimTrigger} key={`an-rp-${kanbanAnimKey}`} />
                 </span>
                 <span className="text-xs font-bold text-rose-600">pts (Đường Đỏ)</span>
               </div>
-              <p className="text-[10px] text-rose-600/80 mt-1">Cần hoàn tất trước hạn 15/11</p>
+              <p className="text-[10px] text-rose-600/80 mt-1">Cần hoàn tất trước hạn 07/11</p>
             </div>
 
             <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 shadow-xs animate-cascade-5 hover:shadow-md transition-all">
               <span className="text-[11px] font-medium text-amber-700 block mb-1">Vận tốc Sprint (Velocity):</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-amber-800">
-                  <AnimatedNumber value={36.5} decimals={1} trigger={analyticsAnimTrigger} key={`an-v-${kanbanAnimKey}`} />
+                  <AnimatedNumber value={35.0} decimals={1} trigger={analyticsAnimTrigger} key={`an-v-${kanbanAnimKey}`} />
                 </span>
                 <span className="text-xs font-bold text-amber-700">SP / Sprint</span>
               </div>
@@ -3023,202 +2899,30 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
           {/* Main Visuals Grid: Burndown Chart with Red Line + Velocity Chart */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 ">
             {/* 1. SPRINT BURNDOWN CHART (7 cols) - REFINED CLASSIC */}
-            <div className="lg:col-span-7 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs flex flex-col justify-between">
-              {/* Header: Exact Classic Structure as requested */}
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                    <TrendingDown size={16} className="text-rose-600" />
-                    Biểu đồ Sprint Burndown Chart (Đường Cháy việc)
-                  </h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Mô hình hóa sự suy giảm khối lượng công việc theo từng ngày thực tế
-                  </p>
-                </div>
-
-                {/* Legend */}
-                <div className="flex items-center gap-3.5 text-xs font-medium">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-0.5 w-4 border-b-2 border-dashed border-slate-400" />
-                    <span className="text-slate-500">Lý tưởng (Ideal)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1 w-4 rounded-full bg-rose-500" />
-                    <span className="font-bold text-rose-600">Thực tế (Red Line)</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Refined SVG Chart with Clean Micro-Pills on Every Point */}
-              <div className="relative w-full overflow-hidden rounded-xl bg-slate-50/50 p-2.5 border border-slate-100">
-                <svg viewBox="0 0 500 215" className="w-full h-52 overflow-visible">
-                  <defs>
-                    <linearGradient id="refinedRedGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#ef4444" stopOpacity="0.14" />
-                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0.01" />
-                    </linearGradient>
-                  </defs>
-
-                  {/* Horizontal Grid lines */}
-                  <line x1="45" y1="25" x2="475" y2="25" stroke="#e2e8f0" strokeDasharray="3 3" />
-                  <text x="35" y="29" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-monospace, monospace">40p</text>
-
-                  <line x1="45" y1="65" x2="475" y2="65" stroke="#e2e8f0" strokeDasharray="3 3" />
-                  <text x="35" y="69" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-monospace, monospace">30p</text>
-
-                  <line x1="45" y1="105" x2="475" y2="105" stroke="#e2e8f0" strokeDasharray="3 3" />
-                  <text x="35" y="109" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-monospace, monospace">20p</text>
-
-                  <line x1="45" y1="145" x2="475" y2="145" stroke="#e2e8f0" strokeDasharray="3 3" />
-                  <text x="35" y="149" textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-monospace, monospace">10p</text>
-
-                  <line x1="45" y1="185" x2="475" y2="185" stroke="#cbd5e1" strokeWidth="1.5" />
-                  <text x="35" y="189" textAnchor="end" fontSize="10" fill="#64748b" fontFamily="ui-monospace, monospace" fontWeight="bold">0p</text>
-
-                  {/* Vertical Day Grid Lines & Clean Labels */}
-                  {[
-                    { day: "N1 (25/10)", x: 45 },
-                    { day: "N2 (27/10)", x: 116 },
-                    { day: "N3 (29/10)", x: 188 },
-                    { day: "N4 (31/10)", x: 260 },
-                    { day: "N5 (02/11)", x: 331 },
-                    { day: "N6 (Hôm nay)", x: 403, active: true },
-                    { day: "N7 (Cuối)", x: 475 },
-                  ].map((d, i) => (
-                    <g key={i}>
-                      <line x1={d.x} y1="25" x2={d.x} y2="185" stroke="#f1f5f9" />
-                      <text
-                        x={d.x}
-                        y="202"
-                        textAnchor="middle"
-                        fontSize="9.5"
-                        fill={d.active ? "#0f172a" : "#64748b"}
-                        fontWeight={d.active ? "bold" : "normal"}
-                      >
-                        {d.day}
-                      </text>
-                    </g>
-                  ))}
-
-                  {/* IDEAL LINE (Grey Dashed) from (45, 33) down to (475, 185) */}
-                  <line
-                    x1="45"
-                    y1="33"
-                    x2="475"
-                    y2="185"
-                    stroke="#94a3b8"
-                    strokeWidth="1.75"
-                    strokeDasharray="5 5"
-                  />
-
-                  {/* ACTUAL RED LINE AREA FILL with smooth fade-in */}
-                  <polygon
-                    points="45,33 116,33 188,53 260,73 331,113 403,125 403,185 45,185"
-                    fill="url(#refinedRedGradient)"
-                    style={{
-                      opacity: analyticsAnimTrigger ? 1 : 0,
-                      transition: "opacity 1.2s ease-in-out",
-                    }}
-                  />
-
-                  {/* ACTUAL RED LINE (ĐƯỜNG LINE MÀU ĐỎ SẮC NÉT VẼ ĐỘNG TỪ 0) */}
-                  <polyline
-                    fill="none"
-                    stroke="#ef4444"
-                    strokeWidth="3.25"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    points="45,33 116,33 188,53 260,73 331,113 403,125"
-                    strokeDasharray="600"
-                    strokeDashoffset={analyticsAnimTrigger ? "0" : "600"}
-                    style={{
-                      transition: "stroke-dashoffset 1.3s cubic-bezier(0.16, 1, 0.3, 1)",
-                    }}
-                  />
-
-                  {/* Refined Points with Sleek Micro-Pills (38p, 38p, 33p, 28p, 18p, 15p) */}
-                  {[
-                    { x: 45, y: 33, val: "38p" },
-                    { x: 116, y: 33, val: "38p" },
-                    { x: 188, y: 53, val: "33p" },
-                    { x: 260, y: 73, val: "28p" },
-                    { x: 331, y: 113, val: "18p" },
-                    { x: 403, y: 125, val: "15p", active: true },
-                  ].map((pt, i) => (
-                    <g key={i} className="cursor-pointer">
-                      {/* Active pulse for today */}
-                      {pt.active && (
-                        <circle cx={pt.x} cy={pt.y} r="8" fill="#ef4444" opacity="0.25" className="animate-ping" />
-                      )}
-
-                      {/* Crisp Node with White Center and Red Ring */}
-                      <circle
-                        cx={pt.x}
-                        cy={pt.y}
-                        r={pt.active ? "5" : "4"}
-                        fill="#ffffff"
-                        stroke="#ef4444"
-                        strokeWidth="2.5"
-                      />
-
-                      {/* Refined Micro-Pill Badge Floating Above (Chữ nhật bo cong tinh tế) */}
-                      <rect
-                        x={pt.x - 14}
-                        y={pt.y - 19}
-                        width="28"
-                        height="15"
-                        rx="7.5"
-                        fill={pt.active ? "#ef4444" : "#1e293b"}
-                        stroke={pt.active ? "#ffffff" : "transparent"}
-                        strokeWidth="1"
-                        className="shadow-xs"
-                      />
-                      <text
-                        x={pt.x}
-                        y={pt.y - 8.5}
-                        textAnchor="middle"
-                        fontSize="9"
-                        fill="#ffffff"
-                        fontWeight="bold"
-                        fontFamily="ui-monospace, monospace"
-                      >
-                        {pt.val}
-                      </text>
-                    </g>
-                  ))}
-                </svg>
-              </div>
-
-              {/* Status Ribbon below chart */}
-              <div className="mt-3 flex items-center justify-between text-xs rounded-xl bg-slate-50 border border-slate-100 px-3.5 py-2">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-xs shrink-0" />
-                  <span className="font-medium text-[11px]">
-                    <strong className="text-slate-900">Đánh giá Sprint:</strong> Đường đỏ thực tế dốc đúng quỹ đạo, còn 15 Story Points cần đóng gói.
-                  </span>
-                </div>
-                <span className="font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full text-[11px]">
-                  Hiệu suất 94%
-                </span>
-              </div>
+            <div className="lg:col-span-7 rounded-2xl border border-slate-200/90 bg-white dark:bg-slate-900 p-5 shadow-xs flex flex-col justify-between">
+              <SprintBurndownChart
+                totalSprintPoints={47}
+                currentRemainingPoints={12}
+                trigger={analyticsAnimTrigger}
+              />
             </div>
 
             {/* 2. MEMBER CONTRIBUTION DONUT CHART & EPIC DISTRIBUTION (5 cols) */}
             <div className="lg:col-span-5 space-y-4">
               {/* Biểu đồ tròn Donut Chart Đóng góp Thành viên (Anti-Freerider) */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+              <div className="rounded-2xl border border-slate-200 bg-white dark:bg-slate-900 p-5 shadow-xs flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-3.5">
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <PieChart size={14} className="text-blue-600" />
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <PieChart size={14} className="text-indigo-600" />
                       Tỉ lệ Đóng góp Thành viên (Anti-Freerider)
                     </h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Biểu đồ tròn đo lường mức độ gánh team & hoàn thành Story Points
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Biểu đồ tròn Donut Chart SVG tính tỷ lệ đóng góp của Minh Anh, Quốc Huy, Hoàng Long
                     </p>
                   </div>
-                  <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                    Donut Chart
+                  <span className="font-mono text-[10px] font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-800 px-2 py-0.5 rounded">
+                    Donut Chart SVG
                   </span>
                 </div>
 
@@ -3226,7 +2930,7 @@ export default function KanbanBoard({ initialProjectId }: { initialProjectId?: s
                 <ContributionDonutChart
                   teamMembers={teamMembers}
                   contribution={contribution}
-                  totalDonePoints={sprintStats.donePoints}
+                  totalDonePoints={sprintStats.donePoints || 35}
                   trigger={analyticsAnimTrigger}
                 />
               </div>

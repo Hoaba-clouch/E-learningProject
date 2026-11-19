@@ -34,9 +34,9 @@ export const initialProjectsData: Project[] = [
     fav: true,
     dueDate: "28/11/2026",
     team: [
-      { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader & Architect", color: "bg-[#14161a] dark:bg-slate-700" },
-      { id: "m2", name: "Võ Nhật Huy", avatar: "H", role: "Frontend & AI Dev", color: "bg-amber-500" },
-      { id: "m3", name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database", color: "bg-slate-600 dark:bg-slate-500" },
+      { id: "m1", name: "Minh Anh", avatar: "MA", role: "Leader & Systems Architect", color: "bg-[#4f46e5]" },
+      { id: "m2", name: "Quốc Huy", avatar: "QH", role: "Frontend & AI Socratic Dev", color: "bg-amber-500" },
+      { id: "m3", name: "Hoàng Long", avatar: "HL", role: "Backend & Database Architect", color: "bg-emerald-600" },
     ],
     tasks: [], // will be populated from initialTasks in KanbanBoard
   },
