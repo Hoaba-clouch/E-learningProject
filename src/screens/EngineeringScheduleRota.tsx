@@ -1627,14 +1627,14 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                 onRoleChange?.("instructor");
                 switchTab("exams");
               }}
-              className={`px-3 py-1 rounded-full font-bold transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded-full font-bold transition flex items-center ${
                 role === "instructor"
                   ? "bg-[#E5A023] text-white shadow-2xs"
                   : "text-[#7A7873] dark:text-slate-400 hover:text-black dark:hover:text-white"
               }`}
               title="Chuyển sang góc nhìn Giảng viên: Book phòng hội đồng, quản lý thi và duyệt cố vấn"
             >
-              <span>👨‍🏫 Giảng viên</span>
+              <span>Giảng viên</span>
             </button>
             <button
               type="button"
@@ -1642,14 +1642,14 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                 onRoleChange?.("student");
                 switchTab("week");
               }}
-              className={`px-3 py-1 rounded-full font-bold transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded-full font-bold transition flex items-center ${
                 role === "student"
                   ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs"
                   : "text-[#7A7873] dark:text-slate-400 hover:text-black dark:hover:text-white"
               }`}
               title="Chuyển sang góc nhìn Học viên: Xem thời khóa biểu và gửi yêu cầu hỏi bài"
             >
-              <span>🎓 Học viên</span>
+              <span>Học viên</span>
             </button>
           </div>
 
@@ -1661,20 +1661,18 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                 setBookRoomInitialValues(null);
                 setIsBookRoomModalOpen(true);
               }}
-              className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5 shadow-md px-4 py-2 font-bold text-xs"
+              className="btn-marlo-primary btn--primary magnetic flex items-center shadow-md px-4 py-2 font-bold text-xs"
               title="Book Phòng Hội Đồng, Phòng Khảo Thí hoặc Phòng Cố Vấn"
             >
-              <Plus size={16} strokeWidth={2.5} />
-              <span>+ Book Phòng Hội Đồng / Thi</span>
+              <span>Book Phòng Hội Đồng / Thi</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setShowBookingModal(true)}
-              className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5 font-bold text-xs"
+              className="btn-marlo-primary btn--primary magnetic flex items-center px-4 py-2 font-bold text-xs"
               title="Đặt lịch hẹn giảng viên hoặc xin cố vấn"
             >
-              <Plus size={16} strokeWidth={2.5} />
               <span>Book a session</span>
             </button>
           )}
@@ -1701,7 +1699,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
               onClick={() => switchTab("exams")}
               className="flex items-center gap-1.5"
             >
-              <span>📋 Lịch Thi Định Kỳ Trực Tiếp</span>
+              <span>Lịch Thi Định Kỳ Trực Tiếp</span>
               <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-full text-[10px] font-bold">
                 {roomSessions.filter((s) => s.kind === "exam").length}
               </span>
@@ -1712,7 +1710,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
               onClick={() => switchTab("mentoring")}
               className="flex items-center gap-1.5"
             >
-              <span>💬 Học Viên Nhờ Cố Vấn</span>
+              <span>Học Viên Nhờ Cố Vấn</span>
               {mentoringRequests.filter((r) => r.status === "pending").length > 0 && (
                 <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px] font-bold">
                   {mentoringRequests.filter((r) => r.status === "pending").length}
@@ -1724,14 +1722,14 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
               aria-current={activeTab === "week" ? "page" : undefined}
               onClick={() => switchTab("week")}
             >
-              📅 Lịch Tuần & Phòng Thi
+              Lịch Tuần & Phòng Thi
             </button>
             <button
               type="button"
               aria-current={activeTab === "agenda" ? "page" : undefined}
               onClick={() => switchTab("agenda")}
             >
-              📝 Agenda
+              Agenda
             </button>
           </>
         ) : (
@@ -1755,7 +1753,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
               aria-current={activeTab === "exams" ? "page" : undefined}
               onClick={() => switchTab("exams")}
             >
-              📋 Lịch Thi Định Kỳ
+              Lịch Thi Định Kỳ
             </button>
           </>
         )}
@@ -1826,10 +1824,9 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                   setBookRoomInitialValues({ kind: "exam", title: "Thi Vấn đáp & Thực hành Đồ án Định kỳ" });
                   setIsBookRoomModalOpen(true);
                 }}
-                className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5 text-xs px-4 py-2"
+                className="btn-marlo-primary btn--primary magnetic flex items-center text-xs px-4 py-2 font-bold"
               >
-                <Plus size={15} strokeWidth={2.5} />
-                <span>+ Book Phòng Thi Mới</span>
+                <span>Book Phòng Thi Mới</span>
               </button>
             </div>
 

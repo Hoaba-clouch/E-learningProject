@@ -252,21 +252,19 @@ export default function MarloProjectDetailScreen({
           <div className="phead__actions flex items-center gap-3">
             <button
               type="button"
-              className="btn flex items-center gap-2"
+              className="btn flex items-center justify-center font-semibold text-xs px-4"
               onClick={() => setIsLogTimeModalOpen(true)}
               title="Ghi nhận giờ làm việc thực tế"
             >
-              <Clock size={16} className="text-[#f29b23]" />
-              <span>Ghi nhận giờ (Log time)</span>
+              <span>Ghi nhận giờ</span>
             </button>
             <button
               type="button"
-              className="btn btn--primary flex items-center gap-2"
+              className="btn btn--primary flex items-center justify-center font-semibold text-xs px-4"
               onClick={() => setIsAddTaskModalOpen(true)}
               title="Thêm công việc kỹ thuật mới"
             >
-              <Plus size={16} strokeWidth={2.5} />
-              <span>Thêm việc (+ Add task)</span>
+              <span>Thêm việc</span>
             </button>
           </div>
         </div>
@@ -412,11 +410,10 @@ export default function MarloProjectDetailScreen({
                 <button
                   type="button"
                   onClick={() => onNavigateToKanban(project.id)}
-                  className="linkbtn flex items-center gap-1.5 font-semibold text-sm"
+                  className="linkbtn flex items-center font-semibold text-sm"
                   title="Mở bảng Kanban chi tiết"
                 >
                   <span>Mở bảng Kanban</span>
-                  <ExternalLink size={13} />
                 </button>
               )}
             </div>
@@ -428,8 +425,7 @@ export default function MarloProjectDetailScreen({
                 return (
                   <div key={col.id} className="pd__col flex flex-col gap-2 min-w-0">
                     <div className="pd__colhead flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 pb-1.5 border-b border-slate-200 dark:border-slate-800">
-                      <span className="flex items-center gap-1.5 truncate">
-                        <i className={`st--${col.id}`} />
+                      <span className="truncate">
                         {col.label}
                       </span>
                       <span className="badge text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
@@ -437,40 +433,34 @@ export default function MarloProjectDetailScreen({
                       </span>
                     </div>
 
-                    <div className="flex flex-col gap-2 mt-1">
+                    <div className="flex flex-col gap-2 mt-1 min-w-0">
                       {colTasks.length === 0 ? (
-                        <div className="text-xs text-slate-400 italic py-2 text-center">Trống</div>
+                        <div className="text-xs text-slate-400 italic py-3 text-center">Trống</div>
                       ) : (
                         colTasks.map((task) => {
                           const whoMember = getMarloMember(task.who);
-                          const hue = whoMember
-                            ? MARLO_HUES[whoMember.hue] || { bg: "#e6d6c4", text: "#161718" }
-                            : { bg: "#e6d6c4", text: "#161718" };
                           return (
                             <div
                               key={task.id}
-                              className="pd__task p-2.5 rounded-xl bg-[#ecedef] hover:bg-[#e1e2e5] dark:bg-[#222326] dark:hover:bg-[#2c2d31] transition-all flex flex-col gap-1.5 cursor-pointer border border-transparent hover:border-slate-300 dark:hover:border-slate-700"
+                              className="p-2.5 rounded-xl bg-[#ecedef] hover:bg-[#e1e2e5] dark:bg-[#222326] dark:hover:bg-[#2c2d31] transition-all flex flex-col gap-1.5 cursor-pointer border border-transparent hover:border-slate-300 dark:hover:border-slate-700 min-w-0"
                               onClick={() => {
                                 if (whoMember) onNavigateToPerson(whoMember.id);
                               }}
                               title={`${task.title} - Phụ trách: ${whoMember?.name || "Chưa giao"}`}
                             >
-                              <div className="flex items-center gap-2">
-                                {whoMember && (
-                                  <div
-                                    className="av av--sm font-bold flex-none text-[10px]"
-                                    style={{ background: hue.bg, color: hue.text }}
-                                  >
-                                    {whoMember.initials || whoMember.name.slice(0, 2).toUpperCase()}
-                                  </div>
+                              <div className="flex items-baseline gap-1.5 min-w-0">
+                                {task.code && (
+                                  <span className="text-[11px] font-bold font-mono text-[#f29b23] shrink-0">
+                                    {task.code}:
+                                  </span>
                                 )}
                                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate flex-1">
-                                  {task.code ? `${task.code}: ` : ""}{task.title}
+                                  {task.title}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold">
+                              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-1 border-t border-black/5 dark:border-white/5">
                                 <span>{task.est}h công</span>
-                                <span className={task.priority === "high" ? "text-rose-600 font-bold" : ""}>
+                                <span className={task.priority === "high" ? "text-rose-600 dark:text-rose-400 font-bold" : ""}>
                                   {task.priority === "high" ? "Ưu tiên cao" : "Bình thường"}
                                 </span>
                               </div>
