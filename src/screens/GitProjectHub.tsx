@@ -1435,6 +1435,7 @@ export default function GitProjectHub({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [archDrawerOpen, showRepoModal, isArchDrawerClosing, isRepoModalClosing]);
   const [repoUrl, setRepoUrl] = useState<string>("https://github.com/Hoaba-clouch/E-learningProject");
+  const [repoInputUrl, setRepoInputUrl] = useState<string>("https://github.com/Hoaba-clouch/E-learningProject");
   const [targetBranch, setTargetBranch] = useState<string>("main");
   const [topoAnimKey, setTopoAnimKey] = useState<number>(0);
   const [statAnimKey, setStatAnimKey] = useState<number>(0);
@@ -1458,6 +1459,7 @@ export default function GitProjectHub({
     if (!data) return;
     setProjectsList(data.projects || []);
     setRepoUrl(data.repository.repoUrl);
+    setRepoInputUrl(data.repository.repoUrl);
     setRepoSlug(data.repository.repoSlug);
     setTargetBranch(data.repository.targetBranch);
     setMergeStrategy(data.repository.defaultMergeStrategy || "squash");
@@ -1482,25 +1484,53 @@ export default function GitProjectHub({
     void loadArchitecture(pid);
   }, [loadArchitecture]);
 
-  const handleSyncGitHubLive = async () => {
+  const handleApplyRepoUrl = async (targetUrl: string) => {
+    const cleanUrl = targetUrl.trim();
+    if (!cleanUrl || !cleanUrl.startsWith("http")) {
+      showToast("Vui lòng nhập URL GitHub hợp lệ (https://...)");
+      return;
+    }
     setIsSyncingLive(true);
+    setActionError(null);
     try {
-      const res = await syncGitHubLiveApi(activeProjectId, repoUrl);
+      setRepoUrl(cleanUrl);
+      setRepoInputUrl(cleanUrl);
+      // 1. Đồng bộ Live Commits, PRs & Architecture trên Backend
+      const res = await syncGitHubLiveApi(activeProjectId, cleanUrl);
       if (res.error) {
         showToast(res.error);
-      } else if (res.synced) {
+      } else {
         showToast(
-          `Đã đồng bộ Live GitHub [${res.repoSlug}]: ${res.commitsSynced || 0} commits, ${
-            res.prsSynced || 0
-          } PRs vào MySQL!`
+          `Đã đồng bộ Live Repo [${res.repoSlug || cleanUrl}]: ${res.commitsSynced || 0} commits & Sơ đồ kiến trúc mới!`
         );
-        await loadGitWorkspace(activeProjectId, selectedPr?.id);
-        await loadArchitecture(activeProjectId);
-        setTopoAnimKey((k) => k + 1);
       }
+      // 2. Kéo cấu trúc sơ đồ kiến trúc động mới nhất
+      const archRes = await generateProjectArchitectureApi(activeProjectId, cleanUrl);
+      if (archRes) {
+        if (Array.isArray(archRes.nodes)) setArchNodes(archRes.nodes);
+        if (Array.isArray(archRes.edges)) setArchEdges(archRes.edges);
+        if (Array.isArray(archRes.flows)) setDynamicFlows(archRes.flows);
+        if (Array.isArray(archRes.subsystems)) setDynamicSubsystems(archRes.subsystems);
+        if (archRes.title) setDynamicArchTitle(archRes.title);
+        if (archRes.techStack) setDynamicTechStack(archRes.techStack);
+      } else {
+        await loadArchitecture(activeProjectId);
+      }
+      // 3. Tải lại Workspace commits, analytics, PRs
+      await loadGitWorkspace(activeProjectId, selectedPr?.id);
+      // 4. Kích hoạt chuyển động mượt mà cho cả Commit Graph và Diagram
+      setTopoAnimKey((k) => k + 1);
+      setDiagramAnimKey((k) => k + 1);
+      setStatAnimKey((k) => k + 1);
+    } catch (err: any) {
+      showToast("Lỗi đồng bộ repo: " + (err?.message || "Kiểm tra kết nối"));
     } finally {
       setIsSyncingLive(false);
     }
+  };
+
+  const handleSyncGitHubLive = async () => {
+    await handleApplyRepoUrl(repoUrl);
   };
 
   const handleSaveArchitecture = async () => {
@@ -1578,8 +1608,7 @@ export default function GitProjectHub({
       setTargetBranch(res.repository.targetBranch);
     }
     handleCloseRepoModal();
-    showToast(`Đã đồng bộ Repo ${res.repository?.repoSlug || repoSlug} (nhánh ${targetBranch})`);
-    void loadGitWorkspace(activeProjectId, selectedPr?.id);
+    await handleApplyRepoUrl(repoUrl);
   };
 
   const handlePushNewCommit = async (payload: {
@@ -1685,6 +1714,31 @@ export default function GitProjectHub({
     return Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
   }, [commits]);
 
+  const uniqueBranches = useMemo(() => {
+    const map = new Map<string, { name: string; color: string; cy: number; count: number }>();
+    commits.forEach((c) => {
+      const bName = c.branch || "main";
+      const existing = map.get(bName);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(bName, {
+          name: bName,
+          color: c.branchColor || "#2563eb",
+          cy: c.cy || 105,
+          count: 1,
+        });
+      }
+    });
+    if (map.size === 0) {
+      return [
+        { name: "main", color: "#2563eb", cy: 45, count: 0 },
+        { name: "develop", color: "#10b981", cy: 105, count: 0 },
+      ];
+    }
+    return Array.from(map.values()).sort((a, b) => a.cy - b.cy);
+  }, [commits]);
+
   const filteredCommits = useMemo(() => {
     return commits.filter((c) => {
       const matchMember = memberFilter === "all" || c.author.name === memberFilter;
@@ -1701,7 +1755,7 @@ export default function GitProjectHub({
           ? bLow.includes("te9ca79") || bLow.includes("backend") || bLow.includes("fastapi")
           : branchFilter === "huy"
           ? bLow === "huy"
-          : c.branch === branchFilter);
+          : c.branch === branchFilter || bLow === branchFilter.toLowerCase());
       return matchMember && matchBranch;
     });
   }, [commits, memberFilter, branchFilter]);
@@ -1941,6 +1995,106 @@ export default function GitProjectHub({
           </button>
         </div>
       </header>
+
+      {/* 🚀 Interactive Repository Switcher & Live Sync Bar */}
+      <section className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-4 shadow-sm backdrop-blur-xs space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xs shrink-0">
+              <FolderGit2 size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Kho Lưu Trữ & Sơ Đồ Kiến Trúc Thời Gian Thực
+                </h3>
+                <span className="pill pill--good pill--plain text-[10.5px] font-mono font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Reactive
+                </span>
+                <span className="text-xs text-slate-400 font-mono">
+                  {repoSlug || "hoaba-clouch/e-learningproject"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Dán bất kỳ link GitHub Repository nào: Commit Graph, Metro-line và Architecture Diagram sẽ tự động phân tích và chuyển đổi tương ứng!
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Repo Presets */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1">
+              Repo mẫu kiểm thử:
+            </span>
+            <button
+              type="button"
+              onClick={() => handleApplyRepoUrl("https://github.com/facebook/react")}
+              className="btn-marlo-ghost px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition cursor-pointer flex items-center gap-1 border border-blue-200/60 dark:border-blue-800/60"
+              title="Chuyển sang repository React (Frontend Architecture)"
+            >
+              <span>⚛️</span>
+              <span>React (Frontend)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyRepoUrl("https://github.com/fastapi/fastapi")}
+              className="btn-marlo-ghost px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1 border border-emerald-200/60 dark:border-emerald-800/60"
+              title="Chuyển sang repository FastAPI (Backend API Architecture)"
+            >
+              <span>⚡</span>
+              <span>FastAPI (Backend)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyRepoUrl("https://github.com/torvalds/linux")}
+              className="btn-marlo-ghost px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition cursor-pointer flex items-center gap-1 border border-amber-200/60 dark:border-amber-800/60"
+              title="Chuyển sang repository Linux Kernel (Systems Architecture)"
+            >
+              <span>🐧</span>
+              <span>Linux (Kernel)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyRepoUrl("https://github.com/Hoaba-clouch/E-learningProject")}
+              className="btn-marlo-ghost px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition cursor-pointer flex items-center gap-1 border border-purple-200/60 dark:border-purple-800/60"
+              title="Hoàn nguyên về repository đồ án gốc CodeMind AI"
+            >
+              <span>🎓</span>
+              <span>CodeMind (Gốc)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Input bar with URL & Actions */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={repoInputUrl}
+              onChange={(e) => setRepoInputUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleApplyRepoUrl(repoInputUrl);
+                }
+              }}
+              placeholder="Dán URL GitHub repository (ví dụ: https://github.com/owner/repo)..."
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs"
+            />
+            <GitBranch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleApplyRepoUrl(repoInputUrl)}
+            disabled={isSyncingLive}
+            className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-98 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 shrink-0"
+          >
+            <RotateCw size={14} className={isSyncingLive ? "animate-spin" : ""} />
+            <span>{isSyncingLive ? "Đang đồng bộ..." : "Đồng bộ Repo & Phân tích"}</span>
+          </button>
+        </div>
+      </section>
 
       {/* 4 Metric Summary Cards with Staggered Cascade & Animated Numbers */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
@@ -2471,67 +2625,43 @@ export default function GitProjectHub({
                 })}
               </div>
 
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-medium flex-wrap">
                 <span className="text-[11px] text-slate-500 px-2 flex items-center gap-1">
                   <GitPullRequest size={12} />
                   Nhánh:
                 </span>
                 <button
                   onClick={() => setBranchFilter("all")}
-                  className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "all" ? "bg-white text-slate-900 font-bold shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  className={`px-2 py-1 rounded-md transition text-xs font-semibold cursor-pointer ${
+                    branchFilter === "all"
+                      ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold shadow-xs"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
-                  Tất cả
+                  Tất cả ({commits.length})
                 </button>
-                <button
-                  onClick={() => setBranchFilter("main")}
-                  className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "main" ? "bg-blue-100 text-blue-800 font-bold" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  main
-                </button>
-                <button
-                  onClick={() => setBranchFilter("pipeline")}
-                  className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "pipeline" ? "bg-purple-100 text-purple-800 font-bold" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  feature/ci-cd-pipeline
-                </button>
-                <button
-                  onClick={() => setBranchFilter("jwt")}
-                  className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "jwt" ? "bg-amber-100 text-amber-800 font-bold" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  TE9CA7A-JWT
-                </button>
-                <button
-                  onClick={() => setBranchFilter("te9ca74")}
-                  className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "te9ca74" ? "bg-cyan-100 text-cyan-800 font-bold" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  feature/te9ca74*
-                </button>
-                <button
-                  onClick={() => setBranchFilter("te9ca79")}
-                  className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "te9ca79" ? "bg-emerald-100 text-emerald-800 font-bold" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  feature/te9ca79*
-                </button>
-                <button
-                  onClick={() => setBranchFilter("huy")}
-                  className={`px-2 py-1 rounded-md transition text-xs ${
-                    branchFilter === "huy" ? "bg-pink-100 text-pink-800 font-bold" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  huy
-                </button>
+                {uniqueBranches.map((b) => {
+                  const isActive = branchFilter === b.name;
+                  return (
+                    <button
+                      key={b.name}
+                      onClick={() => setBranchFilter(b.name)}
+                      className={`px-2 py-1 rounded-md transition text-xs font-semibold cursor-pointer flex items-center gap-1.5 ${
+                        isActive
+                          ? "bg-white dark:bg-slate-900 shadow-xs font-bold"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                      style={{ color: isActive ? b.color : undefined }}
+                    >
+                      <span
+                        className="inline-block w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: b.color }}
+                      />
+                      <span>{b.name}</span>
+                      <span className="text-[10px] opacity-75 font-mono">({b.count})</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -2606,24 +2736,30 @@ export default function GitProjectHub({
                 }
               `}</style>
 
-              {/* 6 Lane Guides & Branch Labels - Khớp 100% với Nhánh Thật của Repository */}
-              <line x1="50" y1="45" x2={svgWidth - 40} y2="45" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="49" fill="#2563eb" fontSize="11" fontFamily="monospace" fontWeight="bold">main</text>
-
-              <line x1="50" y1="105" x2={svgWidth - 40} y2="105" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="109" fill="#8b5cf6" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/ci-cd-pipeline</text>
-
-              <line x1="50" y1="165" x2={svgWidth - 40} y2="165" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="169" fill="#f59e0b" fontSize="11" fontFamily="monospace" fontWeight="bold">TE9CA7A-JWT</text>
-
-              <line x1="50" y1="225" x2={svgWidth - 40} y2="225" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="229" fill="#06b6d4" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/te9ca74-kien-truc</text>
-
-              <line x1="50" y1="285" x2={svgWidth - 40} y2="285" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="289" fill="#10b981" fontSize="11" fontFamily="monospace" fontWeight="bold">feature/te9ca79-backend</text>
-
-              <line x1="50" y1="345" x2={svgWidth - 40} y2="345" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="10" y="349" fill="#ec4899" fontSize="11" fontFamily="monospace" fontWeight="bold">huy</text>
+              {/* Dynamic Lane Guides & Branch Labels - Khớp 100% với Nhánh Thật của Repository */}
+              {uniqueBranches.map((b) => (
+                <g key={`branch-lane-${b.name}`}>
+                  <line
+                    x1="50"
+                    y1={b.cy}
+                    x2={svgWidth - 40}
+                    y2={b.cy}
+                    stroke="#cbd5e1"
+                    strokeDasharray="4 4"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x="10"
+                    y={b.cy + 4}
+                    fill={b.color}
+                    fontSize="11"
+                    fontFamily="monospace"
+                    fontWeight="bold"
+                  >
+                    {b.name.length > 22 ? b.name.slice(0, 20) + "…" : b.name}
+                  </text>
+                </g>
+              ))}
 
               {/* Branch Connecting Lines (Smooth Bézier curves with drawing animations) */}
               {/* 1. Main trunk */}
@@ -2636,7 +2772,7 @@ export default function GitProjectHub({
                 strokeWidth="3"
               />
 
-              {activeProjectId === "prj-codemind" && commits.length <= 16 && (
+              {activeProjectId === "prj-codemind" && (repoSlug.includes("e-learning") || repoSlug.includes("codemind")) && commits.length <= 16 && (
                 <>
                   <path
                     id="topo-dev1-path"
@@ -2723,7 +2859,13 @@ export default function GitProjectHub({
               {/* Dynamic Bezier edges for all commits across branches */}
               {commits.map((c, idx) => {
                 if (idx === 0) return null;
-                if (activeProjectId === "prj-codemind" && commits.length <= 16 && idx < 16) return null;
+                if (
+                  activeProjectId === "prj-codemind" &&
+                  (repoSlug.includes("e-learning") || repoSlug.includes("codemind")) &&
+                  commits.length <= 16 &&
+                  idx < 16
+                )
+                  return null;
                 const prev = commits[idx - 1];
                 const midX = (prev.cx + c.cx) / 2;
                 return (
@@ -2733,7 +2875,13 @@ export default function GitProjectHub({
                     fill="none"
                     stroke={c.branchColor}
                     strokeWidth="2.8"
-                    strokeDasharray={activeProjectId === "prj-codemind" && commits.length <= 16 ? "5 3" : undefined}
+                    strokeDasharray={
+                      activeProjectId === "prj-codemind" &&
+                      (repoSlug.includes("e-learning") || repoSlug.includes("codemind")) &&
+                      commits.length <= 16
+                        ? "5 3"
+                        : undefined
+                    }
                     opacity={0.85}
                   />
                 );
@@ -3522,6 +3670,37 @@ export default function GitProjectHub({
                   <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
                     Đã Kết Nối
                   </span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  <span className="text-[11px] text-slate-500 font-medium">Chọn nhanh:</span>
+                  <button
+                    type="button"
+                    onClick={() => setRepoUrl("https://github.com/facebook/react")}
+                    className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 cursor-pointer"
+                  >
+                    ⚛️ React
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRepoUrl("https://github.com/fastapi/fastapi")}
+                    className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-semibold hover:bg-emerald-100 cursor-pointer"
+                  >
+                    ⚡ FastAPI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRepoUrl("https://github.com/torvalds/linux")}
+                    className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-[11px] font-semibold hover:bg-amber-100 cursor-pointer"
+                  >
+                    🐧 Linux
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRepoUrl("https://github.com/Hoaba-clouch/E-learningProject")}
+                    className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 text-[11px] font-semibold hover:bg-purple-100 cursor-pointer"
+                  >
+                    🎓 CodeMind Gốc
+                  </button>
                 </div>
               </div>
 
