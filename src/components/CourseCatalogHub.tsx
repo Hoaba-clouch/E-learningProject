@@ -95,10 +95,31 @@ interface SubjectVisualTheme {
   bgGradient: string;
   borderHover: string;
   badgeStyle: string;
+  spotlightColor?: string;
+  haloColor?: string;
   renderVisualEffect: () => React.ReactNode;
 }
 
-function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
+const SUBJECT_ACCENT_COLORS: Record<string, { spotlight: string; halo: string }> = {
+  oop: { spotlight: "rgba(6, 182, 212, 0.45)", halo: "rgba(6, 182, 212, 0.55)" },
+  dsa: { spotlight: "rgba(16, 185, 129, 0.45)", halo: "rgba(16, 185, 129, 0.55)" },
+  network: { spotlight: "rgba(139, 92, 246, 0.45)", halo: "rgba(139, 92, 246, 0.55)" },
+  frontend: { spotlight: "rgba(59, 130, 246, 0.45)", halo: "rgba(59, 130, 246, 0.55)" },
+  realtime: { spotlight: "rgba(245, 158, 11, 0.45)", halo: "rgba(245, 158, 11, 0.55)" },
+  mobile: { spotlight: "rgba(84, 197, 248, 0.5)", halo: "rgba(84, 197, 248, 0.65)" },
+  web: { spotlight: "rgba(56, 189, 248, 0.45)", halo: "rgba(56, 189, 248, 0.55)" },
+  "system-design": { spotlight: "rgba(168, 85, 247, 0.45)", halo: "rgba(168, 85, 247, 0.55)" },
+  distributed: { spotlight: "rgba(236, 72, 153, 0.45)", halo: "rgba(236, 72, 153, 0.55)" },
+  security: { spotlight: "rgba(244, 63, 94, 0.45)", halo: "rgba(244, 63, 94, 0.55)" },
+  "ai-ml": { spotlight: "rgba(168, 85, 247, 0.45)", halo: "rgba(168, 85, 247, 0.55)" },
+  "ai-agent": { spotlight: "rgba(99, 102, 241, 0.5)", halo: "rgba(99, 102, 241, 0.65)" },
+  devops: { spotlight: "rgba(56, 189, 248, 0.45)", halo: "rgba(56, 189, 248, 0.55)" },
+  cloud: { spotlight: "rgba(245, 158, 11, 0.45)", halo: "rgba(245, 158, 11, 0.55)" },
+  scrum: { spotlight: "rgba(16, 185, 129, 0.45)", halo: "rgba(16, 185, 129, 0.55)" },
+  capstone: { spotlight: "rgba(242, 155, 35, 0.55)", halo: "rgba(242, 155, 35, 0.7)" },
+};
+
+function _getBaseVisualTheme(id: SubjectId) {
   switch (id) {
     // 1. OOP (Modern C++20) - Memory & Pointer Matrix
     case "oop":
@@ -473,6 +494,19 @@ function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
   }
 }
 
+function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
+  const base = _getBaseVisualTheme(id);
+  const accents = SUBJECT_ACCENT_COLORS[id] || {
+    spotlight: "rgba(242, 155, 35, 0.45)",
+    halo: "rgba(242, 155, 35, 0.55)",
+  };
+  return {
+    ...base,
+    spotlightColor: accents.spotlight,
+    haloColor: accents.halo,
+  };
+}
+
 export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubProps) {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"roadmap" | "all">("roadmap");
@@ -496,16 +530,23 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
       <SpotlightCard
         key={`${sub.id}-${searchQuery}-${viewMode}`}
         onClick={() => onSelectCourse(sub.id)}
+        spotlightColor={theme.spotlightColor}
+        haloColor={theme.haloColor}
         style={{ animationDelay: `${Math.min(idx * 60, 600)}ms` }}
-        className={`animate-card-stagger rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer flex flex-col justify-between ${theme.borderHover}`}
+        className={`animate-card-stagger rounded-2xl border border-slate-200/90 dark:border-slate-800/80 bg-white/95 dark:bg-[#14161F] p-3.5 shadow-sm group-hover:shadow-[0_22px_45px_-12px_rgba(0,0,0,0.6)] group-hover:-translate-y-2 transition-all duration-300 cursor-pointer flex flex-col justify-between ${theme.borderHover}`}
       >
         <div>
           {/* 16:9 Thumbnail Banner with Custom Gradient, Font & Animation */}
           <div
-            className={`aspect-video w-full rounded-xl relative overflow-hidden bg-gradient-to-br ${theme.bgGradient} p-3 flex flex-col justify-between text-white select-none border border-white/10 shadow-inner`}
+            className={`aspect-video w-full rounded-xl relative overflow-hidden bg-gradient-to-br ${theme.bgGradient} p-3 flex flex-col justify-between text-white select-none border border-white/10 shadow-inner group-hover:scale-[1.02] transition-transform duration-300`}
           >
             {/* Visual Dynamic Canvas Effect */}
             {theme.renderVisualEffect()}
+
+            {/* 🌟 Diagonal Cinematic Flare Sweep on Hover */}
+            <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 overflow-hidden z-15">
+              <div className="w-[140%] h-full bg-gradient-to-r from-transparent via-white/25 to-transparent -skew-x-25 -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 ease-out" />
+            </div>
 
             {/* Top Bar inside Thumbnail */}
             <div className="flex items-center justify-between z-10">
@@ -534,17 +575,20 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
               {theme.syntax}
             </div>
 
-            {/* Hover Overlay Play Icon */}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none z-20 backdrop-blur-[1px]">
-              <div className="h-9 w-9 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform duration-200">
-                <Play size={14} fill="currentColor" className="ml-0.5 text-blue-600" />
+            {/* 🌟 Hover Overlay Glowing Play Beacon */}
+            <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none z-20 backdrop-blur-[2px]">
+              <div className="relative flex items-center justify-center">
+                <span className="absolute w-14 h-14 rounded-full bg-gradient-to-r from-[#F8BD57]/40 to-[#EE8420]/40 animate-ping" />
+                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#F8BD57] via-[#F29B23] to-[#EE8420] text-[#1C1304] flex items-center justify-center shadow-[0_0_28px_rgba(242,155,35,0.85)] border-2 border-white/60 transform group-hover:scale-115 transition-transform duration-300">
+                  <Play size={18} fill="#1C1304" className="ml-0.5 text-[#1C1304] drop-shadow-sm" />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Course Name & Teacher */}
           <div className="pt-2.5 space-y-1">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-[#EE8420] dark:group-hover:text-[#F8BD57] group-hover:translate-x-0.5 transition-all line-clamp-2 leading-snug">
               {sub.name}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pt-0.5 truncate">
@@ -559,14 +603,14 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
         {/* Compact Progress Bar */}
         <div className="pt-3">
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono mb-1">
-            <span>Tiến độ</span>
-            <span className="font-bold text-amber-600 dark:text-amber-400">
+            <span className="group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-colors">Tiến độ</span>
+            <span className="font-bold text-amber-600 dark:text-amber-400 font-mono group-hover:scale-105 transition-transform">
               {sub.overallProgress}%
             </span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
+          <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative group-hover:h-2 transition-all">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-500 relative"
+              className="h-full rounded-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-400 transition-all duration-500 relative group-hover:shadow-[0_0_14px_rgba(245,158,11,0.85)]"
               style={{ width: `${sub.overallProgress}%` }}
             >
               <div className="absolute inset-0 f8-shimmer" />
