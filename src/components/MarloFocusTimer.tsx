@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, Check, ChevronDown, CheckCircle2 } from "lucide-react";
+import { Play, Pause, Check, ChevronDown, CheckCircle2, RotateCcw } from "lucide-react";
 import "../marlo-engine/marloStyles.css";
 
 interface Props {
@@ -17,8 +17,7 @@ const COURSES = [
 export default function MarloFocusTimer({ collapsed = false, onSessionComplete }: Props) {
   const [isRunning, setIsRunning] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const [todayTrackedMins, setTodayTrackedMins] = useState(90); // 1.5h
-  const goalHours = 4.0;
+  const [sessionTargetMinutes, setSessionTargetMinutes] = useState(25); // Pomodoro 25p chuẩn
   const [showLogToast, setShowLogToast] = useState(false);
   const [lastLoggedMins, setLastLoggedMins] = useState(0);
   const [selectedCourse, setSelectedCourse] = useState(COURSES[0]);
@@ -44,7 +43,6 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
   const handleStopAndLog = () => {
     if (seconds > 0) {
       const elapsedMins = Math.max(1, Math.round(seconds / 60));
-      setTodayTrackedMins((m) => m + elapsedMins);
       setLastLoggedMins(elapsedMins);
       setIsRunning(false);
       setSeconds(0);
@@ -53,9 +51,16 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
       onSessionComplete?.(elapsedMins);
     } else {
       setLastLoggedMins(0);
+      setIsRunning(false);
+      setSeconds(0);
       setShowLogToast(true);
       setTimeout(() => setShowLogToast(false), 2200);
     }
+  };
+
+  const handleReset = () => {
+    setIsRunning(false);
+    setSeconds(0);
   };
 
   const formatClock = (totalSecs: number) => {
@@ -65,8 +70,12 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  const todayHoursFormatted = (Math.round((todayTrackedMins / 60) * 10) / 10).toFixed(1);
-  const progressRatio = Math.max(0.12, Math.min(1, (todayTrackedMins / 60 + seconds / 3600) / goalHours));
+  const targetSeconds = sessionTargetMinutes * 60;
+  // Khi seconds = 0: progressRatio = 0 (100% không có màu cam che 00:00:00).
+  // Khi seconds > 0: Thanh cam chuyển động mượt mà tăng dần theo thời gian!
+  const progressRatio = seconds > 0
+    ? Math.min(1, Math.max(0.06, seconds / targetSeconds))
+    : 0;
 
   // Collapsed Mode (fits inside collapsed 72px rail - 1:1 with Marlo .timer rail mode)
   if (collapsed) {
@@ -100,7 +109,7 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
           <div className="bg-[#161718] dark:bg-[#F0F0F1] text-white dark:text-[#161718] text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 border border-white/10 dark:border-black/10">
             <CheckCircle2 size={13} className="text-[#F29B23]" />
             <span>
-              {lastLoggedMins > 0 ? `+${lastLoggedMins} phút tập trung hoàn tất!` : "Phiên học tập đã sẵn sàng!"}
+              {lastLoggedMins > 0 ? `+${lastLoggedMins} phút tập trung hoàn tất!` : "Đã đặt lại phiên tập trung!"}
             </span>
           </div>
         </div>
@@ -114,21 +123,60 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
           {/* Top row: Focus Mode label + Stop/Log check button */}
           <div className="timer__top">
             <small>Đồng hồ tập trung</small>
-            <button
-              type="button"
-              className="timer__stop"
-              aria-label="Reset and complete session"
-              title="Đặt lại phiên tập trung"
-              onClick={handleStopAndLog}
-            >
-              <Check size={14} strokeWidth={2.4} />
-            </button>
+            <div className="flex items-center gap-1">
+              {seconds > 0 && (
+                <button
+                  type="button"
+                  className="timer__stop text-xs"
+                  aria-label="Reset timer"
+                  title="Đặt lại về 00:00:00"
+                  onClick={handleReset}
+                >
+                  <RotateCcw size={13} strokeWidth={2.2} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="timer__stop"
+                aria-label="Complete session and log"
+                title="Hoàn tất và lưu phiên học"
+                onClick={handleStopAndLog}
+              >
+                <Check size={14} strokeWidth={2.4} />
+              </button>
+            </div>
           </div>
 
           {/* Focus mode title */}
           <b className="timer__today">
             Pomodoro Focus<small> (Deep Work)</small>
           </b>
+
+          {/* Duration Chips Selector */}
+          <div className="flex items-center justify-between gap-1 mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">Mục tiêu:</span>
+            <div className="flex items-center gap-1">
+              {[15, 25, 45, 60].map((mins) => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() => {
+                    if (!isRunning) {
+                      setSessionTargetMinutes(mins);
+                    }
+                  }}
+                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                    sessionTargetMinutes === mins
+                      ? "bg-[#EE8420] text-white shadow-2xs font-extrabold"
+                      : "bg-[var(--card-2)] text-[var(--muted)] hover:text-[var(--ink)]"
+                  }`}
+                  title={`Đặt thời lượng phiên ${mins} phút`}
+                >
+                  {mins}p
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Project / Subject Selector */}
           <div className="relative">
@@ -181,11 +229,26 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
           </div>
         </div>
 
+        {/* Status Line above pill */}
+        <div className="flex items-center justify-between text-[10.5px] px-1 mb-1 font-mono select-none">
+          <span className={isRunning ? "text-[#EE8420] font-bold flex items-center gap-1" : "text-[var(--muted)]"}>
+            {isRunning && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#EE8420] animate-ping" />}
+            {isRunning ? "Đang tập trung..." : "Sẵn sàng"}
+          </span>
+          <span className="text-[var(--muted)] font-semibold">
+            {Math.round((seconds / targetSeconds) * 100)}%
+          </span>
+        </div>
+
         {/* The Authentic Marlo Pill */}
         <div className="timer__pill">
           <i
-            className="timer__fill"
-            style={{ transform: `scaleX(${progressRatio})` }}
+            className={`timer__fill${isRunning ? " is-active-flowing" : ""}`}
+            style={{
+              transform: `scaleX(${progressRatio})`,
+              opacity: progressRatio > 0 ? 1 : 0,
+              transition: isRunning ? "transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease" : "transform 0.2s ease, opacity 0.2s ease",
+            }}
           />
           <b className="timer__clock">{formatClock(seconds)}</b>
           <button
