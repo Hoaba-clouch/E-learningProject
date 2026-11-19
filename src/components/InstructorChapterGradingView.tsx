@@ -31,14 +31,22 @@ interface InstructorChapterGradingViewProps {
 
 const COURSE_OPTIONS = [
   { id: "", label: "Tất cả 16 Môn học" },
-  { id: "oop", label: "CS201 • Lập trình Hướng đối tượng C++20" },
-  { id: "dsa", label: "CS202 • Cấu trúc Dữ liệu & Giải thuật" },
-  { id: "network", label: "CS301 • Lập trình Mạng & Phân tán" },
-  { id: "os", label: "CS304 • Hệ điều hành & Linux Kernel" },
-  { id: "web", label: "CS305 • Kỹ thuật Web Fullstack & RESTful API" },
-  { id: "ai-ml", label: "CS402 • Trí tuệ Nhân tạo & Học máy" },
-  { id: "security", label: "CS405 • An toàn Thông tin & Mật mã" },
-  { id: "capstone", label: "CS499 • Đồ án Khóa luận Tốt nghiệp" },
+  { id: "oop", label: "CS201 • Lập trình Hướng đối tượng & CTDL" },
+  { id: "dsa", label: "CS202 • Giải thuật Nâng cao & CTDL Phức hợp" },
+  { id: "network", label: "CS205 • Kiến trúc Máy tính, HĐH & Mạng" },
+  { id: "frontend", label: "CS210 • Lập trình Web Frontend (React 19 & TS)" },
+  { id: "realtime", label: "CS215 • Trạng thái, WebSockets & Web Vitals" },
+  { id: "web", label: "CS304 • Phát triển Web Hiện đại & REST API" },
+  { id: "mobile", label: "CS306 • Ứng dụng Di động (Flutter & Dart)" },
+  { id: "system-design", label: "CS308 • Phân tích Thiết kế Hệ thống & CSDL" },
+  { id: "security", label: "CS312 • An toàn Thông tin & OWASP Top 10" },
+  { id: "distributed", label: "CS315 • Hệ thống Phân tán, Kafka & Redis" },
+  { id: "scrum", label: "CS401 • Quản lý Dự án & Agile Scrum" },
+  { id: "devops", label: "CS405 • DevOps, Docker & CI/CD Pipeline" },
+  { id: "ai-ml", label: "CS410 • Trí tuệ Nhân tạo & Machine Learning" },
+  { id: "cloud", label: "CS415 • Điện toán Đám mây & AWS Microservices" },
+  { id: "ai-agent", label: "CS420 • AI-Native Web App, RAG & Agents" },
+  { id: "capstone", label: "CS499 • Đồ án Tốt nghiệp Kỹ sư Enterprise" },
 ];
 
 const STATUS_FILTERS = [
@@ -64,11 +72,26 @@ export function InstructorChapterGradingView({
   });
   const [loading, setLoading] = useState(false);
 
-  // Filters
+  // Filters (mặc định "" để thấy tất cả, hoặc đồng bộ khi defaultSubjectId đổi theo Header)
   const [selectedSubject, setSelectedSubject] = useState<string>(defaultSubjectId);
   const [selectedChapter, setSelectedChapter] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  useEffect(() => {
+    setSelectedSubject(defaultSubjectId);
+  }, [defaultSubjectId]);
+
+  const courseOptionsList =
+    classes.length > 0
+      ? [
+          { id: "", label: `Tất cả ${classes.length} Môn học` },
+          ...classes.map((c) => ({
+            id: c.subjectId || c.id.replace(/^class-/, ""),
+            label: `${c.code || ""} • ${c.name}`.trim(),
+          })),
+        ]
+      : COURSE_OPTIONS;
 
   // Selected for Detail / Action
   const [activeSubId, setActiveSubId] = useState<string | null>(null);
@@ -114,17 +137,6 @@ export function InstructorChapterGradingView({
     void loadData();
   }, [loadData]);
 
-  const activeSub = submissions.find((s) => s.id === activeSubId) || submissions[0] || null;
-
-  // Sync grading input with active submission
-  useEffect(() => {
-    if (activeSub) {
-      const initialScore = activeSub.instructorGrade ?? activeSub.score;
-      setGradeInput(initialScore !== null && initialScore !== undefined ? String(initialScore) : "9.0");
-      setFeedbackInput(activeSub.instructorFeedback || "");
-    }
-  }, [activeSubId, activeSub]);
-
   // Filtered submissions by search query
   const filteredList = submissions.filter((s) => {
     if (!searchQuery.trim()) return true;
@@ -137,8 +149,25 @@ export function InstructorChapterGradingView({
     );
   });
 
+  // activeSub phải lấy từ filteredList để tránh hiển thị nhầm bài khác khi search trả 0 kết quả
+  const activeSub =
+    filteredList.find((s) => s.id === activeSubId) || filteredList[0] || null;
+
+  // Sync grading input with active submission
+  useEffect(() => {
+    if (activeSub) {
+      const initialScore = activeSub.instructorGrade ?? activeSub.score;
+      setGradeInput(initialScore !== null && initialScore !== undefined ? String(initialScore) : "9.0");
+      setFeedbackInput(activeSub.instructorFeedback || "");
+    }
+  }, [activeSubId, activeSub]);
+
   const handleAction = async (action: "approve" | "override" | "request_revision") => {
     if (!activeSub) return;
+    if (action === "request_revision" && !feedbackInput.trim()) {
+      onNotify?.("⚠️ Vui lòng nhập lời phê / hướng dẫn sửa lỗi trước khi gửi yêu cầu nộp lại.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const parsedGrade = parseFloat(gradeInput);
@@ -146,7 +175,9 @@ export function InstructorChapterGradingView({
       const payload = {
         action,
         instructor_grade: action === "approve" ? activeSub.score : gradeVal,
-        instructor_feedback: feedbackInput.trim() || (action === "approve" ? "Đã phê duyệt nghiệm thu theo kết quả Docker Sandbox." : ""),
+        instructor_feedback:
+          feedbackInput.trim() ||
+          (action === "approve" ? "Đã phê duyệt nghiệm thu theo kết quả Docker Sandbox." : ""),
       };
 
       await gradeInstructorChapterSubmission(activeSub.id, payload);
@@ -232,7 +263,7 @@ export function InstructorChapterGradingView({
               onChange={(e) => setSelectedSubject(e.target.value)}
               className="appearance-none pl-3 pr-8 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
             >
-              {COURSE_OPTIONS.map((c) => (
+              {courseOptionsList.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label}
                 </option>

@@ -7,9 +7,17 @@ class LessonCompleteIn(BaseModel):
     subject_id: str = Field(min_length=1, max_length=64)
     chapter_id: str = Field(min_length=1, max_length=64)
     lesson_id: str = Field(min_length=1, max_length=64)
-    xp: int = Field(default=50, ge=0, le=2000)
+    xp: int = Field(default=50, ge=0, le=300)
     quiz_score: int = Field(default=0, ge=0, le=100)
     quiz_total: int = Field(default=0, ge=0, le=100)
+
+
+class VideoProgressIn(BaseModel):
+    subject_id: str = Field(min_length=1, max_length=64)
+    lesson_id: str = Field(min_length=1, max_length=64)
+    watched_seconds: int = Field(default=0, ge=0, le=86400)
+    duration_seconds: int = Field(default=0, ge=0, le=86400)
+    completed: bool = False
 
 
 class VideoNoteCreateIn(BaseModel):
@@ -27,15 +35,15 @@ class ChapterExerciseSubmitIn(BaseModel):
     exercise_title: str = Field(min_length=1, max_length=255)
     repo_url: str = Field(min_length=3, max_length=1000)
     student_note: str = ""
-    xp: int = Field(default=100, ge=0, le=2000)
+    xp: int = Field(default=100, ge=0, le=300)
 
 
 class XpShopPurchaseIn(BaseModel):
     category: str = Field(min_length=1, max_length=32)
     item_id: str = Field(min_length=1, max_length=64)
-    cost: int = Field(ge=0, le=100000)
+    cost: int = Field(ge=0, le=20000)
 
 
 class XpQuestClaimIn(BaseModel):
     quest_id: str = Field(min_length=1, max_length=64)
-    reward: int = Field(ge=1, le=5000)
+    reward: int = Field(ge=1, le=500)

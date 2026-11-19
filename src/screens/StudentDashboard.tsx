@@ -28,20 +28,22 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
-import type { Screen, AvatarStyle, BadgeFrame, SkillMapSkin, Role, Theme } from "../App";
+import type { Screen, AvatarStyle, BadgeFrame, SkillMapSkin, Role, Theme, WorkspaceLaunchTarget } from "../App";
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
 import MarloActivityRing from "../components/MarloActivityRing";
 import MarloCapacityBar from "../components/MarloCapacityBar";
 import MarloToast from "../components/MarloToast";
 import { CNTT_PROJECTS, type CNTTProjectItem } from "./MarloProjectsScreen";
-import { fetchKanbanWorkspace, fetchStudentLearningOverview } from "../api";
+import { fetchKanbanWorkspace, fetchStudentLearningOverview, type StudentLearningOverview } from "../api";
+import { MULTI_CHAPTER_SUBJECTS as SUBJECTS } from "../data/multiChapterCurriculum";
 
 interface Props {
   avatarStyle: AvatarStyle;
   skillMapSkin?: SkillMapSkin;
   badgeFrame: BadgeFrame;
   onNavigate: (s: Screen) => void;
+  onOpenWorkspace?: (opts: Omit<WorkspaceLaunchTarget, "nonce">) => void;
   theme?: Theme;
   onToggleTheme?: (trigger?: any) => void;
   role?: Role;
@@ -62,6 +64,7 @@ export default function StudentDashboard({
   skillMapSkin,
   badgeFrame,
   onNavigate,
+  onOpenWorkspace,
   theme = "light",
   onToggleTheme,
   role = "student",
@@ -71,16 +74,24 @@ export default function StudentDashboard({
   const [totalXp, setTotalXp] = useState(3240);
   const [streakDays, setStreakDays] = useState(14);
   const [studentName, setStudentName] = useState("Nguyễn Văn A");
+  const [learningOverview, setLearningOverview] = useState<StudentLearningOverview | null>(null);
   const [projectsList, setProjectsList] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
 
   useEffect(() => {
     let active = true;
-    fetchStudentLearningOverview().then((data) => {
-      if (!active || !data) return;
-      if (typeof data.profile?.exp_points === "number") setTotalXp(data.profile.exp_points);
-      if (typeof data.profile?.current_streak === "number") setStreakDays(data.profile.current_streak);
-      if (data.user?.name) setStudentName(data.user.name);
-    });
+    const loadOverview = () => {
+      fetchStudentLearningOverview().then((data) => {
+        if (!active || !data) return;
+        setLearningOverview(data);
+        if (typeof data.profile?.exp_points === "number") setTotalXp(data.profile.exp_points);
+        if (typeof data.profile?.current_streak === "number") setStreakDays(data.profile.current_streak);
+        if (data.user?.name) setStudentName(data.user.name);
+      });
+    };
+    loadOverview();
+    window.addEventListener("codemind-xp-updated", loadOverview);
+    window.addEventListener("codemind-courses-updated", loadOverview);
+
     fetchKanbanWorkspace().then((ws) => {
       if (!active || !ws?.projects?.length) return;
       setProjectsList(
@@ -112,8 +123,125 @@ export default function StudentDashboard({
     });
     return () => {
       active = false;
+      window.removeEventListener("codemind-xp-updated", loadOverview);
+      window.removeEventListener("codemind-courses-updated", loadOverview);
     };
   }, []);
+
+  // ─── TÍNH DỮ LIỆU HỌC THỰC TẾ ĐỂ NỐI DEEP-LINK VÀO CODE LAB / MINDMAP / AI TUTOR ───
+  const focusLearning = useMemo(() => {
+    const lastSubj =
+      typeof window !== "undefined" ? window.localStorage.getItem("codemind-last-subject") : null;
+    const completedRows = learningOverview?.completed_lessons || [];
+    const subRows = learningOverview?.chapter_submissions || [];
+    const activeSubjId =
+      lastSubj ||
+      completedRows[completedRows.length - 1]?.subject_id ||
+      "oop";
+    const fallbackSubject = SUBJECTS.find((s) => s.id === activeSubjId) || SUBJECTS[0];
+    const dbCourse = learningOverview?.courses?.find((c) => c.subjectId === fallbackSubject.id);
+
+    const chaptersRaw =
+      dbCourse?.chapters && dbCourse.chapters.length > 0
+        ? dbCourse.chapters.filter((ch: any) => ch.status !== "Bản nháp")
+        : fallbackSubject.chapters.map((ch) => ({
+            id: ch.id,
+            title: ch.title,
+            lessons: ch.lessons.map((l) => ({
+              id: l.id,
+              title: l.title,
+              duration: l.duration,
+              xp: l.xp,
+              content: { lead: l.lead, objective: l.objective },
+            })),
+          }));
+
+    const doneIds = new Set(
+      completedRows
+        .filter((r) => r.subject_id === fallbackSubject.id)
+        .map((r) => r.lesson_id)
+    );
+
+    const flatLessons: Array<{
+      id: string;
+      title: string;
+      duration: string;
+      xp: number;
+      lead: string;
+      chapterNumber: number;
+      chapterTitle: string;
+      done: boolean;
+    }> = [];
+
+    chaptersRaw.forEach((ch: any, chIdx: number) => {
+      const pubLessons = (ch.lessons || []).filter((ls: any) => ls.status !== "Bản nháp");
+      pubLessons.forEach((ls: any) => {
+        flatLessons.push({
+          id: ls.id,
+          title: ls.title,
+          duration: ls.duration || "~20 phút",
+          xp: typeof ls.xp === "number" ? ls.xp : 60,
+          lead: ls.content?.lead || ls.content?.objective || fallbackSubject.description,
+          chapterNumber: chIdx + 1,
+          chapterTitle: ch.title || `Chương ${chIdx + 1}`,
+          done: doneIds.has(ls.id),
+        });
+      });
+    });
+
+    const userId = learningOverview?.user?.id || "student-demo";
+    const lastLessonSaved =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(`codemind-last-lesson-${userId}-${fallbackSubject.id}`)
+        : null;
+
+    const resumeLesson =
+      (lastLessonSaved && flatLessons.find((l) => l.id === lastLessonSaved)) ||
+      flatLessons.find((l) => !l.done) ||
+      flatLessons[0] || {
+        id: "1.1",
+        title: fallbackSubject.name,
+        duration: "~20 phút",
+        xp: 60,
+        lead: fallbackSubject.description,
+        chapterNumber: 1,
+        chapterTitle: "Chương 1",
+        done: false,
+      };
+
+    const totalLessons = flatLessons.length;
+    const doneCount = flatLessons.filter((l) => l.done).length;
+    const pct = totalLessons > 0 ? Math.round((doneCount / totalLessons) * 100) : 0;
+
+    const totalChapters = Math.max(1, chaptersRaw.length);
+    const submittedChapters = new Set(
+      subRows.filter((s) => s.subject_id === fallbackSubject.id).map((s) => s.chapter_number)
+    ).size;
+
+    const quizRecords = completedRows.filter(
+      (r) => r.subject_id === fallbackSubject.id && r.quiz_total > 0
+    );
+    const quizAvgPct =
+      quizRecords.length > 0
+        ? Math.round(
+            quizRecords.reduce((acc, r) => acc + (r.quiz_score / r.quiz_total) * 100, 0) /
+              quizRecords.length
+          )
+        : 0;
+
+    return {
+      subjectId: fallbackSubject.id,
+      courseCode: dbCourse?.code || fallbackSubject.code,
+      courseName: dbCourse?.name || fallbackSubject.name,
+      resumeLesson,
+      totalLessons,
+      doneCount,
+      pct,
+      submittedChapters,
+      totalChapters,
+      quizAvgPct,
+    };
+  }, [learningOverview]);
 
   // ─── ACTIVE FOCUSED PROJECT (Giải quyết triệt để: Biết chính xác tiến độ của dự án nào) ───
   const [selectedProjectId, setSelectedProjectId] = useState<string>("prj-codemind");
@@ -483,10 +611,10 @@ export default function StudentDashboard({
                 </div>
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Khóa học trọng tâm · Lộ trình Kỹ sư 2026
+                    {focusLearning.courseCode} · Khóa học đang theo dõi
                   </div>
                   <div className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>Lập trình Hướng đối tượng C++20 & Cấu trúc Dữ liệu</span>
+                    <span>{focusLearning.courseName}</span>
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   </div>
                 </div>
@@ -495,10 +623,10 @@ export default function StudentDashboard({
               {/* Progress Chip */}
               <div className="flex items-center gap-2">
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                  Đã hoàn thành 68%
+                  Đã hoàn thành {focusLearning.pct}%
                 </span>
                 <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 font-mono">
-                  14/22 bài
+                  {focusLearning.doneCount}/{focusLearning.totalLessons} bài
                 </span>
               </div>
             </div>
@@ -509,32 +637,40 @@ export default function StudentDashboard({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="pill pill--accent font-mono text-[10.5px] font-bold tracking-wide">
-                      CHƯƠNG 3 · BÀI 3.2
+                      CHƯƠNG {focusLearning.resumeLesson.chapterNumber} · BÀI {focusLearning.resumeLesson.id}
                     </span>
                     <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
-                      Đang học dở
+                      {focusLearning.resumeLesson.done ? "Đã hoàn thành" : "Đang học"}
                     </span>
                     <span className="text-xs text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1">
                       <Clock size={12} />
-                      <span>~25 phút thực hành</span>
+                      <span>{focusLearning.resumeLesson.duration}</span>
                     </span>
                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                       <Sparkles size={12} />
-                      <span>+150 XP</span>
+                      <span>+{focusLearning.resumeLesson.xp} XP</span>
                     </span>
                   </div>
 
                   <h2 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-2.5 leading-snug tracking-tight">
-                    Cơ chế Đa hình (Polymorphism) & Bản đồ Con trỏ ảo vtable
+                    {focusLearning.resumeLesson.title}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed max-w-2xl">
-                    Khám phá cách CPU giải quyết Dynamic Dispatch tại runtime, cấu trúc ô nhớ của con trỏ <code className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-amber-600 dark:text-amber-400">vptr</code> và cách phòng tránh vtable overhead trong hệ thống nhúng.
+                    {focusLearning.resumeLesson.lead}
                   </p>
 
                   {/* Quick CTAs */}
                   <div className="mt-5 flex items-center gap-3 flex-wrap">
                     <button
-                      onClick={() => onNavigate("workspace")}
+                      onClick={() =>
+                        onOpenWorkspace
+                          ? onOpenWorkspace({
+                              subjectId: focusLearning.subjectId,
+                              lessonId: focusLearning.resumeLesson.id,
+                              tab: "video",
+                            })
+                          : onNavigate("workspace")
+                      }
                       className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-xs font-black text-[#1C1304] bg-gradient-to-r from-[#F8BD57] via-[#F29B23] to-[#EE8420] hover:brightness-105 active:scale-95 shadow-md shadow-amber-500/20 transition cursor-pointer"
                     >
                       <PlayCircle size={16} strokeWidth={2.4} />
@@ -551,7 +687,15 @@ export default function StudentDashboard({
                     </button>
 
                     <button
-                      onClick={() => onNavigate("workspace")}
+                      onClick={() =>
+                        onOpenWorkspace
+                          ? onOpenWorkspace({
+                              subjectId: focusLearning.subjectId,
+                              lessonId: focusLearning.resumeLesson.id,
+                              tab: "mindmap",
+                            })
+                          : onNavigate("workspace")
+                      }
                       className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
                     >
                       <Layers size={14} className="text-[#EE8420]" />
@@ -559,7 +703,16 @@ export default function StudentDashboard({
                     </button>
 
                     <button
-                      onClick={() => onNavigate("workspace")}
+                      onClick={() =>
+                        onOpenWorkspace
+                          ? onOpenWorkspace({
+                              subjectId: focusLearning.subjectId,
+                              lessonId: focusLearning.resumeLesson.id,
+                              tab: "lecture",
+                              openTutor: true,
+                            })
+                          : onNavigate("workspace")
+                      }
                       className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
                     >
                       <MessageSquareText size={14} className="text-amber-500" />
@@ -571,27 +724,33 @@ export default function StudentDashboard({
                 {/* Progress Visual Box */}
                 <div className="w-full md:w-56 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 shrink-0">
                   <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-slate-500 dark:text-slate-400">Tiến độ chương 3</span>
-                    <span className="text-slate-900 dark:text-white font-mono">68%</span>
+                    <span className="text-slate-500 dark:text-slate-400">Tiến độ môn học</span>
+                    <span className="text-slate-900 dark:text-white font-mono">{focusLearning.pct}%</span>
                   </div>
                   <div className="mt-2 h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-amber-500 to-[#EE8420] transition-all duration-700"
-                      style={{ width: "68%" }}
+                      style={{ width: `${focusLearning.pct}%` }}
                     />
                   </div>
                   <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
                     <div className="flex justify-between">
-                      <span>Bài tập đã nộp:</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-300">12/16</span>
+                      <span>Bài học hoàn thành:</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {focusLearning.doneCount}/{focusLearning.totalLessons}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Quiz đạt chuẩn:</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-300">100%</span>
+                      <span>Bài tập chương đã nộp:</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {focusLearning.submittedChapters}/{focusLearning.totalChapters}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Thời gian học:</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-300">4.5 / 6h</span>
+                      <span>Điểm Quiz trung bình:</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {focusLearning.quizAvgPct > 0 ? `${focusLearning.quizAvgPct}%` : "Chưa làm"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -604,7 +763,15 @@ export default function StudentDashboard({
                     Lộ trình 4 chặng kỹ năng chuyên sâu
                   </h4>
                   <button
-                    onClick={() => onNavigate("workspace")}
+                    onClick={() =>
+                      onOpenWorkspace
+                        ? onOpenWorkspace({
+                            subjectId: focusLearning.subjectId,
+                            lessonId: focusLearning.resumeLesson.id,
+                            tab: "lecture",
+                          })
+                        : onNavigate("workspace")
+                    }
                     className="text-xs font-bold text-[#EE8420] hover:underline inline-flex items-center gap-1 cursor-pointer"
                   >
                     <span>Xem toàn bộ giáo trình</span>
@@ -616,34 +783,42 @@ export default function StudentDashboard({
                   {[
                     {
                       step: "Chặng 1",
-                      title: "C++20 & Quản lý Bộ nhớ",
-                      desc: "Heap, Stack, Con trỏ raw",
-                      status: "Hoàn thành",
-                      done: true,
+                      subjectId: "oop",
+                      title: "C++20 & Hướng đối tượng",
+                      desc: "vtable, Con trỏ thông minh, RAII",
+                      status: focusLearning.subjectId === "oop" ? `Tiến độ ${focusLearning.pct}%` : "Sẵn sàng học",
+                      done: focusLearning.subjectId === "oop" && focusLearning.pct === 100,
+                      active: focusLearning.subjectId === "oop" && focusLearning.pct < 100,
                     },
                     {
                       step: "Chặng 2",
-                      title: "OOP & Con trỏ thông minh",
-                      desc: "Virtual Table, Smart Ptr",
-                      status: "Đang học (68%)",
-                      active: true,
+                      subjectId: "dsa",
+                      title: "Cấu trúc Dữ liệu & Giải thuật",
+                      desc: "Graph, Tree, Quy hoạch động",
+                      status: "Nền tảng cốt lõi",
                     },
                     {
                       step: "Chặng 3",
-                      title: "DSA & Giải thuật STL",
-                      desc: "Red-Black Tree, Hash Map",
-                      status: "Sẵn sàng mở khóa",
+                      subjectId: "distributed",
+                      title: "Hệ thống Phân tán & Cloud",
+                      desc: "Kafka, Redis, Docker CI/CD",
+                      status: "Nâng cao hệ thống",
                     },
                     {
                       step: "Chặng 4",
+                      subjectId: "capstone",
                       title: "Kiến trúc & Đồ án AI",
-                      desc: "Phân tán & CodeMind Capstone",
+                      desc: "AI Agents & CodeMind Capstone",
                       status: "Mục tiêu tốt nghiệp",
                     },
                   ].map((m) => (
                     <div
                       key={m.step}
-                      onClick={() => onNavigate("workspace")}
+                      onClick={() =>
+                        onOpenWorkspace
+                          ? onOpenWorkspace({ subjectId: m.subjectId, tab: "video" })
+                          : onNavigate("workspace")
+                      }
                       className={`relative rounded-2xl border p-3.5 transition-all cursor-pointer ${
                         m.active
                           ? "border-[#EE8420] bg-amber-50/20 dark:bg-amber-950/20 shadow-xs ring-1 ring-[#EE8420]/30"
@@ -1278,7 +1453,6 @@ export default function StudentDashboard({
         <MarloToast
           message={toastMessage}
           onUndo={lastToggledTaskId !== null ? handleUndoTask : undefined}
-          onClose={() => setToastMessage(null)}
         />
       )}
     </div>

@@ -47,15 +47,17 @@ import {
   BookOpen,
   ArrowRight,
   GraduationCap,
+  MessageSquareText,
 } from "lucide-react";
 import {
   askSocraticTutor,
   fetchStudentLearningOverview,
   completeStudentLessonApi,
+  saveStudentVideoProgressApi,
   type StudentLearningOverview,
   type StudentChapterSubmissionDto,
 } from "../api";
-import type { ChatSkin, MentorMascot } from "../App";
+import type { ChatSkin, MentorMascot, WorkspaceLaunchTarget } from "../App";
 import {
   SUBJECT_MODULES,
   type SubjectId,
@@ -72,8 +74,140 @@ import { CourseCatalogHub } from "../components/CourseCatalogHub";
 import { MultiChapterSidebar } from "../components/MultiChapterSidebar";
 import LiquidCardConnector from "../components/LiquidCardConnector";
 import { triggerMarloConfetti } from "../utils/confetti";
-import { HeaderProfileDropdown } from "../components/HeaderProfileDropdown";
+import type { Assignment } from "../data/instructorData";
 import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
+
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return tokens.map((tok, i) => {
+    if (tok.startsWith("`") && tok.endsWith("`") && tok.length >= 2) {
+      return (
+        <code
+          key={i}
+          className="px-1.5 py-0.5 mx-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[0.9em] text-amber-700 dark:text-amber-300"
+        >
+          {tok.slice(1, -1)}
+        </code>
+      );
+    }
+    if (tok.startsWith("**") && tok.endsWith("**") && tok.length >= 4) {
+      return (
+        <strong key={i} className="font-bold text-slate-900 dark:text-white">
+          {tok.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <span key={i}>{tok}</span>;
+  });
+}
+
+function MarkdownLectureBody({ content }: { content: string }) {
+  const blocks: React.ReactNode[] = [];
+  const codeFenceRe = /```([\w+-]*)\n([\s\S]*?)```/g;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  let keyCounter = 0;
+
+  const pushTextBlocks = (chunk: string) => {
+    const lines = chunk.split(/\r?\n/);
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      if (!line) {
+        i++;
+        continue;
+      }
+      if (line.startsWith("### ")) {
+        blocks.push(
+          <h4 key={`b-${keyCounter++}`} className="text-base font-bold text-slate-900 dark:text-white pt-2">
+            {renderInlineMarkdown(line.slice(4))}
+          </h4>
+        );
+        i++;
+      } else if (line.startsWith("## ") || line.startsWith("# ")) {
+        const clean = line.replace(/^#+\s*/, "");
+        blocks.push(
+          <h3 key={`b-${keyCounter++}`} className="text-lg font-extrabold text-slate-900 dark:text-white pt-3 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+            {renderInlineMarkdown(clean)}
+          </h3>
+        );
+        i++;
+      } else if (line.startsWith("> ")) {
+        blocks.push(
+          <blockquote
+            key={`b-${keyCounter++}`}
+            className="border-l-4 border-amber-500 pl-4 py-1.5 bg-amber-50/50 dark:bg-amber-950/20 rounded-r-lg text-sm italic text-slate-700 dark:text-slate-300"
+          >
+            {renderInlineMarkdown(line.slice(2))}
+          </blockquote>
+        );
+        i++;
+      } else if (/^([-*•]|\d+\.)\s+/.test(line)) {
+        const items: string[] = [];
+        const isOrdered = /^\d+\.\s+/.test(line);
+        while (i < lines.length && /^([-*•]|\d+\.)\s+/.test(lines[i].trim())) {
+          items.push(lines[i].trim().replace(/^([-*•]|\d+\.)\s+/, ""));
+          i++;
+        }
+        const ListTag = isOrdered ? "ol" : "ul";
+        blocks.push(
+          <ListTag
+            key={`b-${keyCounter++}`}
+            className={`space-y-1.5 pl-5 text-sm text-slate-700 dark:text-slate-300 ${
+              isOrdered ? "list-decimal" : "list-disc"
+            }`}
+          >
+            {items.map((item, idx) => (
+              <li key={idx} className="leading-relaxed">
+                {renderInlineMarkdown(item)}
+              </li>
+            ))}
+          </ListTag>
+        );
+      } else {
+        const paraLines: string[] = [];
+        while (
+          i < lines.length &&
+          lines[i].trim() !== "" &&
+          !/^(#{1,3}\s+|>\s+|[-*•]\s+|\d+\.\s+)/.test(lines[i].trim())
+        ) {
+          paraLines.push(lines[i].trim());
+          i++;
+        }
+        blocks.push(
+          <p key={`b-${keyCounter++}`} className="text-sm sm:text-[15px] text-slate-700 dark:text-slate-300 leading-relaxed">
+            {renderInlineMarkdown(paraLines.join(" "))}
+          </p>
+        );
+      }
+    }
+  };
+
+  while ((match = codeFenceRe.exec(content)) !== null) {
+    if (match.index > lastIdx) {
+      pushTextBlocks(content.slice(lastIdx, match.index));
+    }
+    const lang = match[1] || "code";
+    const codeText = match[2].trimEnd();
+    blocks.push(
+      <div key={`b-${keyCounter++}`} className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden shadow-xs">
+        <div className="px-3.5 py-1.5 bg-slate-900 border-b border-slate-800 text-[11px] font-mono font-bold text-slate-300 uppercase">
+          {lang}
+        </div>
+        <pre className="p-4 text-xs sm:text-sm font-mono text-slate-100 overflow-x-auto leading-relaxed">
+          {codeText}
+        </pre>
+      </div>
+    );
+    lastIdx = match.index + match[0].length;
+  }
+
+  if (lastIdx < content.length) {
+    pushTextBlocks(content.slice(lastIdx));
+  }
+
+  return <div className="space-y-3">{blocks}</div>;
+}
 
 interface LearningWorkspaceProps {
   mentorMascot: MentorMascot;
@@ -84,6 +218,7 @@ interface LearningWorkspaceProps {
   avatarStyle?: AvatarStyle;
   badgeFrame?: BadgeFrame;
   onNavigate?: (screen: Screen) => void;
+  launchTarget?: WorkspaceLaunchTarget | null;
   onLogout?: () => void;
   onOpenCommandPalette?: () => void;
 }
@@ -111,6 +246,7 @@ export default function LearningWorkspace({
   avatarStyle = "initials",
   badgeFrame = "streak",
   onNavigate,
+  launchTarget,
   onLogout,
   onOpenCommandPalette,
 }: LearningWorkspaceProps) {
@@ -125,7 +261,7 @@ export default function LearningWorkspace({
 
   const [readingMode, setReadingMode] = useState<ReadingMode>("full");
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [mentorCollapsed, setMentorCollapsed] = useState<boolean>(false);
+  const [tutorOpen, setTutorOpen] = useState<boolean>(false);
   const [isCinemaMode, setIsCinemaMode] = useState<boolean>(false);
   const [copiedCodeIndex, setCopiedCodeIndex] = useState<number | null>(null);
 
@@ -134,29 +270,50 @@ export default function LearningWorkspace({
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [tab, activeLessonId]);
 
-
-
-  // Quiz state
+  // Quiz state (tách biệt quizCorrectCount vs quizStreak)
   const [quizIndex, setQuizIndex] = useState<number>(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
   const [quizStreak, setQuizStreak] = useState<number>(0);
-  const [totalXpEarned, setTotalXpEarned] = useState<number>(3240);
+  const [quizCorrectCount, setQuizCorrectCount] = useState<number>(0);
+  const [lastQuizXpAwarded, setLastQuizXpAwarded] = useState<number>(0);
+  const [totalXpEarned, setTotalXpEarned] = useState<number>(0);
   const [learningOverview, setLearningOverview] = useState<StudentLearningOverview | null>(null);
   const [completingLesson, setCompletingLesson] = useState<boolean>(false);
   const [quizDone, setQuizDone] = useState<boolean>(false);
   const [showXpToast, setShowXpToast] = useState<boolean>(false);
+  const [xpToastAmount, setXpToastAmount] = useState<number>(0);
   const quizConfettiRef = useRef<HTMLDivElement>(null);
 
+  const currentUserId = learningOverview?.user?.id || "student-demo";
+  const watchedStorageKey = `codemind_watched_video_lessons_${currentUserId}`;
+
   // Track watched videos per lesson (key: `${subjectId}_${lessonId}`)
-  const [watchedVideoLessonKeys, setWatchedVideoLessonKeys] = useState<Set<string>>(() => {
+  const [watchedVideoLessonKeys, setWatchedVideoLessonKeys] = useState<Set<string>>(new Set<string>());
+  const [videoWatchedSecMap, setVideoWatchedSecMap] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const nextKeys = new Set<string>();
+    const nextSecs: Record<string, number> = {};
     try {
-      const raw = localStorage.getItem("codemind_watched_video_lessons");
-      return raw ? new Set(JSON.parse(raw)) : new Set<string>();
+      const raw = localStorage.getItem(watchedStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) parsed.forEach((k) => nextKeys.add(String(k)));
+      }
     } catch {
-      return new Set<string>();
+      // Ignore localStorage parse error
     }
-  });
+    (learningOverview?.video_progress || []).forEach((vp) => {
+      const k = `${vp.subject_id}_${vp.lesson_id}`;
+      nextSecs[k] = vp.watched_seconds || 0;
+      if (vp.completed) {
+        nextKeys.add(k);
+      }
+    });
+    setWatchedVideoLessonKeys(nextKeys);
+    setVideoWatchedSecMap(nextSecs);
+  }, [watchedStorageKey, learningOverview]);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const showToast = useCallback((msg: string) => {
@@ -171,17 +328,35 @@ export default function LearningWorkspace({
       const next = new Set(prev);
       next.add(key);
       try {
-        localStorage.setItem("codemind_watched_video_lessons", JSON.stringify(Array.from(next)));
+        localStorage.setItem(watchedStorageKey, JSON.stringify(Array.from(next)));
       } catch (e) {
         console.error("Failed to persist watched video", e);
       }
       return next;
     });
-    showToast("🎉 Đã hoàn tất video bài giảng! Bây giờ bạn có thể bấm hoàn thành bài học để nhận thưởng XP.");
+    showToast("🎉 Đã hoàn tất video bài giảng! Bây giờ bạn có thể hoàn thành bài học / Quiz để nhận XP.");
     triggerMarloConfetti(0.5, 0.4);
-  }, [selectedSubjectId, showToast]);
+  }, [selectedSubjectId, watchedStorageKey, showToast]);
 
-  // Hydrate student learning overview (XP, completed lessons, chapter submissions, DB courses)
+  const handleVideoProgressPersist = useCallback(
+    (lessonId: string, watchedSec: number, durationSec: number, completed: boolean) => {
+      const key = `${selectedSubjectId}_${lessonId}`;
+      setVideoWatchedSecMap((prev) => ({
+        ...prev,
+        [key]: Math.max(prev[key] || 0, watchedSec),
+      }));
+      void saveStudentVideoProgressApi({
+        subject_id: selectedSubjectId,
+        lesson_id: lessonId,
+        watched_seconds: watchedSec,
+        duration_seconds: durationSec,
+        completed,
+      });
+    },
+    [selectedSubjectId]
+  );
+
+  // Hydrate student learning overview (XP, completed lessons, video progress, chapter submissions, DB courses)
   useEffect(() => {
     let active = true;
     const hydrateOverview = () => {
@@ -196,12 +371,19 @@ export default function LearningWorkspace({
 
     hydrateOverview();
 
-    // Lắng nghe cập nhật bài giảng thời gian thực từ Giảng viên
+    const handleStorageSync = (e: StorageEvent) => {
+      if (e.key === "codemind-courses-sync-ts") {
+        hydrateOverview();
+      }
+    };
+
     window.addEventListener("codemind-courses-updated", hydrateOverview);
+    window.addEventListener("storage", handleStorageSync);
 
     return () => {
       active = false;
       window.removeEventListener("codemind-courses-updated", hydrateOverview);
+      window.removeEventListener("storage", handleStorageSync);
     };
   }, []);
 
@@ -224,101 +406,140 @@ export default function LearningWorkspace({
     return match ? match[1] : undefined;
   };
 
-  // Merge SQLite courses, AIGC lessons, and completed lesson progress into MULTI_CHAPTER_SUBJECTS
+  // Merge 1-1 từ MySQL courses, AIGC lessons, và tiến độ bài học thực tế
   const resolvedSubjects: SubjectModuleData[] = useMemo(() => {
     const completedSet = new Set(
       (learningOverview?.completed_lessons || []).map((r) => `${r.subject_id}:${r.lesson_id}`)
     );
-    const dbCourseMap = new Map(
-      (learningOverview?.courses || []).map((c) => [c.subjectId, c])
-    );
+    const dbCourses = learningOverview?.courses || [];
+    const dbCourseMap = new Map(dbCourses.map((c) => [c.subjectId, c]));
+    const staticIds = new Set(MULTI_CHAPTER_SUBJECTS.map((s) => s.id));
 
-    return MULTI_CHAPTER_SUBJECTS.map((sub) => {
+    const mapDbLesson = (
+      subId: string,
+      dbL: any,
+      fallbackLesson: LessonItem | undefined,
+      fallbackId: string
+    ): LessonItem & { dbLessonId?: string } => {
+      const lessonId = fallbackLesson?.id || dbL?.id || fallbackId;
+      const isDoneInDb =
+        completedSet.has(`${subId}:${lessonId}`) ||
+        (dbL?.id ? completedSet.has(`${subId}:${dbL.id}`) : false);
+      const dbContent = dbL?.content || {};
+      const readingText = dbContent?.reading ? String(dbContent.reading) : (fallbackLesson?.reading || "");
+      const objective = dbContent?.objective ? String(dbContent.objective) : (fallbackLesson?.objective || dbL?.title || "Nội dung bài học");
+      const lead = dbContent?.lead ? String(dbContent.lead) : (fallbackLesson?.lead || "");
+      const codeSnippet = dbContent?.codeSnippet || fallbackLesson?.codeSnippet;
+      const keyTakeaways =
+        Array.isArray(dbContent?.keyTakeaways) && dbContent.keyTakeaways.length > 0
+          ? dbContent.keyTakeaways
+          : fallbackLesson?.keyTakeaways || ["Nắm vững kiến thức trọng tâm của bài học."];
+      const antiPattern = dbContent?.antiPattern || fallbackLesson?.antiPattern;
+      const youtubeId =
+        extractYoutubeId(dbContent?.youtubeUrl) ||
+        dbContent?.youtubeId ||
+        dbL?.youtubeId ||
+        fallbackLesson?.youtubeId;
+      const youtubeUrl = dbContent?.youtubeUrl || fallbackLesson?.youtubeUrl;
+      const quizzes =
+        Array.isArray(dbContent?.quizzes) && dbContent.quizzes.length > 0
+          ? dbContent.quizzes
+          : fallbackLesson?.quizzes;
+      const videoScenes =
+        Array.isArray(dbContent?.videoScenes) && dbContent.videoScenes.length > 0
+          ? dbContent.videoScenes
+          : fallbackLesson?.videoScenes;
+      const documents = Array.isArray(dbL?.documents) ? dbL.documents : fallbackLesson?.documents;
+
+      return {
+        ...(fallbackLesson || {
+          id: lessonId,
+          title: dbL?.title || `Bài ${lessonId}`,
+          type: "lecture" as const,
+          duration: "15 phút",
+          status: "active" as const,
+          xp: 60,
+          objective,
+          lead: lead || objective,
+          keyTakeaways,
+        }),
+        id: lessonId,
+        dbLessonId: dbL?.id,
+        title: dbL?.title || fallbackLesson?.title || `Bài ${lessonId}`,
+        duration: dbL?.duration || fallbackLesson?.duration || "15 phút",
+        xp: typeof dbL?.xp === "number" ? dbL.xp : (fallbackLesson?.xp || 60),
+        status: isDoneInDb ? "done" : "active",
+        reading: readingText,
+        objective,
+        lead,
+        codeSnippet,
+        keyTakeaways,
+        antiPattern,
+        youtubeId,
+        youtubeUrl,
+        quizzes,
+        videoScenes,
+        documents,
+      };
+    };
+
+    const mergeSubject = (sub: SubjectModuleData): SubjectModuleData => {
       const dbCourse = dbCourseMap.get(sub.id);
-      const dbChapters: any[] = Array.isArray(dbCourse?.chapters) ? dbCourse.chapters : [];
+      const allDbChapters: any[] = Array.isArray(dbCourse?.chapters) ? dbCourse.chapters : [];
 
-      const mergedChapters: ChapterItem[] = sub.chapters.map((chap, chIdx) => {
-        const dbChap = dbChapters[chIdx];
-        const dbLessons: any[] = Array.isArray(dbChap?.lessons) ? dbChap.lessons : [];
-
-        const updatedBaseLessons: LessonItem[] = chap.lessons.map((lesson, lIdx) => {
-          const isDoneInDb = completedSet.has(`${sub.id}:${lesson.id}`);
-          const dbL = dbLessons[lIdx];
-          const dbContent = dbL?.content || {};
-          const isEdited = Boolean(
-            dbL?.isInstructorEdited ||
-            (dbContent && (dbContent.reading || dbContent.youtubeUrl || dbContent.youtubeId || (dbContent.quizzes && dbContent.quizzes.length > 0)))
+      let mergedChapters: (ChapterItem & { dbChapterRef?: any; dbAssignment?: Assignment })[];
+      if (allDbChapters.length > 0) {
+        const publishedDbChapters = allDbChapters.filter((ch) => ch?.status !== "Bản nháp");
+        mergedChapters = publishedDbChapters.map((dbChap, chIdx) => {
+          const baseChap =
+            sub.chapters.find((c) => c.id === dbChap.id) ||
+            sub.chapters[chIdx];
+          const publishedDbLessons: any[] = (Array.isArray(dbChap?.lessons) ? dbChap.lessons : []).filter(
+            (ls: any) => ls?.status !== "Bản nháp"
           );
 
-          const reading = isEdited && dbContent?.reading ? String(dbContent.reading) : lesson.lead;
-          const objective = isEdited && dbContent?.objective ? String(dbContent.objective) : lesson.objective;
-          const lead = isEdited && dbContent?.lead ? String(dbContent.lead) : (reading || lesson.lead);
-          const codeSnippet = isEdited && dbContent?.codeSnippet ? dbContent.codeSnippet : lesson.codeSnippet;
-          const keyTakeaways =
-            isEdited && Array.isArray(dbContent?.keyTakeaways) && dbContent.keyTakeaways.length > 0
-              ? dbContent.keyTakeaways
-              : lesson.keyTakeaways;
-          const antiPattern = isEdited && dbContent?.antiPattern ? dbContent.antiPattern : lesson.antiPattern;
-          const youtubeId = isEdited ? (dbContent?.youtubeId || extractYoutubeId(dbContent?.youtubeUrl)) : undefined;
-          const youtubeUrl = isEdited ? dbContent?.youtubeUrl : undefined;
-          const quizzes = isEdited && Array.isArray(dbContent?.quizzes) && dbContent.quizzes.length > 0 ? dbContent.quizzes : undefined;
-          const videoScenes = isEdited && Array.isArray(dbContent?.videoScenes) && dbContent.videoScenes.length > 0 ? dbContent.videoScenes : undefined;
-
-          return {
-            ...lesson,
-            status: isDoneInDb ? "done" : lesson.status,
-            lead,
-            objective,
-            codeSnippet,
-            keyTakeaways,
-            antiPattern,
-            youtubeId,
-            youtubeUrl,
-            quizzes,
-            videoScenes,
-          };
-        });
-
-        const extraPublished: LessonItem[] = dbLessons
-          .slice(chap.lessons.length)
-          .map((l: any, extraIdx: number) => {
-            const extraId = `${chap.number}.${chap.lessons.length + extraIdx + 1}`;
-            const isDone = completedSet.has(`${sub.id}:${extraId}`);
-            const dbContent = l?.content || {};
-            const ytId = dbContent?.youtubeId || extractYoutubeId(dbContent?.youtubeUrl);
-            return {
-              id: extraId,
-              title: l.title || `Bài ${extraId}`,
-              type: "lecture" as const,
-              duration: l.duration || "15 phút",
-              status: isDone ? "done" : "active",
-              xp: 50,
-              objective: dbContent?.objective || l.title || "Nội dung bài học do Giảng viên phát hành",
-              lead: dbContent?.lead || dbContent?.reading || "Nội dung bài giảng mới được Giảng viên cập nhật.",
-              codeSnippet: dbContent?.codeSnippet,
-              keyTakeaways:
-                Array.isArray(dbContent?.keyTakeaways) && dbContent.keyTakeaways.length > 0
-                  ? dbContent.keyTakeaways
-                  : ["Nắm vững kiến thức trọng tâm của bài học."],
-              antiPattern: dbContent?.antiPattern,
-              youtubeId: ytId,
-              youtubeUrl: dbContent?.youtubeUrl,
-              quizzes: dbContent?.quizzes,
-              videoScenes: dbContent?.videoScenes,
-            };
+          const baseLessons = baseChap?.lessons || [];
+          const mappedLessons = publishedDbLessons.map((dbL, lIdx) => {
+            const titleCodeMatch = String(dbL?.title || "").match(/^(\d+\.\d+)/);
+            const matchedBase =
+              baseLessons.find((b) => b.id === dbL.id) ||
+              (titleCodeMatch ? baseLessons.find((b) => b.id === titleCodeMatch[1]) : undefined);
+            const fallbackId = `${chIdx + 1}.${lIdx + 1}`;
+            return mapDbLesson(sub.id, dbL, matchedBase, fallbackId);
           });
 
-        const allLessons = [...updatedBaseLessons, ...extraPublished];
-        const doneCount = allLessons.filter((l) => l.status === "done").length;
-        const progressPct =
-          allLessons.length > 0 ? Math.round((doneCount / allLessons.length) * 100) : chap.progressPct;
+          const doneCount = mappedLessons.filter((l) => l.status === "done").length;
+          const progressPct =
+            mappedLessons.length > 0 ? Math.round((doneCount / mappedLessons.length) * 100) : 0;
 
-        return {
-          ...chap,
-          lessons: allLessons,
-          progressPct,
-        };
-      });
+          return {
+            id: dbChap.id || baseChap?.id || `${sub.id}-c${chIdx + 1}`,
+            number: chIdx + 1,
+            title: dbChap.title || baseChap?.title || `Chương ${chIdx + 1}`,
+            description: baseChap?.description || `Nội dung Chương ${chIdx + 1} · ${sub.name}`,
+            duration: baseChap?.duration || `${Math.max(15, mappedLessons.length * 15)} phút`,
+            progressPct,
+            lessons: mappedLessons,
+            dbChapterRef: dbChap,
+            dbAssignment: Array.isArray(dbChap.assignments) ? dbChap.assignments[0] : undefined,
+          };
+        });
+      } else {
+        mergedChapters = sub.chapters.map((chap) => {
+          const lessonsWithStatus = chap.lessons.map((lesson) => ({
+            ...lesson,
+            status: (completedSet.has(`${sub.id}:${lesson.id}`) ? "done" : "active") as "done" | "active",
+          }));
+          const doneCount = lessonsWithStatus.filter((l) => l.status === "done").length;
+          const progressPct =
+            lessonsWithStatus.length > 0 ? Math.round((doneCount / lessonsWithStatus.length) * 100) : 0;
+          return {
+            ...chap,
+            lessons: lessonsWithStatus,
+            progressPct,
+          };
+        });
+      }
 
       const totalLessonsCount = mergedChapters.reduce((acc, c) => acc + c.lessons.length, 0);
       const totalDoneCount = mergedChapters.reduce(
@@ -326,38 +547,120 @@ export default function LearningWorkspace({
         0
       );
       const overallProgress =
-        totalLessonsCount > 0 ? Math.round((totalDoneCount / totalLessonsCount) * 100) : sub.overallProgress;
+        totalLessonsCount > 0 ? Math.round((totalDoneCount / totalLessonsCount) * 100) : 0;
 
       return {
         ...sub,
         instructor: dbCourse?.teacher || sub.instructor,
         chapters: mergedChapters,
+        totalChapters: mergedChapters.length,
         totalLessons: totalLessonsCount,
         overallProgress,
       };
-    });
+    };
+
+    const primaryList = MULTI_CHAPTER_SUBJECTS.map(mergeSubject);
+
+    // Bổ sung bất kỳ khóa học mới nào trong DB mà chưa có trong file tĩnh
+    const extraCourses: SubjectModuleData[] = dbCourses
+      .filter((dc) => !staticIds.has(dc.subjectId as SubjectId))
+      .map((dc) =>
+        mergeSubject({
+          id: dc.subjectId as SubjectId,
+          code: dc.code,
+          name: dc.name,
+          semester: "Học kỳ 2026",
+          category: "Học phần Bổ sung",
+          instructor: dc.teacher || "Giảng viên Phụ trách",
+          instructorRole: "Giảng viên Học phần",
+          instructorAvatar: "",
+          bannerGradient: "from-slate-700 via-slate-800 to-slate-900",
+          badgeBg: "bg-slate-100 dark:bg-slate-800",
+          badgeText: "text-slate-700 dark:text-slate-200",
+          totalChapters: dc.chapters?.length || 0,
+          totalLessons: 0,
+          totalDuration: "Đang cập nhật",
+          overallProgress: 0,
+          totalXp: 300,
+          description: `Khóa học ${dc.name} được đồng bộ trực tiếp từ hệ thống Giảng viên.`,
+          chapters: [],
+          quizQuestions: [],
+        })
+      );
+
+    return [...primaryList, ...extraCourses];
   }, [learningOverview]);
+
+  // Xử lý Deep-link từ launchTarget hoặc URL (?course=...&lesson=...&tab=...&tutor=1)
+  const lastLaunchNonceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!launchTarget) return;
+    if (lastLaunchNonceRef.current === launchTarget.nonce) return;
+    lastLaunchNonceRef.current = launchTarget.nonce;
+
+    const targetSubj =
+      resolvedSubjects.find((s) => s.id === launchTarget.subjectId) || resolvedSubjects[0];
+    if (targetSubj) {
+      setSelectedSubjectId(targetSubj.id);
+      const allLessons = targetSubj.chapters.flatMap((c) => c.lessons || []) as Array<
+        LessonItem & { dbLessonId?: string }
+      >;
+      const matchedLesson = launchTarget.lessonId
+        ? allLessons.find(
+            (l) => l.id === launchTarget.lessonId || l.dbLessonId === launchTarget.lessonId
+          )
+        : allLessons.find((l) => l.status !== "done") || allLessons[0];
+      if (matchedLesson) {
+        setActiveLessonId(matchedLesson.id);
+      }
+      setTab(launchTarget.tab || "video");
+      if (launchTarget.openTutor) {
+        setTutorOpen(true);
+      }
+      setWorkspaceView("player");
+      window.dispatchEvent(new CustomEvent("collapse-sidebar", { detail: { collapse: true } }));
+    }
+  }, [launchTarget, resolvedSubjects]);
+
+  // Lưu lại môn và bài học gần nhất theo user để tiện resume
+  useEffect(() => {
+    if (workspaceView !== "player") return;
+    try {
+      window.localStorage.setItem("codemind-last-subject", selectedSubjectId);
+      window.localStorage.setItem(
+        `codemind-last-lesson-${currentUserId}-${selectedSubjectId}`,
+        activeLessonId
+      );
+    } catch {
+      // Ignore storage errors
+    }
+  }, [workspaceView, selectedSubjectId, activeLessonId, currentUserId]);
 
   // Resolve Multi-Chapter Data
   const currentMultiSubject: SubjectModuleData =
     resolvedSubjects.find((m) => m.id === selectedSubjectId) || resolvedSubjects[0];
 
-  let activeChapter: ChapterItem = currentMultiSubject?.chapters?.[0] || {
-    id: "default-ch1",
-    number: 1,
-    title: "Chương 1: Tổng quan",
-    description: "Tổng quan học phần",
-    duration: "45 phút",
-    progressPct: 0,
-    lessons: [],
-  };
-  let activeMultiLesson: LessonItem = activeChapter.lessons?.[0] || {
+  let activeChapter: ChapterItem & { dbChapterRef?: any; dbAssignment?: Assignment } =
+    (currentMultiSubject?.chapters?.[0] as ChapterItem & {
+      dbChapterRef?: any;
+      dbAssignment?: Assignment;
+    }) || {
+      id: "default-ch1",
+      number: 1,
+      title: "Chương 1: Tổng quan",
+      description: "Tổng quan học phần",
+      duration: "45 phút",
+      progressPct: 0,
+      lessons: [],
+    };
+  let activeMultiLesson: LessonItem & { dbLessonId?: string } = activeChapter.lessons?.[0] || {
     id: "1.1",
     title: "Bài học 1.1",
     type: "lecture",
     duration: "15 phút",
     status: "active",
     xp: 50,
+    objective: "Nội dung bài học chuẩn bị sẵn sàng.",
     lead: "Nội dung bài học chuẩn bị sẵn sàng.",
     keyTakeaways: ["Nắm vững nguyên lý nền tảng", "Thực hành bài tập", "Kiểm tra kiến thức"],
     resources: [["Tài liệu Tham khảo", "Đặc tả kỹ thuật chính thức.", "https://developer.mozilla.org"]],
@@ -365,21 +668,31 @@ export default function LearningWorkspace({
 
   if (currentMultiSubject?.chapters) {
     for (const ch of currentMultiSubject.chapters) {
-      const found = (ch.lessons || []).find((l) => l.id === activeLessonId);
+      const found = (ch.lessons || []).find(
+        (l: any) => l.id === activeLessonId || l.dbLessonId === activeLessonId
+      );
       if (found) {
-        activeChapter = ch;
-        activeMultiLesson = found;
+        activeChapter = ch as ChapterItem & { dbChapterRef?: any; dbAssignment?: Assignment };
+        activeMultiLesson = found as LessonItem & { dbLessonId?: string };
         break;
       }
     }
   }
 
   const isLessonDoneInDb = activeMultiLesson.status === "done";
-  const isVideoCompleted = isLessonDoneInDb || watchedVideoLessonKeys.has(`${selectedSubjectId}_${activeMultiLesson.id}`);
+  const videoKey = `${selectedSubjectId}_${activeMultiLesson.id}`;
+  const isVideoCompleted = isLessonDoneInDb || watchedVideoLessonKeys.has(videoKey);
+  const initialWatchedSeconds = videoWatchedSecMap[videoKey] || 0;
 
-  const activeDbCourse = learningOverview?.courses.find((c) => c.subjectId === selectedSubjectId);
-  const activeDbChapter =
-    activeDbCourse?.chapters?.[activeChapter.number - 1] || activeDbCourse?.chapters?.[0];
+  const activeDbChapter = activeChapter.dbChapterRef;
+
+  const completedSubjectLessonIds = useMemo(() => {
+    const ids = new Set<string>();
+    (learningOverview?.completed_lessons || []).forEach((r) => {
+      if (r.subject_id === selectedSubjectId) ids.add(r.lesson_id);
+    });
+    return ids;
+  }, [learningOverview, selectedSubjectId]);
 
   const currentChapterExercise = getChapterExercise(
     selectedSubjectId,
@@ -416,15 +729,17 @@ export default function LearningWorkspace({
       explanation: "Tách biệt mối quan tâm giúp giảm coupling và tăng khả năng bảo trì, mở rộng hệ thống phần mềm.",
     },
   ];
-  const activeQuizQuestions = useMemo(() => {
+  const activeQuizQuestions = useMemo<
+    { q: string; options: { id: string; text: string }[]; correct: string; explanation: string }[]
+  >(() => {
     if (activeMultiLesson?.quizzes && activeMultiLesson.quizzes.length > 0) {
       const optionLetters = ["a", "b", "c", "d"];
       return activeMultiLesson.quizzes.map((q: any, qIdx: number) => {
-        const rawOpts =
+        const rawOpts: string[] =
           Array.isArray(q.options) && q.options.length > 0
             ? q.options
             : ["Phương án A", "Phương án B", "Phương án C", "Phương án D"];
-        const mappedOpts = rawOpts.map((text: string, oIdx: number) => ({
+        const mappedOpts: { id: string; text: string }[] = rawOpts.map((text: string, oIdx: number) => ({
           id: optionLetters[oIdx] || `opt-${oIdx}`,
           text: String(text),
         }));
@@ -470,6 +785,9 @@ export default function LearningWorkspace({
     setSelectedOption(null);
     setQuizSubmitted(false);
     setQuizDone(false);
+    setQuizStreak(0);
+    setQuizCorrectCount(0);
+    setLastQuizXpAwarded(0);
   }, [selectedSubjectId, activeLessonId]);
 
   // Escape key exits cinema mode
@@ -494,10 +812,8 @@ export default function LearningWorkspace({
     setQuizSubmitted(true);
     const currQ = activeQuizQuestions[quizIndex];
     if (currQ && selectedOption === currQ.correct) {
-      setTotalXpEarned((x) => x + 25);
+      setQuizCorrectCount((c) => c + 1);
       setQuizStreak((s) => s + 1);
-      setShowXpToast(true);
-      setTimeout(() => setShowXpToast(false), 2200);
       triggerMarloConfetti(0.52, 0.45);
       window.dispatchEvent(new CustomEvent("pet-state-change", { detail: { state: "success" } }));
     } else {
@@ -550,9 +866,13 @@ export default function LearningWorkspace({
           };
         });
         if (res.xp_awarded > 0) {
+          setXpToastAmount(res.xp_awarded);
           setShowXpToast(true);
-          setTimeout(() => setShowXpToast(false), 2200);
+          setTimeout(() => setShowXpToast(false), 2600);
+          showToast(`🎉 Hoàn thành bài học! Bạn nhận được +${res.xp_awarded} XP.`);
           triggerMarloConfetti(0.52, 0.45);
+        } else {
+          showToast("✓ Đã cập nhật trạng thái hoàn thành bài học.");
         }
       }
     } finally {
@@ -563,23 +883,49 @@ export default function LearningWorkspace({
   const handleNextQuiz = async () => {
     if (quizIndex + 1 >= activeQuizQuestions.length) {
       setQuizDone(true);
+      const totalQ = Math.max(1, activeQuizQuestions.length);
+      const passPct = Math.round((quizCorrectCount / totalQ) * 100);
+
+      // Chặn vượt rào: Không cho phép Quiz hoàn thành bài thay Video hoặc khi dưới 60% điểm đạt
+      if (!isVideoCompleted && !isLessonDoneInDb) {
+        setLastQuizXpAwarded(0);
+        showToast("⚠️ Bạn đã hoàn thành Quiz nhưng cần xem hết video bài giảng để bài học được tính hoàn thành & nhận XP!");
+        return;
+      }
+      if (passPct < 60) {
+        setLastQuizXpAwarded(0);
+        showToast(`Bạn đạt ${quizCorrectCount}/${totalQ} (${passPct}%). Cần đạt tối thiểu 60% để hoàn thành bài!`);
+        return;
+      }
+
       const res = await completeStudentLessonApi({
         subject_id: selectedSubjectId,
         chapter_id: activeChapter.id,
         lesson_id: activeMultiLesson.id,
         xp: activeMultiLesson.xp || 50,
-        quiz_score: quizStreak,
+        quiz_score: quizCorrectCount,
         quiz_total: activeQuizQuestions.length,
       });
       if (res) {
         setTotalXpEarned(res.total_xp);
+        setLastQuizXpAwarded(res.xp_awarded);
+        if (res.xp_awarded > 0) {
+          setXpToastAmount(res.xp_awarded);
+          setShowXpToast(true);
+          setTimeout(() => setShowXpToast(false), 2600);
+          showToast(`🎉 Đạt ${passPct}% Quiz! Nhận +${res.xp_awarded} XP.`);
+        }
         setLearningOverview((prev) => {
           if (!prev) return prev;
           const exists = prev.completed_lessons.some(
             (r) => r.subject_id === selectedSubjectId && r.lesson_id === activeMultiLesson.id
           );
           const nextCompleted = exists
-            ? prev.completed_lessons
+            ? prev.completed_lessons.map((r) =>
+                r.subject_id === selectedSubjectId && r.lesson_id === activeMultiLesson.id
+                  ? { ...r, quiz_score: Math.max(r.quiz_score, quizCorrectCount), quiz_total: Math.max(r.quiz_total, activeQuizQuestions.length) }
+                  : r
+              )
             : [
                 ...prev.completed_lessons,
                 {
@@ -587,7 +933,7 @@ export default function LearningWorkspace({
                   chapter_id: activeChapter.id,
                   lesson_id: activeMultiLesson.id,
                   status: "done",
-                  quiz_score: quizStreak,
+                  quiz_score: quizCorrectCount,
                   quiz_total: activeQuizQuestions.length,
                   xp_earned: res.xp_awarded,
                   completed_at: new Date().toISOString(),
@@ -659,14 +1005,22 @@ export default function LearningWorkspace({
   if (workspaceView === "catalog") {
     return (
       <div ref={workspaceRef} className="flex h-full min-h-full w-full flex-col bg-transparent text-slate-800 dark:text-slate-100 overflow-hidden font-sans">
-
-
         {/* F8 Course Grid Catalog Component */}
         <CourseCatalogHub
           subjects={resolvedSubjects}
           onSelectCourse={(courseId) => {
             setSelectedSubjectId(courseId);
-            setActiveLessonId("1.1");
+            const subj = resolvedSubjects.find((s) => s.id === courseId);
+            const allLessons = (subj?.chapters || []).flatMap((c) => c.lessons || []);
+            const savedLastId =
+              typeof window !== "undefined"
+                ? window.localStorage.getItem(`codemind-last-lesson-${currentUserId}-${courseId}`)
+                : null;
+            const resumeLesson =
+              (savedLastId && allLessons.find((l) => l.id === savedLastId)) ||
+              allLessons.find((l) => l.status !== "done") ||
+              allLessons[0];
+            setActiveLessonId(resumeLesson?.id || "1.1");
             setTab("video");
             setWorkspaceView("player");
             window.dispatchEvent(
@@ -955,18 +1309,54 @@ export default function LearningWorkspace({
                     </div>
                   </div>
 
-                  {/* Lesson Heading & Lead */}
+                  {/* Lesson Heading, Lead & Full Markdown Reading */}
                   <div
-                    className="animate-cascade-item space-y-2.5 border-b border-slate-100 dark:border-slate-800 pb-5"
+                    className="animate-cascade-item space-y-3 border-b border-slate-100 dark:border-slate-800 pb-5"
                     style={{ animationDelay: "220ms" }}
                   >
                     <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                       {activeMultiLesson.title}
                     </h1>
-                    <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
-                      {activeMultiLesson.lead}
-                    </p>
+                    {activeMultiLesson.lead && (
+                      <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
+                        {activeMultiLesson.lead}
+                      </p>
+                    )}
+                    {activeMultiLesson.reading &&
+                      activeMultiLesson.reading.trim() !== (activeMultiLesson.lead || "").trim() && (
+                        <div className="pt-2">
+                          <MarkdownLectureBody content={activeMultiLesson.reading} />
+                        </div>
+                      )}
                   </div>
+
+                  {/* Attached Documents from Instructor */}
+                  {activeMultiLesson.documents && activeMultiLesson.documents.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-4 space-y-2.5">
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <FileText size={13} className="text-blue-500" />
+                        <span>Tài liệu bài giảng Giảng viên đính kèm ({activeMultiLesson.documents.length})</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {activeMultiLesson.documents.map((doc, dIdx) => (
+                          <div
+                            key={`${doc.name}-${dIdx}`}
+                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText size={14} className="text-blue-600 shrink-0" />
+                              <span className="font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                {doc.name}
+                              </span>
+                            </div>
+                            <span className="font-mono text-[10.5px] text-slate-400 shrink-0">
+                              {doc.size || "PDF/DOC"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Main Subsections with Code/Model Blocks */}
                   <div className="space-y-6">
@@ -1233,13 +1623,22 @@ export default function LearningWorkspace({
             <div key={`video-${selectedSubjectId}-${activeLessonId}`} className="animate-screen-enter flex flex-col space-y-4">
               <LessonVideoStudio
                 subjectId={selectedSubjectId}
+                userId={currentUserId}
                 lessonId={activeMultiLesson.id}
                 lessonTitle={activeMultiLesson.title}
+                instructorName={currentMultiSubject.instructor}
+                lessonDescription={activeMultiLesson.lead || activeMultiLesson.objective}
+                lessonDocuments={activeMultiLesson.documents}
+                quizCount={activeQuizQuestions.length}
+                initialWatchedSeconds={initialWatchedSeconds}
                 mentorMascot={mentorMascot}
                 customYoutubeId={activeMultiLesson.youtubeId}
                 customScenes={activeMultiLesson.videoScenes}
                 isVideoCompleted={isVideoCompleted}
                 onVideoCompleted={handleVideoCompleted}
+                onVideoProgressChange={(watchedSec, durationSec, completed) =>
+                  handleVideoProgressPersist(activeMultiLesson.id, watchedSec, durationSec, completed)
+                }
                 onNavigateToTab={(targetTab) => {
                   if (targetTab !== "code") {
                     setTab(targetTab as Tab);
@@ -1262,15 +1661,17 @@ export default function LearningWorkspace({
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">
                     Trắc nghiệm Tình huống Kỹ thuật ({quizIndex + 1}/{activeQuizQuestions.length})
                   </h2>
-                  <p className="text-xs text-slate-500">Môn: {currentMultiSubject.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Môn: {currentMultiSubject.name} · Đúng: {quizCorrectCount}/{activeQuizQuestions.length}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {showXpToast && (
+                  {showXpToast && xpToastAmount > 0 && (
                     <span className="font-mono text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 px-2.5 py-0.5 rounded-full shadow-xs animate-in fade-in duration-200">
-                      +25 XP
+                      +{xpToastAmount} XP
                     </span>
                   )}
-                  <span className="text-xs font-mono font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                  <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 px-2.5 py-0.5 rounded-full">
                     🔥 Streak: <MarloNumber value={quizStreak} />
                   </span>
                 </div>
@@ -1285,12 +1686,18 @@ export default function LearningWorkspace({
                     {activeQuizQuestions[quizIndex]?.options.map((opt, optIdx) => {
                       const isSelected = selectedOption === opt.id;
                       const isCorrect = opt.id === activeQuizQuestions[quizIndex].correct;
-                      let btnCls = "border-slate-200 bg-slate-50/70 hover:bg-slate-100 text-slate-700";
+                      let btnCls =
+                        "border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200";
                       if (quizSubmitted) {
-                        if (isCorrect) btnCls = "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold";
-                        else if (isSelected && !isCorrect) btnCls = "border-rose-500 bg-rose-50 text-rose-800";
+                        if (isCorrect)
+                          btnCls =
+                            "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-bold";
+                        else if (isSelected && !isCorrect)
+                          btnCls =
+                            "border-rose-500 bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300";
                       } else if (isSelected) {
-                        btnCls = "border-blue-600 bg-blue-50 text-blue-800 font-bold ring-1 ring-blue-500";
+                        btnCls =
+                          "border-blue-600 bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-200 font-bold ring-1 ring-blue-500";
                       }
 
                       return (
@@ -1334,33 +1741,72 @@ export default function LearningWorkspace({
                     ) : (
                       <button
                         onClick={handleNextQuiz}
-                        className="rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2 text-xs transition cursor-pointer shadow-xs"
+                        className="rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold px-5 py-2 text-xs transition cursor-pointer shadow-xs"
                       >
                         {quizIndex + 1 >= activeQuizQuestions.length ? "Hoàn thành Quiz" : "Câu tiếp theo →"}
                       </button>
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="text-center py-8 space-y-3">
-                  <div className="h-14 w-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                    <Award size={32} />
+              ) : (() => {
+                const totalQ = Math.max(1, activeQuizQuestions.length);
+                const passPct = Math.round((quizCorrectCount / totalQ) * 100);
+                const passedScore = passPct >= 60;
+                const videoReady = isVideoCompleted || isLessonDoneInDb;
+                return (
+                  <div className="text-center py-8 space-y-3">
+                    <div
+                      className={`h-14 w-14 rounded-2xl flex items-center justify-center mx-auto ${
+                        passedScore && videoReady
+                          ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400"
+                          : "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400"
+                      }`}
+                    >
+                      <Award size={32} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                      {passedScore && videoReady
+                        ? `Xuất sắc! Bạn đạt ${quizCorrectCount}/${totalQ} (${passPct}%)`
+                        : !passedScore
+                        ? `Bạn đạt ${quizCorrectCount}/${totalQ} (${passPct}%) — Cần ≥60% để đạt`
+                        : `Đạt ${quizCorrectCount}/${totalQ} (${passPct}%) — Chưa xem hết Video`}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                      {!videoReady
+                        ? "Theo quy định học tập, bạn cần xem hết video bài giảng trước khi bài học được đánh dấu hoàn thành & cộng XP."
+                        : !passedScore
+                        ? "Hãy xem lại lý thuyết / giải thích kỹ thuật rồi luyện tập lại để đạt tối thiểu 60%."
+                        : lastQuizXpAwarded > 0
+                        ? `Đã cộng +${lastQuizXpAwarded} XP cho bài học này vào hồ sơ sinh viên.`
+                        : "Bài học này đã được ghi nhận hoàn thành trước đó."}
+                    </p>
+                    <div className="flex items-center justify-center gap-2.5 flex-wrap pt-1">
+                      {!videoReady && (
+                        <button
+                          onClick={() => setTab("video")}
+                          className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 px-5 py-2 text-xs font-bold transition cursor-pointer"
+                        >
+                          Xem Video ngay →
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setQuizIndex(0);
+                          setSelectedOption(null);
+                          setQuizSubmitted(false);
+                          setQuizDone(false);
+                          setQuizCorrectCount(0);
+                          setQuizStreak(0);
+                          setLastQuizXpAwarded(0);
+                        }}
+                        className="rounded-xl bg-[#14161a] hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-5 py-2 text-xs font-bold transition cursor-pointer"
+                      >
+                        Luyện tập lại
+                      </button>
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Xuất sắc! Bạn đã hoàn thành bộ Quiz!</h3>
-                  <p className="text-xs text-slate-500">Đã cộng +{totalXpEarned} XP vào hồ sơ sinh viên.</p>
-                  <button
-                    onClick={() => {
-                      setQuizIndex(0);
-                      setSelectedOption(null);
-                      setQuizSubmitted(false);
-                      setQuizDone(false);
-                    }}
-                    className="rounded-xl bg-[#14161a] hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-5 py-2 text-xs font-bold transition cursor-pointer"
-                  >
-                    Luyện tập lại
-                  </button>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
@@ -1370,6 +1816,7 @@ export default function LearningWorkspace({
               <ChapterExerciseStudio
                 subjectId={selectedSubjectId}
                 exercise={currentChapterExercise}
+                dbAssignment={activeChapter.dbAssignment}
                 mentorMascot={mentorMascot}
                 savedSubmission={savedChapterSubmission}
                 onSubmissionSaved={(saved, newTotalXp) => {
@@ -1379,7 +1826,7 @@ export default function LearningWorkspace({
                   setLearningOverview((prev) => {
                     if (!prev) return prev;
                     const filtered = prev.chapter_submissions.filter(
-                      (s) => s.exercise_id !== saved.exercise_id
+                      (s) => !(s.subject_id === selectedSubjectId && s.chapter_number === saved.chapter_number)
                     );
                     return {
                       ...prev,
@@ -1393,14 +1840,14 @@ export default function LearningWorkspace({
                   });
                 }}
                 onEarnXp={(xp) => setTotalXpEarned((prev) => prev + xp)}
-                onBackToLecture={() => setTab("video")}
+                onBackToLecture={() => setTab("lecture")}
               />
             </div>
           )}
 
           {/* ── SƠ ĐỒ TƯ DUY & THỐNG KÊ TIẾN TRÌNH BÀI HỌC (MINDMAP CUỐI CHƯƠNG) ── */}
           {tab === "mindmap" && (
-            <div key={`mindmap-${selectedSubjectId}-${activeLessonId}`} className="animate-screen-enter space-y-4">
+            <div key={`mindmap-${selectedSubjectId}-${activeChapter.id}`} className="animate-screen-enter space-y-4">
               <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 shrink-0">
@@ -1430,9 +1877,11 @@ export default function LearningWorkspace({
 
               <LessonMindmapStudio
                 subjectId={selectedSubjectId}
+                chapterTitle={activeChapter.title}
                 mentorMascot={mentorMascot}
                 instructorMindmapNodes={activeDbChapter?.mindmapNodes}
                 instructorMindmapEdges={activeDbChapter?.mindmapEdges}
+                completedLessonIds={completedSubjectLessonIds}
                 onNavigateToTab={(targetTab) => setTab(targetTab)}
               />
             </div>
@@ -1440,6 +1889,101 @@ export default function LearningWorkspace({
           </div>
         </main>
       </div>
+
+      {/* ── NÚT MỞ AI SOCRATIC MENTOR & DRAWER TƯƠNG TÁC TRỰC TIẾP ── */}
+      {!tutorOpen && (
+        <button
+          type="button"
+          onClick={() => setTutorOpen(true)}
+          className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-[#141619] dark:bg-white text-white dark:text-[#141619] px-4 py-2.5 text-xs font-extrabold shadow-lg hover:scale-105 active:scale-95 transition cursor-pointer"
+          title="Hỏi đáp phản biện Socratic với AI Mentor"
+        >
+          <span className="text-sm">{mentor.emoji}</span>
+          <MessageSquareText size={15} />
+          <span>Hỏi AI Socratic ({mentor.name})</span>
+        </button>
+      )}
+
+      {tutorOpen && (
+        <aside className="fixed bottom-4 right-4 z-50 w-[340px] sm:w-[390px] max-h-[75vh] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className={`w-8 h-8 rounded-xl ${mentor.color} text-white flex items-center justify-center text-xs font-black shrink-0`}>
+                {mentor.emoji}
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                  {mentor.name} · AI Socratic Mentor
+                </div>
+                <div className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
+                  Chủ đề: {activeMultiLesson.title}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTutorOpen(false)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 cursor-pointer"
+              title="Đóng AI Tutor"
+            >
+              <X size={15} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 text-xs">
+            {messages.map((m, idx) => (
+              <div
+                key={idx}
+                className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed ${
+                    m.from === "user"
+                      ? "bg-[#141619] dark:bg-amber-500 text-white dark:text-slate-950 font-medium"
+                      : chatSkin === "terminal"
+                      ? "bg-slate-950 text-emerald-300 font-mono border border-slate-800"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                  }`}
+                >
+                  {m.text}
+                </div>
+              </div>
+            ))}
+            {isAskingAi && (
+              <div className="flex justify-start">
+                <div className="px-3.5 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs flex items-center gap-1.5">
+                  <Loader2 size={13} className="animate-spin" />
+                  <span>{mentor.name} đang phân tích Socratic...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex items-center gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isAskingAi) {
+                  void handleSendMessage();
+                }
+              }}
+              placeholder="Đặt câu hỏi gợi mở tư duy..."
+              className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <button
+              type="button"
+              disabled={!chatInput.trim() || isAskingAi}
+              onClick={() => void handleSendMessage()}
+              className="p-2 rounded-xl bg-[#141619] dark:bg-white text-white dark:text-[#141619] hover:opacity-90 disabled:opacity-40 transition cursor-pointer shrink-0"
+              title="Gửi câu hỏi"
+            >
+              <Send size={14} />
+            </button>
+          </div>
+        </aside>
+      )}
 
       {toastMessage && (
         <MarloToast

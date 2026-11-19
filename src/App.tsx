@@ -43,7 +43,6 @@ export type Screen =
   | "instructor-grading"
   | "instructor-students"
   | "instructor-mindmap"
-  | "instructor-evidence"
   | "kanban"
   | "schedule"
   | "projects"
@@ -51,6 +50,16 @@ export type Screen =
   | "team"
   | "person-detail"
   | "defense-room";
+
+export type WorkspaceTabTarget = "video" | "lecture" | "quiz" | "mindmap" | "exercise";
+
+export interface WorkspaceLaunchTarget {
+  subjectId?: string;
+  lessonId?: string;
+  tab?: WorkspaceTabTarget;
+  openTutor?: boolean;
+  nonce: number;
+}
 
 export type Role = "student" | "admin" | "instructor";
 export type Theme = "light" | "dark";
@@ -67,9 +76,24 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const s = params.get("screen");
       if (s === "courses" || s === "learning") return "workspace";
+      if (s === "instructor-evidence") return "instructor";
       if (s) return s as Screen;
     }
     return "login";
+  });
+  const [workspaceLaunch, setWorkspaceLaunch] = useState<WorkspaceLaunchTarget | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const subjectId = params.get("course") || undefined;
+    const lessonId = params.get("lesson") || undefined;
+    const tabRaw = params.get("tab");
+    const tab =
+      tabRaw === "video" || tabRaw === "lecture" || tabRaw === "quiz" || tabRaw === "mindmap" || tabRaw === "exercise"
+        ? tabRaw
+        : undefined;
+    const openTutor = params.get("tutor") === "1" || undefined;
+    if (!subjectId && !lessonId && !tab && !openTutor) return null;
+    return { subjectId, lessonId, tab, openTutor, nonce: Date.now() };
   });
   const [selectedKanbanProjectId, setSelectedKanbanProjectId] = useState<string>("prj-codemind");
   const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>("codemind");
@@ -81,6 +105,32 @@ export default function App() {
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("screen", nextScreen);
+      if (nextScreen !== "workspace") {
+        url.searchParams.delete("course");
+        url.searchParams.delete("lesson");
+        url.searchParams.delete("tab");
+        url.searchParams.delete("tutor");
+      }
+      window.history.replaceState({}, "", url.toString());
+    }
+    mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  };
+
+  const openWorkspaceTarget = (opts: Omit<WorkspaceLaunchTarget, "nonce">) => {
+    const nextLaunch: WorkspaceLaunchTarget = { ...opts, nonce: Date.now() };
+    setWorkspaceLaunch(nextLaunch);
+    setScreenState("workspace");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("screen", "workspace");
+      if (opts.subjectId) url.searchParams.set("course", opts.subjectId);
+      else url.searchParams.delete("course");
+      if (opts.lessonId) url.searchParams.set("lesson", opts.lessonId);
+      else url.searchParams.delete("lesson");
+      if (opts.tab) url.searchParams.set("tab", opts.tab);
+      else url.searchParams.delete("tab");
+      if (opts.openTutor) url.searchParams.set("tutor", "1");
+      else url.searchParams.delete("tutor");
       window.history.replaceState({}, "", url.toString());
     }
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -304,6 +354,7 @@ export default function App() {
             skillMapSkin={skillMapSkin}
             badgeFrame={badgeFrame}
             onNavigate={setScreen}
+            onOpenWorkspace={openWorkspaceTarget}
             theme={theme}
             onToggleTheme={toggleTheme}
             role={role}
@@ -322,6 +373,7 @@ export default function App() {
             avatarStyle={avatarStyle}
             badgeFrame={badgeFrame}
             onNavigate={setScreen}
+            launchTarget={workspaceLaunch}
             onLogout={handleLogout}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
@@ -379,11 +431,11 @@ export default function App() {
       case "instructor-grading":
       case "instructor-students":
       case "instructor-mindmap":
-      case "instructor-evidence":
         return (
           <InstructorPanel
             currentSection={screen}
             onNavigate={setScreen}
+            onOpenWorkspace={openWorkspaceTarget}
           />
         );
       case "kanban": return <KanbanBoard initialProjectId={selectedKanbanProjectId} role={role} />;

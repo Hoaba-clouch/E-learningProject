@@ -47,6 +47,7 @@ export interface Lesson {
   id: string;
   title: string;
   duration: string;
+  xp?: number;
   status: "Đã phát hành" | "Bản nháp";
   isGenerated: boolean;
   documents: DocumentFile[];
@@ -101,6 +102,7 @@ export interface CourseClass {
   code: string;
   name: string;
   semester: string;
+  dockerImage?: string;
   studentCount: number;
   avgProgressPct: number;
   chapters: Chapter[];

@@ -10,6 +10,7 @@ import {
   Clock,
   BookOpen,
   AlertCircle,
+  AlertTriangle,
   FileCode,
   Check,
   Edit3,
@@ -29,11 +30,15 @@ import {
   type StudentChapterSubmissionDto,
 } from "../api";
 import type { ChapterExerciseData } from "../data/chapterExercises";
+import type { Assignment } from "../data/instructorData";
 import type { MentorMascot } from "../App";
+
+const GITHUB_REPO_URL_RE = /^https?:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/i;
 
 interface ChapterExerciseStudioProps {
   subjectId?: string;
   exercise: ChapterExerciseData;
+  dbAssignment?: Assignment | null;
   mentorMascot?: MentorMascot;
   savedSubmission?: StudentChapterSubmissionDto | null;
   onSubmissionSaved?: (submission: StudentChapterSubmissionDto, totalXp?: number) => void;
@@ -135,12 +140,20 @@ function formatSubmittedTime(iso?: string | null): string {
 export default function ChapterExerciseStudio({
   subjectId = "oop",
   exercise,
+  dbAssignment,
   mentorMascot = "mino",
   savedSubmission,
   onSubmissionSaved,
   onEarnXp,
   onBackToLecture,
 }: ChapterExerciseStudioProps) {
+  const effectiveExerciseTitle = dbAssignment?.title?.trim() || exercise.title;
+  const effectiveDescription =
+    dbAssignment?.description?.trim() || exercise.problemStatement || exercise.objective;
+  const effectiveXp = dbAssignment?.points ?? exercise.xp;
+  const effectiveDockerImage = dbAssignment?.dockerImage?.trim() || "";
+  const configuredTestCases = dbAssignment?.testCases || [];
+
   const [submissionLink, setSubmissionLink] = useState(savedSubmission?.repo_url || "");
   const [studentNote, setStudentNote] = useState(savedSubmission?.student_note || "");
   const [submittedLink, setSubmittedLink] = useState<string | null>(
@@ -226,20 +239,24 @@ export default function ChapterExerciseStudio({
     e.preventDefault();
     const cleanLink = submissionLink.trim();
     if (!cleanLink) return;
+    if (!GITHUB_REPO_URL_RE.test(cleanLink)) {
+      setSubmitError("Vui lòng nhập đường dẫn GitHub Repository hợp lệ (ví dụ: https://github.com/owner/repo).");
+      return;
+    }
 
     setSubmitError(null);
     setGradingPhase("grading");
     setGradingStep(0);
     setLiveLogs([
       `[0.1s] [INIT] Khởi tạo luồng thẩm định Docker CI/CD cho: ${cleanLink}`,
-      `[0.3s] [GIT] git clone --depth=1 repo -> Chuẩn bị biên dịch Chương ${exercise.chapterNumber}`,
+      `[0.3s] [GIT] Kiểm tra & clone repository cho Chương ${exercise.chapterNumber}`,
     ]);
 
     const t1 = setTimeout(() => {
       setGradingStep(1);
       setLiveLogs((prev) => [
         ...prev,
-        "[0.5s] [DOCKER] Cấp phát Container Linux cô lập (--network=none, 2 vCPU, 4GB RAM)",
+        `[0.5s] [DOCKER] Cấp phát Container cô lập (${effectiveDockerImage || "Docker Sandbox"}, --network=none)`,
       ]);
     }, 300);
 
@@ -247,7 +264,7 @@ export default function ChapterExerciseStudio({
       setGradingStep(2);
       setLiveLogs((prev) => [
         ...prev,
-        "[0.7s] [TEST] Thực thi Docker Test Cases từ Giảng viên & Quét Valgrind sanitizer...",
+        `[0.7s] [TEST] Thực thi ${configuredTestCases.length > 0 ? configuredTestCases.length : 5} Docker Test Cases & Quét Sanitizer...`,
       ]);
     }, 600);
 
@@ -255,7 +272,7 @@ export default function ChapterExerciseStudio({
       setGradingStep(3);
       setLiveLogs((prev) => [
         ...prev,
-        "[0.9s] [SYNC] Đồng bộ kết quả Rubric vào SQLite & hàng đợi Giảng viên...",
+        "[0.9s] [SYNC] Đồng bộ kết quả Rubric vào MySQL 8.0 & hàng đợi Giảng viên...",
       ]);
     }, 850);
 
@@ -263,11 +280,11 @@ export default function ChapterExerciseStudio({
       submitStudentChapterExercise({
         subject_id: subjectId,
         chapter_number: exercise.chapterNumber,
-        exercise_id: exercise.id,
-        exercise_title: exercise.title,
+        exercise_id: dbAssignment?.id || exercise.id,
+        exercise_title: effectiveExerciseTitle,
         repo_url: cleanLink,
         student_note: studentNote.trim(),
-        xp: exercise.xp,
+        xp: effectiveXp,
       }),
       new Promise((resolve) => setTimeout(resolve, 1000)),
     ]);
@@ -310,6 +327,13 @@ export default function ChapterExerciseStudio({
     }
   };
 
+  const officialDisplayScore =
+    savedSubmission?.status === "graded" &&
+    savedSubmission.instructor_grade !== null &&
+    savedSubmission.instructor_grade !== undefined
+      ? savedSubmission.instructor_grade
+      : gradeReport.score;
+
   return (
     <div className="flex-1 flex flex-col font-sans select-none w-full pb-8">
       {/* ── TOP HEADER CỦA BÀI TẬP ──────────────────────────────── */}
@@ -323,6 +347,11 @@ export default function ChapterExerciseStudio({
               <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                 Bài tập thực hành
               </span>
+              {effectiveDockerImage && (
+                <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                  {effectiveDockerImage}
+                </span>
+              )}
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                   exercise.difficulty === "Dễ"
@@ -340,23 +369,23 @@ export default function ChapterExerciseStudio({
             </div>
 
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              {exercise.title}
+              {effectiveExerciseTitle}
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              {exercise.problemStatement || exercise.objective}
+              {effectiveDescription}
             </p>
           </div>
 
           <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 shrink-0">
             <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-xs font-bold">
               <Flame size={15} className="fill-amber-500 text-amber-500" />
-              <span>+{exercise.xp} XP</span>
+              <span>+{effectiveXp} XP</span>
             </div>
 
             {onBackToLecture && (
               <button
                 onClick={onBackToLecture}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-semibold"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
               >
                 <BookOpen size={13} />
                 <span>Xem lại lý thuyết</span>
@@ -369,12 +398,45 @@ export default function ChapterExerciseStudio({
       {/* 🌊 DÒNG CHẤT LỎNG NỐI XUỐNG CARD YÊU CẦU */}
       <LiquidCardConnector />
 
-      {/* ── CARD 1: ĐỀ BÀI CHI TIẾT & YÊU CẦU ────────────────────────── */}
+      {/* ── CARD 1: ĐỀ BÀI CHI TIẾT, TEST CASES GIẢNG VIÊN & YÊU CẦU ────────────────────────── */}
       <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-5 sm:p-6 shadow-xs space-y-4">
         <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <FileText size={16} className="text-blue-600" />
-          <span>Yêu cầu kỹ thuật cần đạt</span>
+          <span>Yêu cầu kỹ thuật & Docker Test Cases</span>
         </h2>
+
+        {configuredTestCases.length > 0 && (
+          <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+              <span>Bộ Test Cases kiểm thử tự động ({configuredTestCases.length} ca)</span>
+              <span className="font-mono text-[10.5px] text-slate-400">Đồng bộ từ Giảng viên</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {configuredTestCases.map((tc, idx) => (
+                <div
+                  key={tc.id || idx}
+                  className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-[11px] space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                      #{idx + 1}. {tc.title}
+                    </span>
+                    {tc.isEdgeCase && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-mono text-[9.5px] font-bold shrink-0">
+                        Edge Case
+                      </span>
+                    )}
+                  </div>
+                  {(tc.input || tc.expectedOutput) && (
+                    <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                      In: {tc.input || "—"} → Out: {tc.expectedOutput || "—"}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {exercise.requirements.map((req, i) => (
@@ -394,7 +456,7 @@ export default function ChapterExerciseStudio({
           <div className="space-y-1">
             <p className="font-bold">Hình thức nộp bài chuẩn:</p>
             <p className="leading-relaxed">
-              Bạn có thể nộp link <strong>GitHub Repository</strong>, <strong>Pull Request</strong>, hoặc link <strong>Google Drive / Zip</strong> chứa mã nguồn. Sau khi dán link và bấm Nộp, hệ thống sẽ tự động khởi chạy Docker Sandbox để compile C++20, chạy test cases và trả về nhận xét tức thì.
+              Vui lòng dán đường dẫn <strong>GitHub Repository</strong> công khai của bạn (định dạng <code className="font-mono">https://github.com/owner/repo</code>). Hệ thống sẽ xác thực repository và chạy bộ kiểm thử Docker Sandbox {effectiveDockerImage ? `(${effectiveDockerImage})` : "theo cấu hình môn học"}.
             </p>
           </div>
         </div>
@@ -513,7 +575,28 @@ export default function ChapterExerciseStudio({
                     Nộp lúc: <b className="text-slate-700 dark:text-slate-300">{submittedAt}</b>
                   </div>
                   <h3 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-0.5">
-                    Điểm số: <span className="text-emerald-600 dark:text-emerald-400 font-mono">{gradeReport.score}</span> / {gradeReport.maxScore}
+                    {savedSubmission?.status === "graded" &&
+                    savedSubmission.instructor_grade !== null &&
+                    savedSubmission.instructor_grade !== undefined ? (
+                      <>
+                        Điểm chính thức (GV công nhận):{" "}
+                        <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                          {officialDisplayScore.toFixed(1)}
+                        </span>{" "}
+                        / {gradeReport.maxScore}
+                        <span className="ml-2 text-xs font-mono font-semibold text-slate-400">
+                          (Auto-Test AI: {gradeReport.score})
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        Điểm Auto-Test Sandbox:{" "}
+                        <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                          {gradeReport.score}
+                        </span>{" "}
+                        / {gradeReport.maxScore}
+                      </>
+                    )}
                   </h3>
                 </div>
               </div>
@@ -526,7 +609,7 @@ export default function ChapterExerciseStudio({
                 </span>
                 <span className="text-[11px] text-slate-400 flex items-center gap-1">
                   <Clock size={12} />
-                  <span>{gradeReport.executionTimeMs}ms · Valgrind: 0 leak</span>
+                  <span>{gradeReport.executionTimeMs}ms · Valgrind: {gradeReport.valgrindLeaks} leak</span>
                 </span>
               </div>
             </div>
@@ -680,11 +763,10 @@ export default function ChapterExerciseStudio({
               {/* Clean metadata footer bar */}
               <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 flex-wrap gap-2">
                 <span>
-                  Độ phức tạp Cyclomatic Complexity:{" "}
-                  <b className="text-slate-700 dark:text-slate-300 font-mono">2.4</b> (An toàn)
+                  {gradeReport.aiFeedback.cleanCodeAnalysis || "Phân tích tĩnh & Clean Code: Mức an toàn cao"}
                 </span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                  ✓ Không phát hiện code smell nghiêm trọng
+                  ✓ Kiểm thử tự động bởi Docker Sandbox
                 </span>
               </div>
             </div>
@@ -697,11 +779,11 @@ export default function ChapterExerciseStudio({
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <span>Dán link nộp bài (GitHub Repository / PR / Link Project)</span>
+                  <span>Dán link GitHub Repository bài làm</span>
                   <span className="text-rose-500">*</span>
                 </span>
                 <span className="text-[11px] font-normal text-emerald-600 dark:text-emerald-400">
-                  ⚡ Chấm điểm & nhận xét tự động tức thì trong 2s
+                  ⚡ Xác thực GitHub & Chấm điểm Docker CI/CD tự động
                 </span>
               </label>
 
@@ -711,36 +793,40 @@ export default function ChapterExerciseStudio({
                   type="url"
                   required
                   value={submissionLink}
-                  onChange={(e) => setSubmissionLink(e.target.value)}
-                  placeholder="https://github.com/username/cpp-oop-polymorphism hoặc link repo bất kỳ..."
+                  onChange={(e) => {
+                    setSubmissionLink(e.target.value);
+                    if (submitError) setSubmitError(null);
+                  }}
+                  placeholder={`https://github.com/username/${subjectId}-ch${exercise.chapterNumber}-lab`}
                   className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-3 text-xs sm:text-sm text-slate-900 dark:text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-2xs font-mono"
                 />
               </div>
 
               {/* Sample Quick Links */}
               <div className="flex items-center gap-2 pt-1 flex-wrap">
-                <span className="text-[11px] text-slate-400">Dán nhanh mẫu:</span>
+                <span className="text-[11px] text-slate-400">Định dạng mẫu chuẩn:</span>
                 <button
                   type="button"
-                  onClick={() =>
-                    setSubmissionLink("https://github.com/codemind-student/cpp-oop-polymorphism-lab")
-                  }
+                  onClick={() => {
+                    setSubmissionLink(`https://github.com/Hoaba-clouch/oop-vtable-cpp`);
+                    setSubmitError(null);
+                  }}
                   className="text-[11px] font-mono text-blue-600 dark:text-blue-400 hover:underline bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded cursor-pointer"
                 >
-                  github.com/.../cpp-oop-polymorphism-lab
+                  github.com/owner/{subjectId}-ch{exercise.chapterNumber}-lab
                 </button>
               </div>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                Ghi chú thêm về giải thuật hoặc quyết định kiến trúc (không bắt buộc)
+                Ghi chú thêm về giải thuật hoặc quyết định kiến trúc (nên ghi rõ trade-off)
               </label>
               <input
                 type="text"
                 value={studentNote}
                 onChange={(e) => setStudentNote(e.target.value)}
-                placeholder="Ví dụ: Em đã hoàn thiện thêm phần kiểm tra vptr offset và tối ưu smart pointer..."
+                placeholder={`Mô tả kiến trúc & giải thuật bạn đã triển khai cho Chương ${exercise.chapterNumber}...`}
                 className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-amber-500 transition shadow-2xs"
               />
             </div>
@@ -769,7 +855,7 @@ export default function ChapterExerciseStudio({
                 className="btn-marlo-primary btn--primary flex items-center gap-2 px-6 py-3 text-xs sm:text-sm font-black shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
               >
                 <Zap size={15} className="text-[#1c1304] shrink-0" />
-                <span>Nộp bài & Chấm điểm Tự động (+{exercise.xp} XP)</span>
+                <span>Nộp bài & Chấm điểm Tự động (+{effectiveXp} XP)</span>
               </button>
             </div>
           </form>

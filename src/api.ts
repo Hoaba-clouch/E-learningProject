@@ -5,6 +5,7 @@
  */
 
 import type {
+  Assignment,
   CourseClass,
   DefenseRubricConfig,
   DockerTestCase,
@@ -1132,6 +1133,23 @@ export async function patchInstructorChapter(
   }
 }
 
+export async function deleteInstructorChapter(courseId: string, chapterId: string) {
+  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/instructor/courses/${courseId}/chapters/${chapterId}`,
+      {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function createInstructorLesson(
   courseId: string,
   chapterId: string,
@@ -1157,11 +1175,57 @@ export async function createInstructorLesson(
   }
 }
 
+export async function deleteInstructorLesson(
+  courseId: string,
+  chapterId: string,
+  lessonId: string
+) {
+  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/instructor/courses/${courseId}/chapters/${chapterId}/lessons/${lessonId}`,
+      {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function reorderInstructorLessons(
+  courseId: string,
+  chapterId: string,
+  lessonIds: string[]
+) {
+  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/instructor/courses/${courseId}/chapters/${chapterId}/lessons/reorder`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ lessonIds }),
+      }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function saveInstructorLesson(
   courseId: string,
   chapterId: string,
   lessonId: string,
-  lesson: Partial<Lesson>
+  lesson: Partial<Lesson> & { xp?: number; isAigcGenerated?: boolean }
 ) {
   const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
   try {
@@ -1174,6 +1238,32 @@ export async function saveInstructorLesson(
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(lesson),
+      }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateInstructorAssignment(
+  courseId: string,
+  chapterId: string,
+  assignmentId: string,
+  payload: Partial<Assignment>
+) {
+  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/instructor/courses/${courseId}/chapters/${chapterId}/assignments/${assignmentId}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
       }
     );
     if (!res.ok) return null;
@@ -1199,6 +1289,32 @@ export async function addInstructorTestCase(
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(tc),
+      }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateInstructorTestCase(
+  courseId: string,
+  chapterId: string,
+  tcId: string,
+  payload: Partial<DockerTestCase>
+) {
+  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/instructor/courses/${courseId}/chapters/${chapterId}/test-cases/${tcId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
       }
     );
     if (!res.ok) return null;
@@ -1781,6 +1897,16 @@ export interface StudentCompletedLessonDto {
   completed_at: string;
 }
 
+export interface StudentVideoProgressDto {
+  subject_id: string;
+  lesson_id: string;
+  watched_seconds: number;
+  duration_seconds: number;
+  watched_pct: number;
+  completed: boolean;
+  updated_at?: string;
+}
+
 export interface StudentLearningOverview {
   user: {
     id: string;
@@ -1804,6 +1930,7 @@ export interface StudentLearningOverview {
     claimed_quests: string[];
   };
   completed_lessons: StudentCompletedLessonDto[];
+  video_progress?: StudentVideoProgressDto[];
   chapter_submissions: StudentChapterSubmissionDto[];
   courses: {
     id: string;
@@ -1815,6 +1942,30 @@ export interface StudentLearningOverview {
     aiDefenseEnabled: boolean;
     chapters: any[];
   }[];
+}
+
+export async function saveStudentVideoProgressApi(payload: {
+  subject_id: string;
+  lesson_id: string;
+  watched_seconds: number;
+  duration_seconds: number;
+  completed: boolean;
+}): Promise<StudentVideoProgressDto | null> {
+  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(`${API_BASE}/v1/student/video-progress`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchStudentLearningOverview(): Promise<StudentLearningOverview | null> {
@@ -3236,7 +3387,7 @@ export interface StudentAnalyticsItem {
 
 export async function fetchStudentsAnalyticsApi(courseCode?: string): Promise<StudentAnalyticsItem[]> {
   try {
-    const token = getToken();
+    const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
     const query = courseCode ? `?course_code=${encodeURIComponent(courseCode)}` : "";
     const res = await fetch(`${API_BASE}/v1/instructor/students-analytics${query}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -3253,7 +3404,7 @@ export async function remindStudentApi(
   studentId: string,
   payload: { message: string; action_type: string; bonus_xp?: number }
 ): Promise<any> {
-  const token = getToken();
+  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
   const res = await fetch(`${API_BASE}/v1/instructor/students/${studentId}/remind`, {
     method: "POST",
     headers: {
@@ -3357,7 +3508,7 @@ export async function fetchInstructorChapterSubmissions(
   chapterNumber?: number,
   statusFilter?: string
 ): Promise<ChapterSubmissionsOverview> {
-  const token = getToken();
+  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
   const params = new URLSearchParams();
   if (subjectId) params.set("subject_id", subjectId);
   if (typeof chapterNumber === "number") params.set("chapter_number", String(chapterNumber));
@@ -3403,7 +3554,7 @@ export async function gradeInstructorChapterSubmission(
   subId: string,
   payload: { action: string; instructor_grade?: number; instructor_feedback?: string }
 ): Promise<any> {
-  const token = getToken();
+  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
   const res = await fetch(`${API_BASE}/v1/instructor/chapter-submissions/${subId}/grade`, {
     method: "PATCH",
     headers: {

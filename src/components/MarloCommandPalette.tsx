@@ -183,12 +183,12 @@ export default function MarloCommandPalette({
       action: () => { onNavigate("instructor-grading"); onClose(); },
     },
     {
-      id: "nav-inst-evidence",
-      title: "Nhật ký Bằng chứng Tự học (Live Evidence)",
-      subtitle: "Theo dõi nấc Hint Socratic, lịch sử tự sửa lỗi & phản tư học viên",
+      id: "nav-inst-students",
+      title: "Quản lý & Thống kê Học viên",
+      subtitle: "Theo dõi tiến độ bài học, điểm thực hành, XP & gửi nhắc nhở Socratic",
       category: "Điều hướng",
-      icon: <History size={16} className="text-slate-600 dark:text-slate-300" />,
-      action: () => { onNavigate("instructor-evidence"); onClose(); },
+      icon: <UserRound size={16} className="text-slate-600 dark:text-slate-300" />,
+      action: () => { onNavigate("instructor-students"); onClose(); },
     },
     {
       id: "nav-admin-overview",

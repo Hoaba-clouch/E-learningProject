@@ -672,7 +672,29 @@ CREATE TABLE IF NOT EXISTS student_chapter_submissions (
     ai_feedback_json LONGTEXT NOT NULL,
     xp_awarded INT NOT NULL DEFAULT 0,
     dual_submission_id VARCHAR(64),
+    status VARCHAR(32) DEFAULT 'pending',
+    instructor_grade DOUBLE DEFAULT NULL,
+    instructor_feedback TEXT,
+    graded_by VARCHAR(191) DEFAULT '',
+    graded_at VARCHAR(64) DEFAULT '',
+    student_name VARCHAR(191) DEFAULT '',
+    student_code VARCHAR(64) DEFAULT '',
+    valgrind_leaks INT NOT NULL DEFAULT 0,
     submitted_at VARCHAR(64) NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS student_video_progress (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    subject_id VARCHAR(64) NOT NULL,
+    lesson_id VARCHAR(64) NOT NULL,
+    watched_seconds INT NOT NULL DEFAULT 0,
+    duration_seconds INT NOT NULL DEFAULT 0,
+    watched_pct DOUBLE NOT NULL DEFAULT 0.0,
+    completed INT NOT NULL DEFAULT 0,
+    updated_at VARCHAR(64) NOT NULL,
+    UNIQUE KEY uq_video_user_subj_lesson (user_id, subject_id, lesson_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -683,6 +705,7 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     longest_streak INT DEFAULT 0,
     exp_points INT DEFAULT 0,
     selected_title VARCHAR(191) DEFAULT 'Novice Developer',
+    last_activity_date VARCHAR(32) DEFAULT '',
     radar_algorithm DOUBLE DEFAULT 10.0,
     radar_debugging DOUBLE DEFAULT 10.0,
     radar_cleancode DOUBLE DEFAULT 10.0,
@@ -1002,11 +1025,32 @@ CREATE TABLE IF NOT EXISTS security_otp_codes (
 """
 
 
+def _run_safe_migrations(conn: MySQLConnectionWrapper) -> None:
+    """Chạy các ALTER TABLE an toàn cho CSDL MySQL 8.0 đang tồn tại."""
+    alter_statements = [
+        "ALTER TABLE student_profiles ADD COLUMN last_activity_date VARCHAR(32) DEFAULT ''",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN status VARCHAR(32) DEFAULT 'pending'",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN instructor_grade DOUBLE DEFAULT NULL",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN instructor_feedback TEXT",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN graded_by VARCHAR(191) DEFAULT ''",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN graded_at VARCHAR(64) DEFAULT ''",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN student_name VARCHAR(191) DEFAULT ''",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN student_code VARCHAR(64) DEFAULT ''",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN valgrind_leaks INT NOT NULL DEFAULT 0",
+    ]
+    for stmt in alter_statements:
+        try:
+            conn.execute(stmt)
+        except Exception:
+            pass
+
+
 def init_db() -> None:
     """Khởi tạo toàn bộ 43 bảng CSDL chuẩn mực trên MySQL 8.0 và seed dữ liệu ban đầu."""
     _ensure_mysql_db_exists()
     with db() as conn:
         conn.executescript(MYSQL_DDL_SCHEMA)
+        _run_safe_migrations(conn)
         seed_data(conn)
         from app.services.seed_platform import seed_platform_data
         seed_platform_data(conn)

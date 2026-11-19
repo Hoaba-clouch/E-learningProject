@@ -21,10 +21,25 @@ class LessonCreateIn(BaseModel):
 class LessonSaveIn(BaseModel):
     title: str | None = None
     duration: str | None = None
+    xp: int | None = Field(default=None, ge=0, le=500)
     status: Literal["Đã phát hành", "Bản nháp"] | None = None
     isGenerated: bool | None = None
+    isAigcGenerated: bool | None = None
     documents: list[dict[str, Any]] | None = None
     content: dict[str, Any] | None = None
+
+
+class LessonReorderIn(BaseModel):
+    lessonIds: list[str] = Field(default_factory=list)
+
+
+class AssignmentUpdateIn(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    points: int | None = Field(default=None, ge=0, le=1000)
+    dockerImage: str | None = None
+    repoTemplate: str | None = None
+    isRequired: bool | None = None
 
 
 class DockerTestCaseIn(BaseModel):
@@ -33,8 +48,17 @@ class DockerTestCaseIn(BaseModel):
     input: str = ""
     expectedOutput: str = ""
     isEdgeCase: bool = False
-    timeoutMs: int = Field(default=1500, ge=100, le=30000)
-    memoryLimitMb: int = Field(default=128, ge=16, le=2048)
+    timeoutMs: int = Field(default=1500, ge=100, le=60000)
+    memoryLimitMb: int = Field(default=128, ge=16, le=4096)
+
+
+class DockerTestCaseUpdateIn(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    input: str | None = None
+    expectedOutput: str | None = None
+    isEdgeCase: bool | None = None
+    timeoutMs: int | None = Field(default=None, ge=100, le=60000)
+    memoryLimitMb: int | None = Field(default=None, ge=16, le=4096)
 
 
 class MindmapSaveIn(BaseModel):

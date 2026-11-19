@@ -16,15 +16,10 @@ import "@xyflow/react/dist/style.css";
 import {
   GitBranch,
   MapPin,
-  Sparkles,
   Lightbulb,
   RotateCcw,
-  Maximize2,
-  Minimize2,
   FolderOpen,
   FolderClosed,
-  ChevronRight,
-  Layers,
 } from "lucide-react";
 import { CompactTreeMindmapNode } from "./CompactTreeMindmapNode";
 import {
@@ -40,13 +35,15 @@ const nodeTypes = {
 
 interface LessonMindmapStudioProps {
   subjectId: string;
+  chapterTitle?: string;
   mentorMascot: MentorMascot;
   instructorMindmapNodes?: any[];
   instructorMindmapEdges?: any[];
+  completedLessonIds?: Set<string>;
   onNavigateToTab?: (tab: "lecture" | "video" | "quiz") => void;
 }
 
-// Hàm đệ quy tính toán tọa độ cây lũy tiến (Progressive Tree Layout)
+// Hàm đệ quy tính toán tọa độ cây lũy tiến (có chống vòng lặp cycle bằng visited set)
 function placeSubtree(
   nodeId: string,
   currentY: number,
@@ -54,20 +51,26 @@ function placeSubtree(
   childrenMap: Map<string, string[]>,
   expandedNodeIds: Set<string>,
   nodeMap: Map<string, TreeMindmapNode>,
-  positions: Map<string, { x: number; y: number }>
+  positions: Map<string, { x: number; y: number }>,
+  visited: Set<string>
 ): { topY: number; bottomY: number; centerY: number } {
+  if (visited.has(nodeId)) {
+    return { topY: currentY, bottomY: currentY, centerY: currentY };
+  }
+  visited.add(nodeId);
+
   const node = nodeMap.get(nodeId);
   const type = node?.data.nodeType || "leaf";
   const nodeHeight =
     type === "root" ? 120 : type === "branch" ? 100 : type === "leaf" ? 150 : 95;
-  const gap = 38; // 🌟 Khoảng cách dọc giữa các thẻ thoáng hơn, tách biệt rõ ràng
+  const gap = 38;
 
-  const xPositions = [40, 335, 650, 975]; // 🌟 Khoảng cách cột theo chiều ngang tách rộng rãi hơn
+  const xPositions = [40, 335, 650, 975];
   const posX = depth < xPositions.length ? xPositions[depth] : 40 + depth * 320;
 
   const isExpanded = expandedNodeIds.has(nodeId);
-  const children = (childrenMap.get(nodeId) || []).filter((cid) =>
-    nodeMap.has(cid)
+  const children = (childrenMap.get(nodeId) || []).filter(
+    (cid) => nodeMap.has(cid) && !visited.has(cid)
   );
 
   if (!isExpanded || children.length === 0) {
@@ -76,7 +79,6 @@ function placeSubtree(
     return { topY: currentY, bottomY: currentY + nodeHeight + gap, centerY };
   }
 
-  // Node đang mở và có các nhánh con
   let childRunnerY = currentY;
   const childCenterYs: number[] = [];
 
@@ -88,14 +90,17 @@ function placeSubtree(
       childrenMap,
       expandedNodeIds,
       nodeMap,
-      positions
+      positions,
+      visited
     );
     childCenterYs.push(childRes.centerY);
-    childRunnerY = childRes.bottomY;
+    childRunnerY = Math.max(childRunnerY, childRes.bottomY);
   }
 
   const midChildrenCenter =
-    (childCenterYs[0] + childCenterYs[childCenterYs.length - 1]) / 2;
+    childCenterYs.length > 0
+      ? (childCenterYs[0] + childCenterYs[childCenterYs.length - 1]) / 2
+      : currentY + nodeHeight / 2;
   const parentY = Math.max(
     currentY,
     Math.round(midChildrenCenter - nodeHeight / 2)
@@ -169,9 +174,11 @@ function FitViewButton() {
 
 export function LessonMindmapStudio({
   subjectId,
+  chapterTitle,
   mentorMascot,
   instructorMindmapNodes,
   instructorMindmapEdges,
+  completedLessonIds,
   onNavigateToTab,
 }: LessonMindmapStudioProps) {
   const [showMiniMap, setShowMiniMap] = useState(false);
@@ -180,7 +187,6 @@ export function LessonMindmapStudio({
     hasInstructorMap ? "instructor" : "standard"
   );
 
-  // Mặc định ban đầu chỉ mở root -> Chỉ hiện các nốt chính (Bài 1.1, Bài 1.2...)
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     () => new Set([instructorMindmapNodes?.[0]?.id || "root"])
   );
@@ -188,27 +194,63 @@ export function LessonMindmapStudio({
   const baseData: SubjectTreeData =
     TREE_MINDMAP_DATA[subjectId] || TREE_MINDMAP_DATA.oop;
 
+  const isNodeCompletedForStudent = useCallback(
+    (title: string, nodeId: string, fallbackPct: number) => {
+      if (completedLessonIds && completedLessonIds.size > 0) {
+        if (completedLessonIds.has(nodeId)) return true;
+        const m = title.match(/^(\d+\.\d+)/);
+        if (m && completedLessonIds.has(m[1])) return true;
+      }
+      return completedLessonIds ? false : fallbackPct >= 80;
+    },
+    [completedLessonIds]
+  );
+
   const currentData: SubjectTreeData = useMemo(() => {
     if (mindmapSource !== "instructor" || !hasInstructorMap) {
-      return baseData;
+      return {
+        ...baseData,
+        title: chapterTitle ? `${baseData.title} · ${chapterTitle}` : baseData.title,
+        nodes: baseData.nodes.map((n) => {
+          const isDone =
+            n.data.nodeType === "root"
+              ? n.data.status === "completed"
+              : isNodeCompletedForStudent(n.data.title, n.id, n.data.progressPct);
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              status: isDone ? ("completed" as const) : ("in-progress" as const),
+              progressPct: isDone ? 100 : n.data.progressPct,
+            },
+          };
+        }),
+      };
     }
-    const mappedNodes = (instructorMindmapNodes || []).map((n: any, idx: number) => ({
-      id: String(n.id || `inst-n-${idx}`),
-      type: "compactTreeNode" as const,
-      position: n.position || { x: 40 + idx * 240, y: 120 },
-      data: {
-        title: n.data?.title || "Khái niệm Giảng viên",
-        badge: n.data?.tag || "Master Map",
-        summary: n.data?.summary || "",
-        status: ((Number(n.data?.masteryPct ?? 75) >= 80
-          ? "completed"
-          : "in-progress") as "completed" | "in-progress"),
-        progressPct: Number(n.data?.masteryPct ?? 75),
-        xp: n.data?.xp ? Number(n.data.xp) : undefined,
-        nodeType: (n.data?.nodeType === "root" ? "root" : n.data?.nodeType === "leaf" ? "leaf" : "branch") as "root" | "branch" | "leaf",
-        tone: "blue",
-      },
-    }));
+    const mappedNodes = (instructorMindmapNodes || []).map((n: any, idx: number) => {
+      const title = n.data?.title || "Khái niệm Giảng viên";
+      const pct = Number(n.data?.masteryPct ?? 75);
+      const isDone = isNodeCompletedForStudent(title, String(n.id || `inst-n-${idx}`), pct);
+      return {
+        id: String(n.id || `inst-n-${idx}`),
+        type: "compactTreeNode" as const,
+        position: n.position || { x: 40 + idx * 240, y: 120 },
+        data: {
+          title,
+          badge: n.data?.tag || "Master Map",
+          summary: n.data?.summary || "",
+          status: (isDone ? "completed" : "in-progress") as "completed" | "in-progress",
+          progressPct: isDone ? 100 : pct,
+          xp: n.data?.xp ? Number(n.data.xp) : undefined,
+          nodeType: (n.data?.nodeType === "root"
+            ? "root"
+            : n.data?.nodeType === "leaf"
+            ? "leaf"
+            : "branch") as "root" | "branch" | "leaf",
+          tone: "blue",
+        },
+      };
+    });
     const mappedEdges = (instructorMindmapEdges || []).map((e: any, idx: number) => ({
       id: String(e.id || `inst-e-${idx}`),
       source: String(e.source),
@@ -216,11 +258,19 @@ export function LessonMindmapStudio({
     }));
     return {
       ...baseData,
-      title: `Master Mindmap Giảng viên · ${baseData.subjectCode}`,
+      title: `Master Mindmap Giảng viên · ${chapterTitle || baseData.subjectCode}`,
       nodes: mappedNodes,
       edges: mappedEdges,
     };
-  }, [baseData, hasInstructorMap, instructorMindmapEdges, instructorMindmapNodes, mindmapSource]);
+  }, [
+    baseData,
+    chapterTitle,
+    hasInstructorMap,
+    instructorMindmapEdges,
+    instructorMindmapNodes,
+    isNodeCompletedForStudent,
+    mindmapSource,
+  ]);
 
   useEffect(() => {
     if (hasInstructorMap) {
@@ -228,7 +278,7 @@ export function LessonMindmapStudio({
     } else {
       setMindmapSource("standard");
     }
-  }, [hasInstructorMap, subjectId]);
+  }, [hasInstructorMap, subjectId, chapterTitle]);
 
   // Xây dựng bản đồ quan hệ cha - con
   const { childrenMap, parentMap, nodeMap, rootNodeId } = useMemo(() => {
@@ -299,9 +349,12 @@ export function LessonMindmapStudio({
 
   // Tính toán layout và danh sách nodes / edges hiển thị
   const { computedNodes, computedEdges, visibleCount, totalCount } = useMemo(() => {
-    // 1. Thu thập danh sách nodes hiển thị
+    // 1. Thu thập danh sách nodes hiển thị từ root (chống cycle bằng visited)
     const visibleIds = new Set<string>();
+    const collectVisited = new Set<string>();
     function collect(id: string) {
+      if (collectVisited.has(id) || !nodeMap.has(id)) return;
+      collectVisited.add(id);
       visibleIds.add(id);
       if (expandedNodeIds.has(id)) {
         const children = childrenMap.get(id) || [];
@@ -310,11 +363,46 @@ export function LessonMindmapStudio({
         }
       }
     }
-    collect(rootNodeId);
+    if (rootNodeId && nodeMap.has(rootNodeId)) {
+      collect(rootNodeId);
+    }
 
-    // 2. Tính toán vị trí theo thuật toán cây phân cấp
+    // 2. Tính toán vị trí theo thuật toán cây phân cấp (chống cycle bằng placeVisited)
     const positions = new Map<string, { x: number; y: number }>();
-    placeSubtree(rootNodeId, 40, 0, childrenMap, expandedNodeIds, nodeMap, positions);
+    const placeVisited = new Set<string>();
+    let nextFreeY = 40;
+    if (rootNodeId && nodeMap.has(rootNodeId)) {
+      const rootRes = placeSubtree(
+        rootNodeId,
+        40,
+        0,
+        childrenMap,
+        expandedNodeIds,
+        nodeMap,
+        positions,
+        placeVisited
+      );
+      nextFreeY = Math.max(nextFreeY, rootRes.bottomY + 20);
+    }
+
+    // Bảo đảm hiển thị cả các node mồ côi (orphan nodes chưa có cạnh nối từ root) để không bị tàng hình
+    const orphanNodes = currentData.nodes.filter((n) => !placeVisited.has(n.id));
+    if (orphanNodes.length > 0) {
+      let orphanX = 40;
+      let orphanY = nextFreeY;
+      orphanNodes.forEach((n, oIdx) => {
+        visibleIds.add(n.id);
+        if (!positions.has(n.id)) {
+          positions.set(n.id, { x: orphanX, y: orphanY });
+          if ((oIdx + 1) % 3 === 0) {
+            orphanX = 40;
+            orphanY += 170;
+          } else {
+            orphanX += 310;
+          }
+        }
+      });
+    }
 
     // 3. Xây dựng danh sách Nodes ReactFlow
     const cNodes: Node[] = [];
@@ -445,32 +533,41 @@ export function LessonMindmapStudio({
 
             {/* Quick Metrics & Dynamic Drilldown Controls */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Toggle Master Mindmap Giảng viên (SQLite) */}
-              {hasInstructorMap && (
+              {/* Chọn nguồn Mindmap rõ ràng: Sơ đồ Giảng viên vs Cây chuẩn */}
+              <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 p-0.5">
+                {hasInstructorMap && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMindmapSource("instructor");
+                      setExpandedNodeIds(
+                        new Set([String(instructorMindmapNodes?.[0]?.id || "root")])
+                      );
+                    }}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+                      mindmapSource === "instructor"
+                        ? "bg-[#141619] text-white dark:bg-white dark:text-[#141619] shadow-xs"
+                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    Sơ đồ Giảng viên
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
-                    const next = mindmapSource === "instructor" ? "standard" : "instructor";
-                    setMindmapSource(next);
-                    const nextFirstRoot =
-                      next === "instructor"
-                        ? String(instructorMindmapNodes?.[0]?.id || "root")
-                        : "root";
-                    setExpandedNodeIds(new Set([nextFirstRoot]));
+                    setMindmapSource("standard");
+                    setExpandedNodeIds(new Set(["root"]));
                   }}
-                  className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                    mindmapSource === "instructor"
-                      ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
-                      : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+                    mindmapSource === "standard" || !hasInstructorMap
+                      ? "bg-[#141619] text-white dark:bg-white dark:text-[#141619] shadow-xs"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
-                  title="Chuyển giữa Cây Tri thức Chuẩn và Master Mindmap Giảng viên"
                 >
-                  <GitBranch size={12} />
-                  <span className="text-[11px]">
-                    {mindmapSource === "instructor" ? "Cây chuẩn" : "Sơ đồ Giảng viên"}
-                  </span>
+                  Cây chuẩn
                 </button>
-              )}
+              </div>
 
               {/* Counter Pill */}
               <span className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">

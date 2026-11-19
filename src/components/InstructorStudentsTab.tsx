@@ -25,25 +25,42 @@ import {
 
 interface InstructorStudentsTabProps {
   onNotify?: (msg: string) => void;
+  activeCourseCode?: string;
 }
 
 const COURSE_LIST = [
   { code: "", name: "Tất cả 16 Môn học" },
-  { code: "CS201", name: "CS201 - Lập trình Hướng đối tượng C++20" },
-  { code: "CS202", name: "CS202 - Cấu trúc Dữ liệu & Giải thuật" },
-  { code: "CS301", name: "CS301 - Lập trình Mạng & Phân tán" },
-  { code: "CS304", name: "CS304 - Hệ điều hành & Linux Kernel" },
-  { code: "CS402", name: "CS402 - Trí tuệ Nhân tạo & Học máy" },
-  { code: "CS405", name: "CS405 - An toàn Thông tin & Mật mã" },
-  { code: "CS499", name: "CS499 - Khóa luận Tốt nghiệp Capstone" },
+  { code: "CS201", name: "CS201 - Lập trình Hướng đối tượng & CTDL" },
+  { code: "CS202", name: "CS202 - Giải thuật Nâng cao & CTDL Phức hợp" },
+  { code: "CS205", name: "CS205 - Kiến trúc Máy tính, HĐH & Mạng" },
+  { code: "CS210", name: "CS210 - Lập trình Web Frontend (React 19 & TS)" },
+  { code: "CS215", name: "CS215 - Trạng thái, WebSockets & Web Vitals" },
+  { code: "CS304", name: "CS304 - Phát triển Web Hiện đại & REST API" },
+  { code: "CS306", name: "CS306 - Ứng dụng Di động (Flutter & Dart)" },
+  { code: "CS308", name: "CS308 - Phân tích Thiết kế Hệ thống & CSDL" },
+  { code: "CS312", name: "CS312 - An toàn Thông tin & OWASP Top 10" },
+  { code: "CS315", name: "CS315 - Hệ thống Phân tán, Kafka & Redis" },
+  { code: "CS401", name: "CS401 - Quản lý Dự án & Agile Scrum" },
+  { code: "CS405", name: "CS405 - DevOps, Docker & CI/CD Pipeline" },
+  { code: "CS410", name: "CS410 - Trí tuệ Nhân tạo & Machine Learning" },
+  { code: "CS415", name: "CS415 - Điện toán Đám mây & AWS Microservices" },
+  { code: "CS420", name: "CS420 - AI-Native Web App, RAG & Agents" },
+  { code: "CS499", name: "CS499 - Đồ án Tốt nghiệp Kỹ sư Enterprise" },
 ];
 
-export default function InstructorStudentsTab({ onNotify }: InstructorStudentsTabProps) {
+export default function InstructorStudentsTab({
+  onNotify,
+  activeCourseCode = "",
+}: InstructorStudentsTabProps) {
   const [students, setStudents] = useState<StudentAnalyticsItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState(activeCourseCode);
   const [filterRisk, setFilterRisk] = useState<"all" | "at_risk" | "top_performer" | "on_track">("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    setSelectedCourse(activeCourseCode);
+  }, [activeCourseCode]);
 
   // Modal nhắc nhở / thưởng XP
   const [activeStudent, setActiveStudent] = useState<StudentAnalyticsItem | null>(null);
@@ -53,7 +70,7 @@ export default function InstructorStudentsTab({ onNotify }: InstructorStudentsTa
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [selectedCourse]);
 
   const loadData = async () => {
@@ -110,6 +127,7 @@ export default function InstructorStudentsTab({ onNotify }: InstructorStudentsTa
           : `✓ Đã gửi lời nhắc học vụ tới học viên ${activeStudent.display_name}!`
       );
       setActiveStudent(null);
+      await loadData();
     } catch (err: any) {
       onNotify?.(err.message || "Gửi lời nhắn thất bại");
     } finally {

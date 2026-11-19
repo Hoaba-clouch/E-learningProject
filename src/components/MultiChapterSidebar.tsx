@@ -391,6 +391,15 @@ export function MultiChapterSidebar({
 
   const [openChapters, setOpenChapters] = useState<Record<string, boolean>>(initialOpenChapters);
 
+  useEffect(() => {
+    const targetChap =
+      (activeChapterId && subject.chapters.find((c) => c.id === activeChapterId)) ||
+      subject.chapters.find((c) => (c.lessons || []).some((l) => l.id === activeLessonId));
+    if (targetChap) {
+      setOpenChapters((prev) => (prev[targetChap.id] ? prev : { ...prev, [targetChap.id]: true }));
+    }
+  }, [activeLessonId, activeChapterId, subject.chapters]);
+
   // 🌊 Lan nước khi bấm chuyển bài học
   const [ripples, setRipples] = useState<
     Array<{ id: number; x: number; y: number; key: string }>

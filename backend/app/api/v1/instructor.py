@@ -169,7 +169,7 @@ def trigger_session_action(
 
 
 @router.get("/instructor/dual-submissions")
-def list_dual_submissions(_: dict[str, Any] | None = Depends(get_optional_current_user)) -> dict[str, Any]:
+def list_dual_submissions(_: dict[str, Any] = Depends(require_instructor)) -> dict[str, Any]:
     """Danh sách biên bản Chấm Kép (Docker CI/CD + Phòng Phản Biện AI 3D)."""
     with db() as conn:
         rows = conn.execute("SELECT * FROM dual_submissions ORDER BY updated_at DESC, id ASC").fetchall()
@@ -185,12 +185,12 @@ def decide_dual_submission(
 ) -> dict[str, Any]:
     """Giảng viên phê duyệt điểm Chấm Kép hoặc yêu cầu bảo vệ lại trên Phòng Phản biện 3D."""
     now = now_utc()
+    instructor_name = user.get("display_name") or user.get("full_name") or "Giảng viên"
     with db() as conn:
         existing = conn.execute("SELECT * FROM dual_submissions WHERE id=?", (sub_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy biên bản chấm kép")
 
-        prev_status = existing["status"]
         if payload.action == "approve":
             if payload.final_score is None:
                 raise HTTPException(status_code=422, detail="Vui lòng cung cấp điểm tổng hợp (0 - 100)")
@@ -208,11 +208,23 @@ def decide_dual_submission(
             "UPDATE dual_submissions SET status=?, final_score=?, instructor_feedback=?, updated_at=? WHERE id=?",
             (new_status, new_score, feedback, now, sub_id),
         )
-        if prev_status in ("pending", "flagged") and new_status == "graded":
-            conn.execute(
-                "UPDATE courses SET pending_dual_reviews = MAX(0, pending_dual_reviews - 1) WHERE id=?",
-                (existing["class_id"],),
-            )
+        # Đồng bộ ngược 2 chiều sang bảng student_chapter_submissions nếu có liên kết
+        ch_status = "graded" if new_status == "graded" else "revision_requested"
+        ch_grade = round(new_score / 10.0, 1) if new_score is not None else None
+        conn.execute(
+            """UPDATE student_chapter_submissions
+               SET status = ?, instructor_grade = ?, instructor_feedback = ?, graded_by = ?, graded_at = ?
+               WHERE dual_submission_id = ?""",
+            (ch_status, ch_grade, feedback, instructor_name, now, sub_id),
+        )
+        cnt_row = conn.execute(
+            "SELECT COUNT(*) AS c FROM dual_submissions WHERE class_id=? AND status IN ('pending', 'flagged')",
+            (existing["class_id"],),
+        ).fetchone()
+        conn.execute(
+            "UPDATE courses SET pending_dual_reviews = ? WHERE id=?",
+            (int(cnt_row["c"] or 0) if cnt_row else 0, existing["class_id"]),
+        )
         updated = conn.execute("SELECT * FROM dual_submissions WHERE id=?", (sub_id,)).fetchone()
 
     record_audit_log(
@@ -228,7 +240,7 @@ def decide_dual_submission(
 
 
 @router.get("/instructor/rubric")
-def get_instructor_rubric(_: dict[str, Any] | None = Depends(get_optional_current_user)) -> dict[str, Any]:
+def get_instructor_rubric(_: dict[str, Any] = Depends(require_instructor)) -> dict[str, Any]:
     """Lấy cấu hình Trọng số Rubric Chấm Kép & Bộ câu hỏi xoáy sâu bắt buộc."""
     with db() as conn:
         row = conn.execute("SELECT * FROM defense_rubric_configs WHERE id='default'").fetchone()
@@ -308,13 +320,51 @@ class StudentRemindIn(BaseModel):
 @router.get("/instructor/students-analytics")
 def get_students_analytics(
     course_code: str | None = None,
-    user: dict[str, Any] | None = Depends(get_optional_current_user),
+    _: dict[str, Any] = Depends(require_instructor),
 ) -> dict[str, Any]:
-    """Báo cáo Thống kê Học viên chuyên sâu 16 môn học (Tiến độ bài học, Quiz, AI Defense, Kanban SP & Rủi ro)."""
+    """Báo cáo Thống kê Học viên theo dữ liệu thật trong MySQL 8.0 (Tiến độ bài học, điểm bài nộp, AI Defense, Kanban SP & Rủi ro)."""
     with db() as conn:
+        selected_course = None
+        if course_code:
+            selected_course = conn.execute(
+                "SELECT id, code, subject_id, chapters_json FROM courses WHERE code = ? OR id = ? OR subject_id = ?",
+                (course_code, course_code, course_code),
+            ).fetchone()
+
+        target_subject_id = selected_course["subject_id"] if selected_course else None
+        target_class_id = selected_course["id"] if selected_course else None
+        assigned_course = selected_course["code"] if selected_course else (course_code or "ALL")
+
+        # Đếm tổng số bài học đã phát hành thực tế trong giáo trình
+        total_course_lessons = 0
+        if selected_course:
+            try:
+                for ch in json.loads(selected_course.get("chapters_json") or "[]"):
+                    if ch.get("status") == "Bản nháp":
+                        continue
+                    total_course_lessons += sum(
+                        1 for ls in ch.get("lessons", []) if ls.get("status") != "Bản nháp"
+                    )
+            except Exception:
+                total_course_lessons = 0
+        else:
+            all_courses = conn.execute("SELECT chapters_json FROM courses").fetchall()
+            for c in all_courses:
+                try:
+                    for ch in json.loads(c.get("chapters_json") or "[]"):
+                        if ch.get("status") == "Bản nháp":
+                            continue
+                        total_course_lessons += sum(
+                            1 for ls in ch.get("lessons", []) if ls.get("status") != "Bản nháp"
+                        )
+                except Exception:
+                    pass
+
         students_query = """
-            SELECT u.id, u.user_code, u.display_name, u.email,
-                   sp.exp_points, sp.current_streak, sp.longest_streak
+            SELECT u.id, u.user_code, u.full_name, u.display_name, u.email,
+                   COALESCE(sp.exp_points, 0) AS exp_points,
+                   COALESCE(sp.current_streak, 0) AS current_streak,
+                   COALESCE(sp.longest_streak, 0) AS longest_streak
             FROM users u
             LEFT JOIN student_profiles sp ON sp.user_id = u.id
             WHERE u.role = 'student'
@@ -326,46 +376,100 @@ def get_students_analytics(
         for st in st_rows:
             uid_val = st["id"]
             code_val = st["user_code"] or ""
-            prog_row = conn.execute(
-                """SELECT COUNT(DISTINCT ls.lesson_id) as lessons_done,
-                          AVG(CASE WHEN sub.total_count > 0 THEN (sub.passed_count * 10.0 / sub.total_count) ELSE 8.0 END) as avg_quiz,
-                          COUNT(sub.id) as total_submissions
-                   FROM learning_sessions ls
-                   LEFT JOIN submissions sub ON sub.learning_session_id = ls.id
-                   WHERE ls.user_id = ?""",
-                (uid_val,),
-            ).fetchone()
+            display_name = st["display_name"] or st["full_name"] or "Học viên"
 
-            lessons_done = prog_row["lessons_done"] or 0
-            avg_quiz = round(float(prog_row["avg_quiz"] or 8.2), 1)
-            total_subs = prog_row["total_submissions"] or 0
+            # 1. Tiến độ bài học thực tế từ student_lesson_progress
+            if target_subject_id:
+                prog_row = conn.execute(
+                    """SELECT COUNT(DISTINCT lesson_id) AS lessons_done,
+                              AVG(CASE WHEN quiz_total > 0 THEN (quiz_score * 10.0 / quiz_total) ELSE NULL END) AS avg_quiz_pct
+                       FROM student_lesson_progress
+                       WHERE user_id = ? AND subject_id = ?""",
+                    (uid_val, target_subject_id),
+                ).fetchone()
+            else:
+                prog_row = conn.execute(
+                    """SELECT COUNT(*) AS lessons_done,
+                              AVG(CASE WHEN quiz_total > 0 THEN (quiz_score * 10.0 / quiz_total) ELSE NULL END) AS avg_quiz_pct
+                       FROM student_lesson_progress
+                       WHERE user_id = ?""",
+                    (uid_val,),
+                ).fetchone()
 
-            def_row = conn.execute(
-                """SELECT AVG(defense_score) as avg_def, COUNT(*) as def_count
-                   FROM dual_submissions
-                   WHERE student_name LIKE ? OR student_code = ?""",
-                (f"%{st['display_name']}%", st["user_code"]),
-            ).fetchone()
-            avg_def = round(float(def_row["avg_def"] or 85.0), 1) if def_row and def_row["avg_def"] else 82.5
+            lessons_done = int(prog_row["lessons_done"] or 0) if prog_row else 0
+            pct = (
+                min(100, round((lessons_done / total_course_lessons) * 100))
+                if total_course_lessons > 0
+                else 0
+            )
 
+            # 2. Điểm bài tập chương thực tế từ student_chapter_submissions
+            sub_sql = """
+                SELECT COUNT(*) AS total_subs,
+                       AVG(COALESCE(instructor_grade, score)) AS avg_sub_score,
+                       SUM(CASE WHEN status IN ('flagged', 'revision_requested') THEN 1 ELSE 0 END) AS flagged_subs
+                FROM student_chapter_submissions
+                WHERE user_id = ?
+            """
+            sub_params: list[Any] = [uid_val]
+            if target_subject_id:
+                sub_sql += " AND subject_id = ?"
+                sub_params.append(target_subject_id)
+            sub_row = conn.execute(sub_sql, tuple(sub_params)).fetchone()
+
+            total_subs = int(sub_row["total_subs"] or 0) if sub_row else 0
+            flagged_subs = int(sub_row["flagged_subs"] or 0) if sub_row else 0
+            avg_sub_score = sub_row["avg_sub_score"] if sub_row else None
+            if avg_sub_score is not None:
+                avg_quiz = round(float(avg_sub_score), 1)
+            elif prog_row and prog_row["avg_quiz_pct"] is not None:
+                avg_quiz = round(float(prog_row["avg_quiz_pct"]), 1)
+            else:
+                avg_quiz = 0.0
+
+            # 3. Điểm Phản biện AI 3D thật từ dual_submissions (chỉ tính các phiên đã phản biện)
+            def_sql = """
+                SELECT AVG(defense_score) AS avg_def,
+                       SUM(CASE WHEN status = 'flagged' THEN 1 ELSE 0 END) AS flagged_dual
+                FROM dual_submissions
+                WHERE (user_id = ? OR student_code = ?)
+                  AND defense_status != 'pending'
+                  AND defense_score > 0
+            """
+            def_params: list[Any] = [uid_val, code_val]
+            if target_class_id:
+                def_sql += " AND class_id = ?"
+                def_params.append(target_class_id)
+            def_row = conn.execute(def_sql, tuple(def_params)).fetchone()
+            avg_def = (
+                round(float(def_row["avg_def"]), 1)
+                if def_row and def_row["avg_def"] is not None
+                else 0.0
+            )
+            flagged_dual = int(def_row["flagged_dual"] or 0) if def_row else 0
+
+            # 4. Kanban Story Points thật
             kb_row = conn.execute(
-                """SELECT COUNT(*) as tasks_done, COALESCE(SUM(points), 0) as sp_done
+                """SELECT COUNT(*) AS tasks_done, COALESCE(SUM(points), 0) AS sp_done
                    FROM engineering_tasks
                    WHERE assignee_user_id = ? AND column_id IN ('done', 'verified')""",
                 (uid_val,),
             ).fetchone()
-            tasks_done = kb_row["tasks_done"] or 0
-            sp_done = kb_row["sp_done"] or 0
+            tasks_done = int(kb_row["tasks_done"] or 0) if kb_row else 0
+            sp_done = int(kb_row["sp_done"] or 0) if kb_row else 0
+            exp_points = int(st["exp_points"] or 0)
 
-            assigned_course = course_code or "CS201"
-            total_course_lessons = 18
-            pct = min(100, int((lessons_done / total_course_lessons) * 100)) if lessons_done > 0 else 68
-
-            # Phân loại rủi ro học vụ thực tế theo hồ sơ và mã sinh viên
-            if code_val in ("2210866", "2210851"):
+            # 5. Đánh giá rủi ro động dựa hoàn toàn trên dữ liệu thật (không hardcode MSSV)
+            if flagged_subs > 0 or flagged_dual > 0:
                 risk_status = "at_risk"
-                risk_label = "Cần hỗ trợ"
-            elif code_val in ("2210801", "2210842") or (st["exp_points"] or 0) >= 2000:
+                risk_label = "Cần kiểm tra bài nộp"
+            elif total_subs > 0 and avg_quiz < 6.5:
+                risk_status = "at_risk"
+                risk_label = "Điểm thực hành < 6.5"
+            elif pct == 0 and lessons_done == 0:
+                risk_status = "at_risk"
+                risk_label = "Chưa bắt đầu học"
+            elif pct >= 70 and (avg_quiz >= 8.0 or exp_points >= 600):
                 risk_status = "top_performer"
                 risk_label = "Xuất sắc"
             else:
@@ -374,8 +478,8 @@ def get_students_analytics(
 
             results.append({
                 "student_id": uid_val,
-                "student_code": st["user_code"] or "SV-2026",
-                "display_name": st["display_name"],
+                "student_code": code_val or "SV-2026",
+                "display_name": display_name,
                 "email": st["email"],
                 "course_code": assigned_course,
                 "progress_pct": pct,
@@ -386,8 +490,8 @@ def get_students_analytics(
                 "defense_score": avg_def,
                 "kanban_tasks_done": tasks_done,
                 "kanban_sp": sp_done,
-                "exp_points": st["exp_points"] or 450,
-                "current_streak": st["current_streak"] or 5,
+                "exp_points": exp_points,
+                "current_streak": int(st["current_streak"] or 0),
                 "risk_status": risk_status,
                 "risk_label": risk_label,
             })
@@ -399,19 +503,30 @@ def get_students_analytics(
 def remind_student(
     student_id: str,
     payload: StudentRemindIn,
-    user: dict[str, Any] | None = Depends(get_optional_current_user),
+    user: dict[str, Any] = Depends(require_instructor),
 ) -> dict[str, Any]:
-    instructor_name = (user.get("display_name") if user else None) or (user.get("name") if user else None) or "Cô Trần Thị B (Giảng viên)"
+    instructor_name = user.get("display_name") or user.get("full_name") or "Giảng viên"
     timestamp = now_utc()
     notif_id = f"notif-{uid()}"
 
     with db() as conn:
+        student = conn.execute("SELECT id FROM users WHERE id = ?", (student_id,)).fetchone()
+        if not student:
+            raise HTTPException(status_code=404, detail="Không tìm thấy học viên")
         if payload.action_type == "bonus_xp" and payload.bonus_xp > 0:
-            conn.execute(
-                "UPDATE student_profiles SET exp_points = exp_points + ? WHERE user_id = ?",
-                (payload.bonus_xp, student_id),
-            )
-            title = f"Thưởng +{payload.bonus_xp} XP từ {instructor_name}"
+            bonus = min(payload.bonus_xp, 200)
+            prof = conn.execute("SELECT id FROM student_profiles WHERE user_id = ?", (student_id,)).fetchone()
+            if not prof:
+                conn.execute(
+                    "INSERT INTO student_profiles(id, user_id, current_streak, longest_streak, exp_points) VALUES(?, ?, 0, 0, ?)",
+                    (uid(), student_id, bonus),
+                )
+            else:
+                conn.execute(
+                    "UPDATE student_profiles SET exp_points = exp_points + ? WHERE user_id = ?",
+                    (bonus, student_id),
+                )
+            title = f"Thưởng +{bonus} XP từ {instructor_name}"
         else:
             title = f"Lời nhắc học vụ từ {instructor_name}"
 
@@ -437,7 +552,7 @@ def list_chapter_submissions(
     subject_id: str | None = Query(default=None),
     chapter_number: int | None = Query(default=None),
     status_filter: str = Query(default="all"),
-    user: dict[str, Any] | None = Depends(get_optional_current_user),
+    _: dict[str, Any] = Depends(require_instructor),
 ) -> dict[str, Any]:
     """Danh sách bài tập thực hành theo từng chương để Giảng viên thẩm định & chấm điểm."""
     with db() as conn:
@@ -554,11 +669,11 @@ def list_chapter_submissions(
 def grade_chapter_submission(
     sub_id: str,
     payload: ChapterSubmissionGradeIn,
-    user: dict[str, Any] | None = Depends(get_optional_current_user),
+    user: dict[str, Any] = Depends(require_instructor),
 ) -> dict[str, Any]:
     """Giảng viên phê duyệt điểm AI, chấm lại ghi đè điểm hoặc yêu cầu học viên nộp lại bài tập chương."""
     now = now_utc()
-    instructor_name = (user.get("display_name") if user else None) or (user.get("full_name") if user else None) or "Cô Trần Thị B (Giảng viên)"
+    instructor_name = user.get("display_name") or user.get("full_name") or "Giảng viên"
 
     with db() as conn:
         existing = conn.execute("SELECT * FROM student_chapter_submissions WHERE id = ?", (sub_id,)).fetchone()
@@ -578,9 +693,11 @@ def grade_chapter_submission(
             feedback = payload.instructor_feedback.strip() or f"Giảng viên chấm trực tiếp: {final_grade}/10."
             audit_msg = f"Ghi đè điểm bài tập chương {final_grade}/10"
         elif payload.action == "request_revision":
+            if not payload.instructor_feedback.strip():
+                raise HTTPException(status_code=422, detail="Vui lòng nhập nhận xét / lý do yêu cầu nộp lại.")
             new_status = "revision_requested"
             final_grade = existing["instructor_grade"]
-            feedback = payload.instructor_feedback.strip() or "Yêu cầu sửa lại mã nguồn và nộp lại theo hướng dẫn của Giảng viên."
+            feedback = payload.instructor_feedback.strip()
             audit_msg = "Yêu cầu sửa & nộp lại bài tập chương"
         else:
             raise HTTPException(status_code=400, detail="Hành động không hợp lệ.")
@@ -592,13 +709,27 @@ def grade_chapter_submission(
             (new_status, final_grade, feedback, instructor_name, now, sub_id),
         )
 
-        # Nếu có liên kết dual_submission_id thì đồng bộ trạng thái luôn
+        # Đồng bộ 2 chiều sang bảng dual_submissions và pending_dual_reviews của lớp
         if existing["dual_submission_id"]:
             dual_stat = "graded" if new_status == "graded" else "pending"
+            dual_score = int(round(final_grade * 10)) if final_grade is not None else None
             conn.execute(
                 "UPDATE dual_submissions SET status = ?, final_score = ?, instructor_feedback = ?, updated_at = ? WHERE id = ?",
-                (dual_stat, int(final_grade * 10) if final_grade else None, feedback, now, existing["dual_submission_id"]),
+                (dual_stat, dual_score, feedback, now, existing["dual_submission_id"]),
             )
+            dual_row = conn.execute(
+                "SELECT class_id FROM dual_submissions WHERE id = ?",
+                (existing["dual_submission_id"],),
+            ).fetchone()
+            if dual_row and dual_row.get("class_id"):
+                cnt_row = conn.execute(
+                    "SELECT COUNT(*) AS c FROM dual_submissions WHERE class_id=? AND status IN ('pending', 'flagged')",
+                    (dual_row["class_id"],),
+                ).fetchone()
+                conn.execute(
+                    "UPDATE courses SET pending_dual_reviews = ? WHERE id = ?",
+                    (int(cnt_row["c"] or 0) if cnt_row else 0, dual_row["class_id"]),
+                )
 
         # Gửi thông báo đến học viên
         notif_id = f"notif-grade-{uid()}"

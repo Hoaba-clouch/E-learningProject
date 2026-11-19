@@ -82,7 +82,15 @@ import {
 
 
 
+  ArrowDown,
+
+
+
   ArrowRight,
+
+
+
+  ArrowUp,
 
 
 
@@ -246,7 +254,7 @@ import {
 
 
 
-import type { Screen } from "../App";
+import type { Screen, WorkspaceLaunchTarget } from "../App";
 
 
 
@@ -255,10 +263,6 @@ import InstructorStudentsTab from "../components/InstructorStudentsTab";
 
 
 import {
-
-
-
-  FALLBACK_INSTRUCTOR_SESSIONS,
 
 
 
@@ -282,6 +286,14 @@ import {
 
 
 
+  deleteInstructorChapter,
+
+
+
+  deleteInstructorLesson,
+
+
+
   deleteInstructorTestCase,
 
 
@@ -302,7 +314,7 @@ import {
 
 
 
-  fetchInstructorSessions,
+  fetchStudentsAnalyticsApi,
 
 
 
@@ -310,7 +322,11 @@ import {
 
 
 
-  postInstructorSessionAction,
+  remindStudentApi,
+
+
+
+  reorderInstructorLessons,
 
 
 
@@ -326,7 +342,15 @@ import {
 
 
 
-  type InstructorSessionEvidence,
+  updateInstructorAssignment,
+
+
+
+  updateInstructorTestCase,
+
+
+
+  type StudentAnalyticsItem,
 
 
 
@@ -403,6 +427,10 @@ import {
 
 
 
+  type LessonContent,
+
+
+
   type MasterMindmapNodeData,
 
 
@@ -443,14 +471,83 @@ import {
 
 
 
-export type InstructorTab = "overview" | "syllabus" | "grading" | "students" | "mindmap" | "evidence";
+export type InstructorTab = "overview" | "syllabus" | "grading" | "students" | "mindmap";
 
 export function extractYoutubeId(url?: string): string {
   if (!url) return "M6FwepHC6vM";
   const clean = url.trim();
   if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
-  const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
   return match ? match[1] : "M6FwepHC6vM";
+}
+
+export function isValidYoutubeInput(url?: string): boolean {
+  if (!url || !url.trim()) return true;
+  const clean = url.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return true;
+  return /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([\w-]{11})/.test(clean);
+}
+
+function getSubjectAigcPreset(subjectId: string, courseCode: string, lessonTitle: string) {
+  const sid = (subjectId || "").toLowerCase();
+  if (sid === "frontend" || sid === "realtime" || sid === "web") {
+    return {
+      lang: "typescript",
+      code: `// Minh họa ${courseCode}: ${lessonTitle}\nexport interface ModuleState {\n  status: "ready" | "active";\n  items: string[];\n}\n\nexport function executeModule(state: ModuleState): number {\n  return state.items.filter(Boolean).length;\n}`,
+      caption: `Mã nguồn TypeScript (${courseCode}) minh họa kiến trúc cho ${lessonTitle}`,
+      leadNote: "tối ưu render cycle, type-safety và kiến trúc API/Frontend",
+      badDesc: "Mutate trực tiếp state/DOM ngoài luồng reactive hoặc bỏ qua xử lý lỗi bất đồng bộ.",
+      solution: "Tách biệt state thuần, typed DTO rõ ràng và cleanup effect/subscription đúng vòng đời.",
+    };
+  }
+  if (sid === "mobile") {
+    return {
+      lang: "dart",
+      code: `// Minh họa ${courseCode} (Flutter & Dart): ${lessonTitle}\nimport 'package:flutter/widgets.dart';\n\nclass CoreModuleState {\n  final int completedSteps;\n  const CoreModuleState(this.completedSteps);\n}`,
+      caption: `Mã nguồn Dart/Flutter (${courseCode}) minh họa cho ${lessonTitle}`,
+      leadNote: "quản lý Widget tree, state BLoC và hiệu năng khung hình trên di động",
+      badDesc: "Gọi tác vụ nặng ngay trong build() hoặc rò rỉ StreamController không dispose.",
+      solution: "Đặt logic nghiệp vụ trong Cubit/BLoC tách biệt và giải phóng controller tại dispose().",
+    };
+  }
+  if (sid === "system-design") {
+    return {
+      lang: "sql",
+      code: `-- Minh họa ${courseCode}: ${lessonTitle}\nSELECT u.id, u.full_name, COUNT(s.id) AS submissions\nFROM users u\nLEFT JOIN student_chapter_submissions s ON s.user_id = u.id\nGROUP BY u.id, u.full_name;`,
+      caption: `Truy vấn & Thiết kế Hệ thống (${courseCode}) minh họa cho ${lessonTitle}`,
+      leadNote: "chuẩn hóa dữ liệu, đánh chỉ mục (indexing) và kiến trúc chịu tải cao",
+      badDesc: "Thiết kế bảng phi chuẩn gây dị thường cập nhật và truy vấn N+1 không có index.",
+      solution: "Chuẩn hóa 3NF hợp lý, tạo composite index theo access pattern và phân tách read/write.",
+    };
+  }
+  if (sid === "ai-ml" || sid === "ai-agent" || sid === "security") {
+    return {
+      lang: "python",
+      code: `# Minh họa ${courseCode}: ${lessonTitle}\nfrom dataclasses import dataclass\n\n@dataclass\nclass PipelineResult:\n    score: float\n    verified: bool\n\ndef evaluate_step(confidence: float) -> PipelineResult:\n    return PipelineResult(score=confidence, verified=confidence >= 0.8)`,
+      caption: `Mã nguồn Python (${courseCode}) minh họa chuẩn cho ${lessonTitle}`,
+      leadNote: "kiểm soát luồng dữ liệu, độ chính xác mô hình và an toàn thực thi",
+      badDesc: "Tin cậy trực tiếp đầu vào chưa kiểm chứng (raw input) hoặc đánh giá mô hình không tách validation.",
+      solution: "Áp dụng schema validation nghiêm ngặt, kiểm thử đầu vào/ra và theo dõi chỉ số định lượng.",
+    };
+  }
+  if (sid === "devops" || sid === "cloud" || sid === "distributed" || sid === "scrum" || sid === "capstone") {
+    return {
+      lang: "yaml",
+      code: `# Cấu hình ${courseCode}: ${lessonTitle}\nservice: codemind-sandbox\nchecks:\n  - lint-and-typecheck\n  - automated-tests\nretry_policy:\n  max_attempts: 3`,
+      caption: `Đặc tả kiến trúc & pipeline (${courseCode}) cho ${lessonTitle}`,
+      leadNote: "tính sẵn sàng cao, tự động hóa CI/CD và phối hợp quy trình kỹ nghệ",
+      badDesc: "Triển khai thủ công thiếu rollback, không kiểm tra healthcheck hay giới hạn tài nguyên.",
+      solution: "Khai báo hạ tầng dưới dạng mã (IaC), tự động kiểm thử trước deploy và giám sát telemetry.",
+    };
+  }
+  return {
+    lang: "cpp",
+    code: `// Minh họa ${courseCode}: ${lessonTitle}\n#include <iostream>\n#include <memory>\n\nclass CoreEngine {\npublic:\n    virtual void execute() {\n        std::cout << "[Engine] Executing: ${lessonTitle}\\n";\n    }\n    virtual ~CoreEngine() = default;\n};\n\nint main() {\n    auto engine = std::make_unique<CoreEngine>();\n    engine->execute();\n    return 0;\n}`,
+    caption: `Mã nguồn C++ (${courseCode}) minh họa kiến trúc chuẩn cho ${lessonTitle}`,
+    leadNote: "cấu trúc bộ nhớ, kiểm soát con trỏ (RAII) và tối ưu hóa hiệu năng",
+    badDesc: "Khởi tạo tài nguyên thủ công bằng con trỏ thô (raw pointer) hoặc dùng sai phạm vi kế thừa.",
+    solution: "Đóng gói vòng đời tài nguyên vào smart pointer (unique_ptr/shared_ptr) theo chuẩn RAII.",
+  };
 }
 
 
@@ -464,6 +561,10 @@ interface InstructorPanelProps {
 
 
   onNavigate?: (screen: Screen) => void;
+
+
+
+  onOpenWorkspace?: (target: Omit<WorkspaceLaunchTarget, "nonce">) => void;
 
 
 
@@ -500,14 +601,6 @@ function sectionToTab(section?: Screen): InstructorTab {
 
 
       return "mindmap";
-
-
-
-    case "instructor-evidence":
-
-
-
-      return "evidence";
 
 
 
@@ -568,14 +661,6 @@ function tabToSection(tab: InstructorTab): Screen {
 
 
       return "instructor-mindmap";
-
-
-
-    case "evidence":
-
-
-
-      return "instructor-evidence";
 
 
 
@@ -1107,6 +1192,10 @@ export default function InstructorPanel({
 
 
 
+  onOpenWorkspace,
+
+
+
 }: InstructorPanelProps) {
 
 
@@ -1168,43 +1257,15 @@ export default function InstructorPanel({
 
 
 
-  // Live Evidence State (pre-populated for zero-flicker badge & instant view)
+  // Real Student Analytics for Overview KPIs & Struggling Students (synced from MySQL)
 
 
 
-  const [evidenceSessions, setEvidenceSessions] = useState<InstructorSessionEvidence[]>(
+  const [studentsAnalytics, setStudentsAnalytics] = useState<StudentAnalyticsItem[]>([]);
 
 
 
-    FALLBACK_INSTRUCTOR_SESSIONS
-
-
-
-  );
-
-
-
-  const [evidenceLoading, setEvidenceLoading] = useState(false);
-
-
-
-  const [evidenceFilter, setEvidenceFilter] = useState<"all" | "self" | "hint3" | "stuck">("all");
-
-
-
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-
-
-
-    FALLBACK_INSTRUCTOR_SESSIONS[0]?.session_id || null
-
-
-
-  );
-
-
-
-  const [evidenceActions, setEvidenceActions] = useState<Record<string, string>>({});
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
 
 
 
@@ -1217,6 +1278,14 @@ export default function InstructorPanel({
 
 
   const [newChapterTitle, setNewChapterTitle] = useState("");
+
+
+
+  const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
+
+
+
+  const [renameChapterInput, setRenameChapterInput] = useState("");
 
 
 
@@ -1241,6 +1310,18 @@ export default function InstructorPanel({
 
 
   const [drawerTab, setDrawerTab] = useState<"upload" | "video" | "reading" | "quiz" | "mindmap">("video");
+
+  const [editTitle, setEditTitle] = useState("");
+
+  const [editDuration, setEditDuration] = useState("15 phút");
+
+  const [editXp, setEditXp] = useState<number>(150);
+
+  const [editDocuments, setEditDocuments] = useState<{ name: string; size: string; uploadedAt: string }[]>([]);
+
+  const [aigcTriggeredInModal, setAigcTriggeredInModal] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [editReading, setEditReading] = useState("");
 
@@ -1279,7 +1360,7 @@ export default function InstructorPanel({
 
 
 
-  // Test Case Configurator Modal State
+  // Test Case & Assignment Configurator Modal State
 
 
 
@@ -1292,6 +1373,42 @@ export default function InstructorPanel({
 
 
   const [tcAssignmentId, setTcAssignmentId] = useState<string | null>(null);
+
+
+
+  const [editAssignTitle, setEditAssignTitle] = useState("");
+
+
+
+  const [editAssignDesc, setEditAssignDesc] = useState("");
+
+
+
+  const [editAssignPoints, setEditAssignPoints] = useState<number>(100);
+
+
+
+  const [editAssignDockerImage, setEditAssignDockerImage] = useState("codemind/cpp20-sandbox:latest");
+
+
+
+  const [editingTcId, setEditingTcId] = useState<string | null>(null);
+
+
+
+  const [editTcTitle, setEditTcTitle] = useState("");
+
+
+
+  const [editTcInput, setEditTcInput] = useState("");
+
+
+
+  const [editTcOutput, setEditTcOutput] = useState("");
+
+
+
+  const [editTcEdgeCase, setEditTcEdgeCase] = useState(false);
 
 
 
@@ -1323,6 +1440,10 @@ export default function InstructorPanel({
 
 
 
+  const [previewQuizAnswers, setPreviewQuizAnswers] = useState<Record<string, number>>({});
+
+
+
   // Master Mindmap State
 
 
@@ -1336,6 +1457,10 @@ export default function InstructorPanel({
 
 
   );
+
+
+
+  const [isMindmapDirty, setIsMindmapDirty] = useState(false);
 
 
 
@@ -1545,125 +1670,80 @@ export default function InstructorPanel({
 
     const ch = (activeClass?.chapters || []).find((item) => item.id === selectedMindmapChapterId);
 
-
-
     setNodes(ch?.mindmapNodes || []);
-
-
 
     setEdges(ch?.mindmapEdges || []);
 
-
-
     setSelectedNodeId(null);
 
-
+    setIsMindmapDirty(false);
 
   }, [activeClass, selectedMindmapChapterId, setNodes, setEdges]);
 
+  const broadcastCoursesUpdated = useCallback((courseId?: string) => {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("codemind-courses-updated", { detail: { courseId: courseId || "" } })
+      );
+      localStorage.setItem("codemind-courses-sync-ts", String(Date.now()));
+    } catch {
+      /* ignore storage errors */
+    }
+  }, []);
 
+  // Hydrate Courses, Dual Submissions, Rubric & Real Student Analytics from MySQL / FastAPI
 
-  // Hydrate Courses, Dual Submissions, Rubric & Live Evidence Sessions from FastAPI
+  const loadInstructorWorkspace = useCallback(async () => {
 
-
-
-  const loadEvidence = useCallback(async () => {
-
-
-
-    setEvidenceLoading(true);
-
-
+    setWorkspaceLoading(true);
 
     await ensureRoleSession("instructor");
 
-
-
-    const [sessData, apiCourses, apiSubs, apiRubric] = await Promise.all([
-
-
-
-      fetchInstructorSessions(),
-
-
+    const [apiCourses, apiSubs, apiRubric, apiStudents] = await Promise.all([
 
       fetchInstructorCourses(),
 
-
-
       fetchDualSubmissions(),
-
-
 
       fetchDefenseRubric(),
 
-
+      fetchStudentsAnalyticsApi(),
 
     ]);
 
-
-
     if (apiCourses && apiCourses.length > 0) {
-
-
 
       setClasses(apiCourses);
 
-
-
     }
-
-
 
     if (apiSubs && apiSubs.length > 0) {
 
-
-
       setSubmissions(apiSubs);
 
-
-
     }
-
-
 
     if (apiRubric) {
 
-
-
       setRubric(apiRubric);
-
-
 
     }
 
+    if (Array.isArray(apiStudents)) {
 
+      setStudentsAnalytics(apiStudents);
 
-    setEvidenceSessions(sessData);
+    }
 
-
-
-    setSelectedSessionId((prev) => prev || sessData[0]?.session_id || null);
-
-
-
-    setEvidenceLoading(false);
-
-
+    setWorkspaceLoading(false);
 
   }, []);
 
-
-
   useEffect(() => {
 
+    void loadInstructorWorkspace();
 
-
-    void loadEvidence();
-
-
-
-  }, [loadEvidence]);
+  }, [loadInstructorWorkspace]);
 
 
 
@@ -1917,15 +1997,13 @@ export default function InstructorPanel({
 
     const studentCount =
 
+      studentsAnalytics.length > 0 && overviewScope === "all"
 
+        ? studentsAnalytics.length
 
-      overviewScope === "all"
-
-
+        : overviewScope === "all"
 
         ? classes.reduce((sum, c) => sum + c.studentCount, 0)
-
-
 
         : activeClass.studentCount;
 
@@ -1939,7 +2017,7 @@ export default function InstructorPanel({
 
 
 
-        ? Math.round(classes.reduce((sum, c) => sum + c.avgProgressPct, 0) / classes.length)
+        ? Math.round(classes.reduce((sum, c) => sum + c.avgProgressPct, 0) / Math.max(1, classes.length))
 
 
 
@@ -1947,19 +2025,11 @@ export default function InstructorPanel({
 
 
 
-    const totalSessions = evidenceSessions.length || 6;
+    const topPerformersCount = studentsAnalytics.filter((s) => s.risk_status === "top_performer").length;
 
+    const onTrackCount = studentsAnalytics.filter((s) => s.risk_status === "on_track").length;
 
-
-    const selfSolved = evidenceSessions.filter((e) => e.max_hint_level <= 1).length;
-
-
-
-    const hint3Count = evidenceSessions.filter((e) => e.max_hint_level === 3).length;
-
-
-
-    const normalProgress = Math.max(0, totalSessions - selfSolved - hint3Count);
+    const atRiskCount = studentsAnalytics.filter((s) => s.risk_status === "at_risk").length;
 
 
 
@@ -2011,15 +2081,15 @@ export default function InstructorPanel({
 
 
 
-      selfSolved,
+      topPerformersCount,
 
 
 
-      normalProgress,
+      onTrackCount,
 
 
 
-      hint3Count,
+      atRiskCount,
 
 
 
@@ -2039,7 +2109,7 @@ export default function InstructorPanel({
 
 
 
-  }, [overviewScope, submissions, selectedClassId, rubric, classes, activeClass, evidenceSessions]);
+  }, [overviewScope, submissions, selectedClassId, rubric, classes, activeClass, studentsAnalytics]);
 
 
 
@@ -2253,219 +2323,156 @@ export default function InstructorPanel({
 
   const toggleChapterStatus = async (chapterId: string) => {
 
-
-
     const ch = (activeClass?.chapters || []).find((item) => item.id === chapterId);
-
-
 
     const nextStatus = ch?.status === "Đã phát hành" ? "Bản nháp" : "Đã phát hành";
 
+    const res = await patchInstructorChapter(selectedClassId, chapterId, { status: nextStatus });
 
+    if (!res) {
+      notify("❌ Không thể cập nhật trạng thái chương trên máy chủ.");
+      return;
+    }
 
     setClasses((prev) =>
 
-
-
       prev.map((c) =>
-
-
 
         c.id !== selectedClassId
 
-
-
           ? c
-
-
 
           : {
 
-
-
               ...c,
-
-
 
               chapters: c.chapters.map((item) =>
 
-
-
                 item.id === chapterId ? { ...item, status: nextStatus } : item
-
-
 
               ),
 
-
-
             }
-
-
 
       )
 
-
-
     );
 
+    broadcastCoursesUpdated(selectedClassId);
+
+    notify(
+      nextStatus === "Đã phát hành"
+        ? "Đã phát hành chương học tới Không gian Học viên 1-1."
+        : "Đã chuyển chương học sang Bản nháp (ẩn với học viên)."
+    );
+
+  };
 
 
-    await patchInstructorChapter(selectedClassId, chapterId, { status: nextStatus });
+
+  const handleRenameChapter = async (chapterId: string) => {
+    const titleTrim = renameChapterInput.trim();
+    if (!titleTrim) {
+      notify("⚠️ Tên chương không được để trống.");
+      return;
+    }
+    const res = await patchInstructorChapter(selectedClassId, chapterId, { title: titleTrim });
+    if (!res) {
+      notify("❌ Không thể đổi tên chương trên máy chủ.");
+      return;
+    }
+    setClasses((prev) =>
+      prev.map((c) =>
+        c.id !== selectedClassId
+          ? c
+          : {
+              ...c,
+              chapters: c.chapters.map((item) =>
+                item.id === chapterId ? { ...item, title: titleTrim } : item
+              ),
+            }
+      )
+    );
+    setRenamingChapterId(null);
+    setRenameChapterInput("");
+    broadcastCoursesUpdated(selectedClassId);
+    notify(`Đã đổi tên chương thành "${titleTrim}".`);
+  };
 
 
 
-    notify("Đã cập nhật trạng thái phát hành chương học.");
-
-
-
+  const handleDeleteChapter = async (chapterId: string, chapterTitle: string) => {
+    if (!window.confirm(`Xóa "${chapterTitle}" và toàn bộ bài học/test case bên trong?`)) return;
+    const res = await deleteInstructorChapter(selectedClassId, chapterId);
+    if (!res) {
+      notify("❌ Không thể xóa chương trên máy chủ.");
+      return;
+    }
+    setClasses((prev) =>
+      prev.map((c) =>
+        c.id !== selectedClassId
+          ? c
+          : {
+              ...c,
+              chapters: c.chapters.filter((ch) => ch.id !== chapterId),
+            }
+      )
+    );
+    if (selectedMindmapChapterId === chapterId) {
+      const remaining = (activeClass?.chapters || []).filter((ch) => ch.id !== chapterId);
+      setSelectedMindmapChapterId(remaining[0]?.id || "");
+    }
+    broadcastCoursesUpdated(selectedClassId);
+    notify(`Đã xóa chương "${chapterTitle}".`);
   };
 
 
 
   const handleAddChapter = async () => {
 
-
-
-    if (!newChapterTitle.trim()) return;
-
-
-
     const titleTrim = newChapterTitle.trim();
 
-
+    if (!titleTrim) {
+      notify("⚠️ Vui lòng nhập tên chương học mới.");
+      return;
+    }
 
     const res = await createInstructorChapter(selectedClassId, titleTrim);
 
+    if (!res?.chapter) {
+      notify("❌ Không thể tạo chương học mới trên máy chủ MySQL.");
+      return;
+    }
 
-
-    const newChapterObj = res?.chapter || {
-
-
-
-      id: `ch-${Date.now()}`,
-
-
-
-      title: titleTrim,
-
-
-
-      status: "Bản nháp" as const,
-
-
-
-      mindmapGenerated: false,
-
-
-
-      lessons: [],
-
-
-
-      assignments: [
-
-
-
-        {
-
-
-
-          id: `lab-${Date.now()}`,
-
-
-
-          type: "code_lab" as const,
-
-
-
-          title: `Bài tập thực hành Docker: ${titleTrim}`,
-
-
-
-          description: "Sinh viên nộp repo GitHub để chấm tự động qua Docker Sandbox & Phản biện AI.",
-
-
-
-          isRequired: true,
-
-
-
-          points: 100,
-
-
-
-          dockerImage: "codemind/cpp20-sandbox:latest",
-
-
-
-          testCases: [],
-
-
-
-        },
-
-
-
-      ],
-
-
-
-    };
-
-
+    const newChapterObj = res.chapter;
 
     setClasses((prev) =>
 
-
-
       prev.map((c) =>
-
-
 
         c.id !== selectedClassId
 
-
-
           ? c
-
-
 
           : {
 
-
-
               ...c,
-
-
 
               chapters: [...c.chapters, newChapterObj],
 
-
-
             }
-
-
 
       )
 
-
-
     );
-
-
 
     setNewChapterTitle("");
 
-
-
     setShowAddChapter(false);
 
+    broadcastCoursesUpdated(selectedClassId);
 
-
-    notify("Đã thêm chương học mới vào học phần.");
-
-
+    notify("Đã thêm chương học mới vào MySQL (Bản nháp).");
 
   };
 
@@ -2473,116 +2480,118 @@ export default function InstructorPanel({
 
   const handleAddLesson = async (chapterId: string) => {
 
-
-
-    if (!newLessonTitle.trim()) return;
-
-
-
     const titleTrim = newLessonTitle.trim();
 
-
+    if (!titleTrim) {
+      notify("⚠️ Vui lòng nhập tiêu đề bài học mới.");
+      return;
+    }
 
     const res = await createInstructorLesson(selectedClassId, chapterId, titleTrim);
 
+    if (!res?.lesson) {
+      notify("❌ Không thể tạo bài học mới trên máy chủ.");
+      return;
+    }
 
-
-    const newLesson: Lesson = res?.lesson || {
-
-
-
-      id: `lesson-${Date.now()}`,
-
-
-
-      title: titleTrim,
-
-
-
-      duration: "12 phút",
-
-
-
-      status: "Bản nháp",
-
-
-
-      isGenerated: false,
-
-
-
-      documents: [],
-
-
-
-      content: { reading: "", videoScenes: [], quizzes: [] },
-
-
-
-    };
-
-
+    const newLesson: Lesson = res.lesson;
 
     setClasses((prev) =>
 
-
-
       prev.map((c) =>
-
-
 
         c.id !== selectedClassId
 
-
-
           ? c
-
-
 
           : {
 
-
-
               ...c,
-
-
 
               chapters: c.chapters.map((ch) =>
 
-
-
                 ch.id === chapterId ? { ...ch, lessons: [...ch.lessons, newLesson] } : ch
-
-
 
               ),
 
-
-
             }
-
-
 
       )
 
-
-
     );
-
-
 
     setNewLessonTitle("");
 
-
-
     setAddingLessonChapterId(null);
 
+    broadcastCoursesUpdated(selectedClassId);
+
+    notify(`Đã tạo bài học "${titleTrim}".`);
+
+  };
 
 
-    notify("Đã tạo bài học mới.");
+
+  const handleDeleteLesson = async (chapterId: string, lessonId: string, lessonTitle: string) => {
+    if (!window.confirm(`Xóa bài giảng "${lessonTitle}"?`)) return;
+    const res = await deleteInstructorLesson(selectedClassId, chapterId, lessonId);
+    if (!res) {
+      notify("❌ Không thể xóa bài giảng trên máy chủ.");
+      return;
+    }
+    setClasses((prev) =>
+      prev.map((c) =>
+        c.id !== selectedClassId
+          ? c
+          : {
+              ...c,
+              chapters: c.chapters.map((ch) =>
+                ch.id !== chapterId
+                  ? ch
+                  : { ...ch, lessons: (ch.lessons || []).filter((l) => l.id !== lessonId) }
+              ),
+            }
+      )
+    );
+    broadcastCoursesUpdated(selectedClassId);
+    notify(`Đã xóa bài giảng "${lessonTitle}".`);
+  };
 
 
 
+  const handleReorderLesson = async (chapterId: string, lessonId: string, direction: -1 | 1) => {
+    const ch = (activeClass?.chapters || []).find((item) => item.id === chapterId);
+    if (!ch || !ch.lessons) return;
+    const idx = ch.lessons.findIndex((l) => l.id === lessonId);
+    const targetIdx = idx + direction;
+    if (idx < 0 || targetIdx < 0 || targetIdx >= ch.lessons.length) return;
+
+    const reordered = [...ch.lessons];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    const ids = reordered.map((l) => l.id);
+
+    setClasses((prev) =>
+      prev.map((c) =>
+        c.id !== selectedClassId
+          ? c
+          : {
+              ...c,
+              chapters: c.chapters.map((item) =>
+                item.id === chapterId ? { ...item, lessons: reordered } : item
+              ),
+            }
+      )
+    );
+
+    const res = await reorderInstructorLessons(selectedClassId, chapterId, ids);
+    if (!res) {
+      notify("❌ Lỗi lưu thứ tự bài giảng lên máy chủ.");
+      void loadInstructorWorkspace();
+      return;
+    }
+    broadcastCoursesUpdated(selectedClassId);
+    notify("Đã cập nhật thứ tự bài giảng.");
   };
 
 
@@ -2591,14 +2600,20 @@ export default function InstructorPanel({
     setActiveLessonChapterId(chapterId);
     setSelectedLesson(lesson);
     const content = (lesson.content || {}) as any;
+    const preset = getSubjectAigcPreset(activeClass?.subjectId || "", activeClass?.code || "CS201", lesson.title);
+    setEditTitle(lesson.title || "");
+    setEditDuration(lesson.duration || "15 phút");
+    setEditXp(typeof (lesson as any).xp === "number" ? (lesson as any).xp : 150);
+    setEditDocuments(Array.isArray(lesson.documents) ? lesson.documents : []);
+    setAigcTriggeredInModal(false);
     setEditReading(content.reading || "");
     setEditScenes(
       content.videoScenes && content.videoScenes.length > 0
         ? content.videoScenes
         : [
             { id: "s1", title: "Phân cảnh 1: Đặt vấn đề & Tổng quan", text: lesson.title, script: "Giới thiệu bản chất bài học", time: "00:00" },
-            { id: "s2", title: "Phân cảnh 2: Demo mã nguồn & vtable", text: "Minh họa kiến trúc C++", script: "Phân tích bộ nhớ", time: "05:20" },
-            { id: "s3", title: "Phân cảnh 3: Cạm bẫy thiết kế & Tổng kết", text: "Lưu ý khi biên dịch", script: "Thực hành trên Docker Sandbox", time: "12:15" },
+            { id: "s2", title: `Phân cảnh 2: Demo mã nguồn (${activeClass?.code || "Core"})`, text: `Minh họa kiến trúc ${activeClass?.code || ""}`, script: "Phân tích thực thi", time: "05:20" },
+            { id: "s3", title: "Phân cảnh 3: Cạm bẫy thiết kế & Tổng kết", text: "Lưu ý khi biên dịch & kiểm thử", script: "Thực hành trên Docker Sandbox", time: "12:15" },
           ]
     );
     setEditQuizzes(
@@ -2609,240 +2624,179 @@ export default function InstructorPanel({
             options: Array.isArray(q.options) && q.options.length > 0 ? q.options : ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
             answer: q.answer || (q.options ? q.options[0] : "Phương án A"),
             correctIndex: typeof q.correctIndex === "number" ? q.correctIndex : 0,
-            explanation: q.explanation || "Giải thích chi tiết: Tuân thủ quy chuẩn kiến trúc và bộ nhớ C++.",
+            explanation: q.explanation || `Giải thích chi tiết theo chuẩn học phần ${activeClass?.code || ""}.`,
           }))
         : [
             {
               id: `q-1`,
-              question: `Trong chuyên đề ${lesson.title}, cơ chế cốt lõi nào chi phối hành vi hệ thống?`,
+              question: `Trong chuyên đề ${lesson.title}, cơ chế cốt lõi nào giúp hệ thống vận hành ổn định?`,
               options: [
-                "Đóng gói an toàn tài nguyên và quản lý vòng đời bộ nhớ",
-                "Cấp phát raw pointer tự do không kiểm soát",
-                "Ghép nối cứng toàn bộ logic trong một hàm duy nhất",
-                "Bỏ qua bước giải phóng bộ nhớ heap",
+                "Tách biệt trách nhiệm rõ ràng, quản lý vòng đời và kiểm soát lỗi biên",
+                "Ghép nối cứng toàn bộ logic vào một khối duy nhất không kiểm tra",
+                "Bỏ qua bước kiểm thử đầu vào/đầu ra và tài nguyên",
+                "Không cần quản lý bộ nhớ hay cấu trúc dữ liệu",
               ],
-              answer: "Đóng gói an toàn tài nguyên và quản lý vòng đời bộ nhớ",
+              answer: "Tách biệt trách nhiệm rõ ràng, quản lý vòng đời và kiểm soát lỗi biên",
               correctIndex: 0,
-              explanation: "Nguyên lý đóng gói và an toàn bộ nhớ là chuẩn mực bắt buộc trong lập trình C++ hiện đại.",
+              explanation: `Nguyên lý này đảm bảo mã nguồn ${activeClass?.code || ""} đạt chuẩn sạch, dễ bảo trì và vượt qua CI/CD.`,
             },
           ]
     );
     setEditYoutubeUrl(content.youtubeUrl || (content.youtubeId ? `https://www.youtube.com/watch?v=${content.youtubeId}` : "https://www.youtube.com/watch?v=M6FwepHC6vM"));
     setEditObjective(content.objective || `Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${lesson.title}`);
-    setEditLead(content.lead || content.reading || `Bài học tập trung giải thích cặn kẽ bản chất kỹ thuật của ${lesson.title}, phân tích cấu trúc bộ nhớ và các mẫu thiết kế thực tế.`);
+    setEditLead(content.lead || content.reading || `Bài học tập trung giải thích cặn kẽ bản chất kỹ thuật của ${lesson.title}, phân tích ${preset.leadNote}.`);
     setEditCodeSnippet(content.codeSnippet || {
-      lang: "cpp",
-      code: `// Minh họa: ${lesson.title}\n#include <iostream>\n#include <memory>\n\nclass CoreEngine {\npublic:\n    virtual void execute() {\n        std::cout << "[Engine] Executing core architecture\\n";\n    }\n    virtual ~CoreEngine() = default;\n};\n\nint main() {\n    std::unique_ptr<CoreEngine> engine = std::make_unique<CoreEngine>();\n    engine->execute();\n    return 0;\n}`,
-      caption: `Mã nguồn C++ minh họa kiến trúc chuẩn cho bài học ${lesson.title}`,
+      lang: preset.lang,
+      code: preset.code,
+      caption: preset.caption,
     });
     setEditKeyTakeaways(
       content.keyTakeaways && content.keyTakeaways.length > 0
         ? content.keyTakeaways
         : [
             `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${lesson.title}.`,
-            "Đảm bảo an toàn bộ nhớ (Memory Safety) và tuân thủ nguyên tắc RAII.",
-            "Tối ưu hóa hiệu năng, giảm thiểu chi phí runtime và phân mảnh bộ nhớ.",
+            `Nắm vững kỹ thuật ${preset.leadNote}.`,
+            "Vượt qua các ca biên (edge cases) khi kiểm thử trên Docker Sandbox.",
           ]
     );
     setEditAntiPattern(content.antiPattern || {
-      badDesc: "Khởi tạo tài nguyên thủ công bằng con trỏ thô (raw pointer) mà không giải phóng bằng delete hoặc dùng sai phạm vi kế thừa.",
-      solution: "Đóng gói vòng đời tài nguyên vào smart pointer (unique_ptr/shared_ptr) tuân thủ chặt chẽ nguyên tắc RAII.",
+      badDesc: preset.badDesc,
+      solution: preset.solution,
     });
     setEditStatus(lesson.status || "Đã phát hành");
     setDrawerTab("video");
     setLessonModalOpen(true);
   };
 
-
-
   const attachLessonDocument = (docName: string, size: string) => {
-
-
-
     if (!selectedLesson || !activeLessonChapterId) return;
-
-
-
-    const file = {
-
-
-
+    const newDoc = {
       name: docName,
-
-
-
       size,
-
-
-
       uploadedAt: new Date().toLocaleDateString("vi-VN"),
-
-
-
     };
-
-
-
-    const updatedLesson: Lesson = { ...selectedLesson, documents: [file] };
-
-
-
+    const nextDocs = editDocuments.some((d) => d.name === docName)
+      ? editDocuments.map((d) => (d.name === docName ? newDoc : d))
+      : [...editDocuments, newDoc];
+    setEditDocuments(nextDocs);
+    const updatedLesson: Lesson = { ...selectedLesson, documents: nextDocs };
     setSelectedLesson(updatedLesson);
-
-
-
     setClasses((prev) =>
-
-
-
       prev.map((c) =>
-
-
-
         c.id !== selectedClassId
-
-
-
           ? c
-
-
-
           : {
-
-
-
               ...c,
-
-
-
               chapters: c.chapters.map((ch) =>
-
-
-
                 ch.id !== activeLessonChapterId
-
-
-
                   ? ch
-
-
-
                   : {
-
-
-
                       ...ch,
-
-
-
                       lessons: ch.lessons.map((l) => (l.id === selectedLesson.id ? updatedLesson : l)),
-
-
-
                     }
-
-
-
               ),
-
-
-
             }
-
-
-
       )
-
-
-
     );
-
-
-
-    notify(`Đã đính kèm tài liệu "${docName}".`);
-
-
-
+    notify(`Đã đính kèm tài liệu "${docName}". Nhớ nhấn Lưu bài học để đồng bộ.`);
   };
 
+  const handleLessonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const kb = Math.max(1, Math.round(file.size / 1024));
+      const sizeStr = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
+      attachLessonDocument(file.name, sizeStr);
+    });
+    e.target.value = "";
+  };
 
+  const removeLessonDocument = (docName: string) => {
+    if (!selectedLesson || !activeLessonChapterId) return;
+    const nextDocs = editDocuments.filter((d) => d.name !== docName);
+    setEditDocuments(nextDocs);
+    const updatedLesson: Lesson = { ...selectedLesson, documents: nextDocs };
+    setSelectedLesson(updatedLesson);
+    setClasses((prev) =>
+      prev.map((c) =>
+        c.id !== selectedClassId
+          ? c
+          : {
+              ...c,
+              chapters: c.chapters.map((ch) =>
+                ch.id !== activeLessonChapterId
+                  ? ch
+                  : {
+                      ...ch,
+                      lessons: ch.lessons.map((l) => (l.id === selectedLesson.id ? updatedLesson : l)),
+                    }
+              ),
+            }
+      )
+    );
+    notify(`Đã gỡ tài liệu "${docName}".`);
+  };
 
   const runLessonAigc = () => {
-
-
-
     if (!selectedLesson || !activeLessonChapterId) return;
-
-
-
     setIsAigcRunning(true);
-
-
-
     setAigcStep(1);
-
-
+    const activeLessonTitle = editTitle.trim() || selectedLesson.title;
+    const activeDuration = editDuration.trim() || selectedLesson.duration || "15 phút";
+    const activePreset = getSubjectAigcPreset(activeClass?.subjectId || "", activeClass?.code || "CS201", activeLessonTitle);
+    const preservedYtUrl = editYoutubeUrl.trim() || "https://www.youtube.com/watch?v=M6FwepHC6vM";
+    const preservedYtId = extractYoutubeId(preservedYtUrl);
 
     const timer = setInterval(() => {
-
-
-
       setAigcStep((prev) => {
-
-
-
         if (prev >= 4) {
-
-
-
           clearInterval(timer);
 
+          const genObjective = `Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${activeLessonTitle}`;
+          const genLead = `Bài học (${activeClass.code}) giải thích cặn kẽ bản chất kỹ thuật của ${activeLessonTitle}, tập trung vào ${activePreset.leadNote}.`;
+          const genReading = `# Chuyên Đề ${activeClass.code}: ${activeLessonTitle}
 
+## 1. Bản Chất Kiến Trúc & Bối Cảnh
+Trong học phần ${activeClass.name}, chuyên đề **${activeLessonTitle}** đóng vai trò then chốt giúp kỹ sư phần mềm làm chủ ${activePreset.leadNote}.
 
-          const genObjective = `Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${selectedLesson.title}`;
-          const genLead = `Bài học giải thích cặn kẽ bản chất kỹ thuật của ${selectedLesson.title}, phân tích cấu trúc bộ nhớ, kiểm soát con trỏ và tối ưu hóa hiệu năng theo chuẩn C++ hiện đại.`;
-          const genReading = `# Chuyên Đề: ${selectedLesson.title}
+## 2. Quy Tắc Triển Khai Chuẩn Mực
+1. Phân tách ranh giới trách nhiệm rõ ràng giữa các tầng xử lý.
+2. Kiểm soát chặt chẽ đầu vào, điều kiện biên và giải phóng tài nguyên đúng vòng đời.
+3. Đảm bảo khả năng kiểm thử tự động trong Docker Sandbox CI/CD (${activeClass.dockerImage || "codemind/sandbox:latest"}).
 
-## 1. Cơ Chế Kiến Trúc & Lý Do Tồn Tại
-Trong kiến trúc phần mềm hướng đối tượng C++, việc kiểm soát chặt chẽ vòng đời của đối tượng là điều kiện tiên quyết để đảm bảo tính an toàn bộ nhớ (Memory Safety) và tránh hiện tượng rò rỉ (Memory Leak). Cơ chế ${selectedLesson.title} giúp lập trình viên phân định ranh giới sở hữu tài nguyên rõ ràng giữa các module.
-
-## 2. Quy Tắc Triển Khai Mã Nguồn An Toàn
-1. Luôn tuân thủ nguyên tắc RAII (Resource Acquisition Is Initialization).
-2. Không truyền con trỏ thô (raw pointer) qua các lớp dịch vụ nếu không có cơ chế quản lý vòng đời rõ ràng.
-3. Đảm bảo hàm hủy (destructor) là virtual khi xây dựng các lớp cơ sở (Base Class) có tính kế thừa và đa hình.
-
-## 3. Sẵn Sàng Kiểm Thử Docker Sandbox
-Mã nguồn của bài học này được thiết kế để vượt qua 100% các bộ Test Cases trong môi trường Docker Container cô lập, kiểm tra nghiêm ngặt với Valgrind memory leak checker.`;
+## 3. Lưu Ý Trước Khi Nộp Bài
+Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn bộ video bài giảng + Quiz kiểm tra kiến thức.`;
 
           const genCodeSnippet = {
-            lang: "cpp",
-            code: `// Minh họa: ${selectedLesson.title}\n#include <iostream>\n#include <memory>\n\nclass SystemService {\npublic:\n    virtual void execute() {\n        std::cout << "[Service] Executing: ${selectedLesson.title}\\n";\n    }\n    virtual ~SystemService() = default;\n};\n\nint main() {\n    std::unique_ptr<SystemService> svc = std::make_unique<SystemService>();\n    svc->execute();\n    return 0;\n}`,
-            caption: `Mã nguồn C++ minh họa kiến trúc chuẩn cho bài học ${selectedLesson.title}`,
+            lang: activePreset.lang,
+            code: activePreset.code,
+            caption: activePreset.caption,
           };
 
           const genKeyTakeaways = [
-            `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${selectedLesson.title}.`,
-            "Đảm bảo an toàn bộ nhớ (Memory Safety) và tuân thủ nguyên tắc RAII.",
-            "Tối ưu hóa hiệu năng, giảm thiểu chi phí runtime và phân mảnh bộ nhớ.",
+            `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${activeLessonTitle}.`,
+            `Làm chủ kỹ thuật ${activePreset.leadNote}.`,
+            "Kiểm soát ca biên và đảm bảo pass 100% test tự động trên Docker Sandbox.",
           ];
 
           const genAntiPattern = {
-            badDesc: "Khởi tạo tài nguyên thủ công bằng con trỏ thô (raw pointer) mà không giải phóng bằng delete hoặc dùng sai phạm vi kế thừa.",
-            solution: "Đóng gói vòng đời tài nguyên vào smart pointer (unique_ptr/shared_ptr) tuân thủ chặt chẽ nguyên tắc RAII.",
+            badDesc: activePreset.badDesc,
+            solution: activePreset.solution,
           };
 
           const genScenes: VideoScene[] = [
             {
               id: "ai-s1",
               title: "Phân cảnh 1: Đặt vấn đề & Mục tiêu cốt lõi",
-              text: selectedLesson.title,
-              script: `Xin chào các bạn, hôm nay chúng ta sẽ đi sâu vào bản chất của ${selectedLesson.title}.`,
+              text: activeLessonTitle,
+              script: `Xin chào các bạn, hôm nay trong môn ${activeClass.code} chúng ta sẽ đi sâu vào ${activeLessonTitle}.`,
               time: "00:00",
             },
             {
               id: "ai-s2",
-              title: "Phân cảnh 2: Demo mã nguồn & Cấu trúc bộ nhớ",
-              text: "Các lưu ý khi biên dịch mã nguồn và kiểm tra memory leak",
+              title: `Phân cảnh 2: Demo mã nguồn ${activePreset.lang.toUpperCase()} & Phân tích`,
+              text: `Lưu ý về ${activePreset.leadNote}`,
               script: "Hãy chú ý kiểm tra điều kiện biên trước khi nộp bài lên hệ thống CI/CD.",
               time: "05:15",
             },
@@ -2850,7 +2804,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
               id: "ai-s3",
               title: "Phân cảnh 3: Cạm bẫy thiết kế & Hướng dẫn làm Lab",
               text: "Phân tích Anti-Pattern và phương pháp khắc phục",
-              script: "Đảm bảo tuân thủ nguyên tắc RAII trong toàn bộ dự án đồ án.",
+              script: "Hoàn thành Quiz cuối bài để mở khóa tiến độ chương.",
               time: "11:40",
             },
           ];
@@ -2858,48 +2812,54 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
           const genQuizzes: QuizQuestion[] = [
             {
               id: `q-1`,
-              question: `Trong ${selectedLesson.title}, nguyên tắc kiến trúc nào bắt buộc phải tuân theo để triệt tiêu memory leak?`,
+              question: `Trong chuyên đề "${activeLessonTitle}" (${activeClass.code}), giải pháp kiến trúc nào là chuẩn mực nhất?`,
               options: [
-                "Áp dụng nguyên tắc RAII và quản lý con trỏ thông minh (Smart Pointers)",
-                "Cấp phát raw pointer tự do không giải phóng bằng delete",
-                "Gộp toàn bộ logic vào một hàm main duy nhất",
-                "Bỏ qua bước kiểm tra bộ nhớ với Valgrind",
+                activePreset.solution,
+                activePreset.badDesc,
+                "Gộp toàn bộ logic vào một khối duy nhất không kiểm soát",
+                "Bỏ qua bước kiểm thử các trường hợp biên",
               ],
-              answer: "Áp dụng nguyên tắc RAII và quản lý con trỏ thông minh (Smart Pointers)",
+              answer: activePreset.solution,
               correctIndex: 0,
-              explanation: "RAII đảm bảo tài nguyên luôn được giải phóng khi ra khỏi scope, chống memory leak.",
+              explanation: `Theo chuẩn ${activeClass.code}: ${activePreset.solution}`,
             },
             {
               id: `q-2`,
-              question: `Tại sao hàm hủy (Destructor) của lớp cơ sở phải khai báo là virtual khi có tính kế thừa?`,
+              question: `Vì sao cần tránh sai lầm "${activePreset.badDesc.slice(0, 65)}..." khi triển khai ${activeLessonTitle}?`,
               options: [
-                "Để đảm bảo hàm hủy của lớp dẫn xuất được gọi đúng thứ tự, tránh rò rỉ tài nguyên",
-                "Để tăng kích thước của bảng vtable lên gấp đôi",
-                "Để ngăn chặn các lớp con override hàm thành viên",
-                "Không cần thiết, C++ tự động xử lý mọi trường hợp",
+                "Vì dễ gây lỗi vận hành, rò rỉ tài nguyên hoặc hỏng logic ở trường hợp biên",
+                "Vì làm giảm kích thước tệp mã nguồn",
+                "Vì trình biên dịch sẽ tự động bỏ qua mọi hàm kiểm tra",
+                "Không ảnh hưởng đến độ ổn định của hệ thống",
               ],
-              answer: "Để đảm bảo hàm hủy của lớp dẫn xuất được gọi đúng thứ tự, tránh rò rỉ tài nguyên",
+              answer: "Vì dễ gây lỗi vận hành, rò rỉ tài nguyên hoặc hỏng logic ở trường hợp biên",
               correctIndex: 0,
-              explanation: "Virtual destructor đảm bảo khi xóa đối tượng qua con trỏ lớp cha thì hàm hủy của lớp con vẫn được thực thi đầy đủ.",
+              explanation: `Khắc phục bằng cách: ${activePreset.solution}`,
             },
           ];
 
+          const nextContent: LessonContent = {
+            reading: genReading,
+            videoScenes: genScenes,
+            quizzes: genQuizzes,
+            youtubeUrl: preservedYtUrl,
+            youtubeId: preservedYtId,
+            objective: genObjective,
+            lead: genLead,
+            codeSnippet: genCodeSnippet,
+            keyTakeaways: genKeyTakeaways,
+            antiPattern: genAntiPattern,
+          };
+
           const nextLesson: Lesson = {
             ...selectedLesson,
+            title: activeLessonTitle,
+            duration: activeDuration,
+            xp: editXp,
             isGenerated: true,
             status: "Đã phát hành",
-            content: {
-              reading: genReading,
-              videoScenes: genScenes,
-              quizzes: genQuizzes,
-              youtubeUrl: editYoutubeUrl || "https://www.youtube.com/watch?v=M6FwepHC6vM",
-              youtubeId: "M6FwepHC6vM",
-              objective: genObjective,
-              lead: genLead,
-              codeSnippet: genCodeSnippet,
-              keyTakeaways: genKeyTakeaways,
-              antiPattern: genAntiPattern,
-            },
+            documents: editDocuments,
+            content: nextContent,
           };
 
           setEditReading(genReading);
@@ -2910,159 +2870,106 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
           setEditAntiPattern(genAntiPattern);
           setEditScenes(genScenes);
           setEditQuizzes(genQuizzes);
+          setEditYoutubeUrl(preservedYtUrl);
           setEditStatus("Đã phát hành");
+          setAigcTriggeredInModal(true);
           setSelectedLesson(nextLesson);
 
-
-
           setClasses((prev) =>
-
-
-
             prev.map((c) =>
-
-
-
               c.id !== selectedClassId
-
-
-
                 ? c
-
-
-
                 : {
-
-
-
                     ...c,
-
-
-
                     chapters: c.chapters.map((ch) =>
-
-
-
                       ch.id !== activeLessonChapterId
-
-
-
                         ? ch
-
-
-
                         : {
-
-
-
                             ...ch,
-
-
-
                             lessons: ch.lessons.map((l) => (l.id === selectedLesson.id ? nextLesson : l)),
-
-
-
                           }
-
-
-
                     ),
-
-
-
                   }
-
-
-
             )
-
-
-
           );
-
-
 
           setIsAigcRunning(false);
-
-
-
           setDrawerTab("reading");
 
+          void saveInstructorLesson(selectedClassId, activeLessonChapterId, selectedLesson.id, {
+            title: activeLessonTitle,
+            duration: activeDuration,
+            xp: editXp,
+            status: "Đã phát hành",
+            isGenerated: true,
+            isAigcGenerated: true,
+            documents: editDocuments,
+            content: nextContent as any,
+          }).then((res) => {
+            if (res) broadcastCoursesUpdated(selectedClassId);
+          });
 
-
-          void saveInstructorLesson(
-
-
-
-            selectedClassId,
-
-
-
-            activeLessonChapterId,
-
-
-
-            selectedLesson.id,
-
-
-
-            nextLesson
-
-
-
-          );
-
-
-
-          notify("AI đã biên soạn xong Bài đọc, Video Script và Quiz.");
-
-
-
+          notify(`AI đã biên soạn xong học liệu (${activeClass.code}) & giữ nguyên link Video.`);
           return 4;
-
-
-
         }
-
-
-
         return prev + 1;
-
-
-
       });
-
-
-
     }, 450);
-
-
-
   };
-
-
 
   const saveLessonEdits = async (targetStatus?: "Đã phát hành" | "Bản nháp") => {
     if (!selectedLesson || !activeLessonChapterId) return;
 
-    const finalStatus = targetStatus || editStatus || "Đã phát hành";
-    let ytId = "M6FwepHC6vM";
-    if (editYoutubeUrl) {
-      const clean = editYoutubeUrl.trim();
-      if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) {
-        ytId = clean;
-      } else {
-        const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-        if (match) ytId = match[1];
+    const cleanTitle = editTitle.trim();
+    if (!cleanTitle) {
+      notify("⚠️ Tên bài học không được để trống.");
+      return;
+    }
+
+    const cleanYt = editYoutubeUrl.trim();
+    if (cleanYt && !isValidYoutubeInput(cleanYt)) {
+      notify("❌ Link/ID YouTube không hợp lệ. Vui lòng nhập URL YouTube chuẩn hoặc mã 11 ký tự.");
+      setDrawerTab("video");
+      return;
+    }
+
+    for (let i = 0; i < editQuizzes.length; i += 1) {
+      const q = editQuizzes[i];
+      if (!q.question.trim()) {
+        notify(`⚠️ Câu hỏi #${i + 1} đang bị để trống nội dung.`);
+        setDrawerTab("quiz");
+        return;
+      }
+      const validOpts = (q.options || []).filter((o) => o.trim().length > 0);
+      if (validOpts.length < 2) {
+        notify(`⚠️ Câu hỏi #${i + 1} cần ít nhất 2 phương án trả lời hợp lệ.`);
+        setDrawerTab("quiz");
+        return;
       }
     }
+
+    const finalStatus = targetStatus || editStatus || "Đã phát hành";
+    const ytId = extractYoutubeId(cleanYt);
+    const cleanDuration = editDuration.trim() || selectedLesson.duration || "15 phút";
+    const cleanXp = Number.isFinite(editXp) ? Math.max(10, Math.min(1000, Math.round(editXp))) : 150;
+
+    const normalizedQuizzes = editQuizzes.map((q) => {
+      const cIdx =
+        typeof q.correctIndex === "number" && q.options?.[q.correctIndex] !== undefined
+          ? q.correctIndex
+          : Math.max(0, (q.options || []).findIndex((o) => o === q.answer));
+      return {
+        ...q,
+        correctIndex: cIdx,
+        answer: q.options?.[cIdx] || q.answer,
+      };
+    });
 
     const nextContent: LessonContent = {
       reading: editReading || editLead,
       videoScenes: editScenes,
-      quizzes: editQuizzes,
-      youtubeUrl: editYoutubeUrl,
+      quizzes: normalizedQuizzes,
+      youtubeUrl: cleanYt || `https://www.youtube.com/watch?v=${ytId}`,
       youtubeId: ytId,
       objective: editObjective,
       lead: editLead,
@@ -3070,6 +2977,22 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
       keyTakeaways: editKeyTakeaways,
       antiPattern: editAntiPattern,
     };
+
+    const res = await saveInstructorLesson(selectedClassId, activeLessonChapterId, selectedLesson.id, {
+      title: cleanTitle,
+      duration: cleanDuration,
+      xp: cleanXp,
+      status: finalStatus,
+      isGenerated: true,
+      isAigcGenerated: aigcTriggeredInModal,
+      documents: editDocuments,
+      content: nextContent as any,
+    });
+
+    if (!res) {
+      notify("❌ Lỗi lưu bài giảng lên máy chủ MySQL. Vui lòng thử lại.");
+      return;
+    }
 
     setClasses((prev) =>
       prev.map((c) =>
@@ -3086,8 +3009,12 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                         l.id === selectedLesson.id
                           ? {
                               ...l,
+                              title: cleanTitle,
+                              duration: cleanDuration,
+                              xp: cleanXp,
                               status: finalStatus,
                               isGenerated: true,
+                              documents: editDocuments,
                               content: nextContent,
                             }
                           : l
@@ -3098,23 +3025,13 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
       )
     );
 
-    await saveInstructorLesson(
-      selectedClassId,
-      activeLessonChapterId,
-      selectedLesson.id,
-      {
-        status: finalStatus,
-        isGenerated: true,
-        content: nextContent as any,
-      }
-    );
-
-    try {
-      window.dispatchEvent(new CustomEvent("codemind-courses-updated", { detail: { courseId: selectedClassId } }));
-    } catch (_) {}
-
+    broadcastCoursesUpdated(selectedClassId);
     setLessonModalOpen(false);
-    notify(finalStatus === "Đã phát hành" ? "Đã lưu & PHÁT HÀNH bài học cho học viên thành công!" : "Đã lưu bản nháp bài học.");
+    notify(
+      finalStatus === "Đã phát hành"
+        ? "Đã lưu & PHÁT HÀNH bài học cho học viên thành công!"
+        : "Đã lưu bản nháp bài học (ẩn khỏi học viên)."
+    );
   };
 
 
@@ -3145,700 +3062,410 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
   const openTestCaseModal = (chapterId: string, assignmentId: string) => {
 
+    const ch = (activeClass?.chapters || []).find((c) => c.id === chapterId);
 
+    const asg = ch?.assignments?.find((a) => a.id === assignmentId);
 
     setTcChapterId(chapterId);
 
-
-
     setTcAssignmentId(assignmentId);
 
+    setEditAssignTitle(asg?.title || "");
 
+    setEditAssignDesc(asg?.description || "");
+
+    setEditAssignPoints(asg?.points ?? 100);
+
+    setEditAssignDockerImage(asg?.dockerImage || activeClass?.dockerImage || "codemind/cpp20-sandbox:latest");
+
+    setEditingTcId(null);
 
     setTcModalOpen(true);
 
-
-
   };
 
-
+  const handleSaveAssignmentMeta = async () => {
+    if (!tcChapterId || !tcAssignmentId) return;
+    if (!editAssignTitle.trim()) {
+      notify("⚠️ Tên bài tập không được để trống.");
+      return;
+    }
+    const payload = {
+      title: editAssignTitle.trim(),
+      description: editAssignDesc.trim(),
+      points: Number.isFinite(editAssignPoints) ? Math.max(10, Math.min(1000, Math.round(editAssignPoints))) : 100,
+      dockerImage: editAssignDockerImage.trim() || "codemind/cpp20-sandbox:latest",
+    };
+    const res = await updateInstructorAssignment(selectedClassId, tcChapterId, tcAssignmentId, payload);
+    if (!res) {
+      notify("❌ Không thể lưu thông tin bài tập lên MySQL.");
+      return;
+    }
+    setClasses((prev) =>
+      prev.map((c) =>
+        c.id !== selectedClassId
+          ? c
+          : {
+              ...c,
+              chapters: c.chapters.map((ch) =>
+                ch.id !== tcChapterId
+                  ? ch
+                  : {
+                      ...ch,
+                      assignments: (ch.assignments || []).map((a) =>
+                        a.id === tcAssignmentId ? { ...a, ...payload } : a
+                      ),
+                    }
+              ),
+            }
+      )
+    );
+    broadcastCoursesUpdated(selectedClassId);
+    notify("Đã cập nhật đề bài Lab Docker & đồng bộ cho học viên.");
+  };
 
   const updateAssignmentTestCases = (updater: (cases: DockerTestCase[]) => DockerTestCase[]) => {
 
-
-
     if (!tcChapterId || !tcAssignmentId) return;
-
-
 
     setClasses((prev) =>
 
-
-
       prev.map((c) =>
-
-
 
         c.id !== selectedClassId
 
-
-
           ? c
-
-
 
           : {
 
-
-
               ...c,
-
-
 
               chapters: c.chapters.map((ch) =>
 
-
-
                 ch.id !== tcChapterId
-
-
 
                   ? ch
 
-
-
                   : {
-
-
 
                       ...ch,
 
-
-
                       assignments: (ch?.assignments || []).map((a) =>
-
-
 
                         a.id === tcAssignmentId
 
-
-
                           ? { ...a, testCases: updater(a.testCases || []) }
-
-
 
                           : a
 
-
-
                       ),
-
-
 
                     }
 
-
-
               ),
-
-
 
             }
 
-
-
       )
-
-
 
     );
 
-
-
   };
-
-
 
   const handleAddDockerTestCase = async () => {
 
-
-
-    if (!newTcTitle.trim() || !newTcOutput.trim()) {
-
-
+    if (!newTcTitle.trim() || !newTcOutput.trim() || !tcChapterId) {
 
       notify("Vui lòng nhập tên Test Case và Expected Output.");
 
-
-
       return;
-
-
 
     }
 
-
-
     const draft: DockerTestCase = {
-
-
 
       id: `tc-${Date.now()}`,
 
-
-
       title: newTcTitle.trim(),
-
-
 
       input: newTcInput.trim() || "(default input)",
 
-
-
       expectedOutput: newTcOutput.trim(),
-
-
 
       isEdgeCase: newTcEdgeCase,
 
-
-
       timeoutMs: 1500,
-
-
 
       memoryLimitMb: 64,
 
-
-
     };
 
+    const res = await addInstructorTestCase(selectedClassId, tcChapterId, draft);
 
+    if (!res?.testCase) {
+      notify("❌ Không thể thêm Test Case trên máy chủ.");
+      return;
+    }
 
-    const res = tcChapterId
-
-
-
-      ? await addInstructorTestCase(selectedClassId, tcChapterId, draft)
-
-
-
-      : null;
-
-
-
-    const savedTc: DockerTestCase = res?.testCase || draft;
-
-
+    const savedTc: DockerTestCase = res.testCase;
 
     updateAssignmentTestCases((cases) => [...cases, savedTc]);
 
-
-
     setNewTcTitle("");
-
-
 
     setNewTcInput("");
 
-
-
     setNewTcOutput("");
-
-
 
     setNewTcEdgeCase(false);
 
-
+    broadcastCoursesUpdated(selectedClassId);
 
     notify("Đã thêm Unit Test Case vào Docker Sandbox.");
 
+  };
 
+  const handleToggleTestCaseEdge = async (tc: DockerTestCase) => {
+    if (!tcChapterId) return;
+    const nextEdge = !tc.isEdgeCase;
+    const res = await updateInstructorTestCase(selectedClassId, tcChapterId, tc.id, { isEdgeCase: nextEdge });
+    if (!res) {
+      notify("❌ Không thể cập nhật trạng thái Edge Case.");
+      return;
+    }
+    updateAssignmentTestCases((cases) =>
+      cases.map((item) => (item.id === tc.id ? { ...item, isEdgeCase: nextEdge } : item))
+    );
+    broadcastCoursesUpdated(selectedClassId);
+  };
 
+  const startEditTestCase = (tc: DockerTestCase) => {
+    setEditingTcId(tc.id);
+    setEditTcTitle(tc.title);
+    setEditTcInput(tc.input);
+    setEditTcOutput(tc.expectedOutput);
+    setEditTcEdgeCase(tc.isEdgeCase);
+  };
+
+  const handleSaveEditedTestCase = async () => {
+    if (!tcChapterId || !editingTcId) return;
+    if (!editTcTitle.trim() || !editTcOutput.trim()) {
+      notify("⚠️ Tên Test Case và Expected Output không được để trống.");
+      return;
+    }
+    const payload = {
+      title: editTcTitle.trim(),
+      input: editTcInput.trim() || "(default input)",
+      expectedOutput: editTcOutput.trim(),
+      isEdgeCase: editTcEdgeCase,
+    };
+    const res = await updateInstructorTestCase(selectedClassId, tcChapterId, editingTcId, payload);
+    if (!res) {
+      notify("❌ Không thể cập nhật Test Case trên máy chủ.");
+      return;
+    }
+    updateAssignmentTestCases((cases) =>
+      cases.map((item) => (item.id === editingTcId ? { ...item, ...payload } : item))
+    );
+    setEditingTcId(null);
+    broadcastCoursesUpdated(selectedClassId);
+    notify("Đã cập nhật Test Case & đồng bộ.");
   };
 
 
 
   // --- MASTER MINDMAP ACTIONS ---
 
-
-
   const onConnect = useCallback(
-
-
-
     (params: Connection) => {
-
-
-
-      setEdges((eds) =>
-
-
-
-        addEdge(
-
-
-
-          {
-
-
-
-            ...params,
-
-
-
-            type: "smoothstep",
-
-
-
-            markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
-
-
-
-            style: { strokeWidth: 1.75, stroke: "#94a3b8", strokeDasharray: "5 4" },
-
-
-
-          },
-
-
-
-          eds
-
-
-
-        )
-
-
-
-      );
-
-
-
-      notify("Đã nối nhánh mới trên Master Graph.");
-
-
-
-    },
-
-
-
-    [setEdges]
-
-
-
-  );
-
-
-
-  const handleAddMindmapNode = (nodeType: "branch" | "leaf") => {
-
-
-
-    const id = `mm-${Date.now()}`;
-
-
-
-    const nextNode: Node<MasterMindmapNodeData> = {
-
-
-
-      id,
-
-
-
-      type: "masterMindmapNode",
-
-
-
-      position: { x: nodeType === "branch" ? 350 : 660, y: 120 + (nodes.length % 4) * 85 },
-
-
-
-      data: {
-
-
-
-        title: nodeType === "branch" ? "Chủ đề nhánh mới" : "Khái niệm chi tiết mới",
-
-
-
-        summary: "Chỉnh sửa mô tả và liên kết kiến thức ở bảng bên phải.",
-
-
-
-        tag: nodeType === "branch" ? "Branch" : "Concept",
-
-
-
-        nodeType,
-
-
-
-        masteryPct: 70,
-
-
-
-      },
-
-
-
-    };
-
-
-
-    setNodes((nds) => [...nds, nextNode]);
-
-
-
-    setSelectedNodeId(id);
-
-
-
-    notify("Đã thêm nút mới vào Master Mindmap.");
-
-
-
-  };
-
-
-
-  const handleUpdateSelectedNode = (
-
-
-
-    field: keyof MasterMindmapNodeData,
-
-
-
-    val: string | number
-
-
-
-  ) => {
-
-
-
-    if (!selectedNodeId) return;
-
-
-
-    setNodes((nds) =>
-
-
-
-      nds.map((n) =>
-
-
-
-        n.id === selectedNodeId ? { ...n, data: { ...n.data, [field]: val } } : n
-
-
-
-      )
-
-
-
-    );
-
-
-
-  };
-
-
-
-  const handleSaveMasterGraph = async () => {
-
-
-
-    setClasses((prev) =>
-
-
-
-      prev.map((c) =>
-
-
-
-        c.id !== selectedClassId
-
-
-
-          ? c
-
-
-
-          : {
-
-
-
-              ...c,
-
-
-
-              chapters: c.chapters.map((ch) =>
-
-
-
-                ch.id === selectedMindmapChapterId
-
-
-
-                  ? { ...ch, mindmapNodes: nodes, mindmapEdges: edges, mindmapGenerated: true }
-
-
-
-                  : ch
-
-
-
-              ),
-
-
-
-            }
-
-
-
-      )
-
-
-
-    );
-
-
-
-    await saveInstructorMindmap(selectedClassId, selectedMindmapChapterId, nodes, edges);
-
-
-
-    notify("Đã lưu Sơ đồ Master Graph cho học viên đối chiếu.");
-
-
-
-  };
-
-
-
-  const handleGenerateMindmapAI = () => {
-
-
-
-    setIsMindmapGenerating(true);
-
-
-
-    setMindmapStep(1);
-
-
-
-    const timer = setInterval(() => {
-
-
-
-      setMindmapStep((prev) => {
-
-
-
-        if (prev >= 3) {
-
-
-
-          clearInterval(timer);
-
-
-
-          const ch = (activeClass?.chapters || []).find((c) => c.id === selectedMindmapChapterId);
-
-
-
-          const rootId = `ai-root-${Date.now()}`;
-
-
-
-          const genNodes: Node<MasterMindmapNodeData>[] = [
-
-
-
-            {
-
-
-
-              id: rootId,
-
-
-
-              type: "masterMindmapNode",
-
-
-
-              position: { x: 40, y: 155 },
-
-
-
-              data: {
-
-
-
-                title: ch?.title || "Chủ đề chương",
-
-
-
-                summary: "Master Graph tổng hợp tự động từ giáo trình",
-
-
-
-                tag: `${activeClass.code} · ROOT`,
-
-
-
-                nodeType: "root",
-
-
-
-                masteryPct: activeClass.avgProgressPct,
-
-
-
-                xp: 200,
-
-
-
-              },
-
-
-
-            },
-
-
-
-            ...(ch?.lessons || []).map((l, idx) => ({
-
-
-
-              id: `ai-b-${idx}`,
-
-
-
-              type: "masterMindmapNode",
-
-
-
-              position: { x: 355, y: 40 + idx * 140 },
-
-
-
-              data: {
-
-
-
-                title: l.title,
-
-
-
-                summary: l.content.reading
-
-
-
-                  ? l.content.reading.slice(0, 95) + "..."
-
-
-
-                  : "Trọng tâm bài giảng & kiểm thử thực hành",
-
-
-
-                tag: `Bài ${idx + 1}`,
-
-
-
-                nodeType: "branch" as const,
-
-
-
-                masteryPct: idx === 1 ? 54 : 80,
-
-
-
-              },
-
-
-
-            })),
-
-
-
-          ];
-
-
-
-          const genEdges: Edge[] = (ch?.lessons || []).map((_, idx) => ({
-
-
-
-            id: `ai-e-${idx}`,
-
-
-
-            source: rootId,
-
-
-
-            target: `ai-b-${idx}`,
-
-
-
-            type: "smoothstep",
-
-
-
-            markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
-
-
-
-            style: { strokeWidth: 1.75, stroke: "#94a3b8", strokeDasharray: "5 4" },
-
-
-
-          }));
-
-
-
-          setNodes(genNodes);
-
-
-
-          setEdges(genEdges);
-
-
-
-          setIsMindmapGenerating(false);
-
-
-
-          notify("AI đã dựng xong Master Mindmap đơn sắc chuẩn cho chương học.");
-
-
-
-          return 3;
-
-
-
+      if (!params.source || !params.target || params.source === params.target) {
+        notify("⚠️ Không thể tự nối nút vào chính nó.");
+        return;
+      }
+
+      setEdges((eds) => {
+        if (eds.some((e) => e.source === params.source && e.target === params.target)) {
+          notify("Liên kết này đã tồn tại trên sơ đồ.");
+          return eds;
+        }
+        // Check DAG cycle: can target reach source already?
+        const adj = new Map<string, string[]>();
+        eds.forEach((e) => {
+          adj.set(e.source, [...(adj.get(e.source) || []), e.target]);
+        });
+        const stack = [params.target!];
+        const visited = new Set<string>();
+        while (stack.length > 0) {
+          const cur = stack.pop()!;
+          if (cur === params.source) {
+            notify("⚠️ Không thể tạo vòng lặp (cycle) trong cây Master Mindmap.");
+            return eds;
+          }
+          if (visited.has(cur)) continue;
+          visited.add(cur);
+          (adj.get(cur) || []).forEach((nxt) => stack.push(nxt));
         }
 
-
-
-        return prev + 1;
-
-
-
+        setIsMindmapDirty(true);
+        notify("Đã nối nhánh mới trên Master Graph.");
+        return addEdge(
+          {
+            ...params,
+            type: "smoothstep",
+            markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+            style: { strokeWidth: 1.75, stroke: "#94a3b8", strokeDasharray: "5 4" },
+          },
+          eds
+        );
       });
+    },
+    [setEdges]
+  );
 
+  const handleAddMindmapNode = (nodeType: "branch" | "leaf") => {
+    const id = `mm-${Date.now()}`;
+    const parentNode =
+      nodes.find((n) => n.id === selectedNodeId) ||
+      nodes.find((n) => n.data.nodeType === "root") ||
+      nodes[0];
 
+    const nextNode: Node<MasterMindmapNodeData> = {
+      id,
+      type: "masterMindmapNode",
+      position: { x: nodeType === "branch" ? 350 : 660, y: 120 + (nodes.length % 5) * 90 },
+      data: {
+        title: nodeType === "branch" ? "Chủ đề nhánh mới" : "Khái niệm chi tiết mới",
+        summary: "Chỉnh sửa mô tả và liên kết kiến thức ở bảng bên phải.",
+        tag: nodeType === "branch" ? "Branch" : "Concept",
+        nodeType,
+        masteryPct: 70,
+      },
+    };
 
+    setNodes((nds) => [...nds, nextNode]);
+    if (parentNode && parentNode.id !== id) {
+      const autoEdge: Edge = {
+        id: `edge-${parentNode.id}-${id}`,
+        source: parentNode.id,
+        target: id,
+        type: "smoothstep",
+        markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+        style: { strokeWidth: 1.75, stroke: "#94a3b8", strokeDasharray: "5 4" },
+      };
+      setEdges((eds) => [...eds, autoEdge]);
+    }
+    setSelectedNodeId(id);
+    setIsMindmapDirty(true);
+    notify(
+      parentNode
+        ? `Đã thêm nút mới & nối tự động từ "${parentNode.data.title}".`
+        : "Đã thêm nút mới vào Master Mindmap."
+    );
+  };
+
+  const handleUpdateSelectedNode = (
+    field: keyof MasterMindmapNodeData,
+    val: string | number
+  ) => {
+    if (!selectedNodeId) return;
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === selectedNodeId ? { ...n, data: { ...n.data, [field]: val } } : n
+      )
+    );
+    setIsMindmapDirty(true);
+  };
+
+  const handleSwitchMindmapChapter = (nextChapterId: string) => {
+    if (nextChapterId === selectedMindmapChapterId) return;
+    if (isMindmapDirty && !window.confirm("Bạn có thay đổi Master Graph chưa lưu. Chuyển chương sẽ bỏ qua thay đổi chưa lưu?")) {
+      return;
+    }
+    setSelectedMindmapChapterId(nextChapterId);
+    setIsMindmapDirty(false);
+  };
+
+  const handleSaveMasterGraph = async () => {
+    const res = await saveInstructorMindmap(selectedClassId, selectedMindmapChapterId, nodes, edges);
+    if (!res) {
+      notify("❌ Không thể lưu Master Graph lên máy chủ MySQL.");
+      return;
+    }
+    setClasses((prev) =>
+      prev.map((c) =>
+        c.id !== selectedClassId
+          ? c
+          : {
+              ...c,
+              chapters: c.chapters.map((ch) =>
+                ch.id === selectedMindmapChapterId
+                  ? { ...ch, mindmapNodes: nodes, mindmapEdges: edges, mindmapGenerated: true }
+                  : ch
+              ),
+            }
+      )
+    );
+    setIsMindmapDirty(false);
+    broadcastCoursesUpdated(selectedClassId);
+    notify("Đã lưu Sơ đồ Master Graph & đồng bộ sang tab Mindmap học viên.");
+  };
+
+  const handleGenerateMindmapAI = () => {
+    setIsMindmapGenerating(true);
+    setMindmapStep(1);
+    const timer = setInterval(() => {
+      setMindmapStep((prev) => {
+        if (prev >= 3) {
+          clearInterval(timer);
+          const ch = (activeClass?.chapters || []).find((c) => c.id === selectedMindmapChapterId);
+          const rootId = `ai-root-${Date.now()}`;
+          const genNodes: Node<MasterMindmapNodeData>[] = [
+            {
+              id: rootId,
+              type: "masterMindmapNode",
+              position: { x: 40, y: 155 },
+              data: {
+                title: ch?.title || "Chủ đề chương",
+                summary: "Master Graph tổng hợp tự động từ giáo trình",
+                tag: `${activeClass.code} · ROOT`,
+                nodeType: "root",
+                masteryPct: activeClass.avgProgressPct,
+                xp: 200,
+              },
+            },
+            ...(ch?.lessons || []).map((l, idx) => ({
+              id: `ai-b-${idx}`,
+              type: "masterMindmapNode",
+              position: { x: 355, y: 40 + idx * 140 },
+              data: {
+                title: l.title,
+                summary: l.content.reading
+                  ? l.content.reading.slice(0, 95) + "..."
+                  : "Trọng tâm bài giảng & kiểm thử thực hành",
+                tag: `Bài ${idx + 1}`,
+                nodeType: "branch" as const,
+                masteryPct: idx === 1 ? 54 : 80,
+              },
+            })),
+          ];
+          const genEdges: Edge[] = (ch?.lessons || []).map((_, idx) => ({
+            id: `ai-e-${idx}`,
+            source: rootId,
+            target: `ai-b-${idx}`,
+            type: "smoothstep",
+            markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+            style: { strokeWidth: 1.75, stroke: "#94a3b8", strokeDasharray: "5 4" },
+          }));
+          setNodes(genNodes);
+          setEdges(genEdges);
+          setIsMindmapDirty(true);
+          setIsMindmapGenerating(false);
+          notify("AI đã dựng xong Master Mindmap đơn sắc. Nhấn 'Lưu Master Graph' để phát hành.");
+          return 3;
+        }
+        return prev + 1;
+      });
     }, 450);
-
-
-
   };
 
 
@@ -3979,83 +3606,15 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-  // Filtered live evidence sessions
+  // Real struggling students from MySQL analytics (Overview support widget)
 
-
-
-  const filteredEvidence = useMemo(() => {
-
-
-
-    if (evidenceFilter === "self") {
-
-
-
-      return evidenceSessions.filter((s) => s.max_hint_level <= 1 && s.status === "completed");
-
-
-
-    }
-
-
-
-    if (evidenceFilter === "hint3") {
-
-
-
-      return evidenceSessions.filter((s) => s.max_hint_level === 3);
-
-
-
-    }
-
-
-
-    if (evidenceFilter === "stuck") {
-
-
-
-      return evidenceSessions.filter((s) => s.status === "stuck");
-
-
-
-    }
-
-
-
-    return evidenceSessions;
-
-
-
-  }, [evidenceSessions, evidenceFilter]);
-
-
-
-  const activeEvidence = useMemo(
-
-
-
-    () =>
-
-
-
-      evidenceSessions.find((s) => s.session_id === selectedSessionId) ||
-
-
-
-      filteredEvidence[0] ||
-
-
-
-      null,
-
-
-
-    [evidenceSessions, selectedSessionId, filteredEvidence]
-
-
-
-  );
+  const atRiskStudents = useMemo(() => {
+    const flagged = studentsAnalytics.filter((s) => s.risk_status === "at_risk");
+    if (flagged.length > 0) return flagged.slice(0, 4);
+    return [...studentsAnalytics]
+      .sort((a, b) => a.avg_quiz - b.avg_quiz || a.progress_pct - b.progress_pct)
+      .slice(0, 3);
+  }, [studentsAnalytics]);
 
 
 
@@ -4191,7 +3750,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-            Đồng bộ 1-1 với học viên: Quản lý giáo trình, Docker CI/CD Test Cases, Hội đồng Phản biện AI 3D và Bằng chứng tự học.
+            Đồng bộ 1-1 với học viên: Quản lý giáo trình, Docker CI/CD Test Cases, Master Mindmap và Hội đồng Phản biện AI 3D.
 
 
 
@@ -4407,7 +3966,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                  { id: "all", label: "Toàn bộ 6 lớp" },
+                  { id: "all", label: `Toàn bộ ${classes.length} lớp` },
 
 
 
@@ -4455,7 +4014,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                      : "Tổng hợp trung bình 6 lớp học phần"
+                      : `Tổng hợp trung bình ${classes.length} lớp học phần`
 
 
 
@@ -4899,15 +4458,15 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                  title="Phân bổ năng lực tự học theo Bằng chứng Socratic"
+                  title="Phân bổ Trạng thái Học tập & Thẩm định Bài nộp"
 
 
 
-                  subtitle="Thống kê theo cấp độ sử dụng gợi ý AI và kết quả Unit Test"
+                  subtitle="Thống kê thực tế từ MySQL: Bài đã chấm, chờ duyệt & cảnh báo lệch điểm"
 
 
 
-                  totalLabel="phiên học"
+                  totalLabel="hồ sơ / học viên"
 
 
 
@@ -4919,15 +4478,15 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                    { id: "self", label: "Tự lực (>=80% / Hint <=1)", count: overviewStats.selfSolved, color: "#14161a" },
+                    { id: "graded", label: "Đã phê duyệt chuẩn", count: overviewStats.gradedCount + overviewStats.topPerformersCount, color: "#14161a" },
 
 
 
-                    { id: "prog", label: "Đang hoàn thiện", count: overviewStats.normalProgress, color: "#64748b" },
+                    { id: "pending", label: "Đang học / Chờ duyệt", count: overviewStats.pendingCount + overviewStats.onTrackCount, color: "#64748b" },
 
 
 
-                    { id: "stuck", label: "Dùng Hint mức 3 / Kẹt", count: overviewStats.hint3Count, color: "#EE8420" },
+                    { id: "flagged", label: "Cần hỗ trợ / Lệch điểm", count: overviewStats.flaggedCount + overviewStats.atRiskCount, color: "#EE8420" },
 
 
 
@@ -4979,7 +4538,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                      Học viên cần hỗ trợ & Xác minh Socratic
+                      Học viên cần hỗ trợ & Can thiệp sớm
 
 
 
@@ -4991,7 +4550,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                      Phát hiện tự động từ chênh lệch điểm CI/CD vs Phản biện 3D và nhật ký Hint Nấc 3.
+                      Phát hiện tự động từ điểm CI/CD thực tế, bài chưa đạt và tiến độ hoàn thành trong MySQL.
 
 
 
@@ -5011,7 +4570,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                    onClick={() => handleTabSwitch("evidence")}
+                    onClick={() => handleTabSwitch("students")}
 
 
 
@@ -5023,7 +4582,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                    <span>Xem Evidence</span>
+                    <span>Xem Học viên</span>
 
 
 
@@ -5043,259 +4602,17 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                  {[
+                  {atRiskStudents.length === 0 ? (
 
 
 
-                    {
+                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-5 text-center text-xs text-slate-500 dark:text-slate-400">
 
 
 
-                      id: "help-1",
-
-
-
-                      name: "Nguyễn Minh Khôi",
-
-
-
-                      code: "2210866",
-
-
-
-                      reason: "Pass CI/CD 5/5 nhưng điểm Phản biện AI 3D chỉ đạt 48/100 (Nghi copy code)",
-
-
-
-                      actionTarget: "grading" as InstructorTab,
-
-
-
-                    },
-
-
-
-                    {
-
-
-
-                      id: "help-2",
-
-
-
-                      name: "Võ Ngọc Hà",
-
-
-
-                      code: "2210851",
-
-
-
-                      reason: "Mở tới Hint Nấc 3 ở bài vtable & đang kẹt 2/5 test biên (Object Slicing)",
-
-
-
-                      actionTarget: "evidence" as InstructorTab,
-
-
-
-                    },
-
-
-
-                    {
-
-
-
-                      id: "help-3",
-
-
-
-                      name: "Võ Nhật Huy",
-
-
-
-                      code: "2210815",
-
-
-
-                      reason: "Sát ngưỡng TLE Stress Test 100k đỉnh ở bài Dijkstra (dùng Hint Nấc 3)",
-
-
-
-                      actionTarget: "evidence" as InstructorTab,
-
-
-
-                    },
-
-
-
-                  ].map((st) => (
-
-
-
-                    <div
-
-
-
-                      key={st.id}
-
-
-
-                      className="marlo-row flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3.5"
-
-
-
-                    >
-
-
-
-                      <div className="min-w-0">
-
-
-
-                        <div className="flex items-center gap-2">
-
-
-
-                          <span className="text-xs font-bold text-slate-900 dark:text-white">
-
-
-
-                            {st.name}
-
-
-
-                          </span>
-
-
-
-                          <span className="text-[10px] font-mono text-slate-400">
-
-
-
-                            {st.code}
-
-
-
-                          </span>
-
-
-
-                        </div>
-
-
-
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">
-
-
-
-                          {st.reason}
-
-
-
-                        </p>
-
-
-
-                      </div>
-
-
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-
-
-
-                        <button
-
-
-
-                          type="button"
-
-
-
-                          onClick={() => handleTabSwitch(st.actionTarget)}
-
-
-
-                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
-
-
-
-                        >
-
-
-
-                          Xem chi tiết
-
-
-
-                        </button>
-
-
-
-                        <button
-
-
-
-                          type="button"
-
-
-
-                          disabled={sentReminders[st.id]}
-
-
-
-                          onClick={() => {
-
-
-
-                            setSentReminders((prev) => ({ ...prev, [st.id]: true }));
-
-
-
-                            notify(`Đã gửi nhắc nhở Socratic tới học viên ${st.name}.`);
-
-
-
-                          }}
-
-
-
-                          className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition cursor-pointer ${
-
-
-
-                            sentReminders[st.id]
-
-
-
-                              ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-default"
-
-
-
-                              : "bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619]"
-
-
-
-                          }`}
-
-
-
-                        >
-
-
-
-                          {sentReminders[st.id] ? "Đã nhắc" : "Nhắc nhở Socratic"}
-
-
-
-                        </button>
-
-
-
-                      </div>
+                      {workspaceLoading
+                        ? "Đang tải thống kê học viên từ MySQL..."
+                        : "Chưa có học viên nào ở mức cảnh báo rủi ro."}
 
 
 
@@ -5303,7 +4620,77 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                  ))}
+                  ) : (
+
+
+
+                    atRiskStudents.map((st) => {
+                      const targetTab: InstructorTab = st.risk_status === "at_risk" ? "grading" : "students";
+                      const reasonText =
+                        st.risk_status === "at_risk"
+                          ? `Điểm TB ${st.avg_quiz.toFixed(1)} · Hoàn thành ${st.progress_pct}% (${st.lessons_done} bài học · ${st.total_submissions} bài nộp)`
+                          : `Hoàn thành ${st.progress_pct}% · ${st.exp_points.toLocaleString("vi-VN")} XP · Chuỗi ${st.current_streak} ngày`;
+                      return (
+                        <div
+                          key={st.student_id}
+                          className="marlo-row flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3.5"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                {st.display_name}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                {st.student_code}
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                st.risk_status === "at_risk"
+                                  ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                              }`}>
+                                {st.risk_label}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">
+                              {reasonText}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleTabSwitch(targetTab)}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                            >
+                              Xem chi tiết
+                            </button>
+                            <button
+                              type="button"
+                              disabled={sentReminders[st.student_id]}
+                              onClick={async () => {
+                                try {
+                                  await remindStudentApi(st.student_id, {
+                                    message: `Giảng viên nhắc nhở ôn tập chuyên đề ${activeClass.code} để cải thiện điểm thực hành.`,
+                                    action_type: "remind",
+                                  });
+                                  setSentReminders((prev) => ({ ...prev, [st.student_id]: true }));
+                                  notify(`Đã gửi nhắc nhở Socratic tới học viên ${st.display_name}.`);
+                                } catch (err: any) {
+                                  notify(`❌ ${err?.message || "Không thể gửi nhắc nhở."}`);
+                                }
+                              }}
+                              className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition cursor-pointer ${
+                                sentReminders[st.student_id]
+                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-default"
+                                  : "bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619]"
+                              }`}
+                            >
+                              {sentReminders[st.student_id] ? "Đã nhắc" : "Nhắc nhở Socratic"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
 
 
 
@@ -5603,7 +4990,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                  <div>
+                  <div className="min-w-0 flex-1">
 
 
 
@@ -5611,15 +4998,64 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                      <h2 className="text-base font-bold text-slate-900 dark:text-white">
-
-
-
-                        {chapter.title}
-
-
-
-                      </h2>
+                      {renamingChapterId === chapter.id ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <input
+                            type="text"
+                            value={renameChapterInput}
+                            onChange={(e) => setRenameChapterInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void handleRenameChapter(chapter.id);
+                              } else if (e.key === "Escape") {
+                                setRenamingChapterId(null);
+                              }
+                            }}
+                            className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1 text-sm font-bold text-slate-900 dark:text-white outline-none min-w-[240px]"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleRenameChapter(chapter.id)}
+                            className="rounded-lg bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-2.5 py-1 text-xs font-bold cursor-pointer"
+                          >
+                            Lưu tên
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRenamingChapterId(null)}
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-500 cursor-pointer"
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                            {chapter.title}
+                          </h2>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRenamingChapterId(chapter.id);
+                              setRenameChapterInput(chapter.title);
+                            }}
+                            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                            title="Đổi tên chương"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteChapter(chapter.id, chapter.title)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                            title="Xóa chương học"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
 
 
 
@@ -5827,6 +5263,17 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleAddLesson(chapter.id);
+                        } else if (e.key === "Escape") {
+                          setAddingLessonChapterId(null);
+                        }
+                      }}
+
+
+
                       placeholder="Nhập tiêu đề bài học mới (VD: 1.4 Interface & Multiple Inheritance)..."
 
 
@@ -5947,7 +5394,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                      (chapter.lessons || []).map((lesson) => (
+                      (chapter.lessons || []).map((lesson, lessonIdx) => (
 
 
 
@@ -5995,6 +5442,30 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
+                              </span>
+
+
+
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+
+
+
+                                +{(lesson as any).xp ?? 150} XP
+
+
+
+                              </span>
+
+
+
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                  lesson.status === "Bản nháp"
+                                    ? "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
+                                    : "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+                                }`}
+                              >
+                                {lesson.status || "Đã phát hành"}
                               </span>
 
 
@@ -6071,7 +5542,38 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+
+
+
+                            <button
+                              type="button"
+                              disabled={lessonIdx === 0}
+                              onClick={() => void handleReorderLesson(chapter.id, lesson.id, -1)}
+                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                              title="Di chuyển lên"
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={lessonIdx === (chapter.lessons?.length || 1) - 1}
+                              onClick={() => void handleReorderLesson(chapter.id, lesson.id, 1)}
+                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                              title="Di chuyển xuống"
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteLesson(chapter.id, lesson.id, lesson.title)}
+                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                              title="Xóa bài giảng"
+                            >
+                              <Trash2 size={12} />
+                            </button>
 
 
 
@@ -6108,6 +5610,10 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
                                 setPreviewTab("reading");
+
+
+
+                                setPreviewQuizAnswers({});
 
 
 
@@ -6439,6 +5945,17 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleAddChapter();
+                    } else if (e.key === "Escape") {
+                      setShowAddChapter(false);
+                    }
+                  }}
+
+
+
                   placeholder="Ví dụ: Chương 3: Design Patterns trong Hệ thống Lớn..."
 
 
@@ -6576,7 +6093,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
               <InstructorChapterGradingView
                 onNotify={notify}
                 classes={classes}
-                defaultSubjectId={selectedClassId}
+                defaultSubjectId={activeClass?.subjectId || ""}
               />
             ) : (
               <>
@@ -7632,7 +7149,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
           <div className="animate-screen-enter">
 
-            <InstructorStudentsTab onNotify={notify} />
+            <InstructorStudentsTab onNotify={notify} activeCourseCode={activeClass?.code || ""} />
 
           </div>
 
@@ -7672,7 +7189,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                  onChange={(e) => setSelectedMindmapChapterId(e.target.value)}
+                  onChange={(e) => handleSwitchMindmapChapter(e.target.value)}
 
 
 
@@ -7705,6 +7222,14 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
                 </select>
+
+
+
+                {isMindmapDirty && (
+                  <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 text-[10.5px] font-bold text-amber-700 dark:text-amber-300">
+                    Chưa lưu thay đổi
+                  </span>
+                )}
 
 
 
@@ -8434,31 +7959,15 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
                               setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
 
-
-
                               setEdges((eds) =>
-
-
-
                                 eds.filter(
-
-
-
                                   (e) => e.source !== selectedNodeId && e.target !== selectedNodeId
-
-
-
                                 )
-
-
-
                               );
-
-
 
                               setSelectedNodeId(null);
 
-
+                              setIsMindmapDirty(true);
 
                               notify("Đã xóa nút khỏi Master Mindmap.");
 
@@ -8580,658 +8089,6 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-        {/* ====================================================================
-
-
-
-            TAB 5: LIVE LEARNING EVIDENCE (SOCRATIC SESSIONS TELEMETRY)
-
-
-
-           ==================================================================== */}
-
-
-
-        {tab === "evidence" && (
-
-
-
-          <div className="animate-screen-enter space-y-4">
-
-
-
-            {/* Toolbar */}
-
-
-
-            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
-
-
-
-              <MarloSegmentedControl<"all" | "self" | "hint3" | "stuck">
-
-
-
-                size="sm"
-
-
-
-                value={evidenceFilter}
-
-
-
-                onChange={setEvidenceFilter}
-
-
-
-                options={[
-
-
-
-                  { id: "all", label: "Tất cả phiên học" },
-
-
-
-                  { id: "self", label: "Tự lực giải quyết" },
-
-
-
-                  { id: "hint3", label: "Dùng Hint mức 3" },
-
-
-
-                  { id: "stuck", label: "Đang kẹt / Cần hỗ trợ" },
-
-
-
-                ]}
-
-
-
-              />
-
-
-
-              <button
-
-
-
-                type="button"
-
-
-
-                onClick={() => void loadEvidence()}
-
-
-
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition cursor-pointer"
-
-
-
-              >
-
-
-
-                <RefreshCw size={13} className={evidenceLoading ? "animate-spin" : ""} />
-
-
-
-                <span>Đồng bộ Telemetry</span>
-
-
-
-              </button>
-
-
-
-            </div>
-
-
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-
-
-
-              {/* Session Cards List */}
-
-
-
-              <div className="lg:col-span-7 space-y-2.5">
-
-
-
-                {filteredEvidence.map((sess) => {
-
-
-
-                  const isActive = activeEvidence?.session_id === sess.session_id;
-
-
-
-                  return (
-
-
-
-                    <div
-
-
-
-                      key={sess.session_id}
-
-
-
-                      onClick={() => setSelectedSessionId(sess.session_id)}
-
-
-
-                      className={`marlo-card marlo-row rounded-2xl border p-4 cursor-pointer transition space-y-2.5 ${
-
-
-
-                        isActive
-
-
-
-                          ? "border-[#141619] dark:border-white bg-slate-50/70 dark:bg-slate-900/90 shadow-xs"
-
-
-
-                          : "border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] hover:border-slate-300"
-
-
-
-                      }`}
-
-
-
-                    >
-
-
-
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-
-
-
-                        <div className="flex items-center gap-2">
-
-
-
-                          <span className="text-xs font-bold text-slate-900 dark:text-white">
-
-
-
-                            {sess.display_name}
-
-
-
-                          </span>
-
-
-
-                          <span className="text-[10.5px] font-mono text-slate-400">
-
-
-
-                            {sess.student_code} · {sess.course_code}
-
-
-
-                          </span>
-
-
-
-                        </div>
-
-
-
-                        <div className="flex items-center gap-1.5">
-
-
-
-                          <span
-
-
-
-                            className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full border ${
-
-
-
-                              sess.max_hint_level === 0
-
-
-
-                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
-
-
-
-                                : sess.max_hint_level <= 2
-
-
-
-                                ? "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-
-
-
-                                : "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400"
-
-
-
-                            }`}
-
-
-
-                          >
-
-
-
-                            {sess.max_hint_level === 0
-
-
-
-                              ? "Không dùng Hint"
-
-
-
-                              : `Mở tới Hint Nấc ${sess.max_hint_level}`}
-
-
-
-                          </span>
-
-
-
-                          <span className="text-[10.5px] font-mono text-slate-500">
-
-
-
-                            Bước {sess.current_step_no}/6
-
-
-
-                          </span>
-
-
-
-                        </div>
-
-
-
-                      </div>
-
-
-
-                      <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-
-
-
-                        {sess.title}
-
-
-
-                      </div>
-
-
-
-                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2.5 text-[11px] text-slate-600 dark:text-slate-300 italic">
-
-
-
-                        "{sess.socratic_note}"
-
-
-
-                      </div>
-
-
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-500">
-
-
-
-                        <span>
-
-
-
-                          Auto-Test: <strong className="text-slate-900 dark:text-white">{sess.passed_count}/{sess.total_tests} pass</strong>
-
-
-
-                        </span>
-
-
-
-                        <span>Thời lượng: {sess.time_spent_min} phút</span>
-
-
-
-                      </div>
-
-
-
-                    </div>
-
-
-
-                  );
-
-
-
-                })}
-
-
-
-              </div>
-
-
-
-              {/* Right Detailed Evidence Timeline */}
-
-
-
-              {activeEvidence && (
-
-
-
-                <aside className="lg:col-span-5 marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs space-y-4">
-
-
-
-                  <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
-
-
-
-                    <div className="text-xs font-mono uppercase tracking-wider text-slate-400">
-
-
-
-                      Nhật ký Tư duy Socratic · teacher_visibility = {activeEvidence.teacher_visibility}
-
-
-
-                    </div>
-
-
-
-                    <h3 className="text-base font-black text-slate-950 dark:text-white mt-0.5">
-
-
-
-                      {activeEvidence.display_name} — {activeEvidence.title}
-
-
-
-                    </h3>
-
-
-
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-
-
-
-                      Ghi chú tự phản tư: "{activeEvidence.socratic_note}"
-
-
-
-                    </p>
-
-
-
-                  </div>
-
-
-
-                  <div className="space-y-2.5">
-
-
-
-                    {activeEvidence.step_logs.map((log, i) => (
-
-
-
-                      <div
-
-
-
-                        key={i}
-
-
-
-                        className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3 space-y-1"
-
-
-
-                      >
-
-
-
-                        <div className="flex items-center justify-between text-xs">
-
-
-
-                          <span className="font-bold text-slate-900 dark:text-white">
-
-
-
-                            Bước {log.step}: {log.label}
-
-
-
-                          </span>
-
-
-
-                          <span className="font-mono text-[10.5px] text-slate-400">
-
-
-
-                            {log.timestamp}
-
-
-
-                          </span>
-
-
-
-                        </div>
-
-
-
-                        <p className="text-[11px] text-slate-600 dark:text-slate-300">{log.detail}</p>
-
-
-
-                      </div>
-
-
-
-                    ))}
-
-
-
-                  </div>
-
-
-
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-2">
-
-
-
-                    <button
-
-
-
-                      type="button"
-
-
-
-                      onClick={() => {
-
-
-
-                        setEvidenceActions((prev) => ({
-
-
-
-                          ...prev,
-
-
-
-                          [activeEvidence.session_id]: "xp",
-
-
-
-                        }));
-
-
-
-                        void postInstructorSessionAction(
-
-
-
-                          activeEvidence.session_id,
-
-
-
-                          "award_xp",
-
-
-
-                          "Thưởng +25 XP Tự lực"
-
-
-
-                        );
-
-
-
-                        notify(`Đã gửi lời khen & +25 XP tự lực tới ${activeEvidence.display_name}.`);
-
-
-
-                      }}
-
-
-
-                      className="flex-1 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] py-2.5 px-3 text-xs font-bold transition cursor-pointer"
-
-
-
-                    >
-
-
-
-                      {evidenceActions[activeEvidence.session_id] === "xp"
-
-
-
-                        ? "Đã gửi +25 XP"
-
-
-
-                        : "Gửi động viên (+25 XP)"}
-
-
-
-                    </button>
-
-
-
-                    <button
-
-
-
-                      type="button"
-
-
-
-                      onClick={() => {
-
-
-
-                        setEvidenceActions((prev) => ({
-
-
-
-                          ...prev,
-
-
-
-                          [activeEvidence.session_id]: "reading",
-
-
-
-                        }));
-
-
-
-                        void postInstructorSessionAction(
-
-
-
-                          activeEvidence.session_id,
-
-
-
-                          "assign_reading",
-
-
-
-                          "Giao tài liệu bổ trợ"
-
-
-
-                        );
-
-
-
-                        notify(`Đã đính kèm bài đọc bổ trợ cho ${activeEvidence.display_name}.`);
-
-
-
-                      }}
-
-
-
-                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 py-2.5 px-3 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
-
-
-
-                    >
-
-
-
-                      Gửi bài đọc bổ trợ
-
-
-
-                    </button>
-
-
-
-                  </div>
-
-
-
-                </aside>
-
-
-
-              )}
-
-
-
-            </div>
-
-
-
-          </div>
-
-
-
-        )}
-
-
-
       </div>
 
 
@@ -9274,10 +8131,10 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
           >
             {/* ── MODAL HEADER ──────────────────────────────────────────────── */}
             <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
-                    Biên soạn Bài học AIGC · Studio
+                    Biên soạn Bài học AIGC · {activeClass.code}
                   </span>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
@@ -9289,27 +8146,40 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                     {editStatus}
                   </span>
                 </div>
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate">
-                  {selectedLesson.title}
-                </h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Tên bài giảng..."
+                    className="flex-1 min-w-[220px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-slate-400"
+                  />
+                  <input
+                    type="text"
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(e.target.value)}
+                    placeholder="15 phút"
+                    className="w-24 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-200 outline-none text-center"
+                    title="Thời lượng hiển thị cho học viên"
+                  />
+                  <div className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5">
+                    <span className="text-[10px] font-mono text-slate-400">+</span>
+                    <input
+                      type="number"
+                      min={10}
+                      max={1000}
+                      step={10}
+                      value={editXp}
+                      onChange={(e) => setEditXp(Number(e.target.value) || 0)}
+                      className="w-12 bg-transparent text-xs font-mono font-bold text-slate-900 dark:text-white outline-none text-center"
+                      title="Điểm kinh nghiệm thưởng khi hoàn thành bài"
+                    />
+                    <span className="text-[10px] font-mono text-slate-400">XP</span>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {/* Toggle Trạng thái phát hành */}
-                <button
-                  type="button"
-                  onClick={() => setEditStatus((prev) => (prev === "Đã phát hành" ? "Bản nháp" : "Đã phát hành"))}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border flex items-center gap-1.5 ${
-                    editStatus === "Đã phát hành"
-                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700"
-                  }`}
-                  title="Chuyển đổi trạng thái giữa Bản nháp và Đã phát hành cho học viên"
-                >
-                  <CheckCircle2 size={13} className={editStatus === "Đã phát hành" ? "text-emerald-500" : "text-slate-400"} />
-                  <span>{editStatus === "Đã phát hành" ? "Đang phát hành" : "Đang để nháp"}</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={() => {
@@ -9318,7 +8188,10 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                       chapterTitle: ch?.title || activeClass.name,
                       lesson: {
                         ...selectedLesson,
+                        title: editTitle || selectedLesson.title,
+                        duration: editDuration || selectedLesson.duration,
                         status: editStatus,
+                        documents: editDocuments,
                         content: {
                           reading: editReading,
                           videoScenes: editScenes,
@@ -9335,6 +8208,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                       assignment: ch?.assignments?.[0],
                     });
                     setPreviewTab("reading");
+                    setPreviewQuizAnswers({});
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                 >
@@ -9567,28 +8441,30 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                     <button
                       type="button"
                       onClick={() => {
-                        setEditObjective(`Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${selectedLesson.title}`);
-                        setEditLead(`Bài học giải thích cặn kẽ bản chất kỹ thuật của ${selectedLesson.title}, phân tích cấu trúc bộ nhớ và các mẫu thiết kế thực tế.`);
+                        const t = editTitle.trim() || selectedLesson.title;
+                        const preset = getSubjectAigcPreset(activeClass?.subjectId || "", activeClass?.code || "CS201", t);
+                        setEditObjective(`Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${t}`);
+                        setEditLead(`Bài học (${activeClass.code}) giải thích cặn kẽ bản chất kỹ thuật của ${t}, tập trung vào ${preset.leadNote}.`);
                         setEditCodeSnippet({
-                          lang: "cpp",
-                          code: `// Minh họa: ${selectedLesson.title}\n#include <iostream>\n#include <memory>\n\nclass CoreEngine {\npublic:\n    virtual void execute() {\n        std::cout << "[Engine] Executing: ${selectedLesson.title}\\n";\n    }\n    virtual ~CoreEngine() = default;\n};\n\nint main() {\n    std::unique_ptr<CoreEngine> engine = std::make_unique<CoreEngine>();\n    engine->execute();\n    return 0;\n}`,
-                          caption: `Mã nguồn C++ minh họa kiến trúc chuẩn cho bài học ${selectedLesson.title}`,
+                          lang: preset.lang,
+                          code: preset.code,
+                          caption: preset.caption,
                         });
                         setEditKeyTakeaways([
-                          `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${selectedLesson.title}.`,
-                          "Đảm bảo an toàn bộ nhớ (Memory Safety) và tuân thủ nguyên tắc RAII.",
-                          "Tối ưu hóa hiệu năng, giảm thiểu chi phí runtime và phân mảnh bộ nhớ.",
+                          `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${t}.`,
+                          `Làm chủ ${preset.leadNote}.`,
+                          "Đạt 100% test tự động & xử lý đủ các trường hợp biên (Edge Cases).",
                         ]);
                         setEditAntiPattern({
-                          badDesc: "Khởi tạo tài nguyên thủ công bằng con trỏ thô (raw pointer) mà không giải phóng bằng delete hoặc dùng sai phạm vi kế thừa.",
-                          solution: "Đóng gói vòng đời tài nguyên vào smart pointer (unique_ptr/shared_ptr) tuân thủ chặt chẽ nguyên tắc RAII.",
+                          badDesc: preset.badDesc,
+                          solution: preset.solution,
                         });
-                        notify("Đã nạp mẫu bài đọc C++ chuẩn hóa.");
+                        notify(`Đã nạp mẫu bài giảng chuẩn ${activeClass.code}.`);
                       }}
                       className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold cursor-pointer hover:bg-blue-100 flex items-center gap-1.5"
                     >
                       <Sparkles size={13} />
-                      <span>Áp dụng mẫu bài giảng C++ chuẩn</span>
+                      <span>Áp dụng mẫu bài giảng {activeClass.code}</span>
                     </button>
                   </div>
 
@@ -9770,53 +8646,42 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                       <button
                         type="button"
                         onClick={() => {
+                          const t = editTitle.trim() || selectedLesson.title;
+                          const preset = getSubjectAigcPreset(activeClass?.subjectId || "", activeClass?.code || "CS201", t);
                           setEditQuizzes([
                             {
                               id: `q-1`,
-                              question: `Trong ${selectedLesson.title}, nguyên tắc kiến trúc nào bắt buộc phải tuân theo để triệt tiêu memory leak?`,
+                              question: `Trong chuyên đề "${t}" (${activeClass.code}), giải pháp nào phản ánh đúng nguyên tắc cốt lõi?`,
                               options: [
-                                "Áp dụng nguyên tắc RAII và quản lý con trỏ thông minh (Smart Pointers)",
-                                "Cấp phát raw pointer tự do không giải phóng bằng delete",
-                                "Gộp toàn bộ logic vào một hàm main duy nhất",
-                                "Bỏ qua bước kiểm tra bộ nhớ với Valgrind",
+                                preset.solution,
+                                preset.badDesc,
+                                "Ghép nối cứng toàn bộ logic không tách mô-đun",
+                                "Bỏ qua kiểm thử đầu vào và điều kiện biên",
                               ],
-                              answer: "Áp dụng nguyên tắc RAII và quản lý con trỏ thông minh (Smart Pointers)",
+                              answer: preset.solution,
                               correctIndex: 0,
-                              explanation: "RAII đảm bảo tài nguyên luôn được giải phóng khi ra khỏi scope, chống memory leak.",
+                              explanation: `Chuẩn ${activeClass.code}: ${preset.solution}`,
                             },
                             {
                               id: `q-2`,
-                              question: `Tại sao hàm hủy (Destructor) của lớp cơ sở phải khai báo là virtual khi có tính kế thừa?`,
+                              question: `Vì sao cần tránh sai lầm phổ biến: "${preset.badDesc.slice(0, 70)}"?`,
                               options: [
-                                "Để đảm bảo hàm hủy của lớp dẫn xuất được gọi đúng thứ tự, tránh rò rỉ tài nguyên",
-                                "Để tăng kích thước của bảng vtable lên gấp đôi",
-                                "Để ngăn chặn các lớp con override hàm thành viên",
-                                "Không cần thiết, C++ tự động xử lý mọi trường hợp",
+                                "Vì dễ phát sinh lỗi runtime, rò rỉ tài nguyên hoặc hỏng logic biên",
+                                "Vì làm tệp mã nguồn ngắn hơn",
+                                "Vì trình biên dịch sẽ tự động sửa mọi lỗi thiết kế",
+                                "Vì không ảnh hưởng tới khả năng mở rộng hay kiểm thử",
                               ],
-                              answer: "Để đảm bảo hàm hủy của lớp dẫn xuất được gọi đúng thứ tự, tránh rò rỉ tài nguyên",
+                              answer: "Vì dễ phát sinh lỗi runtime, rò rỉ tài nguyên hoặc hỏng logic biên",
                               correctIndex: 0,
-                              explanation: "Virtual destructor đảm bảo khi xóa đối tượng qua con trỏ lớp cha thì hàm hủy của lớp con vẫn được thực thi đầy đủ.",
-                            },
-                            {
-                              id: `q-3`,
-                              question: `Độ phức tạp tra cứu phương thức thông qua con trỏ vptr tới bảng ảo vtable trong runtime là bao nhiêu?`,
-                              options: [
-                                "O(1) - Chi phí tra cứu chỉ là một phép dịch offset trong mảng con trỏ hàm",
-                                "O(N) - Phải duyệt tuần tự qua toàn bộ cây phả hệ các lớp",
-                                "O(log N) - Tra cứu theo thuật toán cây nhị phân",
-                                "Không xác định tùy thuộc vào dung lượng RAM",
-                              ],
-                              answer: "O(1) - Chi phí tra cứu chỉ là một phép dịch offset trong mảng con trỏ hàm",
-                              correctIndex: 0,
-                              explanation: "vtable là mảng các con trỏ hàm cố định, compiler tính toán offset từ lúc biên dịch nên tra cứu luôn là O(1).",
+                              explanation: `Cách xử lý đúng: ${preset.solution}`,
                             },
                           ]);
-                          notify("Đã nạp 3 câu hỏi trắc nghiệm C++ chuẩn.");
+                          notify(`Đã nạp bộ câu hỏi trắc nghiệm chuẩn ${activeClass.code}.`);
                         }}
                         className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold cursor-pointer hover:bg-blue-100 flex items-center gap-1.5"
                       >
                         <Sparkles size={13} />
-                        <span>Nạp bộ câu hỏi mẫu C++</span>
+                        <span>Nạp bộ câu hỏi mẫu {activeClass.code}</span>
                       </button>
 
                       <button
@@ -9842,7 +8707,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                         className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white dark:bg-white dark:text-slate-900 text-xs font-bold cursor-pointer flex items-center gap-1.5"
                       >
                         <Plus size={13} />
-                        <span>+ Thêm câu hỏi</span>
+                        <span>Thêm câu hỏi</span>
                       </button>
                     </div>
                   </div>
@@ -10017,6 +8882,9 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                     <button
                       type="button"
                       onClick={() => {
+                        if (activeLessonChapterId) {
+                          setSelectedMindmapChapterId(activeLessonChapterId);
+                        }
                         setLessonModalOpen(false);
                         handleTabSwitch("mindmap");
                       }}
@@ -10030,9 +8898,9 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                   <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-2 text-xs">
                     <div className="font-bold text-slate-900 dark:text-white">Trạng thái đồng bộ Master Mindmap:</div>
                     <ul className="space-y-1.5 text-slate-600 dark:text-slate-300 pl-4 list-disc">
-                      <li>Khái niệm bài học: <strong className="text-slate-900 dark:text-white">{selectedLesson.title}</strong></li>
+                      <li>Khái niệm bài học: <strong className="text-slate-900 dark:text-white">{editTitle || selectedLesson.title}</strong></li>
                       <li>Học phần áp dụng: <span className="font-mono">{activeClass.code} · {activeClass.name}</span></li>
-                      <li>Khi Giảng viên cập nhật các nút tại Tab "Master Mindmap", hệ thống lập tức lưu vào SQLite và hiển thị trực tiếp cho học viên.</li>
+                      <li>Khi Giảng viên cập nhật các nút tại Tab "Master Mindmap" và bấm Lưu, dữ liệu được lưu trực tiếp vào MySQL 8.0 và đồng bộ sang tab Mindmap của học viên.</li>
                     </ul>
                   </div>
                 </div>
@@ -10041,20 +8909,37 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
               {/* ── TAB 5: TÀI LIỆU & AI ── */}
               {drawerTab === "upload" && (
                 <div className="space-y-4">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.pptx,.docx,.md,.txt"
+                    onChange={handleLessonFileUpload}
+                    className="hidden"
+                  />
                   <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/30">
                     <Upload size={24} className="mx-auto text-slate-400" />
                     <div>
                       <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                        {selectedLesson.documents[0]
-                          ? `Đang dùng tài liệu: ${selectedLesson.documents[0].name}`
-                          : "Chọn tài liệu giáo trình để AI biên soạn bài giảng"}
+                        {editDocuments.length > 0
+                          ? `Đã đính kèm ${editDocuments.length} tài liệu giáo trình`
+                          : "Tải lên hoặc chọn tài liệu giáo trình để AI biên soạn bài giảng"}
                       </div>
                       <p className="text-xs text-slate-500 mt-1">
-                        Hỗ trợ định dạng PDF, PPTX, Docx giáo trình chuẩn ABET
+                        Hỗ trợ định dạng PDF, PPTX, DOCX, Markdown (.md) chuẩn ABET
                       </p>
                     </div>
 
                     <div className="flex flex-wrap justify-center gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center gap-1.5"
+                      >
+                        <Upload size={13} />
+                        <span>Tải tệp từ máy (PDF/PPTX/MD)</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => attachLessonDocument(`${activeClass.code}_Slide_Chuan.pdf`, "480 KB")}
@@ -10083,6 +8968,34 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
                       </button>
                     </div>
                   </div>
+
+                  {editDocuments.length > 0 && (
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Danh sách Tài liệu Đính kèm ({editDocuments.length})
+                      </div>
+                      {editDocuments.map((doc) => (
+                        <div
+                          key={doc.name}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText size={14} className="text-slate-500 shrink-0" />
+                            <span className="font-semibold text-slate-800 dark:text-slate-100 truncate">{doc.name}</span>
+                            <span className="font-mono text-[11px] text-slate-400 shrink-0">({doc.size} · {doc.uploadedAt})</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeLessonDocument(doc.name)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shrink-0"
+                            title="Gỡ tài liệu"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -10251,7 +9164,58 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
-
+              {/* Assignment Metadata Editor */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 bg-slate-50/50 dark:bg-slate-900/40">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">
+                    Thông tin Bài tập Thực hành & Docker Image
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveAssignmentMeta()}
+                    className="rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-3 py-1.5 text-[11px] font-bold cursor-pointer"
+                  >
+                    Lưu đề bài Lab
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={editAssignTitle}
+                    onChange={(e) => setEditAssignTitle(e.target.value)}
+                    placeholder="Tiêu đề bài tập Lab..."
+                    className="sm:col-span-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-semibold outline-none"
+                  />
+                  <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2">
+                    <span className="text-[11px] text-slate-400 font-mono">Điểm/XP:</span>
+                    <input
+                      type="number"
+                      min={10}
+                      max={1000}
+                      value={editAssignPoints}
+                      onChange={(e) => setEditAssignPoints(Number(e.target.value) || 100)}
+                      className="w-16 bg-transparent text-xs font-mono font-bold outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <textarea
+                    rows={2}
+                    value={editAssignDesc}
+                    onChange={(e) => setEditAssignDesc(e.target.value)}
+                    placeholder="Yêu cầu bài tập & tiêu chí đánh giá..."
+                    className="sm:col-span-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs outline-none resize-none"
+                  />
+                  <input
+                    type="text"
+                    value={editAssignDockerImage}
+                    onChange={(e) => setEditAssignDockerImage(e.target.value)}
+                    placeholder="codemind/cpp20-sandbox:latest"
+                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 font-mono text-[11px] outline-none"
+                    title="Docker image chạy test"
+                  />
+                </div>
+              </div>
 
               <div className="space-y-2">
 
@@ -10269,181 +9233,119 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3 flex items-start justify-between gap-3"
+                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-3 space-y-2"
 
 
 
                   >
 
-
-
-                    <div className="min-w-0 space-y-1 text-xs">
-
-
-
-                      <div className="flex flex-wrap items-center gap-2">
-
-
-
-                        <span className="font-mono font-bold text-slate-400">#{idx + 1}</span>
-
-
-
-                        <span className="font-bold text-slate-900 dark:text-white">{tc.title}</span>
-
-
-
-                        {tc.isEdgeCase && (
-
-
-
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-[#8F5404] dark:text-amber-400">
-
-
-
-                            Edge Case
-
-
-
-                          </span>
-
-
-
-                        )}
-
-
-
+                    {editingTcId === tc.id ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={editTcTitle}
+                          onChange={(e) => setEditTcTitle(e.target.value)}
+                          placeholder="Tên Test Case"
+                          className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs font-semibold outline-none"
+                        />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={editTcInput}
+                            onChange={(e) => setEditTcInput(e.target.value)}
+                            placeholder="Input"
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 font-mono text-xs outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={editTcOutput}
+                            onChange={(e) => setEditTcOutput(e.target.value)}
+                            placeholder="Expected Output"
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 font-mono text-xs outline-none"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editTcEdgeCase}
+                              onChange={(e) => setEditTcEdgeCase(e.target.checked)}
+                            />
+                            <span>Edge Case</span>
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingTcId(null)}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-semibold cursor-pointer"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveEditedTestCase()}
+                              className="rounded-lg bg-emerald-600 text-white px-2.5 py-1 text-[11px] font-bold cursor-pointer"
+                            >
+                              Lưu Test Case
+                            </button>
+                          </div>
+                        </div>
                       </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1 text-xs">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono font-bold text-slate-400">#{idx + 1}</span>
+                            <span className="font-bold text-slate-900 dark:text-white">{tc.title}</span>
+                            {tc.isEdgeCase && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-[#8F5404] dark:text-amber-400">
+                                Edge Case
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-mono text-[11px] text-slate-500">
+                            Input: {tc.input} → Expected: <strong className="text-slate-800 dark:text-slate-200">{tc.expectedOutput}</strong>
+                          </div>
+                        </div>
 
-
-
-                      <div className="font-mono text-[11px] text-slate-500">
-
-
-
-                        Input: {tc.input} → Expected: <strong className="text-slate-800 dark:text-slate-200">{tc.expectedOutput}</strong>
-
-
-
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => startEditTestCase(tc)}
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                            title="Sửa Test Case"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleTestCaseEdge(tc)}
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10.5px] font-semibold cursor-pointer"
+                          >
+                            {tc.isEdgeCase ? "Tắt Edge" : "Đặt Edge"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (tcChapterId) {
+                                const delRes = await deleteInstructorTestCase(selectedClassId, tcChapterId, tc.id);
+                                if (!delRes) {
+                                  notify("❌ Không thể xóa Test Case trên máy chủ.");
+                                  return;
+                                }
+                              }
+                              updateAssignmentTestCases((cases) => cases.filter((i) => i.id !== tc.id));
+                              broadcastCoursesUpdated(selectedClassId);
+                              notify("Đã xóa Test Case khỏi Docker Sandbox.");
+                            }}
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                            title="Xóa Test Case"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
-
-
-
-                    </div>
-
-
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-
-
-
-                      <button
-
-
-
-                        type="button"
-
-
-
-                        onClick={() =>
-
-
-
-                          updateAssignmentTestCases((cases) =>
-
-
-
-                            cases.map((item) =>
-
-
-
-                              item.id === tc.id ? { ...item, isEdgeCase: !item.isEdgeCase } : item
-
-
-
-                            )
-
-
-
-                          )
-
-
-
-                        }
-
-
-
-                        className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10.5px] font-semibold cursor-pointer"
-
-
-
-                      >
-
-
-
-                        {tc.isEdgeCase ? "Tắt Edge" : "Đặt Edge"}
-
-
-
-                      </button>
-
-
-
-                      <button
-
-
-
-                        type="button"
-
-
-
-                        onClick={() => {
-
-
-
-                          updateAssignmentTestCases((cases) => cases.filter((i) => i.id !== tc.id));
-
-
-
-                          if (tcChapterId) {
-
-
-
-                            void deleteInstructorTestCase(selectedClassId, tcChapterId, tc.id);
-
-
-
-                          }
-
-
-
-                        }}
-
-
-
-                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-
-
-
-                        title="Xóa Test Case"
-
-
-
-                      >
-
-
-
-                        <Trash2 size={13} />
-
-
-
-                      </button>
-
-
-
-                    </div>
-
-
+                    )}
 
                   </div>
 
@@ -10875,356 +9777,218 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
-
-
               {previewTab === "reading" && (
-
-
-
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-5 text-xs leading-6 text-slate-700 dark:text-slate-200 whitespace-pre-line">
-
-
-
-                  {previewLesson.lesson.content.reading || "Bài học này chưa có nội dung bài đọc."}
-
-
-
-                </div>
-
-
-
-              )}
-
-
-
-              {previewTab === "video" && (
-
-
-
-                <div className="space-y-3">
-
-
-
-                  {previewLesson.lesson.content.videoScenes.length === 0 ? (
-
-
-
-                    <p className="text-xs text-slate-400">Chưa có kịch bản video.</p>
-
-
-
-                  ) : (
-
-
-
-                    previewLesson.lesson.content.videoScenes.map((sc) => (
-
-
-
-                      <div
-
-
-
-                        key={sc.id}
-
-
-
-                        className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-1.5"
-
-
-
-                      >
-
-
-
-                        <div className="text-xs font-bold text-slate-900 dark:text-white">
-
-
-
-                          {sc.title} — {sc.text}
-
-
-
-                        </div>
-
-
-
-                        <p className="text-xs text-slate-600 dark:text-slate-300">{sc.script}</p>
-
-
-
-                      </div>
-
-
-
-                    ))
-
-
-
+                <div className="space-y-4">
+                  {(previewLesson.lesson.content as any)?.objective && (
+                    <div className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 p-3.5 text-xs">
+                      <span className="font-bold text-blue-700 dark:text-blue-300 uppercase text-[10px] tracking-wider block mb-1">
+                        Mục tiêu bài học
+                      </span>
+                      <p className="text-slate-800 dark:text-slate-200 font-medium">
+                        {(previewLesson.lesson.content as any).objective}
+                      </p>
+                    </div>
                   )}
 
+                  {(previewLesson.lesson.content as any)?.lead && (
+                    <p className="text-xs leading-6 text-slate-700 dark:text-slate-300 font-medium">
+                      {(previewLesson.lesson.content as any).lead}
+                    </p>
+                  )}
 
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-5 text-xs leading-6 text-slate-700 dark:text-slate-200 whitespace-pre-line">
+                    {previewLesson.lesson.content.reading || "Bài học này chưa có nội dung bài đọc."}
+                  </div>
 
+                  {(previewLesson.lesson.content as any)?.codeSnippet?.code && (
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-950 text-slate-100">
+                      <div className="px-3.5 py-2 border-b border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <span>{(previewLesson.lesson.content as any).codeSnippet.caption || "Mã nguồn minh họa"}</span>
+                        <span className="uppercase">{(previewLesson.lesson.content as any).codeSnippet.lang || "code"}</span>
+                      </div>
+                      <pre className="p-3.5 text-[11.5px] leading-relaxed overflow-x-auto font-mono">
+                        <code>{(previewLesson.lesson.content as any).codeSnippet.code}</code>
+                      </pre>
+                    </div>
+                  )}
+
+                  {Array.isArray((previewLesson.lesson.content as any)?.keyTakeaways) &&
+                    (previewLesson.lesson.content as any).keyTakeaways.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2 text-xs">
+                        <div className="font-bold text-slate-900 dark:text-white">Nguyên lý cốt lõi cần nhớ:</div>
+                        <ul className="list-disc pl-4 space-y-1 text-slate-700 dark:text-slate-300">
+                          {(previewLesson.lesson.content as any).keyTakeaways.map((kt: string, kIdx: number) => (
+                            <li key={kIdx}>{kt}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                  {(previewLesson.lesson.content as any)?.antiPattern?.badDesc && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 p-3.5">
+                        <div className="font-bold text-rose-700 dark:text-rose-300 mb-1">Anti-Pattern cần tránh</div>
+                        <p className="text-slate-700 dark:text-slate-300">{(previewLesson.lesson.content as any).antiPattern.badDesc}</p>
+                      </div>
+                      <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/20 p-3.5">
+                        <div className="font-bold text-emerald-700 dark:text-emerald-300 mb-1">Giải pháp chuẩn Kiến trúc</div>
+                        <p className="text-slate-700 dark:text-slate-300">{(previewLesson.lesson.content as any).antiPattern.solution}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {Array.isArray(previewLesson.lesson.documents) && previewLesson.lesson.documents.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 space-y-1.5 text-xs">
+                      <div className="font-bold text-slate-700 dark:text-slate-200">Tài liệu đính kèm ({previewLesson.lesson.documents.length}):</div>
+                      {previewLesson.lesson.documents.map((doc) => (
+                        <div key={doc.name} className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                          <FileText size={12} />
+                          <span>{doc.name} ({doc.size})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-
-
               )}
 
-
+              {previewTab === "video" && (
+                <div className="space-y-4">
+                  <div className="aspect-video w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-black">
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${extractYoutubeId((previewLesson.lesson.content as any)?.youtubeUrl || (previewLesson.lesson.content as any)?.youtubeId)}?rel=0&modestbranding=1`}
+                      title="Preview YouTube Player"
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                  <div className="space-y-2.5">
+                    {previewLesson.lesson.content.videoScenes.length === 0 ? (
+                      <p className="text-xs text-slate-400">Chưa có phân cảnh video.</p>
+                    ) : (
+                      previewLesson.lesson.content.videoScenes.map((sc) => (
+                        <div
+                          key={sc.id}
+                          className="rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 space-y-1"
+                        >
+                          <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between gap-2">
+                            <span>{sc.title} — {sc.text}</span>
+                            {sc.time && <span className="font-mono text-[11px] text-slate-400">{sc.time}</span>}
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-300">{sc.script}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
 
               {previewTab === "quiz" && (
-
-
-
                 <div className="space-y-3">
-
-
-
-                  {previewLesson.lesson.content.quizzes.map((q, idx) => (
-
-
-
-                    <div
-
-
-
-                      key={q.id}
-
-
-
-                      className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2"
-
-
-
-                    >
-
-
-
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">
-
-
-
-                        Câu {idx + 1}: {q.question}
-
-
-
-                      </div>
-
-
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-
-
-
-                        {q.options.map((opt) => (
-
-
-
-                          <div
-
-
-
-                            key={opt}
-
-
-
-                            className={`rounded-lg border px-3 py-2 text-xs ${
-
-
-
-                              opt === q.answer
-
-
-
-                                ? "border-[#141619] dark:border-white font-bold bg-slate-50 dark:bg-slate-900"
-
-
-
-                                : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
-
-
-
-                            }`}
-
-
-
-                          >
-
-
-
-                            {opt}
-
-
-
+                  {previewLesson.lesson.content.quizzes.map((q, idx) => {
+                    const selectedIdx = previewQuizAnswers[q.id];
+                    const correctIdx =
+                      typeof q.correctIndex === "number"
+                        ? q.correctIndex
+                        : Math.max(0, q.options.findIndex((o) => o === q.answer));
+                    return (
+                      <div
+                        key={q.id}
+                        className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2.5"
+                      >
+                        <div className="text-xs font-bold text-slate-900 dark:text-white">
+                          Câu {idx + 1}: {q.question}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {q.options.map((opt, optIdx) => {
+                            const isPicked = selectedIdx === optIdx;
+                            const isCorrectOpt = optIdx === correctIdx;
+                            const showResult = typeof selectedIdx === "number";
+                            return (
+                              <button
+                                key={`${q.id}-${optIdx}`}
+                                type="button"
+                                onClick={() =>
+                                  setPreviewQuizAnswers((prev) => ({ ...prev, [q.id]: optIdx }))
+                                }
+                                className={`text-left rounded-lg border px-3 py-2 text-xs transition cursor-pointer ${
+                                  showResult && isCorrectOpt
+                                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 font-bold"
+                                    : showResult && isPicked && !isCorrectOpt
+                                    ? "border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 font-semibold"
+                                    : isPicked
+                                    ? "border-[#141619] dark:border-white font-bold bg-slate-50 dark:bg-slate-900"
+                                    : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-400"
+                                }`}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {typeof selectedIdx === "number" && q.explanation && (
+                          <div className="text-[11px] rounded-lg bg-slate-50 dark:bg-slate-900/70 px-3 py-2 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800">
+                            <strong>Giải thích:</strong> {q.explanation}
                           </div>
-
-
-
-                        ))}
-
-
-
+                        )}
                       </div>
-
-
-
-                    </div>
-
-
-
-                  ))}
-
-
-
+                    );
+                  })}
                 </div>
-
-
-
               )}
-
-
 
               {previewTab === "exercise" && (
-
-
-
                 <div className="space-y-3">
-
-
-
                   <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-
-
-
                     <div className="text-sm font-bold text-slate-900 dark:text-white">
-
-
-
                       {previewLesson.assignment?.title || "Bài tập thực hành chương"}
-
-
-
                     </div>
-
-
-
                     <p className="text-xs text-slate-500 mt-1">
-
-
-
                       {previewLesson.assignment?.description || "Nộp GitHub Repo để Docker Sandbox biên dịch và chạy test tự động."}
-
-
-
                     </p>
-
-
-
-                  </div>
-
-
-
-                  <div className="space-y-2">
-
-
-
-                    {(previewLesson.assignment?.testCases || []).map((tc) => (
-
-
-
-                      <div
-
-
-
-                        key={tc.id}
-
-
-
-                        className="rounded-xl border border-slate-200 dark:border-slate-800 px-3.5 py-2.5 text-xs flex justify-between"
-
-
-
-                      >
-
-
-
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">{tc.title}</span>
-
-
-
-                        <span className="font-mono text-slate-500">{tc.timeoutMs} ms</span>
-
-
-
+                    {previewLesson.assignment?.dockerImage && (
+                      <div className="text-[11px] font-mono text-slate-400 mt-2">
+                        Docker Sandbox: {previewLesson.assignment.dockerImage} · +{previewLesson.assignment.points} XP
                       </div>
-
-
-
-                    ))}
-
-
-
+                    )}
                   </div>
-
-
-
+                  <div className="space-y-2">
+                    {(previewLesson.assignment?.testCases || []).map((tc) => (
+                      <div
+                        key={tc.id}
+                        className="rounded-xl border border-slate-200 dark:border-slate-800 px-3.5 py-2.5 text-xs flex justify-between"
+                      >
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{tc.title}</span>
+                        <span className="font-mono text-slate-500">{tc.timeoutMs} ms</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-
-
-
               )}
-
-
 
             </div>
 
-
-
             <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-
-
-
               <button
-
-
-
                 type="button"
-
-
-
                 onClick={() => {
-
-
-
+                  const targetLessonId = previewLesson.lesson.id;
+                  const targetTab = previewTab === "reading" ? "lecture" : previewTab;
                   setPreviewLesson(null);
-
-
-
-                  onNavigate?.("workspace");
-
-
-
+                  if (onOpenWorkspace) {
+                    onOpenWorkspace({
+                      subjectId: activeClass.subjectId || activeClass.id,
+                      lessonId: targetLessonId,
+                      tab: targetTab,
+                    });
+                  } else {
+                    onNavigate?.("workspace");
+                  }
                 }}
-
-
-
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
-
-
-
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
               >
-
-
-
                 <span>Mở Không gian Học viên đầy đủ</span>
-
-
-
                 <ArrowUpRight size={13} />
-
-
-
               </button>
 
 
