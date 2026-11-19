@@ -1860,7 +1860,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                             <button
                               type="button"
                               onClick={() => onNavigate("defense-room")}
-                              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold flex items-center gap-1.5 transition shadow-xs"
+                              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-xs font-bold flex items-center gap-1.5 transition shadow-xs cursor-pointer"
                               title="Mở phòng chấm thi AI Council 3D"
                             >
                               <span>Vào chấm thi</span>

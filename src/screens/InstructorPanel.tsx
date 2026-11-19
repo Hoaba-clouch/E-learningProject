@@ -6220,7 +6220,7 @@ export default function InstructorPanel({
 
 
 
-                              className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 px-3 py-1.5 text-xs font-bold transition cursor-pointer shadow-xs"
 
 
 
@@ -12025,7 +12025,7 @@ export default function InstructorPanel({
 
 
 
-          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] px-4 py-3 text-xs font-bold shadow-lg border border-black/10 transition cursor-pointer"
+          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-[#141619] hover:bg-black text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 px-4 py-3 text-xs font-bold shadow-lg border border-black/10 dark:border-white/20 transition cursor-pointer"
 
 
 

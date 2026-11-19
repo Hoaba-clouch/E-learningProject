@@ -332,8 +332,8 @@ export function InstructorChapterGradingView({
                         onClick={() => setActiveSubId(sub.id)}
                         className={`cursor-pointer transition-colors ${
                           isSelected
-                            ? "bg-emerald-50/60 dark:bg-emerald-950/30"
-                            : "hover:bg-slate-50/80 dark:hover:bg-slate-850/50"
+                            ? "bg-emerald-50/90 dark:bg-slate-800/90 border-l-4 border-emerald-500"
+                            : "hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
                         }`}
                       >
                         <td className="px-3.5 py-3">
@@ -380,8 +380,8 @@ export function InstructorChapterGradingView({
 
                         <td className="px-3 py-3 text-right">
                           <div className="font-mono font-bold text-xs">
-                            <span className="text-slate-500">{sub.score.toFixed(1)}</span>
-                            <span className="text-slate-300 mx-1">/</span>
+                            <span className="text-slate-600 dark:text-slate-300 font-bold">{sub.score.toFixed(1)}</span>
+                            <span className="text-slate-400 dark:text-slate-500 mx-1">/</span>
                             <span className={sub.instructorGrade !== null && sub.instructorGrade !== undefined ? "text-emerald-600 dark:text-emerald-400 font-extrabold" : "text-amber-500 font-normal"}>
                               {sub.instructorGrade !== null && sub.instructorGrade !== undefined ? sub.instructorGrade.toFixed(1) : "—"}
                             </span>

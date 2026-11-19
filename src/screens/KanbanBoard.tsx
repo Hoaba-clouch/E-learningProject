@@ -7423,105 +7423,53 @@ export default function KanbanBoard({
       {/* ── HARD CONSTRAINT H2 VIOLATION ALERT MODAL ──────────────────────── */}
 
       {h2Violation && (
-
         <div onClick={handleCloseH2Violation} className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 ${isH2ViolationClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
-
-          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl border border-rose-200 bg-white p-6 shadow-2xl ${isH2ViolationClosing ? "marlo-modal-out" : "marlo-modal"}`}>
-
-            
-
-          
-
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl border border-rose-200 dark:border-rose-900/50 bg-white dark:bg-[#181922] p-6 shadow-2xl ${isH2ViolationClosing ? "marlo-modal-out" : "marlo-modal"}`}>
             <div className="mb-4 flex items-center gap-3.5">
-
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-sm">
-
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 shadow-sm">
                 <ShieldAlert size={28} />
-
               </span>
-
               <div>
-
-                <h3 className="text-base font-bold text-slate-900">
-
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
                   Ràng buộc Cứng H2 Bị Vi Phạm!
-
                 </h3>
-
-                <p className="text-xs font-semibold text-rose-600">
-
+                <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
                   Task Dependency Constraint Blocked
-
                 </p>
-
               </div>
-
             </div>
 
-
-
-            <p className="mb-4 text-xs leading-relaxed text-slate-600">
-
-              Hệ thống không cho phép kéo thẻ <strong>"{h2Violation.task.title}"</strong> sang cột <strong>Done</strong> vì thẻ tiền đề sau đây vẫn chưa hoàn thành:
-
+            <p className="mb-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+              Hệ thống không cho phép kéo thẻ <strong className="text-slate-900 dark:text-white">"{h2Violation.task.title}"</strong> sang cột <strong className="text-slate-900 dark:text-white">Done</strong> vì thẻ tiền đề sau đây vẫn chưa hoàn thành:
             </p>
 
-
-
-            <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50/70 p-4">
-
-              <div className="flex items-center justify-between text-xs font-semibold text-rose-900">
-
+            <div className="mb-5 rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/40 p-4">
+              <div className="flex items-center justify-between text-xs font-semibold text-rose-900 dark:text-rose-300">
                 <span>Thẻ tiền đề: #{h2Violation.blockingTask.code}</span>
-
-                <span className="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-rose-700 shadow-2xs">
-
+                <span className="rounded-md bg-white dark:bg-rose-900/70 border border-rose-100 dark:border-rose-800 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-700 dark:text-rose-200 shadow-2xs">
                   Hiện ở: {h2Violation.blockingTask.column}
-
                 </span>
-
               </div>
-
-              <p className="mt-1.5 text-xs font-bold text-rose-800">
-
+              <p className="mt-1.5 text-xs font-bold text-rose-800 dark:text-rose-200">
                 {h2Violation.blockingTask.title}
-
               </p>
-
-              <p className="mt-1.5 text-[11px] text-slate-600">
-
-                Người phụ trách: <strong>{h2Violation.blockingTask.assignee.name}</strong> ({h2Violation.blockingTask.assignee.role})
-
+              <p className="mt-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                Người phụ trách: <strong className="text-slate-800 dark:text-slate-100">{h2Violation.blockingTask.assignee.name}</strong> ({h2Violation.blockingTask.assignee.role})
               </p>
-
             </div>
 
-
-
-            <p className="mb-5 text-[11px] text-slate-500 italic">
-
+            <p className="mb-5 text-[11px] text-slate-500 dark:text-slate-400 italic">
               * Quy tắc H2 trong đồ án đảm bảo mã nguồn và module được tích hợp tuần tự, triệt tiêu nguy cơ xung đột (merge conflicts) giữa các bạn trong nhóm.
-
             </p>
-
-
 
             <div className="flex justify-end">
-
               <button
-
                 onClick={handleCloseH2Violation}
-
-                className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
-
+                className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-rose-600 dark:hover:bg-rose-500 py-2.5 text-xs font-semibold text-white shadow-sm transition cursor-pointer"
               >
-
                 Đã hiểu, tôi sẽ hoàn thành task tiền đề trước
-
               </button>
-
             </div>
-
           </div>
 
         </div>
