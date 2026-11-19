@@ -72,8 +72,8 @@ export default function App() {
     return "login";
   });
   const [selectedKanbanProjectId, setSelectedKanbanProjectId] = useState<string>("prj-codemind");
-  const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>("kestrel");
-  const [selectedMarloPersonId, setSelectedMarloPersonId] = useState<string>("dara");
+  const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>("codemind");
+  const [selectedMarloPersonId, setSelectedMarloPersonId] = useState<string>("hoa");
   const mainRef = useRef<HTMLElement>(null);
 
   const setScreen = (nextScreen: Screen) => {

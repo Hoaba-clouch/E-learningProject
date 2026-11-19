@@ -2,14 +2,14 @@ import React, { useState, useRef, useEffect } from "react";
 import { Search, Check, Folder, Users } from "lucide-react";
 import gsap from "gsap";
 import {
-  MARLO_MEMBERS,
-  MARLO_PROJECTS,
-  MARLO_TASKS,
+  getMarloMembers,
+  getMarloProjects,
+  getMarloTasks,
+  getMemberLoadStats,
   MARLO_SKILLS,
   MARLO_MEMBER_STATUS_LABEL,
   MARLO_MEMBER_STATUS_TONE,
   MARLO_HUES,
-  getMemberLoadStats,
   MarloMember,
 } from "../marlo-engine/marloData";
 import "../marlo-engine/marloStyles.css";
@@ -23,12 +23,24 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
   const containerRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"people" | "workload">("people");
+  const [dataVersion, setDataVersion] = useState(0);
 
-  // In the studio count
-  const inStudioCount = MARLO_MEMBERS.filter((m) => m.status === "in").length;
+  // Sync with live store changes
+  useEffect(() => {
+    const handleDataChanged = () => setDataVersion((v) => v + 1);
+    window.addEventListener("codemind-marlo-data-changed", handleDataChanged);
+    return () => window.removeEventListener("codemind-marlo-data-changed", handleDataChanged);
+  }, []);
+
+  const members = getMarloMembers();
+  const allTasks = getMarloTasks();
+  const allProjects = getMarloProjects();
+
+  // In the lab count
+  const inStudioCount = members.filter((m) => m.status === "in").length;
 
   // Filter members by search
-  const filteredMembers = MARLO_MEMBERS.filter((m) => {
+  const filteredMembers = members.filter((m) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const skillName = MARLO_SKILLS[m.skill]?.name || "";
@@ -43,14 +55,12 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
   useEffect(() => {
     if (!containerRef.current) return;
     const ctx = gsap.context(() => {
-      // 1. Header & Controls
       gsap.fromTo(
         ".phead, .toolbar",
         { opacity: 0, y: -12 },
         { opacity: 1, y: 0, duration: 0.45, ease: "power2.out", stagger: 0.06 }
       );
 
-      // 2. Member Cards (Wave / Staggered Entrance)
       gsap.fromTo(
         ".people .person",
         { opacity: 0, y: 24, scale: 0.96 },
@@ -68,7 +78,7 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
     }, containerRef);
 
     return () => ctx.revert();
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, dataVersion]);
 
   return (
     <div
@@ -80,10 +90,10 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
         <div className="phead mb-4">
           <div className="phead__text">
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Team
+              Đội Ngũ Kỹ Thuật & Cố Vấn (Team)
             </h1>
             <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
-              {MARLO_MEMBERS.length} people · {inStudioCount} in the studio today.
+              {members.length} chuyên gia & học viên · {inStudioCount} người đang có mặt tại phòng Lab hôm nay.
             </p>
           </div>
         </div>
@@ -99,7 +109,7 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
                 : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
-            People
+            Danh sách nhân sự (People)
             {activeTab === "people" && (
               <span className="absolute bottom-[-9px] left-0 right-0 h-[2.5px] bg-[#f29b23] rounded-full" />
             )}
@@ -113,7 +123,7 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
                 : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
-            Workload
+            Phân bổ khối lượng (Workload)
             {activeTab === "workload" && (
               <span className="absolute bottom-[-9px] left-0 right-0 h-[2.5px] bg-[#f29b23] rounded-full" />
             )}
@@ -128,29 +138,29 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Find someone"
+              placeholder="Tìm theo tên kỹ sư, vai trò, chuyên môn..."
               className="input pl-9"
             />
           </div>
         </div>
 
-        {/* Grid People (Matching Image 2) */}
+        {/* Grid People */}
         {filteredMembers.length === 0 ? (
           <section className="card text-center py-12">
             <Users size={32} className="mx-auto text-slate-400 mb-2" />
             <b className="text-base font-semibold block text-slate-700 dark:text-slate-300">
-              No one matches “{searchQuery}”
+              Không tìm thấy thành viên nào khớp với “{searchQuery}”
             </b>
-            <p className="text-xs text-slate-500 mt-1">Try another name, role, or discipline.</p>
+            <p className="text-xs text-slate-500 mt-1">Vui lòng thử tìm với từ khóa hoặc chuyên môn khác.</p>
           </section>
         ) : (
-          <div className="people grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="people grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
             {filteredMembers.map((member) => {
               const stats = getMemberLoadStats(member.id);
-              const openTasksCount = MARLO_TASKS.filter(
+              const openTasksCount = allTasks.filter(
                 (t) => t.who === member.id && t.status !== "done"
               ).length;
-              const activeJobsCount = MARLO_PROJECTS.filter(
+              const activeJobsCount = allProjects.filter(
                 (p) => p.team.includes(member.id) && p.status !== "delivered"
               ).length;
 
@@ -164,14 +174,14 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
                   key={member.id}
                   onClick={() => onSelectPerson(member.id)}
                   className="card person hover:translate-y-[-2px] hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
-                  title={`Bấm để xem chi tiết hồ sơ thành viên ${member.name}`}
+                  title={`Bấm để xem chi tiết hồ sơ chuyên gia ${member.name}`}
                 >
                   <div>
                     {/* Top: Avatar & Status Pill */}
                     <div className="person__top flex items-start justify-between mb-3">
                       <div className="relative">
                         <div
-                          className="av av--lg font-bold shadow-2xs"
+                          className="av av--lg font-bold shadow-2xs text-sm"
                           style={{ background: hue.bg, color: hue.text }}
                         >
                           {member.initials || member.name.slice(0, 2).toUpperCase()}
@@ -179,7 +189,7 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
                         {member.status === "in" && (
                           <span
                             className="av__dot"
-                            title="Đang có mặt tại Studio hôm nay"
+                            title="Đang có mặt tại phòng Lab hôm nay"
                           />
                         )}
                       </div>
@@ -201,7 +211,7 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
 
                     {/* Last 7 days Load */}
                     <div className="person__load flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
-                      <span>Last 7 days</span>
+                      <span>7 ngày gần nhất</span>
                       <b className="text-slate-800 dark:text-slate-200">
                         {stats.last7Days} / {member.capacity} h
                       </b>
@@ -219,11 +229,11 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
                   <div className="person__foot flex items-center gap-4 pt-3 border-t border-[#14161a14] dark:border-[#ffffff12] text-xs text-slate-500 font-semibold">
                     <span className="flex items-center gap-1.5">
                       <Check size={13} strokeWidth={2.5} />
-                      {openTasksCount} open
+                      {openTasksCount} task mở
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Folder size={13} strokeWidth={2} />
-                      {activeJobsCount} jobs
+                      {activeJobsCount} đề tài
                     </span>
                   </div>
                 </div>
