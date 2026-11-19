@@ -230,13 +230,6 @@ export function LessonMindmapStudio({
     }
   }, [hasInstructorMap, subjectId]);
 
-  // Khi đổi môn học hoặc rootNodeId thay đổi, mở nốt root tương ứng
-  useEffect(() => {
-    if (rootNodeId) {
-      setExpandedNodeIds((prev) => (prev.has(rootNodeId) ? prev : new Set([rootNodeId])));
-    }
-  }, [rootNodeId, subjectId]);
-
   // Xây dựng bản đồ quan hệ cha - con
   const { childrenMap, parentMap, nodeMap, rootNodeId } = useMemo(() => {
     const cMap = new Map<string, string[]>();
@@ -266,6 +259,13 @@ export function LessonMindmapStudio({
       rootNodeId: rId,
     };
   }, [currentData]);
+
+  // Khi đổi môn học hoặc rootNodeId thay đổi, mở nốt root tương ứng
+  useEffect(() => {
+    if (rootNodeId) {
+      setExpandedNodeIds((prev) => (prev.has(rootNodeId) ? prev : new Set([rootNodeId])));
+    }
+  }, [rootNodeId, subjectId]);
 
   // Toggle mở rộng / thu gọn 1 node
   const toggleNode = useCallback((nodeId: string) => {
