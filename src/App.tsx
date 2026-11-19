@@ -85,11 +85,28 @@ export default function App() {
     }
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   };
-  const [role, setRole] = useState<Role>(() => {
+  const [role, setRoleState] = useState<Role>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("role");
+      if (r === "instructor" || r === "admin" || r === "student") return r as Role;
+      const stored = window.localStorage.getItem("code-mind-role");
+      if (stored === "instructor" || stored === "admin" || stored === "student") return stored as Role;
+    }
     if (screen.startsWith("instructor")) return "instructor";
     if (screen.startsWith("admin")) return "admin";
     return "student";
   });
+
+  const setRole = (nextRole: Role) => {
+    setRoleState(nextRole);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("role", nextRole);
+      window.history.replaceState({}, "", url.toString());
+      window.localStorage.setItem("code-mind-role", nextRole);
+    }
+  };
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("code-mind-theme") as Theme | null) ?? "light";
@@ -370,7 +387,7 @@ export default function App() {
           />
         );
       case "kanban": return <KanbanBoard initialProjectId={selectedKanbanProjectId} role={role} />;
-      case "schedule": return <EngineeringScheduleRota role={role} />;
+      case "schedule": return <EngineeringScheduleRota role={role} onNavigate={setScreen} onRoleChange={setRole} />;
       case "projects": return (
         <MarloProjectsScreen
           role={role}
