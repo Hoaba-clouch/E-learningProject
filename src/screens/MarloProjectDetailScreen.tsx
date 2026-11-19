@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Plus, Clock, ExternalLink, X, CheckCircle2, Crown } from "lucide-react";
+import { ChevronLeft, Plus, ExternalLink, X, CheckCircle2, Crown } from "lucide-react";
 import gsap from "gsap";
 import {
   getMarloProject,
@@ -8,7 +8,6 @@ import {
   getProjectTasks,
   getProjectHoursStats,
   addMarloTask,
-  logMarloHours,
   updateMarloProjectStatus,
   updateMarloTaskStatus,
   MARLO_PROJECT_STATUS,
@@ -62,20 +61,12 @@ export default function MarloProjectDetailScreen({
   const circumference = 2 * Math.PI * radius;
   const targetStrokeDashoffset = circumference - (progressPercent / 100) * circumference;
 
-  // Max value for hours by week bar chart
-  const maxBarValue = Math.max(...stats.values, 45);
-
   // ─── Modal States ───
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskWho, setNewTaskWho] = useState(project.lead);
-  const [newTaskEst, setNewTaskEst] = useState(8);
+  const [newTaskEst, setNewTaskEst] = useState(5);
   const [newTaskPriority, setNewTaskPriority] = useState<"high" | "med" | "low">("high");
-
-  const [isLogTimeModalOpen, setIsLogTimeModalOpen] = useState(false);
-  const [logHours, setLogHours] = useState(4);
-  const [logWho, setLogWho] = useState(project.lead);
-  const [logNote, setLogNote] = useState("");
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const showToast = (msg: string) => {
@@ -94,31 +85,13 @@ export default function MarloProjectDetailScreen({
       status: "todo",
       priority: newTaskPriority,
       kind: "architecture",
-      est: Number(newTaskEst) || 8,
+      est: Number(newTaskEst) || 5,
       due: Date.now() + 3 * 86400000,
     });
 
     setNewTaskTitle("");
     setIsAddTaskModalOpen(false);
     showToast(`✓ Đã thêm công việc kỹ thuật mới vào đồ án ${project.name}!`);
-  };
-
-  const handleLogHours = (e: React.FormEvent) => {
-    e.preventDefault();
-    const h = Number(logHours);
-    if (!h || h <= 0) return;
-
-    logMarloHours({
-      projectId: project.id,
-      who: logWho,
-      hours: h,
-      kind: "architecture",
-      note: logNote.trim() || "Ghi nhận tiến độ kỹ thuật đồ án",
-    });
-
-    setIsLogTimeModalOpen(false);
-    setLogNote("");
-    showToast(`✓ Đã ghi nhận ${h} giờ làm việc thực tế vào đồ án!`);
   };
 
   const handleStatusChange = (newStatus: any) => {
@@ -252,14 +225,6 @@ export default function MarloProjectDetailScreen({
           <div className="phead__actions flex items-center gap-3">
             <button
               type="button"
-              className="btn flex items-center justify-center font-semibold text-xs px-4"
-              onClick={() => setIsLogTimeModalOpen(true)}
-              title="Ghi nhận giờ làm việc thực tế"
-            >
-              <span>Ghi nhận giờ</span>
-            </button>
-            <button
-              type="button"
               className="btn btn--primary flex items-center justify-center font-semibold text-xs px-4"
               onClick={() => setIsAddTaskModalOpen(true)}
               title="Thêm công việc kỹ thuật mới"
@@ -269,8 +234,8 @@ export default function MarloProjectDetailScreen({
           </div>
         </div>
 
-        {/* 4 Stat Cards */}
-        <div className="pd__stats grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* 3 Stat Cards (Không tính giờ công) */}
+        <div className="pd__stats grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* Card 1: Progress Donut */}
           <section className="card pd__stat pd__stat--hero flex items-center gap-4">
             <div className="relative w-[88px] h-[88px] flex items-center justify-center flex-none">
@@ -312,18 +277,7 @@ export default function MarloProjectDetailScreen({
             </div>
           </section>
 
-          {/* Card 2: Hours Logged */}
-          <section className="card pd__stat flex flex-col justify-between">
-            <small className="text-xs text-slate-500 font-semibold">Tổng giờ công kỹ thuật</small>
-            <b className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 my-1">
-              {stats.totalHours} giờ
-            </b>
-            <span className="text-xs text-emerald-600 font-semibold">
-              +{stats.thisWeekHours} giờ trong tuần này
-            </span>
-          </section>
-
-          {/* Card 3: Budget Used */}
+          {/* Card 2: Budget Used */}
           <section className="card pd__stat flex flex-col justify-between">
             <small className="text-xs text-slate-500 font-semibold">Kinh phí nghiên cứu đã giải ngân</small>
             <b className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 my-1">
@@ -342,7 +296,7 @@ export default function MarloProjectDetailScreen({
             </div>
           </section>
 
-          {/* Card 4: Status Dropdown & Lead */}
+          {/* Card 3: Status Dropdown & Lead */}
           <section className="card pd__stat flex flex-col justify-between">
             <small className="text-xs text-slate-500 font-semibold">Trạng thái đồ án</small>
             <div className="my-1">
@@ -459,7 +413,7 @@ export default function MarloProjectDetailScreen({
                                 </span>
                               </div>
                               <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-1 border-t border-black/5 dark:border-white/5">
-                                <span>{task.est}h công</span>
+                                <span className="truncate max-w-[120px]">{whoMember ? whoMember.name : "Chưa phân công"}</span>
                                 <span className={task.priority === "high" ? "text-rose-600 dark:text-rose-400 font-bold" : ""}>
                                   {task.priority === "high" ? "Ưu tiên cao" : "Bình thường"}
                                 </span>
@@ -475,58 +429,8 @@ export default function MarloProjectDetailScreen({
             </div>
           </section>
 
-          {/* Right Stack: Hours by week chart & Team */}
+          {/* Right Stack: Team List (Đã loại bỏ hoàn toàn biểu đồ giờ cống hiến) */}
           <div className="stack flex flex-col gap-6">
-            {/* Hours by week bar chart */}
-            <section className="card">
-              <div className="chead mb-3">
-                <div className="chead__text">
-                  <h2 className="text-lg font-bold">Giờ cống hiến theo tuần</h2>
-                  <p className="text-xs text-slate-500">8 tuần nghiên cứu gần nhất</p>
-                </div>
-              </div>
-
-              <div className="bars h-[180px]">
-                <div className="bars__cols h-[140px] flex items-end gap-2 pb-6 border-b border-slate-200 dark:border-slate-800">
-                  {stats.labels.map((lbl, idx) => {
-                    const val = stats.values[idx] || 0;
-                    const heightPercent = (val / maxBarValue) * 100;
-                    const isCurrentWeek = idx === stats.labels.length - 1;
-
-                    return (
-                      <div
-                        key={lbl}
-                        className={`bars__col flex-1 flex flex-col items-center justify-end h-full relative group ${
-                          isCurrentWeek ? "is-hi" : ""
-                        }`}
-                      >
-                        <div className="bars__track w-full flex items-end justify-center h-full relative">
-                          <div
-                            className={`bars__bar w-full max-w-[28px] rounded-t-sm transition-all duration-500 ${
-                              isCurrentWeek
-                                ? "bg-[#f29b23]"
-                                : val > 0
-                                ? "bg-[#161718] dark:bg-[#f0f0f1]"
-                                : "bg-transparent"
-                            }`}
-                            style={{ height: `${Math.max(4, heightPercent)}%` }}
-                            title={`${lbl}: ${val} giờ`}
-                          />
-                        </div>
-                        <span
-                          className={`bars__label text-[10px] font-semibold mt-2 whitespace-nowrap ${
-                            isCurrentWeek ? "text-[#f29b23] font-bold" : "text-slate-400"
-                          }`}
-                        >
-                          {lbl}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-
             {/* Team List */}
             <section className="card">
               <div className="chead mb-3">
@@ -593,7 +497,7 @@ export default function MarloProjectDetailScreen({
 
                         <div className="text-right flex-none">
                           <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-200/70 dark:bg-slate-800 px-2.5 py-1 rounded-full">
-                            {m.capacity} h/tuần
+                            {isLead ? "Nhóm trưởng" : "Thành viên"}
                           </span>
                         </div>
                       </div>
@@ -657,12 +561,12 @@ export default function MarloProjectDetailScreen({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Ước lượng (giờ)
+                    Độ phức tạp (Story Points)
                   </label>
                   <input
                     type="number"
                     min={1}
-                    max={120}
+                    max={21}
                     value={newTaskEst}
                     onChange={(e) => setNewTaskEst(Number(e.target.value))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
@@ -697,90 +601,6 @@ export default function MarloProjectDetailScreen({
                   className="px-5 py-2 text-xs font-bold bg-[#f29b23] hover:bg-[#d48419] text-white rounded-xl shadow-xs transition"
                 >
                   Xác Nhận Tạo Task
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ─── REAL MODAL: LOG TIME ─── */}
-      {isLogTimeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white dark:bg-[#1b1c1e] rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Ghi Nhận Giờ Nghiên Cứu / Code
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsLogTimeModalOpen(false)}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleLogHours} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Số giờ thực hiện hôm nay *
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  max="24"
-                  required
-                  value={logHours}
-                  onChange={(e) => setLogHours(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-[#f29b23]/30"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Nhân sự ghi nhận
-                </label>
-                <select
-                  value={logWho}
-                  onChange={(e) => setLogWho(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
-                >
-                  {allMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Ghi chú công việc đã làm
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="VD: Viết test case, debug lỗi WebSocket, tinh chỉnh prompt Socratic..."
-                  value={logNote}
-                  onChange={(e) => setLogNote(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsLogTimeModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-[#f29b23] hover:bg-[#d48419] text-white rounded-xl shadow-xs transition"
-                >
-                  Ghi Nhận Vào Hệ Thống
                 </button>
               </div>
             </form>

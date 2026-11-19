@@ -100,7 +100,7 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
           <div className="bg-[#161718] dark:bg-[#F0F0F1] text-white dark:text-[#161718] text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 border border-white/10 dark:border-black/10">
             <CheckCircle2 size={13} className="text-[#F29B23]" />
             <span>
-              {lastLoggedMins > 0 ? `+${lastLoggedMins} phút • Ghi nhận vào hồ sơ!` : "Giờ học hôm nay đã đồng bộ!"}
+              {lastLoggedMins > 0 ? `+${lastLoggedMins} phút tập trung hoàn tất!` : "Phiên học tập đã sẵn sàng!"}
             </span>
           </div>
         </div>
@@ -108,26 +108,26 @@ export default function MarloFocusTimer({ collapsed = false, onSessionComplete }
 
       <section
         className={`timer${isRunning ? " is-on" : ""}`}
-        aria-label="Time tracking"
+        aria-label="Pomodoro focus timer"
       >
         <div className="timer__body">
-          {/* Top row: Tracked today label + Stop/Log check button */}
+          {/* Top row: Focus Mode label + Stop/Log check button */}
           <div className="timer__top">
-            <small>Tracked today</small>
+            <small>Đồng hồ tập trung</small>
             <button
               type="button"
               className="timer__stop"
-              aria-label="Stop and log the time"
-              title="Lưu phiên học (+XP & Log)"
+              aria-label="Reset and complete session"
+              title="Đặt lại phiên tập trung"
               onClick={handleStopAndLog}
             >
               <Check size={14} strokeWidth={2.4} />
             </button>
           </div>
 
-          {/* Today logged stats */}
+          {/* Focus mode title */}
           <b className="timer__today">
-            {todayHoursFormatted} h<small> of {goalHours.toFixed(1)} h</small>
+            Pomodoro Focus<small> (Deep Work)</small>
           </b>
 
           {/* Project / Subject Selector */}

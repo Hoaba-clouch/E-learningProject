@@ -56,7 +56,6 @@ export default function MarloPersonDetailScreen({
   const ledProjects = allProjects.filter((p) => p.lead === member.id);
 
   const hue = MARLO_HUES[member.hue] || { bg: "#f7d593", text: "#633806" };
-  const maxWeeklyHours = Math.max(...stats.values, member.capacity, 40);
 
   // ─── Modal States ───
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -136,19 +135,6 @@ export default function MarloPersonDetailScreen({
           stagger: 0.08,
           delay: 0.2,
           clearProps: "transform,opacity",
-        }
-      );
-
-      gsap.fromTo(
-        ".bars__bar",
-        { scaleY: 0, transformOrigin: "bottom center" },
-        {
-          scaleY: 1,
-          duration: 0.7,
-          ease: "back.out(1.4)",
-          stagger: 0.035,
-          delay: 0.35,
-          clearProps: "transform",
         }
       );
 
@@ -243,19 +229,12 @@ export default function MarloPersonDetailScreen({
             </div>
           </div>
 
-          {/* 3 Stats: Last 7 days, 8 weeks, Open work */}
+          {/* Profile Stats: Open tasks & Assigned Projects (Không hiển thị giờ công) */}
           <div className="prof__stats flex flex-wrap items-center gap-6 sm:gap-8 border-t md:border-t-0 md:border-l border-[#14161a14] dark:border-[#ffffff12] pt-4 md:pt-0 md:pl-8">
             <div>
-              <small className="text-xs text-slate-500 font-semibold block">7 ngày qua</small>
+              <small className="text-xs text-slate-500 font-semibold block">Đề tài tham gia</small>
               <b className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                {stats.last7Days} h
-              </b>
-            </div>
-
-            <div>
-              <small className="text-xs text-slate-500 font-semibold block">8 tuần gần đây</small>
-              <b className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                {stats.eightWeeksTotal} h
+                {jobs.length} đồ án
               </b>
             </div>
 
@@ -263,6 +242,13 @@ export default function MarloPersonDetailScreen({
               <small className="text-xs text-slate-500 font-semibold block">Công việc đang mở</small>
               <b className="text-2xl font-bold text-[#f29b23]">
                 {openTasks.length} task
+              </b>
+            </div>
+
+            <div>
+              <small className="text-xs text-slate-500 font-semibold block">Vai trò nghiên cứu</small>
+              <b className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                {ledProjects.length > 0 ? "Nhóm trưởng" : "Thành viên"}
               </b>
             </div>
           </div>
@@ -322,7 +308,7 @@ export default function MarloPersonDetailScreen({
                           {t.code ? `${t.code}: ` : ""}{t.title}
                         </b>
                         <small className="text-xs text-slate-500 dark:text-slate-400 block truncate mt-0.5">
-                          {p?.name || "Đồ án"} · {t.est}h dự kiến
+                          {p?.name || "Đồ án"} · Ưu tiên: {t.priority === "high" ? "Cao" : "Bình thường"}
                         </small>
                       </div>
 
@@ -346,58 +332,8 @@ export default function MarloPersonDetailScreen({
             </div>
           </section>
 
-          {/* Right Stack: Hours by week & Jobs */}
+          {/* Right Stack: Jobs List (Đã loại bỏ hoàn toàn biểu đồ giờ cống hiến) */}
           <div className="flex flex-col gap-6">
-            {/* Hours by week chart */}
-            <section className="card">
-              <div className="chead mb-3">
-                <div className="chead__text">
-                  <h2 className="text-lg font-bold">Giờ cống hiến theo tuần</h2>
-                  <p className="text-xs text-slate-500">Định mức quy định: {member.capacity} giờ / tuần</p>
-                </div>
-              </div>
-
-              <div className="bars h-[180px]">
-                <div className="bars__cols h-[140px] flex items-end gap-2 pb-6 border-b border-slate-200 dark:border-slate-800">
-                  {stats.labels.map((lbl, idx) => {
-                    const val = stats.values[idx] || 0;
-                    const heightPercent = (val / maxWeeklyHours) * 100;
-                    const isCurrentWeek = idx === stats.labels.length - 1;
-
-                    return (
-                      <div
-                        key={lbl}
-                        className={`bars__col flex-1 flex flex-col items-center justify-end h-full relative group ${
-                          isCurrentWeek ? "is-hi" : ""
-                        }`}
-                      >
-                        <div className="bars__track w-full flex items-end justify-center h-full relative">
-                          <div
-                            className={`bars__bar w-full max-w-[28px] rounded-t-sm transition-all duration-500 ${
-                              isCurrentWeek
-                                ? "bg-[#f29b23]"
-                                : val > 0
-                                ? "bg-[#161718] dark:bg-[#f0f0f1]"
-                                : "bg-transparent"
-                            }`}
-                            style={{ height: `${Math.max(4, heightPercent)}%` }}
-                            title={`${lbl}: ${val} giờ`}
-                          />
-                        </div>
-                        <span
-                          className={`bars__label text-[10px] font-semibold mt-2 whitespace-nowrap ${
-                            isCurrentWeek ? "text-[#f29b23] font-bold" : "text-slate-400"
-                          }`}
-                        >
-                          {lbl}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-
             {/* Jobs List (Projects member is assigned to) */}
             <section className="card">
               <div className="chead mb-3">
@@ -501,12 +437,12 @@ export default function MarloPersonDetailScreen({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Thời lượng dự kiến (giờ)
+                    Độ phức tạp (Story Points)
                   </label>
                   <input
                     type="number"
                     min={1}
-                    max={100}
+                    max={21}
                     value={assignEst}
                     onChange={(e) => setAssignEst(Number(e.target.value))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"

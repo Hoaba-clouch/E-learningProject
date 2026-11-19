@@ -5,7 +5,6 @@ import {
   getMarloMembers,
   getMarloProjects,
   getMarloTasks,
-  getMemberLoadStats,
   MARLO_SKILLS,
   MARLO_MEMBER_STATUS_LABEL,
   MARLO_MEMBER_STATUS_TONE,
@@ -22,7 +21,7 @@ interface Props {
 export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"people" | "workload">("people");
+  const [activeTab, setActiveTab] = useState<"people" | "leads">("people");
   const [dataVersion, setDataVersion] = useState(0);
 
   // Sync with live store changes
@@ -39,8 +38,12 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
   // In the lab count
   const inStudioCount = members.filter((m) => m.status === "in").length;
 
-  // Filter members by search
+  // Filter members by search & tab
   const filteredMembers = members.filter((m) => {
+    if (activeTab === "leads") {
+      const isLead = allProjects.some((p) => p.lead === m.id);
+      if (!isLead) return false;
+    }
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const skillName = MARLO_SKILLS[m.skill]?.name || "";
@@ -98,7 +101,7 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
           </div>
         </div>
 
-        {/* Tab switch: People vs Workload */}
+        {/* Tab switch: All Members vs Leads */}
         <div className="flex items-center gap-2 mb-6 border-b border-[#14161a14] dark:border-[#ffffff12] pb-2">
           <button
             type="button"
@@ -109,22 +112,22 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
                 : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
-            Danh sách nhân sự (People)
+            Tất cả thành viên
             {activeTab === "people" && (
               <span className="absolute bottom-[-9px] left-0 right-0 h-[2.5px] bg-[#f29b23] rounded-full" />
             )}
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("workload")}
+            onClick={() => setActiveTab("leads")}
             className={`px-4 py-2 text-sm font-bold transition-all relative ${
-              activeTab === "workload"
+              activeTab === "leads"
                 ? "text-slate-950 dark:text-white"
                 : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
-            Phân bổ khối lượng (Workload)
-            {activeTab === "workload" && (
+            Nhóm trưởng đồ án (Leads)
+            {activeTab === "leads" && (
               <span className="absolute bottom-[-9px] left-0 right-0 h-[2.5px] bg-[#f29b23] rounded-full" />
             )}
           </button>
@@ -156,7 +159,6 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
         ) : (
           <div className="people grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
             {filteredMembers.map((member) => {
-              const stats = getMemberLoadStats(member.id);
               const openTasksCount = allTasks.filter(
                 (t) => t.who === member.id && t.status !== "done"
               ).length;
@@ -167,7 +169,6 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
               const hue = MARLO_HUES[member.hue] || { bg: "#e6d6c4", text: "#161718" };
               const statusTone = MARLO_MEMBER_STATUS_TONE[member.status];
               const statusLabel = MARLO_MEMBER_STATUS_LABEL[member.status];
-              const loadPercent = Math.min(100, (stats.last7Days / member.capacity) * 100);
 
               return (
                 <div
@@ -220,19 +221,12 @@ export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }:
                       {member.role} · {MARLO_SKILLS[member.skill]?.name}
                     </small>
 
-                    {/* Last 7 days Load */}
-                    <div className="person__load flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
-                      <span>7 ngày gần nhất</span>
+                    {/* Task Assignment */}
+                    <div className="person__load flex items-center justify-between text-xs text-slate-500 font-semibold mb-3">
+                      <span>Nhiệm vụ đảm nhiệm</span>
                       <b className="text-slate-800 dark:text-slate-200">
-                        {stats.last7Days} / {member.capacity} h
+                        {openTasksCount} task đang mở
                       </b>
-                    </div>
-
-                    <div className="w-full bg-[#e1e2e5] dark:bg-[#2c2d31] h-1.5 rounded-full overflow-hidden mb-3">
-                      <div
-                        className="h-full rounded-full bg-[#f29b23] transition-all duration-500"
-                        style={{ width: `${loadPercent}%` }}
-                      />
                     </div>
                   </div>
 
