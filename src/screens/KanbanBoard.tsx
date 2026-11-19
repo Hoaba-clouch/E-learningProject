@@ -2175,7 +2175,36 @@ export default function KanbanBoard({
     }
   }, [role, activeTab]);
 
-  const [isSprintLocked, setIsSprintLocked] = useState(false);
+  const [isSprintLocked, setIsSprintLocked] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("codemind_kanban_sprint_locked") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSprintLock = () => {
+    const next = !isSprintLocked;
+    setIsSprintLocked(next);
+    try {
+      localStorage.setItem("codemind_kanban_sprint_locked", String(next));
+    } catch (e) {
+      console.error("Failed to persist sprint locked state", e);
+    }
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast({
+      taskId: "sprint-lock",
+      taskCode: "SPRINT",
+      taskTitle: next ? "Đã khóa Sprint 1" : "Đã mở lại Sprint 1",
+      customMessage: next
+        ? "🔒 Đã khóa Sprint. Sinh viên không thể di chuyển hoặc tạo task mới."
+        : "🔓 Đã mở lại Sprint. Sinh viên có thể tiếp tục cập nhật task.",
+      undone: false,
+    });
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+    }, 4000);
+  };
 
   const [kanbanAnimKey, setKanbanAnimKey] = useState<number>(0);
 
@@ -2606,11 +2635,11 @@ export default function KanbanBoard({
       const dist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
 
       if (!d.isDragging && dist > 4) {
-
+        if (isSprintLocked) {
+          return;
+        }
         d.isDragging = true;
-
         setPointerDrag((prev) => prev ? { ...prev, isDragging: true } : null);
-
       }
 
 
@@ -3708,9 +3737,17 @@ export default function KanbanBoard({
 
 
 
-    // Restrict student when sprint is locked by Admin
-    if (role === "student" && isSprintLocked) {
-      alert("Sprint đã bị khóa bởi Ban Đào Tạo / Quản trị viên. Sinh viên không thể thay đổi trạng thái công việc.");
+    // Restrict movement when sprint is locked by Admin
+    if (isSprintLocked) {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoToast({
+        taskId: "sprint-locked-notice",
+        taskCode: "LOCKED",
+        taskTitle: "Sprint đang bị khóa",
+        customMessage: "🔒 Sprint 1 hiện đang bị khóa kiểm toán. Không thể di chuyển hoặc thay đổi trạng thái thẻ.",
+        undone: false,
+      });
+      undoTimerRef.current = setTimeout(() => setUndoToast(null), 3500);
       return;
     }
 
@@ -5016,8 +5053,8 @@ export default function KanbanBoard({
 
 
 
-            {/* Student-only project tools (Hidden for Instructors to keep clean evaluation workspace) */}
-            {role !== "instructor" && (
+            {/* Student-only project tools (Hidden for Instructors and Admin to keep clean workspace) */}
+            {role === "student" && (
               <>
                 {/* Engineering & Agile Scrum Handbook Button */}
                 <button
@@ -5060,25 +5097,18 @@ export default function KanbanBoard({
 
             <div className="flex items-center gap-2 pl-1 border-l border-slate-200 dark:border-slate-800">
 
-              {/* Export Button */}
-
-              <button
-
-                type="button"
-
-                onClick={handleExportTasks}
-
-                className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-[#1a1f2c] hover:bg-slate-800 dark:hover:bg-[#252c3e] text-white border border-transparent dark:border-slate-700/60 font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition active:scale-97 cursor-pointer"
-
-                title="Xuất danh sách công việc sang file CSV"
-
-              >
-
-                <Download size={14} className="stroke-[2.5]" />
-
-                <span>Export</span>
-
-              </button>
+              {/* Export Button (Student & Instructor; Admin has dedicated Audit CSV button) */}
+              {role !== "admin" && (
+                <button
+                  type="button"
+                  onClick={handleExportTasks}
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-[#1a1f2c] hover:bg-slate-800 dark:hover:bg-[#252c3e] text-white border border-transparent dark:border-slate-700/60 font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition active:scale-97 cursor-pointer"
+                  title="Xuất danh sách công việc sang file CSV"
+                >
+                  <Download size={14} className="stroke-[2.5]" />
+                  <span>Export</span>
+                </button>
+              )}
 
 
 
@@ -5148,62 +5178,44 @@ export default function KanbanBoard({
 
               {role === "admin" && (
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
 
                   <button
 
                     type="button"
 
-                    onClick={() => {
+                    onClick={toggleSprintLock}
 
-                      const next = !isSprintLocked;
-
-                      setIsSprintLocked(next);
-
-                      alert(next ? "🔒 Đã khóa Sprint. Sinh viên không thể di chuyển hoặc tạo task mới." : "🔓 Đã mở lại Sprint.");
-
-                    }}
-
-                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs ${
 
                       isSprintLocked
 
-                        ? "bg-rose-600 hover:bg-rose-700 text-white"
+                        ? "bg-rose-600 hover:bg-rose-700 text-white ring-2 ring-rose-500/30 animate-pulse"
 
                         : "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 shadow-2xs"
 
                     }`}
 
-                    title="Đóng băng toàn bộ hoạt động kéo thả task khi hết giờ thi/Sprint"
+                    title={isSprintLocked ? "Sprint đang bị đóng băng. Bấm để mở lại Sprint." : "Đóng băng toàn bộ hoạt động kéo thả task của sinh viên"}
 
                   >
 
-                    {isSprintLocked ? <Lock size={13} /> : <Unlock size={13} />}
+                    {isSprintLocked ? <Lock size={14} className="stroke-[2.5]" /> : <Unlock size={14} className="stroke-[2.5]" />}
 
-                    <span>{isSprintLocked ? "Sprint Đang Khóa" : "Khóa Sprint"}</span>
+                    <span>{isSprintLocked ? "Mở Khóa Sprint" : "Khóa Sprint"}</span>
 
                   </button>
 
                   <button
-
                     type="button"
-
                     onClick={handleExportTasks}
-
-                    className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
                     title="Xuất file nhật ký kiểm toán công việc toàn bộ dự án"
-
                   >
-
-                    <FileSpreadsheet size={13} />
-
+                    <FileSpreadsheet size={14} />
                     <span>Kiểm toán CSV</span>
-
                   </button>
-
                 </div>
-
               )}
 
             </div>
@@ -5510,6 +5522,39 @@ export default function KanbanBoard({
 
       {/* ── TAB 1: KANBAN BOARD WITH REAL DRAG AND DROP (WITH STAGGERED WATERFALL CASCADE) ─ */}
 
+      {/* 🔒 SPRINT LOCKED GOVERNANCE BANNER */}
+      {isSprintLocked && activeTab === "board" && (
+        <div className="animate-in fade-in slide-in-from-top-2 mb-4 p-3.5 rounded-2xl bg-rose-500/10 dark:bg-rose-950/40 border border-rose-500/30 flex items-center justify-between flex-wrap gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-rose-600 text-white shrink-0 shadow-xs">
+              <Lock size={16} className="stroke-[2.5]" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-rose-700 dark:text-rose-300 flex items-center gap-2">
+                <span>Sprint 1 Hiện Đang Bị Khóa (Đóng Băng Kiểm Toán)</span>
+                <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white font-mono text-[10px] uppercase tracking-wider">
+                  Frozen
+                </span>
+              </h4>
+              <p className="text-[11px] text-rose-600/90 dark:text-rose-400 mt-0.5">
+                Toàn bộ thao tác kéo thả di chuyển task và tạo thẻ mới đã bị tạm khóa để phục vụ kiểm toán, chấm điểm đồ án.
+              </p>
+            </div>
+          </div>
+
+          {role === "admin" && (
+            <button
+              type="button"
+              onClick={toggleSprintLock}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm"
+            >
+              <Unlock size={13} className="stroke-[2.5]" />
+              <span>Mở khóa Sprint ngay</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {activeTab === "board" && (
 
         <div
@@ -5764,7 +5809,7 @@ export default function KanbanBoard({
 
                               } : undefined}
 
-                              className={`group relative flex cursor-grab active:cursor-grabbing flex-col rounded-xl p-3.5 transition-all select-none border border-slate-200/90 dark:border-slate-700/70 bg-white dark:bg-[#181d29] border-l-[3.5px] ${col.cardBorderLeft} ${
+                              className={`group relative flex ${isSprintLocked ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} flex-col rounded-xl p-3.5 transition-all select-none border border-slate-200/90 dark:border-slate-700/70 bg-white dark:bg-[#181d29] border-l-[3.5px] ${col.cardBorderLeft} ${
 
                                 isJustDropped
 
@@ -5784,13 +5829,18 @@ export default function KanbanBoard({
 
                           <div className="flex items-center gap-1.5 min-w-0">
 
-                            <GripVertical
-
-                              size={13}
-
-                              className="text-slate-300 group-hover:text-slate-500 shrink-0"
-
-                            />
+                            {isSprintLocked ? (
+                              <Lock
+                                size={12}
+                                className="text-rose-500 shrink-0 stroke-[2.2]"
+                                title="Sprint đang khóa kiểm toán"
+                              />
+                            ) : (
+                              <GripVertical
+                                size={13}
+                                className="text-slate-300 group-hover:text-slate-500 shrink-0"
+                              />
+                            )}
 
                             <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-0.5 shrink-0 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200/60">
 
@@ -6080,8 +6130,8 @@ export default function KanbanBoard({
 
 
 
-                {/* Inline Quick Add Card - Trello Style (Only for Students, Instructors only evaluate) */}
-                {role !== "instructor" && (
+                {/* Inline Quick Add Card - Trello Style (Only for Students when sprint is unlocked) */}
+                {role === "student" && !isSprintLocked && (
                   inlineAddingCol === col.id ? (
                     <div className="mt-1.5 rounded-xl border border-amber-400/80 bg-white dark:bg-slate-800 p-2 shadow-xs">
                       <textarea
@@ -6126,6 +6176,14 @@ export default function KanbanBoard({
                       <span>Thêm thẻ</span>
                     </button>
                   )
+                )}
+
+                {/* Subtle Sprint Frozen Badge for Students & Admin */}
+                {isSprintLocked && (
+                  <div className="mt-2 py-1 text-center text-[11px] text-rose-500/80 dark:text-rose-400/80 font-medium flex items-center justify-center gap-1 border border-dashed border-rose-300/40 dark:border-rose-900/40 rounded-lg bg-rose-50/40 dark:bg-rose-950/20 select-none">
+                    <Lock size={10} className="stroke-[2.5]" />
+                    <span>Sprint đóng băng</span>
+                  </div>
                 )}
 
               </div>
