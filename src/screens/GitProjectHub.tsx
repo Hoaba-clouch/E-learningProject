@@ -1,11 +1,12 @@
-import { useState, useMemo, useCallback, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
-import { useMarloPageEntrance, animateMarloCards, animateMarloRows, animateMarloPill } from "../utils/marloAnimations";
+import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import OdometerNumber from "../components/OdometerNumber";
-import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
 import {
   GitPrReviewPanel,
+  GitNewCommitModal,
   GitNewPrModal,
 } from "../components/GitPrReviewPanel";
 import {
@@ -17,6 +18,7 @@ import {
   generateProjectArchitectureApi,
   mergeGitPullRequestApi,
   pushGitCommitApi,
+  requestChangesPrApi,
   saveProjectArchitectureApi,
   syncGitHubLiveApi,
   updateGitHubRepoApi,
@@ -24,6 +26,7 @@ import {
   type GitMemberAnalytics,
   type GitProjectTaskRef,
   type GitPullRequestRecord,
+  type SessionRole,
 } from "../api";
 import {
   ReactFlow,
@@ -75,6 +78,9 @@ import {
   Zap,
   Save,
   CloudDownload,
+  Download,
+  Lock,
+  Unlock,
   X,
 } from "lucide-react";
 
@@ -167,23 +173,40 @@ function ContainerBoxNode({ data }: NodeProps) {
     label: string;
     width: number;
     height: number;
-    bgColor: string;
-    borderColor: string;
-    textColor: string;
+    stroke?: string;
+    bgColor?: string;
+    borderColor?: string;
+    textColor?: string;
     isDimmed?: boolean;
   };
+  const hasStaticClasses = Boolean(c.bgColor && c.borderColor);
+  const strokeHex = c.stroke || "#3b82f6";
+
   return (
     <div
       style={{
         width: c.width,
         height: c.height,
         animation: "archContainerFade 0.6s ease-out both",
+        ...(hasStaticClasses
+          ? {}
+          : {
+              borderColor: `${strokeHex}70`,
+              backgroundColor: `${strokeHex}0a`,
+            }),
       }}
-      className={`rounded-3xl border-2 pointer-events-none select-none p-4 relative shadow-xs transition-all duration-300 ${c.bgColor} ${c.borderColor} ${
-        c.isDimmed ? "opacity-35" : "opacity-100"
-      }`}
+      className={`rounded-3xl border-2 pointer-events-none select-none p-4 relative shadow-xs transition-all duration-300 ${
+        hasStaticClasses
+          ? `${c.bgColor} ${c.borderColor} dark:bg-slate-900/50 dark:border-slate-700`
+          : ""
+      } ${c.isDimmed ? "opacity-35" : "opacity-100"}`}
     >
-      <div className={`absolute top-3 right-5 text-sm font-bold font-mono tracking-wider ${c.textColor}`}>
+      <div
+        style={hasStaticClasses && c.textColor ? undefined : { color: strokeHex }}
+        className={`absolute top-3 right-5 text-sm font-bold font-mono tracking-wider ${
+          c.textColor ? `${c.textColor} dark:text-slate-300` : ""
+        }`}
+      >
         {c.label}
       </div>
     </div>
@@ -222,7 +245,7 @@ function GitDiagramCardNode({ data }: NodeProps) {
         } ${
           nodeData.isSelected || nodeData.isFlowActive
             ? "border-blue-600 bg-blue-600 text-white ring-4 ring-blue-500/30 scale-105 shadow-xl"
-            : "border-blue-400 bg-blue-50 text-blue-900 hover:border-blue-500 hover:scale-105"
+            : "border-blue-400 bg-blue-50 dark:bg-blue-950/70 text-blue-900 dark:text-blue-200 hover:border-blue-500 hover:scale-105"
         }`}
       >
         <Handle type="source" position={Position.Bottom} className="!w-2.5 !h-2.5 !bg-blue-600 !border-white" />
@@ -242,20 +265,20 @@ function GitDiagramCardNode({ data }: NodeProps) {
         } ${
           nodeData.isSelected || nodeData.isFlowActive
             ? "border-blue-700 bg-blue-600 text-white ring-4 ring-blue-500/30 scale-105 shadow-xl"
-            : "border-blue-500 bg-blue-50/90 text-blue-950 hover:bg-blue-100 hover:scale-[1.02]"
+            : "border-blue-500 bg-blue-50/90 dark:bg-blue-950/70 text-blue-950 dark:text-blue-100 hover:bg-blue-100 dark:hover:bg-blue-900/70 hover:scale-[1.02]"
         }`}
       >
         <Handle type="target" position={Position.Top} className="!w-2.5 !h-2.5 !bg-blue-600 !border-white" />
         <Handle type="target" position={Position.Left} className="!w-2.5 !h-2.5 !bg-blue-600 !border-white" />
         <Handle type="target" position={Position.Right} className="!w-2.5 !h-2.5 !bg-blue-600 !border-white" />
         <div className="flex items-center justify-center gap-1.5">
-          <Database size={14} className={nodeData.isSelected || nodeData.isFlowActive ? "text-blue-100 animate-pulse" : "text-blue-600"} />
+          <Database size={14} className={nodeData.isSelected || nodeData.isFlowActive ? "text-blue-100 animate-pulse" : "text-blue-600 dark:text-blue-400"} />
           <div className="text-xs font-bold leading-tight">{nodeData.label}</div>
         </div>
-        <div className={`text-[10px] font-mono mt-0.5 ${nodeData.isSelected || nodeData.isFlowActive ? "text-blue-100" : "text-blue-700 font-semibold"}`}>
+        <div className={`text-[10px] font-mono mt-0.5 ${nodeData.isSelected || nodeData.isFlowActive ? "text-blue-100" : "text-blue-700 dark:text-blue-300 font-semibold"}`}>
           {nodeData.subLabel}
         </div>
-        <div className={`text-[9px] mt-1 font-mono ${nodeData.isSelected || nodeData.isFlowActive ? "text-blue-200" : "text-slate-500"}`}>
+        <div className={`text-[9px] mt-1 font-mono ${nodeData.isSelected || nodeData.isFlowActive ? "text-blue-200" : "text-slate-500 dark:text-slate-400"}`}>
           {nodeData.tech}
         </div>
       </div>
@@ -267,20 +290,20 @@ function GitDiagramCardNode({ data }: NodeProps) {
       style={{
         animation: `archNodePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}s both`,
       }}
-      className={`relative w-[175px] rounded-xl border-2 p-2.5 shadow-sm transition-all duration-300 cursor-pointer bg-white ${
+      className={`relative w-[175px] rounded-xl border-2 p-2.5 shadow-sm transition-all duration-300 cursor-pointer bg-white dark:bg-slate-900 ${
         nodeData.isDimmed ? "opacity-25 grayscale scale-95" : "opacity-100"
       } ${
         nodeData.isSelected
           ? "border-blue-600 ring-4 ring-blue-500/25 shadow-lg scale-[1.04] z-20"
           : nodeData.isFlowActive
           ? "border-emerald-500 ring-4 ring-emerald-500/20 shadow-md scale-[1.02] z-10"
-          : "border-slate-200 hover:border-slate-300 hover:shadow-md hover:scale-[1.02]"
+          : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-md hover:scale-[1.02]"
       }`}
     >
       <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-slate-400 !border-white" />
       <Handle type="target" position={Position.Left} className="!w-2 !h-2 !bg-slate-400 !border-white" />
 
-      <div className="flex items-center justify-between gap-1 border-b border-slate-100 pb-1.5">
+      <div className="flex items-center justify-between gap-1 border-b border-slate-100 dark:border-slate-800 pb-1.5">
         <span
           className="text-[8.5px] font-bold px-1.5 py-0.2 rounded font-mono uppercase tracking-wider"
           style={{
@@ -290,23 +313,23 @@ function GitDiagramCardNode({ data }: NodeProps) {
         >
           {nodeData.container}
         </span>
-        <span className="text-[9px] font-mono text-slate-400">{nodeData.tech}</span>
+        <span className="text-[9px] font-mono text-slate-400 dark:text-slate-500">{nodeData.tech}</span>
       </div>
 
       <div className="mt-1.5 space-y-0.5">
-        <h4 className="text-[11px] font-bold text-slate-900 leading-tight truncate">
+        <h4 className="text-[11px] font-bold text-slate-900 dark:text-slate-100 leading-tight truncate">
           {nodeData.label}
         </h4>
         {nodeData.subLabel && (
-          <p className="text-[9.5px] font-mono text-blue-700 font-medium truncate">
+          <p className="text-[9.5px] font-mono text-blue-700 dark:text-blue-400 font-medium truncate">
             {nodeData.subLabel}
           </p>
         )}
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-[8.5px] text-slate-400 pt-1 border-t border-slate-100">
+      <div className="mt-2 flex items-center justify-between text-[8.5px] text-slate-400 dark:text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800">
         <span className="truncate">{nodeData.badge}</span>
-        <span className="text-blue-600 font-bold hover:underline shrink-0">Chi tiết →</span>
+        <span className="text-blue-600 dark:text-blue-400 font-bold hover:underline shrink-0">Chi tiết →</span>
       </div>
 
       <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-slate-600 !border-white" />
@@ -1284,22 +1307,43 @@ function AnimatedNumber({
 }
 
 interface GitProjectHubProps {
+  role?: SessionRole;
   initialProjectId?: string;
   onSelectProject?: (projectId: string) => void;
   onNavigate?: (screen: any) => void;
 }
 
+function readProjectFrozenState(projectId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      window.localStorage.getItem(`codemind_git_repo_locked_${projectId}`) === "1" ||
+      window.localStorage.getItem(`codemind_kanban_sprint_locked_${projectId}`) === "1" ||
+      window.localStorage.getItem("codemind_projects_submission_locked") === "1"
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function GitProjectHub({
+  role = "student",
   initialProjectId = "prj-codemind",
   onSelectProject,
   onNavigate,
 }: GitProjectHubProps = {}) {
+  const isStudent = role === "student";
+  const isInstructor = role === "instructor";
+  const isAdmin = role === "admin";
+
   const gitHubRef = useRef<HTMLDivElement>(null);
   const [viewMode, setViewMode] = useState<"topology" | "prs" | "gitdiagram" | "analytics" | "gitflow">("topology");
   const [activeProjectId, setActiveProjectId] = useState<string>(initialProjectId);
   const [projectsList, setProjectsList] = useState<GitHubProjectSummary[]>([]);
   const [repoSlug, setRepoSlug] = useState<string>("hoaba-clouch/e-learningproject");
   const [mergeStrategy, setMergeStrategy] = useState<string>("squash");
+  const [webhookActive, setWebhookActive] = useState<boolean>(true);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>("");
   const [commits, setCommits] = useState<GitCommitItem[]>(GIT_COMMITS);
   const [pullRequests, setPullRequests] = useState<GitPullRequestRecord[]>([]);
   const [selectedPr, setSelectedPr] = useState<GitPullRequestRecord | null>(null);
@@ -1316,6 +1360,9 @@ export default function GitProjectHub({
     memberShares: [36, 34, 30],
     balanceStatus: "Cân bằng",
   });
+  const [isRepoFrozen, setIsRepoFrozen] = useState<boolean>(() =>
+    readProjectFrozenState(initialProjectId)
+  );
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [prActionLoading, setPrActionLoading] = useState<string | null>(null);
@@ -1327,36 +1374,82 @@ export default function GitProjectHub({
     setTimeout(() => setActionToast(null), 3500);
   };
 
-  // 🏷️ Marlo Horizontal Liquid Rubberband Active Pill State
-  const tabTrackRef = useRef<HTMLDivElement>(null);
-  const tabPillRef = useRef<HTMLSpanElement>(null);
-  const isFirstTabRender = useRef(true);
-
-  useLayoutEffect(() => {
-    const activeBtn = tabTrackRef.current?.querySelector<HTMLElement>(
-      `[data-tab-id="${viewMode}"]`
-    );
-    animateMarloPill(tabPillRef.current, activeBtn, {
-      animate: !isFirstTabRender.current,
-      radius: 8,
-    });
-    isFirstTabRender.current = false;
-  }, [viewMode]);
-
   useEffect(() => {
-    const handleResize = () => {
-      const activeBtn = tabTrackRef.current?.querySelector<HTMLElement>(
-        `[data-tab-id="${viewMode}"]`
+    setIsRepoFrozen(readProjectFrozenState(activeProjectId));
+  }, [activeProjectId]);
+
+  const handleToggleRepoFreeze = () => {
+    if (!isAdmin) return;
+    const nextLocked = !isRepoFrozen;
+    try {
+      window.localStorage.setItem(
+        `codemind_git_repo_locked_${activeProjectId}`,
+        nextLocked ? "1" : "0"
       );
-      animateMarloPill(tabPillRef.current, activeBtn, {
-        animate: false,
-        radius: 8,
-      });
+    } catch {
+      // Ignore storage errors
+    }
+    setIsRepoFrozen(nextLocked);
+    showToast(
+      nextLocked
+        ? `Đã đóng băng Repository của dự án ${activeProjectId} — Sinh viên không thể Commit / PR / Merge.`
+        : `Đã mở khóa Repository dự án ${activeProjectId} — Sinh viên có thể tiếp tục nộp bài.`
+    );
+  };
+
+  const handleExportGitCsv = () => {
+    const csvCell = (val: unknown) => {
+      const s = String(val ?? "").replace(/"/g, '""');
+      return `"${s}"`;
     };
-    const ro = new ResizeObserver(handleResize);
-    if (tabTrackRef.current) ro.observe(tabTrackRef.current);
-    return () => ro.disconnect();
-  }, [viewMode]);
+    const lines: string[] = [];
+    lines.push("BAO CAO KIEM DINH GIT PROJECT HUB");
+    lines.push(`Du an,${csvCell(activeProjectId)},Repo,${csvCell(repoSlug)},Diem Van hoa Git,${metricsState.gitCultureScore}`);
+    lines.push("");
+    lines.push("PHAN BO DONG GOP THANH VIEN (50% SP / 30% Commit / 20% DoD)");
+    lines.push("Thanh vien,Vai tro,Ty trong (%),So Commit,Story Points,Them dong,Xoa dong,Xep hang");
+    memberAnalytics.forEach((m) => {
+      lines.push(
+        [m.name, m.role, m.sharePct, m.commitsCount, m.storyPointsDone, m.additions, m.deletions, m.grade]
+          .map(csvCell)
+          .join(",")
+      );
+    });
+    lines.push("");
+    lines.push("DANH SACH PULL REQUEST & CON DAU DOD");
+    lines.push("PR #,Tieu de,Tac gia,Nhanh nguon,Nhanh dich,Task,AI Score,Trang thai,Peer Reviewer,DoD SHA-256");
+    pullRequests.forEach((pr) => {
+      lines.push(
+        [
+          `#${String(pr.prNumber).padStart(2, "0")}`,
+          pr.title,
+          pr.author.name,
+          pr.sourceBranch,
+          pr.targetBranch,
+          pr.taskCode || "",
+          pr.aiReviewScore,
+          pr.status,
+          pr.peerReviewer || "",
+          pr.dodSha256 || "",
+        ]
+          .map(csvCell)
+          .join(",")
+      );
+    });
+
+    const blob = new Blob(["\uFEFF" + lines.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `git_audit_${activeProjectId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`Đã xuất báo cáo kiểm định Git (${activeProjectId}.csv)!`);
+  };
 
   const [selectedNodeId, setSelectedNodeId] = useState<string>("learning-ws");
   const [archDrawerOpen, setArchDrawerOpen] = useState(false);
@@ -1379,7 +1472,7 @@ export default function GitProjectHub({
   const [archLastUpdated, setArchLastUpdated] = useState<string>("");
 
   const loadArchitecture = useCallback(async (pid: string) => {
-    const data = await fetchProjectArchitectureApi(pid);
+    const data = await fetchProjectArchitectureApi(pid, role);
     if (!data) return;
     if (Array.isArray(data.nodes) && data.nodes.length > 0) {
       setArchNodes(data.nodes);
@@ -1400,7 +1493,7 @@ export default function GitProjectHub({
     if (data.techStack) setDynamicTechStack(data.techStack);
     if (data.updatedAt) setArchLastUpdated(data.updatedAt);
     setDiagramAnimKey((k) => k + 1);
-  }, [activeArchFlow, setArchNodes, setArchEdges]);
+  }, [activeArchFlow, role, setArchNodes, setArchEdges]);
 
   // GitHub Repo Connection State
   const [showRepoModal, setShowRepoModal] = useState<boolean>(false);
@@ -1455,7 +1548,7 @@ export default function GitProjectHub({
   const [branchFilter, setBranchFilter] = useState<string>("all");
 
   const loadGitWorkspace = useCallback(async (pid: string, preserveSelectedPrId?: string) => {
-    const data = await fetchGitHubWorkspaceApi(pid);
+    const data = await fetchGitHubWorkspaceApi(pid, role);
     if (!data) return;
     setProjectsList(data.projects || []);
     setRepoUrl(data.repository.repoUrl);
@@ -1463,6 +1556,8 @@ export default function GitProjectHub({
     setRepoSlug(data.repository.repoSlug);
     setTargetBranch(data.repository.targetBranch);
     setMergeStrategy(data.repository.defaultMergeStrategy || "squash");
+    setWebhookActive(Boolean(data.repository.webhookActive));
+    setLastSyncedAt(data.repository.lastSyncedAt || "");
     setMetricsState(data.metrics);
     setProjectTasks(data.projectTasks || []);
     setMemberAnalytics(data.memberAnalytics || []);
@@ -1470,7 +1565,7 @@ export default function GitProjectHub({
       setCommits(data.commits as GitCommitItem[]);
       setSelectedCommit((prev) => {
         const match = data.commits.find((c) => c.id === prev?.id);
-        return (match || data.commits[Math.min(8, data.commits.length - 1)] || data.commits[0]) as GitCommitItem;
+        return (match || data.commits[data.commits.length - 1] || data.commits[0]) as GitCommitItem;
       });
     } else {
       setCommits([]);
@@ -1482,9 +1577,13 @@ export default function GitProjectHub({
       return prs.find((p) => p.id === targetId) || prs[0] || null;
     });
     void loadArchitecture(pid);
-  }, [loadArchitecture]);
+  }, [loadArchitecture, role]);
 
   const handleApplyRepoUrl = async (targetUrl: string) => {
+    if (isRepoFrozen && isStudent) {
+      showToast("Repository đang bị đóng băng (Freeze), không thể đồng bộ mới.");
+      return;
+    }
     const cleanUrl = targetUrl.trim();
     if (!cleanUrl || !cleanUrl.startsWith("http")) {
       showToast("Vui lòng nhập URL GitHub hợp lệ (https://...)");
@@ -1495,30 +1594,16 @@ export default function GitProjectHub({
     try {
       setRepoUrl(cleanUrl);
       setRepoInputUrl(cleanUrl);
-      // 1. Đồng bộ Live Commits, PRs & Architecture trên Backend
-      const res = await syncGitHubLiveApi(activeProjectId, cleanUrl);
+      const res = await syncGitHubLiveApi(activeProjectId, cleanUrl, role);
       if (res.error) {
         showToast(res.error);
       } else {
+        const modeLabel = res.isRemoteLive ? "Live GitHub API" : "Đồng bộ cục bộ";
         showToast(
-          `Đã đồng bộ Live Repo [${res.repoSlug || cleanUrl}]: ${res.commitsSynced || 0} commits & Sơ đồ kiến trúc mới!`
+          `[${modeLabel}] Repo ${res.repoSlug || cleanUrl}: ${res.commitsSynced || 0} commits & Sơ đồ kiến trúc đã cập nhật!`
         );
       }
-      // 2. Kéo cấu trúc sơ đồ kiến trúc động mới nhất
-      const archRes = await generateProjectArchitectureApi(activeProjectId, cleanUrl);
-      if (archRes) {
-        if (Array.isArray(archRes.nodes)) setArchNodes(archRes.nodes);
-        if (Array.isArray(archRes.edges)) setArchEdges(archRes.edges);
-        if (Array.isArray(archRes.flows)) setDynamicFlows(archRes.flows);
-        if (Array.isArray(archRes.subsystems)) setDynamicSubsystems(archRes.subsystems);
-        if (archRes.title) setDynamicArchTitle(archRes.title);
-        if (archRes.techStack) setDynamicTechStack(archRes.techStack);
-      } else {
-        await loadArchitecture(activeProjectId);
-      }
-      // 3. Tải lại Workspace commits, analytics, PRs
       await loadGitWorkspace(activeProjectId, selectedPr?.id);
-      // 4. Kích hoạt chuyển động mượt mà cho cả Commit Graph và Diagram
       setTopoAnimKey((k) => k + 1);
       setDiagramAnimKey((k) => k + 1);
       setStatAnimKey((k) => k + 1);
@@ -1534,6 +1619,10 @@ export default function GitProjectHub({
   };
 
   const handleSaveArchitecture = async () => {
+    if (isRepoFrozen && isStudent) {
+      showToast("Repository đang bị đóng băng, không thể lưu sửa đổi kiến trúc.");
+      return;
+    }
     setIsSavingArch(true);
     try {
       const payload = {
@@ -1550,7 +1639,7 @@ export default function GitProjectHub({
         edges: archEdges,
         repoUrl,
       };
-      const res = await saveProjectArchitectureApi(activeProjectId, payload);
+      const res = await saveProjectArchitectureApi(activeProjectId, payload, role);
       if (res.error) {
         showToast(res.error);
       } else {
@@ -1562,9 +1651,13 @@ export default function GitProjectHub({
   };
 
   const handleGenerateArchitecture = async () => {
+    if (isRepoFrozen && isStudent) {
+      showToast("Repository đang bị đóng băng, không thể quét lại kiến trúc.");
+      return;
+    }
     setIsGeneratingArch(true);
     try {
-      const res = await generateProjectArchitectureApi(activeProjectId, repoUrl);
+      const res = await generateProjectArchitectureApi(activeProjectId, repoUrl, role);
       if (res.error) {
         showToast(res.error);
       } else if (res) {
@@ -1593,11 +1686,15 @@ export default function GitProjectHub({
   }, [activeProjectId, loadGitWorkspace]);
 
   const handleSaveRepoSync = async () => {
-    const res = await updateGitHubRepoApi(activeProjectId, {
-      repo_url: repoUrl,
-      target_branch: targetBranch,
-      default_merge_strategy: mergeStrategy,
-    });
+    const res = await updateGitHubRepoApi(
+      activeProjectId,
+      {
+        repo_url: repoUrl,
+        target_branch: targetBranch,
+        default_merge_strategy: mergeStrategy,
+      },
+      role
+    );
     if (res.error) {
       setActionError(res.error);
       return;
@@ -1617,8 +1714,10 @@ export default function GitProjectHub({
     task_code?: string;
     author_name?: string;
     files_changed: string[];
+    additions?: number;
+    deletions?: number;
   }) => {
-    const res = await pushGitCommitApi(activeProjectId, payload);
+    const res = await pushGitCommitApi(activeProjectId, payload, role);
     if (res.error) {
       showToast(res.error);
       return;
@@ -1644,7 +1743,7 @@ export default function GitProjectHub({
     code_snippet: string;
   }) => {
     setActionError(null);
-    const res = await createGitPullRequestApi(activeProjectId, payload);
+    const res = await createGitPullRequestApi(activeProjectId, payload, role);
     if (res.error) {
       setActionError(res.error);
       return;
@@ -1660,7 +1759,7 @@ export default function GitProjectHub({
     setActionError(null);
     setPrActionLoading("ai-fix");
     try {
-      const res = await applyPrAiFixApi(prId);
+      const res = await applyPrAiFixApi(prId, role);
       if (res.error) {
         setActionError(res.error);
         return;
@@ -1672,17 +1771,45 @@ export default function GitProjectHub({
     }
   };
 
-  const handlePeerApprovePr = async (prId: string, comment: string) => {
+  const handlePeerApprovePr = async (prId: string, comment: string, reviewerName?: string) => {
     setActionError(null);
     setPrActionLoading("peer-approve");
     try {
-      const res = await approvePrPeerReviewApi(prId, { comment });
+      const res = await approvePrPeerReviewApi(
+        prId,
+        { comment, reviewer_name: reviewerName },
+        role
+      );
       if (res.error) {
         setActionError(res.error);
         return;
       }
       await loadGitWorkspace(activeProjectId, prId);
-      showToast("Đã ký Peer Review Approve cho Pull Request!");
+      showToast(
+        isInstructor
+          ? "Giảng viên đã ký phê duyệt DoD cho Pull Request!"
+          : "Đã ký Peer Review Approve cho Pull Request!"
+      );
+    } finally {
+      setPrActionLoading(null);
+    }
+  };
+
+  const handleRequestChangesPr = async (prId: string, comment: string, reviewerName?: string) => {
+    setActionError(null);
+    setPrActionLoading("request-changes");
+    try {
+      const res = await requestChangesPrApi(
+        prId,
+        { comment, reviewer_name: reviewerName },
+        role
+      );
+      if (res.error) {
+        setActionError(res.error);
+        return;
+      }
+      await loadGitWorkspace(activeProjectId, prId);
+      showToast("Đã gửi yêu cầu chỉnh sửa (Request Changes) cho Pull Request!");
     } finally {
       setPrActionLoading(null);
     }
@@ -1692,14 +1819,20 @@ export default function GitProjectHub({
     setActionError(null);
     setPrActionLoading("merge");
     try {
-      const res = await mergeGitPullRequestApi(prId, strategy);
+      const res = await mergeGitPullRequestApi(prId, strategy, role);
       if (res.error) {
         setActionError(res.error);
         return;
       }
       await loadGitWorkspace(activeProjectId, prId);
+      const stratLabel =
+        strategy === "rebase"
+          ? "Rebase Merge"
+          : strategy === "merge"
+          ? "Merge Commit"
+          : "Squash Merge";
       showToast(
-        `Đã Squash Merge & đóng dấu SHA-256 DoD${
+        `Đã ${stratLabel} & đóng dấu SHA-256 DoD${
           res.updatedTaskCode ? ` (Task #${res.updatedTaskCode} → Hoàn thành)` : ""
         }${(res.xp_awarded || 0) > 0 ? ` • +${res.xp_awarded} XP` : ""}`
       );
@@ -1737,6 +1870,100 @@ export default function GitProjectHub({
       ];
     }
     return Array.from(map.values()).sort((a, b) => a.cy - b.cy);
+  }, [commits]);
+
+  const dynamicTopoEdges = useMemo(() => {
+    if (commits.length === 0) return [];
+    const edges: Array<{
+      key: string;
+      d: string;
+      color: string;
+      dashed?: boolean;
+      width?: number;
+    }> = [];
+
+    const lastCommitByBranch = new Map<string, GitCommitItem>();
+    const firstBranchSeen = new Set<string>();
+
+    for (let i = 0; i < commits.length; i++) {
+      const c = commits[i];
+      const b = c.branch || "main";
+      const msgLow = (c.message || "").toLowerCase();
+
+      if (!firstBranchSeen.has(b)) {
+        firstBranchSeen.add(b);
+        if (b !== "main" && b !== "master") {
+          let parentCommit: GitCommitItem | undefined;
+          for (let j = i - 1; j >= 0; j--) {
+            const pb = commits[j].branch || "main";
+            if (pb === "develop" && b !== "develop") {
+              parentCommit = commits[j];
+              break;
+            }
+            if (pb === "main" || pb === "master") {
+              parentCommit = commits[j];
+              break;
+            }
+          }
+          if (!parentCommit && i > 0) parentCommit = commits[0];
+          if (parentCommit) {
+            const midX = (parentCommit.cx + c.cx) / 2;
+            edges.push({
+              key: `branch-out-${c.id}`,
+              d: `M ${parentCommit.cx} ${parentCommit.cy} C ${midX} ${parentCommit.cy}, ${midX} ${c.cy}, ${c.cx} ${c.cy}`,
+              color: c.branchColor || "#6366f1",
+              width: 3,
+            });
+          }
+        }
+      } else {
+        const prevSame = lastCommitByBranch.get(b);
+        if (prevSame) {
+          edges.push({
+            key: `intra-${c.id}`,
+            d: `M ${prevSame.cx} ${prevSame.cy} L ${c.cx} ${c.cy}`,
+            color: c.branchColor || prevSame.branchColor || "#2563eb",
+            width: 3,
+          });
+        }
+      }
+
+      if ((b === "main" || b === "master" || b === "develop") && i > 0) {
+        const isMergeMsg =
+          msgLow.includes("merge") ||
+          msgLow.includes("pr #") ||
+          msgLow.includes("pull request") ||
+          msgLow.includes("release");
+        if (isMergeMsg) {
+          let sourceCommit: GitCommitItem | undefined;
+          for (let j = i - 1; j >= 0; j--) {
+            const candidate = commits[j];
+            const cb = (candidate.branch || "").toLowerCase();
+            if (cb !== b.toLowerCase() && msgLow.includes(cb)) {
+              sourceCommit = candidate;
+              break;
+            }
+          }
+          if (!sourceCommit && commits[i - 1].branch !== b) {
+            sourceCommit = commits[i - 1];
+          }
+          if (sourceCommit) {
+            const midX = (sourceCommit.cx + c.cx) / 2;
+            edges.push({
+              key: `merge-in-${c.id}`,
+              d: `M ${sourceCommit.cx} ${sourceCommit.cy} C ${midX} ${sourceCommit.cy}, ${midX} ${c.cy}, ${c.cx} ${c.cy}`,
+              color: sourceCommit.branchColor || "#a855f7",
+              dashed: true,
+              width: 2.5,
+            });
+          }
+        }
+      }
+
+      lastCommitByBranch.set(b, c);
+    }
+
+    return edges;
   }, [commits]);
 
   const filteredCommits = useMemo(() => {
@@ -1847,8 +2074,17 @@ export default function GitProjectHub({
   }, [archEdges, activeArchFlow, currentFlow, selectedNodeId]);
 
   const selectedNode = useMemo(() => {
-    return archNodes.find((n) => n.id === selectedNodeId) ?? archNodes[5];
+    return (
+      archNodes.find((n) => n.id === selectedNodeId) ??
+      archNodes.find((n) => n.type !== "containerBox") ??
+      archNodes[0]
+    );
   }, [archNodes, selectedNodeId]);
+
+  const archComponentCount = useMemo(
+    () => archNodes.filter((n) => n.type !== "containerBox").length,
+    [archNodes]
+  );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.type === "containerBox") return;
@@ -1857,57 +2093,71 @@ export default function GitProjectHub({
   }, []);
 
   const copyMermaidCode = () => {
-    const rawMermaid = `flowchart TD
-    user(("Campus user")) -->|uses| app_shell["App shell\\n[App.tsx]"]
+    const sanitizeId = (raw: string) => raw.replace(/[^a-zA-Z0-9_]/g, "_");
+    const escLabel = (raw: string) =>
+      (raw || "").replace(/"/g, "'").replace(/\r?\n/g, " ");
+    const containers = archNodes.filter((n) => n.type === "containerBox");
+    const childNodes = archNodes.filter((n) => n.type !== "containerBox");
+    const grouped = new Map<string, Node[]>();
+    const standalone: Node[] = [];
 
-    subgraph CampusApp ["Campus App"]
-        app_shell -->|renders| login["Login\\n[LoginScreen.tsx]"]
-        app_shell -->|renders| student_dash["Student dashboard"]
-        app_shell -->|renders| learning_ws["Learning workspace"]
-        app_shell -->|renders| tech_reels["Tech reels\\n[TechReels.tsx]"]
-        app_shell -->|renders| profile["Student profile\\n[StudentProfile.tsx]"]
-        app_shell -->|renders| xp_shop["XP shop\\n[XPShop.tsx]"]
-        app_shell -->|renders| admin_dash["Admin dashboard\\n[AdminDashboard.tsx]"]
-        learning_ws -->|imports| api_client["API client\\n[api.ts]"]
-    end
+    const labelToBoxId = new Map<string, string>();
+    for (const box of containers) {
+      const lbl = String(((box.data || {}) as Record<string, any>).label || "").trim().toLowerCase();
+      if (lbl) labelToBoxId.set(lbl, box.id);
+    }
 
-    api_client -->|HTTP API| api_startup["API startup\\n[main.py]"]
+    for (const n of childNodes) {
+      const d = (n.data || {}) as Record<string, any>;
+      const parentId =
+        ((n as any).parentId as string | undefined) ||
+        labelToBoxId.get(String(d.container || "").trim().toLowerCase());
+      if (parentId) {
+        const bucket = grouped.get(parentId) || [];
+        bucket.push(n);
+        grouped.set(parentId, bucket);
+      } else {
+        standalone.push(n);
+      }
+    }
 
-    subgraph APIPlatform ["API Platform"]
-        api_startup -->|mounts| v1_router["V1 router\\n[router.py]"]
-        v1_router -->|registers| auth["Authentication\\n[auth.py]"]
-        auth -->|auth dependency| auth_deps["Auth dependencies\\n[deps.py]"]
-        auth_deps -->|checks tokens| token_utils["Token utilities\\n[security.py]"]
-    end
+    const lines: string[] = [
+      "flowchart TD",
+      `    %% ${escLabel(dynamicArchTitle)} (${repoSlug})`,
+    ];
 
-    subgraph ProjectWorkspace ["Project Workspace"]
-        app_shell -->|renders| git_hub["Git project hub\\n[GitProjectHub.tsx]"]
-        app_shell -->|renders| kanban["Kanban board\\n[KanbanBoard.tsx]"]
-        app_shell -->|renders| inst_panel["Instructor panel"]
-        kanban -->|renders| task_csv["Task CSV manager"]
-        v1_router -->|registers| inst_apis["Instructor APIs\\n[instructor.py]"]
-        v1_router -->|registers| kanban_apis["Kanban APIs\\n[kanban.py]"]
-    end
+    for (const box of containers) {
+      const bd = (box.data || {}) as Record<string, any>;
+      const members = grouped.get(box.id) || [];
+      if (members.length === 0) continue;
+      lines.push(`    subgraph ${sanitizeId(box.id)} ["${escLabel(bd.label || box.id)}"]`);
+      for (const n of members) {
+        const d = (n.data || {}) as Record<string, any>;
+        const sub = d.subLabel ? `\\n${escLabel(d.subLabel)}` : "";
+        lines.push(`        ${sanitizeId(n.id)}["${escLabel(d.label || n.id)}${sub}"]`);
+      }
+      lines.push("    end");
+    }
 
-    subgraph LearningServices ["Learning Services"]
-        v1_router -->|registers| learning_apis["Learning APIs\\n[lms.py]"]
-        v1_router -->|registers| submissions["Submissions\\n[submissions.py]"]
-        v1_router -->|registers| ai_apis["AI tutor APIs\\n[ai.py]"]
-        learning_apis -->|references| code_evaluator["Code evaluator\\n[code_evaluator.py]"]
-        submissions -->|evaluates code| code_evaluator
-        submissions -->|references| analytics["Event analytics\\n[analytics.py]"]
-        ai_apis -->|references| analytics
-        ai_apis -->|tracks events| analytics
-    end
+    for (const n of standalone) {
+      const d = (n.data || {}) as Record<string, any>;
+      const nid = sanitizeId(n.id);
+      const lbl = escLabel(d.label || n.id);
+      const sub = d.subLabel ? `\\n${escLabel(d.subLabel)}` : "";
+      if (d.isCylinder) lines.push(`    ${nid}[("${lbl}${sub}")]`);
+      else if (d.isCircle) lines.push(`    ${nid}(("${lbl}"))`);
+      else lines.push(`    ${nid}["${lbl}${sub}"]`);
+    }
 
-    db[("SQLite database\\n[database.py]")]
-    inst_apis -->|accesses| db
-    kanban_apis -->|accesses| db
-    learning_apis -->|queries| db
-    submissions -->|reads and writes| db
-    ai_apis -->|accesses| db
-    analytics -->|accesses| db`;
+    for (const e of archEdges) {
+      const src = sanitizeId(e.source);
+      const tgt = sanitizeId(e.target);
+      const elbl = escLabel(String(e.label || ""));
+      if (elbl) lines.push(`    ${src} -->|${elbl}| ${tgt}`);
+      else lines.push(`    ${src} --> ${tgt}`);
+    }
 
+    const rawMermaid = lines.join("\n");
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(rawMermaid);
       setCopiedMermaid(true);
@@ -1946,15 +2196,23 @@ export default function GitProjectHub({
           <div className="flex flex-wrap items-center gap-2">
             <span className="pill pill--info font-mono text-[11px] font-bold">
               <Network size={13} />
-              Phân hệ 2 • Sơ đồ Kiến trúc Chuẩn GitDiagram & Git Project Hub
+              Phân hệ 3 • Git Project Hub & Kiến trúc
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium font-mono">
               {repoSlug} ({targetBranch})
             </span>
+            {isRepoFrozen && (
+              <span className="pill pill--bad pill--plain font-mono text-[10.5px] font-bold flex items-center gap-1">
+                <Lock size={11} />
+                Đang đóng băng nhánh
+              </span>
+            )}
           </div>
-          <MarloTitle text="Sơ đồ Kiến trúc Hệ thống (GitDiagram) & Git Hub" className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 dark:text-white" />
+          <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
+            Sơ đồ Kiến trúc Hệ thống & Git Project Hub
+          </h1>
           <p className="mt-1 text-sm text-[#62656b] dark:text-[#a0a3a9] max-w-4xl">
-            Cấu trúc phân tầng chuẩn GitDiagram kết hợp Cây phân nhánh Git Graph, CodeMind AI AST Reviewer & Thẩm định DoD SHA-256.
+            Cây phân nhánh Git Graph đồng bộ thời gian thực, CodeMind AI AST Reviewer 2 lớp, Sơ đồ Kiến trúc phân tầng & Thẩm định DoD SHA-256.
           </p>
         </div>
 
@@ -1986,17 +2244,109 @@ export default function GitProjectHub({
             <FolderGit2 size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
             <span>Mở Repo GitHub</span>
           </a>
-          <button
-            onClick={() => setShowRepoModal(true)}
-            className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5"
-          >
-            <GitFork size={15} className="text-[#1c1304] shrink-0" />
-            <span>Liên Kết & Đồng Bộ Repo</span>
-          </button>
+          {(isStudent || isAdmin) && (
+            <button
+              onClick={() => setShowRepoModal(true)}
+              disabled={isStudent && isRepoFrozen}
+              title={isStudent && isRepoFrozen ? "Repository đang bị đóng băng (Freeze)" : "Cấu hình URL Repo & Chiến lược Merge"}
+              className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <GitFork size={15} className="text-[#1c1304] shrink-0" />
+              <span>Cấu hình Repo</span>
+            </button>
+          )}
         </div>
       </header>
 
-      {/* 🚀 Interactive Repository Switcher & Live Sync Bar */}
+      {/* Role-Specific Control Banners */}
+      {isInstructor && (
+        <section className="marlo-card rounded-2xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-950/25 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <div className="text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+              <ShieldCheck size={15} className="text-blue-600 dark:text-blue-400" />
+              Giảng viên • Thẩm định Mã nguồn, Duyệt PR & Đánh giá Chống Ăn Theo
+            </div>
+            <p className="text-xs text-blue-800/80 dark:text-blue-300/80">
+              Bạn có thể phê duyệt DoD hoặc gửi yêu cầu chỉnh sửa trên từng Pull Request, theo dõi tỷ lệ đóng góp 50/30/20 và xuất báo cáo kiểm định.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleExportGitCsv}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-xs font-bold text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs"
+            >
+              <Download size={13} />
+              <span>Xuất Báo Cáo Git (CSV)</span>
+            </button>
+            {onNavigate && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("kanban")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <span>Bảng Kanban →</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("defense-room")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-blue-600 text-white text-xs font-bold hover:bg-slate-800 dark:hover:bg-blue-700 cursor-pointer"
+                >
+                  <span>Phòng Bảo vệ AI →</span>
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {isAdmin && (
+        <section className="marlo-card rounded-2xl border border-slate-300/90 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/50 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <ShieldCheck size={15} className="text-emerald-600 dark:text-emerald-400" />
+              Quản trị viên • Kiểm toán Tuân thủ Git & Đóng băng Nhánh Nộp bài
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Kiểm soát trạng thái bảo vệ nhánh trước giờ bảo vệ đồ án. Khi bật Đóng băng, sinh viên chỉ được xem dữ liệu và không thể đẩy Commit hay Merge PR mới.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleToggleRepoFreeze}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer shadow-2xs transition ${
+                isRepoFrozen
+                  ? "bg-amber-500 hover:bg-amber-600 text-slate-950"
+                  : "bg-slate-900 hover:bg-slate-800 dark:bg-rose-600 dark:hover:bg-rose-700 text-white"
+              }`}
+            >
+              {isRepoFrozen ? <Unlock size={13} /> : <Lock size={13} />}
+              <span>{isRepoFrozen ? "Mở khóa Đóng băng Repo" : "Đóng băng Repo Nộp bài"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportGitCsv}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+            >
+              <Download size={13} />
+              <span>Xuất Nhật Ký Kiểm Toán (CSV)</span>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {isStudent && isRepoFrozen && (
+        <section className="rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 p-3.5 flex items-center gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+          <Lock size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          <span>
+            <strong>Chế độ Đóng băng (Freeze):</strong> Quản trị viên đã khóa quyền ghi trên Repository dự án này để phục vụ bảo vệ đồ án. Các nút tạo Commit, PR, Đồng bộ và Merge tạm thời bị khóa.
+          </span>
+        </section>
+      )}
+
+      {/* Repository Connection & Status Bar */}
       <section className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-4 shadow-sm backdrop-blur-xs space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -2006,93 +2356,53 @@ export default function GitProjectHub({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Kho Lưu Trữ & Sơ Đồ Kiến Trúc Thời Gian Thực
+                  Kho Lưu Trữ Git & Trạng Thái Đồng Bộ
                 </h3>
-                <span className="pill pill--good pill--plain text-[10.5px] font-mono font-bold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live Reactive
+                <span className={`pill pill--plain text-[10.5px] font-mono font-bold flex items-center gap-1 ${webhookActive ? "pill--good" : "pill--warn"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${webhookActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
+                  {webhookActive ? "Webhook Tự động Bật" : "Webhook Tạm dừng"}
                 </span>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                   {repoSlug || "hoaba-clouch/e-learningproject"}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Dán bất kỳ link GitHub Repository nào: Commit Graph, Metro-line và Architecture Diagram sẽ tự động phân tích và chuyển đổi tương ứng!
+                Nhánh đích: <strong className="font-mono text-slate-700 dark:text-slate-200">{targetBranch}</strong> • Chiến lược gộp mặc định: <strong className="font-mono text-slate-700 dark:text-slate-200">{mergeStrategy}</strong>
+                {lastSyncedAt ? ` • Đồng bộ gần nhất: ${lastSyncedAt}` : ""}
               </p>
             </div>
           </div>
 
-          {/* Quick Repo Presets */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1">
-              Repo mẫu kiểm thử:
-            </span>
-            <button
-              type="button"
-              onClick={() => handleApplyRepoUrl("https://github.com/facebook/react")}
-              className="btn-marlo-ghost px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition cursor-pointer flex items-center gap-1 border border-blue-200/60 dark:border-blue-800/60"
-              title="Chuyển sang repository React (Frontend Architecture)"
-            >
-              <span>⚛️</span>
-              <span>React (Frontend)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleApplyRepoUrl("https://github.com/fastapi/fastapi")}
-              className="btn-marlo-ghost px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1 border border-emerald-200/60 dark:border-emerald-800/60"
-              title="Chuyển sang repository FastAPI (Backend API Architecture)"
-            >
-              <span>⚡</span>
-              <span>FastAPI (Backend)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleApplyRepoUrl("https://github.com/torvalds/linux")}
-              className="btn-marlo-ghost px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition cursor-pointer flex items-center gap-1 border border-amber-200/60 dark:border-amber-800/60"
-              title="Chuyển sang repository Linux Kernel (Systems Architecture)"
-            >
-              <span>🐧</span>
-              <span>Linux (Kernel)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleApplyRepoUrl("https://github.com/Hoaba-clouch/E-learningProject")}
-              className="btn-marlo-ghost px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition cursor-pointer flex items-center gap-1 border border-purple-200/60 dark:border-purple-800/60"
-              title="Hoàn nguyên về repository đồ án gốc CodeMind AI"
-            >
-              <span>🎓</span>
-              <span>CodeMind (Gốc)</span>
-            </button>
-          </div>
-        </div>
+          {(isStudent || isAdmin) && (
+            <div className="flex items-center gap-2 flex-1 max-w-2xl">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={repoInputUrl}
+                  onChange={(e) => setRepoInputUrl(e.target.value)}
+                  disabled={isStudent && isRepoFrozen}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !(isStudent && isRepoFrozen)) {
+                      handleApplyRepoUrl(repoInputUrl);
+                    }
+                  }}
+                  placeholder="URL GitHub repository (https://github.com/owner/repo)..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs disabled:opacity-50"
+                />
+                <GitBranch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              </div>
 
-        {/* Input bar with URL & Actions */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              value={repoInputUrl}
-              onChange={(e) => setRepoInputUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleApplyRepoUrl(repoInputUrl);
-                }
-              }}
-              placeholder="Dán URL GitHub repository (ví dụ: https://github.com/owner/repo)..."
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs"
-            />
-            <GitBranch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => handleApplyRepoUrl(repoInputUrl)}
-            disabled={isSyncingLive}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-98 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 shrink-0"
-          >
-            <RotateCw size={14} className={isSyncingLive ? "animate-spin" : ""} />
-            <span>{isSyncingLive ? "Đang đồng bộ..." : "Đồng bộ Repo & Phân tích"}</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => handleApplyRepoUrl(repoInputUrl)}
+                disabled={isSyncingLive || (isStudent && isRepoFrozen)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                <RotateCw size={14} className={isSyncingLive ? "animate-spin" : ""} />
+                <span>{isSyncingLive ? "Đang đồng bộ..." : "Đồng bộ Git"}</span>
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -2122,15 +2432,35 @@ export default function GitProjectHub({
             <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+            <span
+              className={`text-2xl font-bold font-mono ${
+                metricsState.aiIntegrityPct >= 90
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : metricsState.aiIntegrityPct >= 75
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-rose-600 dark:text-rose-400"
+              }`}
+            >
               <AnimatedNumber value={metricsState.aiIntegrityPct} suffix="%" key={`integ-${statAnimKey}-${activeProjectId}`} />
             </span>
-            <span className="pill pill--good pill--plain text-[10.5px] font-bold">
-              Bình thường
+            <span
+              className={`pill pill--plain text-[10.5px] font-bold ${
+                metricsState.aiIntegrityPct >= 90
+                  ? "pill--good"
+                  : metricsState.aiIntegrityPct >= 75
+                  ? "pill--warn"
+                  : "pill--bad"
+              }`}
+            >
+              {metricsState.aiIntegrityPct >= 90
+                ? "Liêm chính cao"
+                : metricsState.aiIntegrityPct >= 75
+                ? "Cần lưu ý"
+                : "Cảnh báo AST/AI"}
             </span>
           </div>
           <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Cadence Variance {metricsState.cadenceVarianceHours}h — không dump code AI.
+            Cadence Variance {metricsState.cadenceVarianceHours}h — theo dõi nhịp độ & cảnh báo AST.
           </p>
         </div>
 
@@ -2150,7 +2480,7 @@ export default function GitProjectHub({
           <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate">
             {memberAnalytics.length > 0
               ? memberAnalytics.map((m) => `${m.name} (${m.sharePct}%)`).join(", ")
-              : "Nguyễn Bá Hòa (36%), Võ Nhật Huy (34%), Phan Đình Nghị (30%)."}
+              : "Chưa có dữ liệu thành viên."}
           </p>
         </div>
 
@@ -2168,7 +2498,7 @@ export default function GitProjectHub({
             </span>
           </div>
           <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Kiến trúc 22 Components + Quét bảo mật AST 2 lớp.
+            Kiến trúc {archComponentCount} Components + Quét bảo mật AST 2 lớp.
           </p>
         </div>
       </section>
@@ -2178,25 +2508,25 @@ export default function GitProjectHub({
         <MarloSegmentedControl
           value={viewMode}
           options={[
-            { id: "topology", label: "Git Graph", icon: <Network size={15} /> },
+            { id: "topology", label: "Cây nhánh Git", icon: <Network size={15} /> },
             {
               id: "prs",
-              label: "Pull Requests",
+              label: "Pull Requests & AST",
               icon: <GitPullRequest size={15} />,
               badge: pullRequests.filter((p) => p.status !== "merged").length || undefined,
             },
-            { id: "gitdiagram", label: "Architecture Diagram", icon: <Boxes size={15} /> },
-            { id: "analytics", label: "Team Analytics", icon: <BarChart3 size={15} /> },
-            { id: "gitflow", label: "Git Flow", icon: <Layers size={15} /> },
+            { id: "gitdiagram", label: "Sơ đồ Kiến trúc", icon: <Boxes size={15} /> },
+            { id: "analytics", label: "Phân tích Đội ngũ", icon: <BarChart3 size={15} /> },
+            { id: "gitflow", label: "Quy trình Git Flow", icon: <Layers size={15} /> },
           ]}
           onChange={(val) => handleSetViewMode(val as any)}
           tone="dark"
         />
 
-        <div className="hidden lg:flex items-center gap-3 text-xs text-slate-500 pr-3 font-mono shrink-0">
+        <div className="hidden lg:flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 pr-3 font-mono shrink-0">
           <button
             onClick={copyMermaidCode}
-            className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-600 font-sans font-medium text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 cursor-pointer"
+            className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 font-sans font-medium text-xs bg-slate-50 dark:bg-slate-800 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700 cursor-pointer"
           >
             {copiedMermaid ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
             {copiedMermaid ? "Đã copy Mermaid.js" : "Sao chép mã Mermaid.js"}
@@ -2207,6 +2537,9 @@ export default function GitProjectHub({
       {/* MODE 0: PULL REQUESTS & CODEMIND AI 2-TIER REVIEW */}
       {viewMode === "prs" && (
         <GitPrReviewPanel
+          role={role}
+          isFrozen={isRepoFrozen}
+          members={memberAnalytics}
           pullRequests={pullRequests}
           selectedPr={selectedPr}
           onSelectPr={(pr) => {
@@ -2216,6 +2549,7 @@ export default function GitProjectHub({
           onOpenNewPrModal={() => setShowNewPrModal(true)}
           onAiFix={handleAiFixPr}
           onPeerApprove={handlePeerApprovePr}
+          onRequestChanges={handleRequestChangesPr}
           onMerge={handleMergePr}
           onOpenDefenseRoom={onNavigate ? () => onNavigate("defense-room") : undefined}
           actionLoading={prActionLoading}
@@ -2253,35 +2587,29 @@ export default function GitProjectHub({
 
             {/* Action Buttons Toolbar */}
             <div className="flex items-center gap-2 flex-wrap shrink-0">
-              <button
-                onClick={handleSyncGitHubLive}
-                disabled={isSyncingLive}
-                title="Đồng bộ commit & PRs từ link GitHub thật"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 transition shadow-2xs cursor-pointer disabled:opacity-60"
-              >
-                <RotateCw size={13} className={isSyncingLive ? "animate-spin text-blue-400" : "text-emerald-400"} />
-                {isSyncingLive ? "Đang đồng bộ..." : "Live Sync GitHub"}
-              </button>
+              {!isAdmin && (
+                <>
+                  <button
+                    onClick={handleGenerateArchitecture}
+                    disabled={isGeneratingArch || (isStudent && isRepoFrozen)}
+                    title="AI quét mã nguồn Repo và tự động sinh sơ đồ kiến trúc phân tầng động"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-100/80 hover:bg-purple-200/80 dark:bg-purple-950/60 dark:text-purple-300 dark:hover:bg-purple-900/80 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-0 outline-none ring-0 shadow-none"
+                  >
+                    <Sparkles size={13} className={isGeneratingArch ? "animate-spin text-purple-600" : "text-purple-500"} />
+                    {isGeneratingArch ? "AI đang quét..." : "AI Trích xuất Kiến trúc"}
+                  </button>
 
-              <button
-                onClick={handleGenerateArchitecture}
-                disabled={isGeneratingArch}
-                title="AI quét mã nguồn Repo và tự động sinh sơ đồ kiến trúc phân tầng động"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-100/80 hover:bg-purple-200/80 dark:bg-purple-950/60 dark:text-purple-300 dark:hover:bg-purple-900/80 transition cursor-pointer disabled:opacity-60 border-0 border-none outline-none ring-0 shadow-none"
-              >
-                <Sparkles size={13} className={isGeneratingArch ? "animate-spin text-purple-600" : "text-purple-500"} />
-                {isGeneratingArch ? "AI đang quét..." : "AI Trích xuất Kiến trúc"}
-              </button>
-
-              <button
-                onClick={handleSaveArchitecture}
-                disabled={isSavingArch}
-                title="Lưu vị trí component và cấu hình sơ đồ vào CSDL MySQL"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition cursor-pointer disabled:opacity-60 border-0 border-none outline-none ring-0 shadow-none"
-              >
-                <Save size={13} className="text-slate-600 dark:text-slate-400" />
-                {isSavingArch ? "Đang lưu..." : "Lưu vào CSDL"}
-              </button>
+                  <button
+                    onClick={handleSaveArchitecture}
+                    disabled={isSavingArch || (isStudent && isRepoFrozen)}
+                    title="Lưu vị trí component và cấu hình sơ đồ vào CSDL MySQL"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-0 outline-none ring-0 shadow-none"
+                  >
+                    <Save size={13} className="text-slate-600 dark:text-slate-400" />
+                    {isSavingArch ? "Đang lưu..." : "Lưu vào CSDL"}
+                  </button>
+                </>
+              )}
 
               <button
                 onClick={() => setDiagramAnimKey((k) => k + 1)}
@@ -2293,7 +2621,7 @@ export default function GitProjectHub({
             </div>
           </div>
 
-          {/* ReactFlow Canvas Window (FULL 100% WIDTH - KHÔNG GIAN RỘNG TỐI ĐA) */}
+          {/* ReactFlow Canvas Window */}
           <div className="w-full h-[760px] rounded-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden relative bg-slate-50/50 dark:bg-slate-950/70 shadow-inner">
             <ReactFlow
               key={`rf-canvas-${diagramAnimKey}-${activeArchFlow}`}
@@ -2326,7 +2654,7 @@ export default function GitProjectHub({
             {/* Watermark badge on canvas */}
             <div className="absolute top-3 left-3 z-10 flex items-center gap-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs text-xs font-mono text-slate-600 dark:text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>gitdiagram.com/{repoSlug}</span>
+              <span>Sơ đồ Kiến trúc Động • {repoSlug}</span>
             </div>
 
             {/* Helper hint pill floating on bottom-right of canvas */}
@@ -2411,141 +2739,135 @@ export default function GitProjectHub({
               )}
             </div>
             <a
-              href={`https://gitdiagram.com/${repoSlug}`}
+              href={repoUrl}
               target="_blank"
               rel="noreferrer"
               className="text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1 shrink-0"
             >
-              gitdiagram.com/{repoSlug}
+              github.com/{repoSlug}
               <ExternalLink size={12} />
             </a>
           </div>
 
-          {/* 🌟 SLIDE-OVER DRAWER (GUSTRA STYLE) - CHỈ XUẤT HIỆN KHI NHẤP VÀO COMPONENT 🌟 */}
+          {/* Slide-over Component Inspector Drawer */}
           {archDrawerOpen && selectedNode && (
-            <div className={`fixed inset-0 z-50 flex justify-end bg-slate-950/40 backdrop-blur-xs ${isArchDrawerClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
-              <div className="flex-1" onClick={handleCloseArchDrawer} />
-              {/* Click backdrop to close */}
-              
+            typeof document !== "undefined" ? (
+              createPortal(
+                <div className={`fixed inset-0 z-[9998] flex justify-end bg-slate-950/50 backdrop-blur-xs ${isArchDrawerClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+                  <div className="flex-1" onClick={handleCloseArchDrawer} />
+                  <div className={`w-full max-w-md h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col overflow-y-auto p-6 space-y-5 relative ${isArchDrawerClosing ? "marlo-drawer-out" : "marlo-drawer"}`}>
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border font-mono"
+                          style={{
+                            backgroundColor: `${(selectedNode.data as Record<string, string>).containerColor || "#2563eb"}15`,
+                            borderColor: `${(selectedNode.data as Record<string, string>).containerColor || "#2563eb"}40`,
+                            color: (selectedNode.data as Record<string, string>).containerColor || "#2563eb",
+                          }}
+                        >
+                          {(selectedNode.data as Record<string, string>).container || "Component"}
+                        </span>
+                        <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+                          {(selectedNode.data as Record<string, string>).tech}
+                        </span>
+                      </div>
 
-              {/* Drawer Sliding from Right */}
-              <div className={`w-full max-w-md h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col overflow-y-auto p-6 space-y-5 relative ${isArchDrawerClosing ? "marlo-drawer-out" : "marlo-drawer"}`}>
-                {/* Header with Subsystem Badge and Close Button */}
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border font-mono"
-                      style={{
-                        backgroundColor: `${(selectedNode.data as Record<string, string>).containerColor || "#2563eb"}15`,
-                        borderColor: `${(selectedNode.data as Record<string, string>).containerColor || "#2563eb"}40`,
-                        color: (selectedNode.data as Record<string, string>).containerColor || "#2563eb",
-                      }}
-                    >
-                      {(selectedNode.data as Record<string, string>).container || "Component"}
-                    </span>
-                    <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
-                      {(selectedNode.data as Record<string, string>).tech}
-                    </span>
-                  </div>
+                      <button
+                        onClick={handleCloseArchDrawer}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                        title="Đóng bảng điều khiển"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
 
-                  <button
-                    onClick={handleCloseArchDrawer}
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
+                        {(selectedNode.data as Record<string, string>).label} {(selectedNode.data as Record<string, string>).subLabel || ""}
+                      </h3>
+                      <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        {(selectedNode.data as Record<string, string>).description}
+                      </p>
+                    </div>
 
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                    title="Đóng bảng điều khiển"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 rounded-xl space-y-1">
+                      <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider font-mono">
+                        Đường dẫn tệp tin mã nguồn:
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-blue-700 dark:text-blue-400 truncate">
+                          {(selectedNode.data as Record<string, string>).filePath}
+                        </span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText((selectedNode.data as Record<string, string>).filePath || "");
+                            setDrawerToast("Đã sao chép đường dẫn file!");
+                            setTimeout(() => setDrawerToast(null), 2000);
+                          }}
+                          className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition shrink-0 cursor-pointer"
+                          title="Sao chép đường dẫn file"
+                        >
+                          <Copy size={13} />
+                        </button>
+                      </div>
+                    </div>
 
-                {/* Title & Description */}
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
-                    {(selectedNode.data as Record<string, string>).label} {(selectedNode.data as Record<string, string>).subLabel || ""}
-                  </h3>
-                  <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {(selectedNode.data as Record<string, string>).description}
-                  </p>
-                </div>
+                    <div className="space-y-2.5 text-xs bg-slate-50/70 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/70">
+                      <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
+                        <span>Luồng gọi đến (Upstream):</span>
+                        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                          {(selectedNode.data as Record<string, string>).upstream}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
+                        <span>Luồng gọi đi (Downstream):</span>
+                        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                          {(selectedNode.data as Record<string, string>).downstream}
+                        </span>
+                      </div>
+                    </div>
 
-                {/* Source File Path Card with Copy Button */}
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 rounded-xl space-y-1">
-                  <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider font-mono">
-                    Đường dẫn tệp tin mã nguồn:
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs font-bold text-blue-700 dark:text-blue-400 truncate">
-                      {(selectedNode.data as Record<string, string>).filePath}
-                    </span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText((selectedNode.data as Record<string, string>).filePath || "");
-                        setDrawerToast("Đã sao chép đường dẫn file!");
-                        setTimeout(() => setDrawerToast(null), 2000);
-                      }}
-                      className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition shrink-0 cursor-pointer"
-                      title="Sao chép đường dẫn file"
-                    >
-                      <Copy size={13} />
-                    </button>
-                  </div>
-                </div>
+                    <div className="p-4 bg-slate-50/80 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-xl space-y-2 text-xs">
+                      <div className="flex items-center gap-1.5 font-bold text-purple-700 dark:text-purple-400 text-[11px] uppercase tracking-wider font-mono">
+                        <Sparkles size={14} className="text-purple-600 dark:text-purple-400" />
+                        Vấn Đáp Phản Biện (Understand Anything)
+                      </div>
+                      <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-sans text-xs">
+                        {(selectedNode.data as Record<string, string>).defenseQA}
+                      </p>
+                    </div>
 
-                {/* Upstream & Downstream Dependencies */}
-                <div className="space-y-2.5 text-xs bg-slate-50/70 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/70">
-                  <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
-                    <span>Luồng gọi đến (Upstream):</span>
-                    <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
-                      {(selectedNode.data as Record<string, string>).upstream}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
-                    <span>Luồng gọi đi (Downstream):</span>
-                    <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
-                      {(selectedNode.data as Record<string, string>).downstream}
-                    </span>
-                  </div>
-                </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        <span>Mã Mermaid.js (Sao chép cho Báo cáo):</span>
+                        <button
+                          onClick={() => {
+                            copyMermaidCode();
+                            setDrawerToast("Đã sao chép mã Mermaid!");
+                            setTimeout(() => setDrawerToast(null), 2000);
+                          }}
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                        >
+                          <Copy size={12} />
+                          {copiedMermaid ? "Đã copy!" : "Copy Mermaid"}
+                        </button>
+                      </div>
+                      <div className="rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-[140px] leading-relaxed border border-slate-800 shadow-inner">
+                        <pre>{`${selectedNode.id}["${(selectedNode.data as Record<string, string>).label}"]`}</pre>
+                      </div>
+                    </div>
 
-                {/* Defense Q&A Box (Understand Anything) */}
-                <div className="p-4 bg-slate-50/80 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-purple-700 dark:text-purple-400 text-[11px] uppercase tracking-wider font-mono">
-                    <Sparkles size={14} className="text-purple-600 dark:text-purple-400" />
-                    Vấn Đáp Phản Biện (Understand Anything)
+                    {drawerToast && (
+                      <div className="p-2.5 bg-emerald-600 text-white text-xs font-bold rounded-lg text-center animate-fade-in shadow-sm">
+                        ✓ {drawerToast}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-sans text-xs">
-                    {(selectedNode.data as Record<string, string>).defenseQA}
-                  </p>
-                </div>
-
-                {/* Mermaid Preview Box */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                    <span>Mã Mermaid.js (Sao chép cho Báo cáo):</span>
-                    <button
-                      onClick={() => {
-                        copyMermaidCode();
-                        setDrawerToast("Đã sao chép mã Mermaid!");
-                        setTimeout(() => setDrawerToast(null), 2000);
-                      }}
-                      className="text-xs text-blue-600 hover:underline flex items-center gap-1 cursor-pointer font-bold"
-                    >
-                      <Copy size={12} />
-                      {copiedMermaid ? "Đã copy!" : "Copy Mermaid"}
-                    </button>
-                  </div>
-                  <div className="rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-[140px] leading-relaxed border border-slate-800 shadow-inner">
-                    <pre>{`${selectedNode.id}["${(selectedNode.data as Record<string, string>).label}"]`}</pre>
-                  </div>
-                </div>
-
-                {drawerToast && (
-                  <div className="p-2.5 bg-emerald-600 text-white text-xs font-bold rounded-lg text-center animate-fade-in shadow-sm">
-                    ✓ {drawerToast}
-                  </div>
-                )}
-              </div>
-            </div>
+                </div>,
+                document.body
+              )
+            ) : null
           )}
         </div>
       )}
@@ -2565,41 +2887,40 @@ export default function GitProjectHub({
               </p>
             </div>
 
-            {/* Member & Branch Filter Controls + Live Sync + Replay Animation */}
+            {/* Member & Branch Filter Controls + Push Commit + Replay Animation */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 shadow-2xs">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Tự động ghi nhận từ Git
-              </span>
-
-              <button
-                onClick={handleSyncGitHubLive}
-                disabled={isSyncingLive}
-                title="Hệ thống tự động ghi nhận qua Webhook. Bấm để đồng bộ tức thì các commit mới nhất từ Git repo về CSDL MySQL & Git Graph"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 transition shadow-2xs cursor-pointer disabled:opacity-60"
-              >
-                <RotateCw size={13} className={isSyncingLive ? "animate-spin text-blue-400" : "text-emerald-400"} />
-                {isSyncingLive ? "Đang đồng bộ..." : "Đồng Bộ Git Live"}
-              </button>
+              {isStudent && (
+                <button
+                  onClick={() => setShowNewCommitModal(true)}
+                  disabled={isRepoFrozen}
+                  title={isRepoFrozen ? "Repository đang bị đóng băng (Freeze)" : "Ghi nhận Commit mới lên Git Graph"}
+                  className="btn-marlo-primary btn--primary inline-flex items-center gap-1.5 text-xs py-1.5 px-3 shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus size={14} />
+                  <span>Ghi nhận Commit (+10 XP)</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setTopoAnimKey((k) => k + 1)}
                 title="Kích hoạt lại chuyển động vẽ nhánh Git"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition shadow-2xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition shadow-2xs cursor-pointer"
               >
-                <RotateCw size={13} className="text-slate-600" />
+                <RotateCw size={13} className="text-slate-600 dark:text-slate-400" />
                 Phát Lại Chuyển Động
               </button>
 
-              <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
-                <span className="text-[11px] text-slate-500 px-2 flex items-center gap-1">
+              <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-medium">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 px-2 flex items-center gap-1">
                   <User size={12} />
                   Thành viên:
                 </span>
                 <button
                   onClick={() => setMemberFilter("all")}
                   className={`px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer ${
-                    memberFilter === "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                    memberFilter === "all"
+                      ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   Tất cả ({commits.length})
@@ -2616,7 +2937,9 @@ export default function GitProjectHub({
                       key={au.name}
                       onClick={() => setMemberFilter(au.name)}
                       className={`px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer ${
-                        memberFilter === au.name ? activeCls : "text-slate-600 hover:text-slate-900"
+                        memberFilter === au.name
+                          ? activeCls
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                       }`}
                     >
                       {au.name} ({au.count})
@@ -2761,8 +3084,7 @@ export default function GitProjectHub({
                 </g>
               ))}
 
-              {/* Branch Connecting Lines (Smooth Bézier curves with drawing animations) */}
-              {/* 1. Main trunk */}
+              {/* Main Trunk */}
               <path
                 id="topo-main-path"
                 className="topo-path-main"
@@ -2771,121 +3093,22 @@ export default function GitProjectHub({
                 stroke="#2563eb"
                 strokeWidth="3"
               />
+              <circle r="5" fill="#38bdf8" filter="url(#topoGlow)">
+                <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="4.2s" repeatCount="indefinite" begin="0.3s" />
+              </circle>
 
-              {activeProjectId === "prj-codemind" && (repoSlug.includes("e-learning") || repoSlug.includes("codemind")) && commits.length <= 16 && (
-                <>
-                  <path
-                    id="topo-dev1-path"
-                    className="topo-path-develop1"
-                    d="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45"
-                    fill="none"
-                    stroke="#6366f1"
-                    strokeWidth="3"
-                  />
-                  <path
-                    id="topo-dev2-path"
-                    className="topo-path-develop2"
-                    d="M 720 225 L 1050 225"
-                    fill="none"
-                    stroke="#6366f1"
-                    strokeWidth="3"
-                  />
-                  <path
-                    id="topo-auth-path"
-                    className="topo-path-auth"
-                    d="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225"
-                    fill="none"
-                    stroke="#f59e0b"
-                    strokeWidth="3"
-                  />
-                  <path
-                    id="topo-eval-path"
-                    className="topo-path-evaluator"
-                    d="M 170 225 C 230 225, 280 345, 340 345 L 560 345 C 630 345, 680 345, 690 345 C 705 345, 715 225, 720 225"
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="3"
-                  />
-                  <path
-                    id="topo-hotfix-path"
-                    className="topo-path-hotfix"
-                    d="M 810 45 C 840 45, 860 105, 890 105 C 920 105, 940 45, 970 45"
-                    fill="none"
-                    stroke="#f43f5e"
-                    strokeWidth="3"
-                  />
-                  <path
-                    id="topo-hotfix-dev-path"
-                    className="topo-path-hotfix-dev"
-                    d="M 890 105 C 930 105, 980 225, 1030 225"
-                    fill="none"
-                    stroke="#f43f5e"
-                    strokeWidth="2.5"
-                    strokeDasharray="4 3"
-                  />
-                  <path
-                    id="topo-release-path"
-                    className="topo-path-release"
-                    d="M 1030 225 C 1060 225, 1080 165, 1110 165 L 1200 165 C 1240 165, 1270 45, 1300 45"
-                    fill="none"
-                    stroke="#a855f7"
-                    strokeWidth="3"
-                  />
-
-                  <circle r="6" fill="#38bdf8" filter="url(#topoGlow)">
-                    <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="3.8s" repeatCount="indefinite" begin="0.3s" />
-                  </circle>
-                  <circle r="12" fill="#38bdf8" opacity="0.25" filter="url(#topoGlow)">
-                    <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="3.8s" repeatCount="indefinite" begin="0.3s" />
-                  </circle>
-                  <circle r="5.5" fill="#a855f7" filter="url(#topoGlow)">
-                    <animateMotion path="M 70 45 C 110 45, 130 225, 170 225 L 720 225 C 760 225, 780 45, 810 45" dur="4.2s" repeatCount="indefinite" begin="0.6s" />
-                  </circle>
-                  <circle r="5.5" fill="#f59e0b" filter="url(#topoGlow)">
-                    <animateMotion path="M 170 225 C 210 225, 230 285, 260 285 L 420 285 C 500 285, 600 285, 610 285 C 625 285, 630 225, 640 225" dur="3.5s" repeatCount="indefinite" begin="1.0s" />
-                  </circle>
-                  <circle r="5.5" fill="#10b981" filter="url(#topoGlow)">
-                    <animateMotion path="M 170 225 C 230 225, 280 345, 340 345 L 560 345 C 630 345, 680 345, 690 345 C 705 345, 715 225, 720 225" dur="4s" repeatCount="indefinite" begin="1.3s" />
-                  </circle>
-                  <circle r="5.5" fill="#f43f5e" filter="url(#topoGlow)">
-                    <animateMotion path="M 810 45 C 840 45, 860 105, 890 105 C 920 105, 940 45, 970 45" dur="2.8s" repeatCount="indefinite" begin="1.6s" />
-                  </circle>
-                  <circle r="5.5" fill="#c084fc" filter="url(#topoGlow)">
-                    <animateMotion path="M 1030 225 C 1060 225, 1080 165, 1110 165 L 1200 165 C 1240 165, 1270 45, 1300 45" dur="3.6s" repeatCount="indefinite" begin="1.9s" />
-                  </circle>
-                </>
-              )}
-
-              {/* Dynamic Bezier edges for all commits across branches */}
-              {commits.map((c, idx) => {
-                if (idx === 0) return null;
-                if (
-                  activeProjectId === "prj-codemind" &&
-                  (repoSlug.includes("e-learning") || repoSlug.includes("codemind")) &&
-                  commits.length <= 16 &&
-                  idx < 16
-                )
-                  return null;
-                const prev = commits[idx - 1];
-                const midX = (prev.cx + c.cx) / 2;
-                return (
-                  <path
-                    key={`dyn-edge-${c.id}`}
-                    d={`M ${prev.cx} ${prev.cy} C ${midX} ${prev.cy}, ${midX} ${c.cy}, ${c.cx} ${c.cy}`}
-                    fill="none"
-                    stroke={c.branchColor}
-                    strokeWidth="2.8"
-                    strokeDasharray={
-                      activeProjectId === "prj-codemind" &&
-                      (repoSlug.includes("e-learning") || repoSlug.includes("codemind")) &&
-                      commits.length <= 16
-                        ? "5 3"
-                        : undefined
-                    }
-                    opacity={0.85}
-                  />
-                );
-              })}
+              {/* Dynamic DAG Branch Split, Intra-Branch & Merge Curves */}
+              {dynamicTopoEdges.map((edge) => (
+                <path
+                  key={edge.key}
+                  d={edge.d}
+                  fill="none"
+                  stroke={edge.color}
+                  strokeWidth={edge.width || 2.8}
+                  strokeDasharray={edge.dashed ? "5 3" : undefined}
+                  opacity={0.88}
+                />
+              ))}
 
               {/* Interactive Commit Dots */}
               {commits.map((c, idx) => {
@@ -2962,7 +3185,7 @@ export default function GitProjectHub({
                       fontFamily="monospace"
                       fontWeight={isSelected ? "bold" : "600"}
                       fill={isSelected ? "#0f172a" : "#475569"}
-                      className="dark:fill-slate-200 pointer-events-none select-none"
+                      className="dark:fill-slate-200 dark:stroke-slate-900 pointer-events-none select-none"
                       paintOrder="stroke"
                       stroke="#ffffff"
                       strokeWidth={2}
@@ -3045,8 +3268,8 @@ export default function GitProjectHub({
 
           {/* Selected Commit Detail Inspector Card */}
           {selectedCommit && (
-            <div key={`commit-card-${selectedCommit.id}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 ">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div key={`commit-card-${selectedCommit.id}`} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
                 <div className="flex items-center gap-3">
                   <span
                     className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0"
@@ -3056,12 +3279,12 @@ export default function GitProjectHub({
                   </span>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-900">{selectedCommit.author.name}</span>
-                      <span className="text-[11px] font-medium text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">{selectedCommit.author.name}</span>
+                      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-300 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                         {selectedCommit.author.role}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 font-mono">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 font-mono">
                       <span>{selectedCommit.date}</span>
                       <span>•</span>
                       <span>{selectedCommit.timeAgo}</span>
@@ -3076,31 +3299,31 @@ export default function GitProjectHub({
                   >
                     {selectedCommit.branch}
                   </span>
-                  <span className="font-mono text-xs font-bold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200">
+                  <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700">
                     commit {selectedCommit.sha}
                   </span>
                 </div>
               </div>
 
-              <div className="text-sm font-semibold text-slate-900 leading-snug">
+              <div className="text-sm font-semibold text-slate-900 dark:text-white leading-snug">
                 {selectedCommit.message}
               </div>
 
               {/* Modified Files Breakdown */}
               <div className="space-y-1.5 pt-1">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
                   <span className="flex items-center gap-1.5">
-                    <FileText size={14} className="text-slate-500" />
-                    Các tệp tin mã nguồn được chỉnh sửa ({selectedCommit.filesChanged.length} files):
+                    <FileText size={14} className="text-slate-500 dark:text-slate-400" />
+                    Các tệp tin mã nguồn được chỉnh sửa ({selectedCommit.filesChanged.length} tệp):
                   </span>
-                  <span className="font-mono text-[11px] text-emerald-600 font-bold">
+                  <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
                     +{selectedCommit.stats.additions} dòng / -{selectedCommit.stats.deletions} dòng
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
                   {selectedCommit.filesChanged.map((file: string, idx: number) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 text-slate-700">
-                      <GitCommit size={13} className="text-blue-600 shrink-0" />
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
+                      <GitCommit size={13} className="text-blue-600 dark:text-blue-400 shrink-0" />
                       <span className="truncate">{file}</span>
                     </div>
                   ))}
@@ -3111,11 +3334,11 @@ export default function GitProjectHub({
 
           {/* Commit History Timeline Table */}
           <div className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Clock size={16} className="text-slate-600" />
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Clock size={16} className="text-slate-600 dark:text-slate-400" />
               Nhật Ký Commit Theo Dòng Thời Gian (Nhấp chuột để xem vị trí trên cây)
             </h3>
-            <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 overflow-hidden text-xs">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden text-xs">
               {filteredCommits.map((c, cIdx) => {
                 const isSelected = selectedCommit?.id === c.id;
                 return (
@@ -3123,23 +3346,25 @@ export default function GitProjectHub({
                     key={c.id}
                     style={{ animationDelay: `${0.05 + Math.min(cIdx, 8) * 0.04}s` }}
                     onClick={() => setSelectedCommit(c)}
-                    className={`animate-cascade-item p-3 flex items-center justify-between transition cursor-pointer ${
-                      isSelected ? "bg-blue-50/70 border-l-4 border-l-blue-600" : "bg-white hover:bg-slate-50"
+                    className={`animate-cascade-item p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition cursor-pointer ${
+                      isSelected
+                        ? "bg-blue-50/70 dark:bg-blue-950/35 border-l-4 border-l-blue-600 dark:border-l-blue-400"
+                        : "bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/70"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 shrink-0">
                         {c.sha}
                       </span>
-                      <span className="font-medium text-slate-900 truncate max-w-[380px]">{c.message}</span>
+                      <span className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-[380px]">{c.message}</span>
                       <span
-                        className="font-mono text-[10px] text-white px-2 py-0.2 rounded font-semibold shrink-0"
+                        className="font-mono text-[10px] text-white px-2 py-0.5 rounded font-semibold shrink-0"
                         style={{ backgroundColor: c.branchColor }}
                       >
                         {c.branch}
                       </span>
                     </div>
-                    <div className="flex items-center gap-4 text-slate-500 font-mono shrink-0">
+                    <div className="flex items-center gap-4 text-slate-500 dark:text-slate-400 font-mono shrink-0">
                       <div className="flex items-center gap-1.5">
                         <span
                           className="w-4 h-4 rounded-full flex items-center justify-center font-bold text-[8.5px] text-white"
@@ -3147,12 +3372,12 @@ export default function GitProjectHub({
                         >
                           {c.author.avatar}
                         </span>
-                        <span>{c.author.name}</span>
+                        <span className="text-slate-700 dark:text-slate-300">{c.author.name}</span>
                       </div>
-                      <span className="text-emerald-600 font-semibold">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
                         +{c.stats.additions} / -{c.stats.deletions}
                       </span>
-                      <span className="text-slate-400 text-[11px]">{c.timeAgo}</span>
+                      <span className="text-slate-400 dark:text-slate-500 text-[11px]">{c.timeAgo}</span>
                     </div>
                   </div>
                 );
@@ -3172,7 +3397,7 @@ export default function GitProjectHub({
               Thống kê Đóng góp Nhóm & Tính Liêm chính Mã Nguồn (Anti-Freerider 50/30/20)
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Tính toán tự động từ SQLite: 50% Story Points hoàn thành + 30% Commit/PR + 20% DoD Review của {memberAnalytics.length || 3} thành viên.
+              Tính toán tự động từ CSDL MySQL: 50% Story Points hoàn thành + 30% Commit/PR + 20% DoD Review của {memberAnalytics.length || 3} thành viên.
             </p>
           </div>
 
@@ -3224,7 +3449,7 @@ export default function GitProjectHub({
               </div>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white dark:bg-slate-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-slate-200 dark:border-slate-800 font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                CADENCE ACTIVE
+                NHỊP ĐỘ HỢP LỆ
               </span>
             </div>
             <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
@@ -3237,110 +3462,93 @@ export default function GitProjectHub({
       {/* MODE 4: GIT FLOW & REPO SUBMISSION STANDARDS */}
       {viewMode === "gitflow" && (
         <div key="mode-gitflow" className="animate-screen-enter bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-6 space-y-8">
-          {/* Header Title with Enterprise Status Badges */}
+          {/* Header Title */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
             <div>
               <div className="flex items-center gap-2">
                 <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
                   <Layers size={20} />
                 </span>
-                <MarloTitle
-                  text="Quy Chuẩn Chu Trình Vận Hành Git Flow & Thẩm Định Nộp Bài"
-                  as="h2"
-                  className="text-lg font-bold text-slate-900 dark:text-white"
-                />
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Quy Chuẩn Chu Trình Vận Hành Git Flow & Thẩm Định Nộp Bài
+                </h2>
               </div>
               <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-1 max-w-3xl leading-relaxed">
-                Chu trình 6 bước khép kín từ nhận task Kanban, tách nhánh chuẩn hóa, commit có mã task, kiểm thử sandbox tự động, quy trình Review 2 lớp (AI Bot + Peer Review), chiến lược Squash Merge, đến nghiệm thu thẩm định liêm chính.
+                Chu trình 6 bước khép kín từ nhận task Kanban, tách nhánh chuẩn hóa, commit có mã task, kiểm thử sandbox tự động, quy trình Review 2 lớp (AI Bot + Peer Review), chiến lược Merge phù hợp, đến nghiệm thu thẩm định liêm chính.
               </p>
             </div>
           </div>
 
-          {/* SƠ ĐỒ ĐƯỜNG NHÁNH METRO GIT FLOW TRỰC QUAN (VISUAL METRO PIPELINE) */}
+          {/* SƠ ĐỒ ĐƯỜNG NHÁNH METRO GIT FLOW ĐỘNG */}
           <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-5 space-y-4 shadow-2xs">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <GitBranch size={16} className="text-slate-700 dark:text-slate-300" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                  Sơ Đồ Phân Nhánh Metro Git Flow (Branch Lifecycle Architecture)
+                  Sơ Đồ Phân Nhánh Metro Git Flow (Branch Lifecycle)
                 </h3>
               </div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Repository Branching Model (Hoaba-clouch/E-learningProject)</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono font-medium">
+                Mô hình nhánh hiện tại ({repoSlug || "hoaba-clouch/e-learningproject"})
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-              {/* Lane 1: main */}
-              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-blue-600" />
-                    main (Production)
-                  </span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">LOCKED</span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Nhánh chính thức dùng để bảo vệ và demo đồ án. Chỉ nhận PR kiểm duyệt và hợp nhất qua quy trình CI/CD. Gắn thẻ Git Tag phiên bản chính thức.
-                </p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {uniqueBranches.slice(0, 4).map((b, bIdx) => {
+                const isMain = b.name === "main" || b.name === "master";
+                const isDevelop = b.name === "develop" || b.name.includes("pipeline");
+                const tagLabel = isMain
+                  ? "BẢO VỆ"
+                  : isDevelop
+                  ? "TÍCH HỢP"
+                  : bIdx % 2 === 0
+                  ? "TÍNH NĂNG"
+                  : "HOẠT ĐỘNG";
+                const desc = isMain
+                  ? "Nhánh phát hành & bảo vệ đồ án chính thức. Chỉ tiếp nhận PR đã vượt qua 2 lớp Review & AST."
+                  : isDevelop
+                  ? "Trục tích hợp các nhánh tính năng, chạy kiểm thử tự động CI/CD trước khi chốt bản phát hành."
+                  : `Nhánh phát triển tính năng (${b.count} commits đã ghi nhận), tự động ánh xạ sang cây Metro Git Graph.`;
 
-              {/* Lane 2: feature/ci-cd-pipeline */}
-              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-purple-500" />
-                    feature/ci-cd-pipeline
-                  </span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">PIPELINE</span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Trục tích hợp CI/CD tự động, Docker Sandbox isolated runner, kiểm thử tự động pytest và đồng bộ trạng thái đồ án với CSDL MySQL.
-                </p>
-              </div>
-
-              {/* Lane 3: TE9CA7A-JWT */}
-              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    TE9CA7A-JWT (Auth & Security)
-                  </span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">FEATURE</span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Module xác thực JWT, mã hóa Bcrypt, bảo vệ đa phiên thiết bị và cơ chế phân quyền RBAC 3 vai trò (Admin, Giảng viên, Sinh viên).
-                </p>
-              </div>
-
-              {/* Lane 4: feature/te9ca74 & huy */}
-              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-cyan-500" />
-                    feature/te9ca74 & huy
-                  </span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">ACTIVE</span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Nhánh kiến trúc 3 tầng FastAPI + React (TE9CA74) và nhánh frontend Kanban tương tác kéo thả chuẩn Trello của thành viên nhóm.
-                </p>
-              </div>
+                return (
+                  <div
+                    key={b.name}
+                    className="p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 space-y-2 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs truncate">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: b.color }} />
+                        <span className="truncate font-mono">{b.name}</span>
+                      </span>
+                      <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
+                        {tagLabel}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      {desc}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* CHI TIẾT 6 BƯỚC KHÉP KÍN TOÀN DIỆN */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-600" />
                 Quy Trình 6 Bước Thực Thi Chi Tiết (Actionable SOP)
               </h3>
-              <span className="text-xs text-slate-400 font-mono">Tuân thủ nghiêm ngặt chuẩn DoD (Definition of Done)</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                Tuân thủ nghiêm ngặt chuẩn DoD (Definition of Done)
+              </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {/* Bước 1 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200 bg-white shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
                 style={{ animationDelay: "0.14s" }}
               >
                 <div className="space-y-2">
@@ -3349,27 +3557,29 @@ export default function GitProjectHub({
                       1
                     </span>
                     <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-blue-700 dark:text-blue-400 border border-slate-200 dark:border-slate-700">
-                      Planning & Lock
+                      Lập kế hoạch & Khóa H2
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                     Nhận Task & Thẩm Định Tiên Quyết H2
                   </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Sinh viên nhận task trên Kanban. Kiểm tra nghiêm ngặt <strong className="text-slate-800">Ràng buộc Tiên quyết H2</strong>: Task cha phụ thuộc bắt buộc phải ở trạng thái <strong className="text-emerald-600">ĐÃ XONG (Done)</strong> mới được kéo sang cột <strong className="text-blue-600">ĐANG LÀM</strong>.
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Sinh viên nhận task trên Kanban. Kiểm tra <strong className="text-slate-800 dark:text-white">Ràng buộc Tiên quyết H2</strong>: Task cha phụ thuộc phải đạt trạng thái <strong className="text-emerald-600 dark:text-emerald-400">Hoàn thành</strong> hoặc <strong className="text-emerald-600 dark:text-emerald-400">Đã nghiệm thu</strong> trước khi Task con chuyển sang <strong className="text-blue-600 dark:text-blue-400">Hoàn thành</strong> và trước khi Merge PR tự động đóng thẻ.
                   </p>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-700 space-y-1">
-                  <div className="text-slate-400 text-[10px] uppercase font-bold">Quy tắc bắt buộc:</div>
-                  <div className="text-slate-600">• Ghi nhận đúng mã Task ID duy nhất (Ví dụ: <span className="font-bold text-blue-600">#TE35D77</span>).</div>
-                  <div className="text-slate-600">• Không nhận cùng lúc quá 2 task đang làm.</div>
+                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-700 dark:text-slate-300 space-y-1">
+                  <div className="text-slate-400 dark:text-slate-500 text-[10px] uppercase font-bold">Quy tắc bắt buộc:</div>
+                  <div className="text-slate-600 dark:text-slate-300">
+                    • Ghi nhận đúng mã Task ID duy nhất (Ví dụ: <span className="font-bold text-blue-600 dark:text-blue-400">#{projectTasks[0]?.code || "TE35D77"}</span>).
+                  </div>
+                  <div className="text-slate-600 dark:text-slate-300">• Không nhận cùng lúc quá 2 task đang làm.</div>
                 </div>
               </div>
 
               {/* Bước 2 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200 bg-white shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
                 style={{ animationDelay: "0.19s" }}
               >
                 <div className="space-y-2">
@@ -3378,28 +3588,28 @@ export default function GitProjectHub({
                       2
                     </span>
                     <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-purple-700 dark:text-purple-400 border border-slate-200 dark:border-slate-700">
-                      Branching
+                      Tách nhánh
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    Tách Nhánh Feature Từ Develop
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Tách Nhánh Feature Từ {targetBranch || "develop"}
                   </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Cập nhật code mới nhất từ <code className="text-blue-600 font-mono">develop</code> rồi tách nhánh làm việc cá nhân. Tên nhánh bắt buộc phải chứa đúng mã Task ID để hệ thống tự động liên kết thẻ Kanban.
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Cập nhật code mới nhất từ <code className="text-blue-600 dark:text-blue-400 font-mono">{targetBranch || "develop"}</code> rồi tách nhánh làm việc cá nhân. Tên nhánh chứa mã Task ID để hệ thống tự liên kết thẻ Kanban.
                   </p>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-slate-900 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner">
+                <div className="p-2.5 rounded-lg bg-slate-900 dark:bg-slate-950 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner border border-slate-800">
                   <div className="text-slate-400 text-[10px] uppercase font-bold">Lệnh Terminal mẫu:</div>
-                  <div className="text-emerald-400 font-semibold">$ git checkout develop</div>
-                  <div className="text-emerald-400 font-semibold">$ git pull origin develop</div>
-                  <div className="text-amber-300 font-semibold">$ git checkout -b feature/TE35D77_docker-sandbox</div>
+                  <div className="text-emerald-400 font-semibold">$ git checkout {targetBranch || "develop"}</div>
+                  <div className="text-emerald-400 font-semibold">$ git pull origin {targetBranch || "develop"}</div>
+                  <div className="text-amber-300 font-semibold">$ git checkout -b feature/{projectTasks[0]?.code || "TE35D77"}_module</div>
                 </div>
               </div>
 
               {/* Bước 3 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200 bg-white shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
                 style={{ animationDelay: "0.24s" }}
               >
                 <div className="space-y-2">
@@ -3408,28 +3618,28 @@ export default function GitProjectHub({
                       3
                     </span>
                     <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-slate-200 dark:border-slate-700">
-                      Commit Standard
+                      Chuẩn Commit
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                     Lập Trình & Commit Kèm Mã Task
                   </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Tuân thủ quy chuẩn <strong className="text-slate-800">Conventional Commits</strong>. Mỗi commit đều phải mang tiền tố rõ ràng (<code className="text-slate-700">feat</code>, <code className="text-slate-700">fix</code>, <code className="text-slate-700">test</code>) kèm mã task trong ngoặc đơn để liên kết lịch sử.
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Tuân thủ quy chuẩn <strong className="text-slate-800 dark:text-white">Conventional Commits</strong>. Mỗi commit mang tiền tố rõ ràng (<code className="text-slate-700 dark:text-blue-300">feat</code>, <code className="text-slate-700 dark:text-blue-300">fix</code>, <code className="text-slate-700 dark:text-blue-300">test</code>) kèm mã task để tích lũy lịch sử.
                   </p>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-slate-900 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner">
+                <div className="p-2.5 rounded-lg bg-slate-900 dark:bg-slate-950 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner border border-slate-800">
                   <div className="text-slate-400 text-[10px] uppercase font-bold">Cú pháp Commit mẫu:</div>
                   <div className="text-emerald-400 font-semibold">$ git add .</div>
-                  <div className="text-amber-300 font-semibold">$ git commit -m "feat(#TE35D77): build docker alpine cgroups limit"</div>
-                  <div className="text-slate-400 text-[10px] mt-1">• Cam kết khoảng cách tự nhiên (Variance ~4.8h)</div>
+                  <div className="text-amber-300 font-semibold">$ git commit -m "feat(#{projectTasks[0]?.code || "TE35D77"}): implement module"</div>
+                  <div className="text-slate-400 text-[10px] mt-1">• Nhịp độ tự nhiên (Variance ~{metricsState.cadenceVarianceHours}h)</div>
                 </div>
               </div>
 
               {/* Bước 4 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200 bg-white shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
                 style={{ animationDelay: "0.29s" }}
               >
                 <div className="space-y-2">
@@ -3438,21 +3648,21 @@ export default function GitProjectHub({
                       4
                     </span>
                     <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700">
-                      CI & Test
+                      CI & Kiểm thử
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                     Kiểm Thử Nội Bộ & Docker Sandbox
                   </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Chạy toàn bộ unit test local và kiểm thử trên môi trường giả lập Docker Sandbox. Hệ thống kiểm tra 5 test cases ẩn đảm bảo không có lỗi rò rỉ bộ nhớ, timeout hay crash runtime trước khi đẩy code lên remote.
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Chạy toàn bộ unit test local và kiểm thử trên môi trường Docker Sandbox. Hệ thống kiểm tra test cases ẩn đảm bảo không rò rỉ bộ nhớ, timeout hay crash trước khi mở PR.
                   </p>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-slate-900 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner">
+                <div className="p-2.5 rounded-lg bg-slate-900 dark:bg-slate-950 text-[11px] font-mono text-slate-200 space-y-1 overflow-x-auto shadow-inner border border-slate-800">
                   <div className="text-slate-400 text-[10px] uppercase font-bold">Lệnh Push nhánh lên GitHub:</div>
                   <div className="text-emerald-400 font-semibold">$ npm test (hoặc pytest tests/)</div>
-                  <div className="text-amber-300 font-semibold">$ git push -u origin feature/TE35D77_docker-sandbox</div>
+                  <div className="text-amber-300 font-semibold">$ git push -u origin feature/{projectTasks[0]?.code || "TE35D77"}_module</div>
                   <div className="text-slate-400 text-[10px]">• Tiêu chí: Memory &lt;= 128MB, TLE &lt; 2.0s</div>
                 </div>
               </div>
@@ -3468,22 +3678,28 @@ export default function GitProjectHub({
                       5
                     </span>
                     <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-rose-700 dark:text-rose-400 border border-slate-200 dark:border-slate-700">
-                      2-Tier Review & Merge
+                      Review 2 Lớp & Merge
                     </span>
                   </div>
                   <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Mở Pull Request, Review 2 Lớp & Squash Merge
+                    Mở Pull Request, Review 2 Lớp & Merge
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    Mở PR từ nhánh feature vào <code className="text-blue-600 dark:text-blue-400 font-mono font-bold">develop</code>. Kích hoạt chu trình duyệt mã 2 tầng bảo mật nghiêm ngặt trước khi hợp nhất.
+                    Mở PR từ nhánh feature vào <code className="text-blue-600 dark:text-blue-400 font-mono font-bold">{targetBranch || "develop"}</code>. Kích hoạt chu trình duyệt mã 2 tầng bảo mật nghiêm ngặt trước khi hợp nhất.
                   </p>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-700 dark:text-slate-300 space-y-1.5 shadow-2xs">
                   <div className="text-blue-900 dark:text-blue-400 font-bold text-[10px] uppercase">Quy trình Review & Merge chi tiết:</div>
-                  <div className="text-slate-600 dark:text-slate-400">• <strong className="text-slate-800 dark:text-slate-200">Lớp 1 (CodeMind AI Bot):</strong> Tự động quét CVE lỗ hổng, AST complexity, AST blast radius.</div>
-                  <div className="text-slate-600 dark:text-slate-400">• <strong className="text-slate-800 dark:text-slate-200">Lớp 2 (Peer Review chéo):</strong> Tối thiểu 1 thành viên khác (Hòa / Huy / Nghị) duyệt diff và Approve. Bắt buộc resolve 100% comment.</div>
-                  <div className="text-slate-600 dark:text-slate-400">• <strong className="text-purple-700 dark:text-purple-400 font-bold">Chiến lược Merge:</strong> Chọn <span className="bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 px-1 rounded font-bold">Squash and Merge</span> để gộp thành 1 commit duy nhất trên develop.</div>
+                  <div className="text-slate-600 dark:text-slate-400">
+                    • <strong className="text-slate-800 dark:text-slate-200">Lớp 1 (CodeMind AI Bot):</strong> Tự động quét CVE lỗ hổng, AST complexity, AST blast radius.
+                  </div>
+                  <div className="text-slate-600 dark:text-slate-400">
+                    • <strong className="text-slate-800 dark:text-slate-200">Lớp 2 (Peer Review chéo):</strong> Tối thiểu 1 thành viên khác ({memberAnalytics.length > 0 ? memberAnalytics.map((m) => m.name.split(" ").slice(-1)[0]).join(" / ") : "Thành viên nhóm"}) hoặc Giảng viên duyệt diff và Approve.
+                  </div>
+                  <div className="text-slate-600 dark:text-slate-400">
+                    • <strong className="text-purple-700 dark:text-purple-400 font-bold">Chiến lược Merge:</strong> Khuyến nghị <span className="bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 px-1 rounded font-bold">Squash and Merge</span> giữ lịch sử sạch.
+                  </div>
                 </div>
               </div>
 
@@ -3498,14 +3714,14 @@ export default function GitProjectHub({
                       6
                     </span>
                     <span className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-emerald-800 dark:text-emerald-300 border border-slate-200 dark:border-slate-700">
-                      Submission & DoD
+                      Nghiệm thu & DoD
                     </span>
                   </div>
                   <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                     Nộp Bài, Thẩm Định Liêm Chính & Vấn Đáp AI
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    Dán URL PR đã merge vào hệ thống CodeMind Campus. Hệ thống phân tích đối chiếu commit cadence, băm mã SHA-256 xác thực và tự động đóng dấu nghiệm thu hoàn thành.
+                    Merge PR trên CodeMind Campus để đối chiếu commit cadence, băm con dấu SHA-256 DoD và đồng bộ hồ sơ sang Phòng Bảo vệ & Chấm Kép của Giảng viên.
                   </p>
                 </div>
 
@@ -3513,7 +3729,7 @@ export default function GitProjectHub({
                   <div className="text-emerald-900 dark:text-emerald-400 font-bold text-[10px] uppercase">Kết quả thẩm định:</div>
                   <div className="text-emerald-800 dark:text-emerald-400 font-bold">✓ Đóng dấu [ ĐÃ NGHIỆM THU - DoD 100% ]</div>
                   <div className="text-slate-600 dark:text-slate-400">• Tự động cộng Story Points vào Sprint Burndown.</div>
-                  <div className="text-slate-600 dark:text-slate-400">• Sinh 20 câu hỏi vấn đáp phản biện phục vụ buổi bảo vệ.</div>
+                  <div className="text-slate-600 dark:text-slate-400">• Tự sinh câu hỏi vấn đáp phản biện từ Diff PR.</div>
                   <button
                     onClick={() => handleSetViewMode("prs")}
                     className="w-full mt-1 py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-sans font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition"
@@ -3526,25 +3742,27 @@ export default function GitProjectHub({
             </div>
           </div>
 
-          {/* BẢNG SO SÁNH CHIẾN LƯỢC MERGE & GIẢI QUYẾT XUNG ĐỘT (MERGE STRATEGY & CONFLICT RESOLUTION) */}
+          {/* BẢNG SO SÁNH CHIẾN LƯỢC MERGE & GIẢI QUYẾT XUNG ĐỘT */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2">
-            {/* Cột trái: So sánh Chiến lược Merge (7 cols) */}
+            {/* Cột trái: So sánh Chiến lược Merge */}
             <div
-              className="marlo-card lg:col-span-7 rounded-2xl border border-slate-200 p-5 space-y-3 bg-slate-50/40"
+              className="marlo-card lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 bg-slate-50/40 dark:bg-slate-800/30"
               style={{ animationDelay: "0.43s" }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <GitCommit size={16} className="text-purple-600" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-mono">
-                    Ma Trận Lựa Chọn Chiến Lược Merge (Merge Policy)
+                  <GitCommit size={16} className="text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white font-mono">
+                    Ma Trận Lựa Chọn Chiến Lược Merge
                   </h4>
                 </div>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-mono">RECOMMENDED</span>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/70 px-2 py-0.5 rounded-full font-mono">
+                  KHUYÊN DÙNG
+                </span>
               </div>
 
               <div className="space-y-2 text-xs">
-                {/* Option 1: Squash and Merge (Khuyên dùng) */}
+                {/* Option 1 */}
                 <div
                   className="marlo-row marlo-item-interactive p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-1.5 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200"
                   style={{ animationDelay: "0.46s" }}
@@ -3554,50 +3772,52 @@ export default function GitProjectHub({
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       1. Squash and Merge (Chuẩn đồ án Sprint)
                     </span>
-                    <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-800">ƯU TIÊN SỐ 1</span>
+                    <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-800">
+                      ƯU TIÊN SỐ 1
+                    </span>
                   </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Gộp tất cả 5-10 commit thử nghiệm vụn vặt trên nhánh feature thành <strong>đúng 1 commit duy nhất</strong> khi merge vào <code className="text-blue-600 font-mono">develop</code>. Tiêu đề commit gộp chứa đúng mã task: <code className="text-purple-700 font-mono font-bold">feat(#TE35D77): hoàn thiện docker sandbox (#PR-42)</code>. Lịch sử Git sạch sẽ, chuyên nghiệp, dễ rollback.
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Gộp toàn bộ commit thử nghiệm trên nhánh feature thành <strong className="dark:text-white">đúng 1 commit duy nhất</strong> khi merge vào <code className="text-blue-600 dark:text-blue-400 font-mono">develop</code>. Lịch sử Git gọn gàng và dễ rollback.
                   </p>
                 </div>
 
-                {/* Option 2: Rebase and Merge */}
+                {/* Option 2 */}
                 <div
-                  className="marlo-row marlo-item-interactive p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1 opacity-80 hover:opacity-100 hover:border-blue-400 transition-all duration-200"
+                  className="marlo-row marlo-item-interactive p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-1 hover:border-blue-400 dark:hover:border-blue-600 transition-all duration-200"
                   style={{ animationDelay: "0.49s" }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-blue-500" />
                       2. Rebase and Merge (Lịch sử tuyến tính)
                     </span>
-                    <span className="text-[10px] font-mono text-slate-500">Tùy chọn</span>
+                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">Tùy chọn</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Dời gốc commit của feature lên đầu nhánh develop, tạo lịch sử thẳng tắp không có commit rẽ nhánh. Phù hợp với những PR lớn có nhiều commit logic độc lập.
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Dời gốc commit của feature lên đầu nhánh develop, tạo lịch sử thẳng hàng. Phù hợp với những PR lớn có nhiều commit logic độc lập.
                   </p>
                 </div>
 
-                {/* Option 3: Merge Commit */}
+                {/* Option 3 */}
                 <div
-                  className="marlo-row marlo-item-interactive p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1 opacity-80 hover:opacity-100 hover:border-purple-400 transition-all duration-200"
+                  className="marlo-row marlo-item-interactive p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-1 hover:border-purple-400 dark:hover:border-purple-600 transition-all duration-200"
                   style={{ animationDelay: "0.52s" }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-purple-500" />
                       3. Merge Commit (--no-ff)
                     </span>
-                    <span className="text-[10px] font-mono text-slate-500">Dùng cho Release</span>
+                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">Dùng cho Release</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Tạo 1 commit merge chuyên biệt giữ nguyên cấu trúc phân nhánh. Chỉ sử dụng khi chốt Sprint đóng gói từ <code className="text-blue-600 font-mono">develop</code> vào <code className="text-purple-600 font-mono">main</code>.
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Tạo 1 commit merge chuyên biệt giữ nguyên cấu trúc phân nhánh. Thường dùng khi chốt Sprint đóng gói từ <code className="text-blue-600 dark:text-blue-400 font-mono">develop</code> vào <code className="text-purple-600 dark:text-purple-400 font-mono">main</code>.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Cột phải: Hướng dẫn Xử lý Merge Conflict (5 cols) */}
+            {/* Cột phải: Hướng dẫn Xử lý Merge Conflict */}
             <div
               className="marlo-card lg:col-span-5 rounded-2xl border border-slate-700/60 p-5 space-y-3 bg-slate-900 text-white shadow-md flex flex-col justify-between"
               style={{ animationDelay: "0.47s" }}
@@ -3610,16 +3830,16 @@ export default function GitProjectHub({
                   </h4>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Khi 2 thành viên cùng sửa chung 1 file và PR báo xung đột (<strong className="text-rose-400">Can't automatically merge</strong>), sinh viên bắt buộc xử lý tại local theo 4 bước chuẩn:
+                  Khi 2 thành viên cùng sửa chung 1 file và PR báo xung đột (<strong className="text-rose-400">Can't automatically merge</strong>), sinh viên xử lý tại local theo 4 bước chuẩn:
                 </p>
               </div>
 
               <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono space-y-2 text-slate-300">
-                <div className="text-slate-400 text-[10px] uppercase font-bold">Terminal Runbook:</div>
-                <div><span className="text-slate-500"># 1. Đứng tại nhánh feature cá nhân</span><br /><span className="text-emerald-400 font-semibold">$ git checkout feature/TE35D77_docker-sandbox</span></div>
+                <div className="text-slate-400 text-[10px] uppercase font-bold">Các bước thực hiện Terminal:</div>
+                <div><span className="text-slate-500"># 1. Đứng tại nhánh feature cá nhân</span><br /><span className="text-emerald-400 font-semibold">$ git checkout feature/TE35D77_module</span></div>
                 <div><span className="text-slate-500"># 2. Kéo code develop mới nhất về trộn</span><br /><span className="text-amber-300 font-semibold">$ git pull origin develop</span></div>
-                <div><span className="text-slate-500"># 3. Mở VS Code chọn Accept Current / Incoming</span><br /><span className="text-emerald-400 font-semibold">$ git add . && git commit -m "chore: resolve conflicts with develop"</span></div>
-                <div><span className="text-slate-500"># 4. Đẩy ngược lại lên PR (PR sẽ tự động xanh)</span><br /><span className="text-emerald-400 font-semibold">$ git push origin feature/TE35D77_docker-sandbox</span></div>
+                <div><span className="text-slate-500"># 3. Mở VS Code chọn Accept Current / Incoming</span><br /><span className="text-emerald-400 font-semibold">$ git add . && git commit -m "chore: resolve conflicts"</span></div>
+                <div><span className="text-slate-500"># 4. Đẩy ngược lại lên PR</span><br /><span className="text-emerald-400 font-semibold">$ git push origin feature/TE35D77_module</span></div>
               </div>
 
               <div className="text-[10px] text-emerald-400 font-mono flex items-center gap-1.5 pt-1 border-t border-slate-800">
@@ -3631,158 +3851,177 @@ export default function GitProjectHub({
         </div>
       )}
 
-      {/* Modal Liên Kết & Đồng Bộ GitHub Repo */}
+      {/* Modal Cấu hình & Đồng Bộ GitHub Repo */}
       {showRepoModal && (
-        <div onClick={handleCloseRepoModal} className={`fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 ${isRepoModalClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
-          <div onClick={(e) => e.stopPropagation()} className={`bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-5 space-y-4 ${isRepoModalClosing ? "marlo-modal-out" : "marlo-modal"}`}>
-            
-          
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <GitFork size={18} className="text-blue-600" />
-                  Liên Kết & Đồng Bộ Repo GitHub
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Quản lý kho mã nguồn và cấu hình nhánh đồng bộ trực tiếp cho dự án CodeMind.
-                </p>
-              </div>
-              <button
-                onClick={handleCloseRepoModal}
-                className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3.5 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Đường dẫn Kho lưu trữ (GitHub Repository URL):
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                    Đã Kết Nối
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                  <span className="text-[11px] text-slate-500 font-medium">Chọn nhanh:</span>
+        typeof document !== "undefined" ? (
+          createPortal(
+            <div onClick={handleCloseRepoModal} className={`fixed inset-0 z-[9998] bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-4 ${isRepoModalClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+              <div onClick={(e) => e.stopPropagation()} className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 space-y-4 ${isRepoModalClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+                <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <GitFork size={18} className="text-blue-600 dark:text-blue-400" />
+                      Cấu hình & Đồng Bộ Repo GitHub
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Quản lý kho mã nguồn, nhánh nộp bài chính và chiến lược Merge mặc định của dự án.
+                    </p>
+                  </div>
                   <button
-                    type="button"
-                    onClick={() => setRepoUrl("https://github.com/facebook/react")}
-                    className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 cursor-pointer"
+                    onClick={handleCloseRepoModal}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold p-1 cursor-pointer"
                   >
-                    ⚛️ React
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRepoUrl("https://github.com/fastapi/fastapi")}
-                    className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-semibold hover:bg-emerald-100 cursor-pointer"
-                  >
-                    ⚡ FastAPI
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRepoUrl("https://github.com/torvalds/linux")}
-                    className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-[11px] font-semibold hover:bg-amber-100 cursor-pointer"
-                  >
-                    🐧 Linux
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRepoUrl("https://github.com/Hoaba-clouch/E-learningProject")}
-                    className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 text-[11px] font-semibold hover:bg-purple-100 cursor-pointer"
-                  >
-                    🎓 CodeMind Gốc
+                    <X size={16} />
                   </button>
                 </div>
-              </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Nhánh nộp bài & đồng bộ chính (Target Branch):
-                </label>
-                <select
-                  value={targetBranch}
-                  onChange={(e) => setTargetBranch(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  <option value="main">main (Production Release - Sprint 4)</option>
-                  <option value="develop">develop (Integration Branch - Sprint 2)</option>
-                  <option value="feature/erd">feature/erd (Sprint 1 Database 8 Tables)</option>
-                  <option value="feature/auth">feature/auth (Sprint 2 JWT Authentication)</option>
-                  <option value="feature/sandbox">feature/sandbox (Sprint 3 Docker Runner)</option>
-                </select>
-              </div>
+                <div className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                      Đường dẫn Kho lưu trữ (GitHub Repository URL):
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={repoUrl}
+                        onChange={(e) => setRepoUrl(e.target.value)}
+                        className="w-full px-3 py-2 pr-24 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-2 py-0.5 rounded">
+                        Đã Kết Nối
+                      </span>
+                    </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Chiến lược Merge mặc định (Default Merge Strategy):
-                </label>
-                <select
-                  value={mergeStrategy}
-                  onChange={(e) => setMergeStrategy(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  <option value="squash">squash (Squash and Merge — Chuẩn Sprint)</option>
-                  <option value="rebase">rebase (Rebase and Merge — Tuyến tính)</option>
-                  <option value="merge">merge (Merge Commit --no-ff)</option>
-                </select>
-              </div>
+                    <details className="mt-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-2.5 py-1.5">
+                      <summary className="text-[11px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                        Thử nghiệm nhanh với Repo mẫu công khai (tùy chọn)
+                      </summary>
+                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setRepoUrl("https://github.com/Hoaba-clouch/E-learningProject")}
+                          className="px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[11px] font-semibold hover:bg-purple-100 cursor-pointer"
+                        >
+                          CodeMind Gốc
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRepoUrl("https://github.com/facebook/react")}
+                          className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[11px] font-semibold hover:bg-blue-100 cursor-pointer"
+                        >
+                          React
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRepoUrl("https://github.com/fastapi/fastapi")}
+                          className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-100 cursor-pointer"
+                        >
+                          FastAPI
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRepoUrl("https://github.com/torvalds/linux")}
+                          className="px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[11px] font-semibold hover:bg-amber-100 cursor-pointer"
+                        >
+                          Linux
+                        </button>
+                      </div>
+                    </details>
+                  </div>
 
-              <div className="p-3 bg-blue-50/70 rounded-lg text-blue-900 space-y-1.5 text-xs">
-                <div className="font-bold flex items-center gap-1.5 text-blue-800">
-                  <ShieldCheck size={14} />
-                  Trạng thái liên kết tự động:
+                  <div>
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                      Nhánh nộp bài & đồng bộ chính (Target Branch):
+                    </label>
+                    <select
+                      value={targetBranch}
+                      onChange={(e) => setTargetBranch(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    >
+                      <option value="main">main (Production Release)</option>
+                      <option value="develop">develop (Integration Branch)</option>
+                      <option value="feature/erd">feature/erd (Database Design)</option>
+                      <option value="feature/auth">feature/auth (Authentication)</option>
+                      <option value="feature/sandbox">feature/sandbox (Docker Runner)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                      Chiến lược Merge mặc định (Default Merge Strategy):
+                    </label>
+                    <select
+                      value={mergeStrategy}
+                      onChange={(e) => setMergeStrategy(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    >
+                      <option value="squash">squash (Squash and Merge — Chuẩn Sprint)</option>
+                      <option value="rebase">rebase (Rebase and Merge — Tuyến tính)</option>
+                      <option value="merge">merge (Merge Commit --no-ff)</option>
+                    </select>
+                  </div>
+
+                  <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/60 rounded-lg text-blue-900 dark:text-blue-200 space-y-1.5 text-xs">
+                    <div className="font-bold flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
+                      <ShieldCheck size={14} />
+                      Trạng thái liên kết tự động:
+                    </div>
+                    <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800 dark:text-blue-300">
+                      <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG</strong>.</li>
+                      <li>Tự động quét Pull Request qua <strong>CodeMind AI AST Reviewer</strong>.</li>
+                      <li>Kiểm định liêm chính AI và phân bổ đóng góp giữa các thành viên nhóm.</li>
+                    </ul>
+                  </div>
                 </div>
-                <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800">
-                  <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG (GitKraken)</strong>.</li>
-                  <li>Tự động quét Pull Request qua <strong>CodeMind AI Code Reviewer</strong>.</li>
-                  <li>Tự động kiểm định liêm chính AI và nhịp độ đóng góp giữa các thành viên nhóm.</li>
-                </ul>
-              </div>
-            </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <a
-                href={repoUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-blue-600 hover:underline font-semibold flex items-center gap-1"
-              >
-                <FolderGit2 size={13} />
-                Xem trên GitHub
-              </a>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleCloseRepoModal}
-                  className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg cursor-pointer"
-                >
-                  Đóng
-                </button>
-                <button
-                  onClick={handleSaveRepoSync}
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer"
-                >
-                  Lưu & Đồng Bộ Ngay
-                </button>
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <a
+                    href={repoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
+                  >
+                    <FolderGit2 size={13} />
+                    Xem trên GitHub
+                  </a>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleCloseRepoModal}
+                      className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                    >
+                      Đóng
+                    </button>
+                    <button
+                      onClick={handleSaveRepoSync}
+                      className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer"
+                    >
+                      Lưu & Đồng Bộ Ngay
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
+            </div>,
+            document.body
+          )
+        ) : null
       )}
+
+      <GitNewCommitModal
+        isOpen={showNewCommitModal}
+        onClose={() => setShowNewCommitModal(false)}
+        onSubmit={handlePushNewCommit}
+        members={memberAnalytics}
+        tasks={projectTasks}
+        existingBranches={uniqueBranches.map((b) => b.name)}
+      />
 
       <GitNewPrModal
         isOpen={showNewPrModal}
         onClose={() => setShowNewPrModal(false)}
         onSubmit={handleCreateNewPr}
         tasks={projectTasks}
+        defaultTargetBranch={targetBranch}
+        existingBranches={uniqueBranches.map((b) => b.name)}
       />
     </div>
   );

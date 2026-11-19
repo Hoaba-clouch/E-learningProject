@@ -404,6 +404,7 @@ export default function App() {
       case "github":
         return (
           <GitProjectHub
+            role={role}
             initialProjectId={selectedKanbanProjectId}
             onSelectProject={setSelectedKanbanProjectId}
             onNavigate={setScreen}

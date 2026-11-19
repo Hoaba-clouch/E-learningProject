@@ -2822,9 +2822,10 @@ export interface GitHubWorkspaceBundle {
 }
 
 export async function fetchGitHubWorkspaceApi(
-  projectId: string = "prj-codemind"
+  projectId: string = "prj-codemind",
+  preferredRole?: SessionRole
 ): Promise<GitHubWorkspaceBundle | null> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/workspace?project_id=${encodeURIComponent(projectId)}`,
@@ -2841,9 +2842,10 @@ export async function fetchGitHubWorkspaceApi(
 
 export async function updateGitHubRepoApi(
   projectId: string,
-  payload: { repo_url: string; target_branch: string; default_merge_strategy: string }
+  payload: { repo_url: string; target_branch: string; default_merge_strategy: string },
+  preferredRole?: SessionRole
 ): Promise<{ repository?: GitHubRepoConfig; error?: string }> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/repo`,
@@ -2874,9 +2876,10 @@ export async function pushGitCommitApi(
     files_changed?: string[];
     additions?: number;
     deletions?: number;
-  }
+  },
+  preferredRole?: SessionRole
 ): Promise<{ commit?: GitHubCommitRecord; xp_awarded?: number; error?: string }> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/commits`,
@@ -2909,9 +2912,10 @@ export async function createGitPullRequestApi(
     author_name?: string;
     merge_strategy?: string;
     code_snippet?: string;
-  }
+  },
+  preferredRole?: SessionRole
 ): Promise<{ pullRequest?: GitPullRequestRecord; error?: string }> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/pull-requests`,
@@ -2933,9 +2937,10 @@ export async function createGitPullRequestApi(
 }
 
 export async function applyPrAiFixApi(
-  prId: string
+  prId: string,
+  preferredRole?: SessionRole
 ): Promise<{ pullRequest?: GitPullRequestRecord; commit?: GitHubCommitRecord; error?: string }> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/pull-requests/${encodeURIComponent(prId)}/ai-fix`,
@@ -2954,9 +2959,10 @@ export async function applyPrAiFixApi(
 
 export async function approvePrPeerReviewApi(
   prId: string,
-  payload: { reviewer_name?: string; comment?: string }
+  payload: { reviewer_name?: string; comment?: string },
+  preferredRole?: SessionRole
 ): Promise<{ pullRequest?: GitPullRequestRecord; error?: string; status?: number }> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/pull-requests/${encodeURIComponent(prId)}/peer-approve`,
@@ -2977,9 +2983,36 @@ export async function approvePrPeerReviewApi(
   }
 }
 
+export async function requestChangesPrApi(
+  prId: string,
+  payload: { reviewer_name?: string; comment: string },
+  preferredRole?: SessionRole
+): Promise<{ pullRequest?: GitPullRequestRecord; error?: string; status?: number }> {
+  const token = await getWorkspaceAuthToken(preferredRole);
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/git-hub/pull-requests/${encodeURIComponent(prId)}/request-changes`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})`, status: res.status };
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối Backend" };
+  }
+}
+
 export async function mergeGitPullRequestApi(
   prId: string,
-  mergeStrategy: string = "squash"
+  mergeStrategy: string = "squash",
+  preferredRole?: SessionRole
 ): Promise<{
   pullRequest?: GitPullRequestRecord;
   mergeCommit?: GitHubCommitRecord;
@@ -2989,7 +3022,7 @@ export async function mergeGitPullRequestApi(
   error?: string;
   status?: number;
 }> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/pull-requests/${encodeURIComponent(prId)}/merge`,
@@ -3013,7 +3046,8 @@ export async function mergeGitPullRequestApi(
 
 export async function syncGitHubLiveApi(
   projectId: string,
-  repoUrl?: string
+  repoUrl?: string,
+  preferredRole?: SessionRole
 ): Promise<{
   synced?: boolean;
   repoSlug?: string;
@@ -3024,7 +3058,7 @@ export async function syncGitHubLiveApi(
   isRemoteLive?: boolean;
   error?: string;
 }> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/sync-github`,
@@ -3045,8 +3079,11 @@ export async function syncGitHubLiveApi(
   }
 }
 
-export async function fetchProjectArchitectureApi(projectId: string): Promise<any> {
-  const token = await getWorkspaceAuthToken();
+export async function fetchProjectArchitectureApi(
+  projectId: string,
+  preferredRole?: SessionRole
+): Promise<any> {
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/architecture`,
@@ -3063,9 +3100,10 @@ export async function fetchProjectArchitectureApi(projectId: string): Promise<an
 
 export async function saveProjectArchitectureApi(
   projectId: string,
-  payload: any
+  payload: any,
+  preferredRole?: SessionRole
 ): Promise<{ success?: boolean; error?: string }> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/architecture`,
@@ -3088,9 +3126,10 @@ export async function saveProjectArchitectureApi(
 
 export async function generateProjectArchitectureApi(
   projectId: string,
-  repoUrl?: string
+  repoUrl?: string,
+  preferredRole?: SessionRole
 ): Promise<any> {
-  const token = await getWorkspaceAuthToken();
+  const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
       `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/generate-architecture`,

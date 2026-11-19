@@ -18,6 +18,7 @@ from app.schemas.git_hub import (
     GitCommitCreateIn,
     GitPrMergeIn,
     GitPrPeerApproveIn,
+    GitPrRequestChangesIn,
     GitPullRequestCreateIn,
     GitRepoUpdateIn,
 )
@@ -25,6 +26,16 @@ from app.services.architecture_templates import get_default_architecture_for_pro
 from app.services.seed_git_hub import resolve_branch_lane
 
 router = APIRouter(prefix="/git-hub", tags=["Git Project Hub & AI PR Review"])
+
+
+def _require_roles(user: dict[str, Any], allowed: tuple[str, ...], action_label: str) -> str:
+    role = str(user.get("role") or "student").strip().lower()
+    if role not in allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Vai trò '{role}' không có quyền {action_label}.",
+        )
+    return role
 
 _IGNORED_TASK_TOKENS = {"MERGE", "README", "HOTFIX", "DOCKER", "OAUTH", "HTTPS", "FIXUP", "SQLITE"}
 _TASK_CODE_PATTERN = re.compile(r"\b([A-Z]{2,6}-?[A-Z0-9]{2,6})\b")
@@ -278,16 +289,19 @@ def _run_ai_ast_scanner(title: str, description: str, source_branch: str, task_c
 def _award_git_xp(conn: Any, user: dict[str, Any], amount: int) -> int:
     if amount <= 0:
         return 0
-    prof = conn.execute("SELECT id FROM student_profiles WHERE user_id=?", (user["id"],)).fetchone()
-    target_uid = user["id"] if prof else None
-    if not target_uid:
+    prof = conn.execute(
+        "SELECT id, radar_teamwork FROM student_profiles WHERE user_id=?",
+        (user["id"],),
+    ).fetchone()
+    if not prof:
         return 0
+    next_radar = round(min(100.0, float(prof["radar_teamwork"] or 0.0) + 0.5), 2)
     conn.execute(
         """UPDATE student_profiles
            SET exp_points = exp_points + ?,
-               radar_teamwork = MIN(100.0, radar_teamwork + 0.5)
+               radar_teamwork = ?
            WHERE user_id=?""",
-        (amount, target_uid),
+        (amount, next_radar, user["id"]),
     )
     return amount
 
@@ -314,7 +328,11 @@ def _compute_analytics_and_metrics(
             member_names.append((name, c["author"]["role"], c["author"]["avatar"]))
 
     total_commits = len(commits)
-    total_sp_done = sum(int(t["points"] or 0) for t in tasks_rows if t["column_id"] == "done")
+    total_sp_done = sum(
+        int(t["points"] or 0)
+        for t in tasks_rows
+        if t["column_id"] in ("done", "verified")
+    )
     total_prs = len(pull_requests)
 
     raw_members: list[dict[str, Any]] = []
@@ -330,7 +348,7 @@ def _compute_analytics_and_metrics(
             assignee = json.loads(t["assignee_json"] or "{}")
             if str(assignee.get("name") or "") == m_name:
                 m_tasks.append(str(t["epic"] or t["title"]))
-                if t["column_id"] == "done":
+                if t["column_id"] in ("done", "verified"):
                     m_sp_done += int(t["points"] or 0)
 
         m_prs = [pr for pr in pull_requests if pr["author"]["name"] == m_name or pr["peerReviewer"] == m_name]
@@ -392,11 +410,30 @@ def _compute_analytics_and_metrics(
     )
     git_culture_score = round(min(99.5, 58.0 + 0.25 * task_linked_pct + 0.165 * avg_ai_score), 1)
 
+    unresolved_critical = 0
+    unresolved_warning = 0
+    changes_req_count = 0
+    for pr in pull_requests:
+        if pr.get("status") == "changes_requested":
+            changes_req_count += 1
+        if pr.get("status") != "merged":
+            for f in (pr.get("aiFindings") or []):
+                if not isinstance(f, dict) or f.get("resolved"):
+                    continue
+                sev = str(f.get("severity") or "").lower()
+                if sev == "critical":
+                    unresolved_critical += 1
+                elif sev == "warning":
+                    unresolved_warning += 1
+
+    penalty = unresolved_critical * 12 + unresolved_warning * 4 + changes_req_count * 3
+    ai_integrity_pct = max(45, min(100, 100 - penalty))
+
     is_balanced = all(s >= 20 for s in shares) if len(shares) >= 2 else True
     metrics = {
         "gitCultureScore": git_culture_score,
         "taskLinkedPct": task_linked_pct,
-        "aiIntegrityPct": 100,
+        "aiIntegrityPct": ai_integrity_pct,
         "cadenceVarianceHours": float(repo["cadence_variance_hours"] or 4.8),
         "totalCommits": total_commits,
         "openPrsCount": sum(1 for pr in pull_requests if pr["status"] != "merged"),
@@ -475,7 +512,8 @@ def update_project_repo(
     payload: GitRepoUpdateIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Lưu URL GitHub Repository, nhánh nộp bài chính và chiến lược Merge vào SQLite."""
+    """Lưu URL GitHub Repository, nhánh nộp bài chính và chiến lược Merge vào CSDL."""
+    _require_roles(user, ("student", "admin"), "cập nhật cấu hình Git Repository")
     clean_url = payload.repo_url.strip()
     if not (clean_url.startswith("http://") or clean_url.startswith("https://")):
         raise HTTPException(
@@ -522,6 +560,7 @@ def push_git_commit(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Ghi nhận một Commit mới lên Git Graph & thưởng +10 XP nếu tuân thủ Conventional Commit + Mã Task."""
+    _require_roles(user, ("student",), "ghi nhận Commit mới")
     now = now_utc()
     clean_msg = payload.message.strip()
     task_code = _extract_task_code(payload.task_code, clean_msg)
@@ -585,6 +624,14 @@ def create_pull_request(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Tạo Pull Request mới và chạy tự động CodeMind AI Senior Reviewer & AST Security Scanner."""
+    _require_roles(user, ("student",), "tạo Pull Request mới")
+    src_b = payload.source_branch.strip()
+    tgt_b = (payload.target_branch or "develop").strip() or "develop"
+    if src_b == tgt_b:
+        raise HTTPException(
+            status_code=422,
+            detail="Nhánh nguồn và nhánh đích không được trùng nhau.",
+        )
     now = now_utc()
     clean_title = payload.title.strip()
     task_code = _extract_task_code(payload.task_code, clean_title)
@@ -665,6 +712,7 @@ def apply_pr_ai_fix(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Áp dụng bản vá 1-Click từ CodeMind AI Senior Reviewer để xử lý toàn bộ cảnh báo AST trên PR."""
+    _require_roles(user, ("student",), "áp dụng bản vá 1-Click AI")
     now = now_utc()
     with db() as conn:
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
@@ -739,11 +787,17 @@ def peer_approve_pr(
     payload: GitPrPeerApproveIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Lớp 2 (Peer Review): Thành viên trong nhóm kiểm tra chéo & ký Approve PR."""
+    """Lớp 2 (Peer / Giảng viên Review): Kiểm tra chéo & ký Approve PR."""
+    role = _require_roles(user, ("student", "instructor"), "phê duyệt Pull Request")
     with db() as conn:
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
         if not pr:
             raise HTTPException(status_code=404, detail="Không tìm thấy Pull Request")
+        if pr["status"] == "merged":
+            raise HTTPException(
+                status_code=400,
+                detail="Pull Request đã được merge, không thể phê duyệt lại.",
+            )
 
         findings = json.loads(pr["ai_findings_json"] or "[]")
         unresolved_critical = [f for f in findings if f.get("severity") == "critical" and not f.get("resolved")]
@@ -753,25 +807,106 @@ def peer_approve_pr(
                 detail="Không thể Peer Approve khi còn cảnh báo bảo mật AST mức Critical chưa được khắc phục.",
             )
 
-        proj = conn.execute("SELECT team_json FROM engineering_projects WHERE id=?", (pr["project_id"],)).fetchone()
-        team = json.loads(proj["team_json"] or "[]") if proj else []
-        fallback_reviewer = next(
-            (str(m.get("name")) for m in team if str(m.get("name")) != pr["author_name"]),
-            "Nguyễn Bá Hòa",
-        )
-        reviewer = (payload.reviewer_name or "").strip() or user.get("full_name") or user.get("display_name") or fallback_reviewer
-        if reviewer == pr["author_name"]:
-            reviewer = fallback_reviewer
+        if role == "instructor":
+            reviewer = (
+                (payload.reviewer_name or "").strip()
+                or user.get("full_name")
+                or user.get("display_name")
+                or "TS. Nguyễn Lan Anh"
+            )
+        else:
+            reviewer = (
+                (payload.reviewer_name or "").strip()
+                or user.get("full_name")
+                or user.get("display_name")
+                or ""
+            )
+            if not reviewer or reviewer.strip().lower() == str(pr["author_name"] or "").strip().lower():
+                raise HTTPException(
+                    status_code=422,
+                    detail="Tác giả PR không thể tự Peer Approve. Hãy chọn một thành viên khác trong nhóm làm Reviewer hoặc chờ Giảng viên thẩm định.",
+                )
 
-        next_status = pr["status"] if pr["status"] == "merged" else "approved"
+        comment_text = payload.comment.strip() or (
+            "Giảng viên đã thẩm định DoD & kiến trúc — Đạt yêu cầu."
+            if role == "instructor"
+            else "LGTM — Đạt chuẩn Clean Code & Kiến trúc 3 tầng."
+        )
         conn.execute(
             """UPDATE git_pull_requests
-               SET peer_approved=1, peer_reviewer=?, peer_comment=?, status=?
+               SET peer_approved=1, peer_reviewer=?, peer_comment=?, status='approved'
                WHERE id=?""",
-            (reviewer, payload.comment.strip(), next_status, pr_id),
+            (reviewer, comment_text, pr_id),
         )
         updated_pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
 
+    record_audit_log(
+        reviewer,
+        user["id"],
+        f"{'Giảng viên duyệt' if role == 'instructor' else 'Peer Approve'} PR #{int(updated_pr['pr_number']):02d}",
+        f"POST /v1/git-hub/pull-requests/{pr_id}/peer-approve",
+        log_type="user",
+        resource_type="git_pull_request",
+        resource_id=pr_id,
+    )
+    return {"pullRequest": _serialize_pr(updated_pr)}
+
+
+@router.post("/pull-requests/{pr_id}/request-changes")
+def request_changes_pr(
+    pr_id: str,
+    payload: GitPrRequestChangesIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Gửi yêu cầu chỉnh sửa (Request Changes) trả PR về trạng thái cần sửa lại."""
+    role = _require_roles(user, ("student", "instructor"), "yêu cầu chỉnh sửa Pull Request")
+    with db() as conn:
+        pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
+        if not pr:
+            raise HTTPException(status_code=404, detail="Không tìm thấy Pull Request")
+        if pr["status"] == "merged":
+            raise HTTPException(
+                status_code=400,
+                detail="Pull Request đã được merge, không thể yêu cầu sửa lại.",
+            )
+
+        if role == "instructor":
+            reviewer = (
+                (payload.reviewer_name or "").strip()
+                or user.get("full_name")
+                or user.get("display_name")
+                or "TS. Nguyễn Lan Anh"
+            )
+        else:
+            reviewer = (
+                (payload.reviewer_name or "").strip()
+                or user.get("full_name")
+                or user.get("display_name")
+                or ""
+            )
+            if not reviewer or reviewer.strip().lower() == str(pr["author_name"] or "").strip().lower():
+                raise HTTPException(
+                    status_code=422,
+                    detail="Tác giả PR không thể tự gửi Request Changes trên PR của chính mình. Hãy chọn thành viên khác làm Reviewer.",
+                )
+
+        conn.execute(
+            """UPDATE git_pull_requests
+               SET peer_approved=0, peer_reviewer=?, peer_comment=?, status='changes_requested'
+               WHERE id=?""",
+            (reviewer, payload.comment.strip(), pr_id),
+        )
+        updated_pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
+
+    record_audit_log(
+        reviewer,
+        user["id"],
+        f"Request Changes PR #{int(updated_pr['pr_number']):02d}: {payload.comment.strip()[:80]}",
+        f"POST /v1/git-hub/pull-requests/{pr_id}/request-changes",
+        log_type="user",
+        resource_type="git_pull_request",
+        resource_id=pr_id,
+    )
     return {"pullRequest": _serialize_pr(updated_pr)}
 
 
@@ -782,6 +917,7 @@ def merge_pull_request(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Thực hiện Squash/Rebase Merge, cấp con dấu SHA-256 DoD, đồng bộ Task Kanban & Dual Grading."""
+    _require_roles(user, ("student",), "thực hiện Merge Pull Request")
     now = now_utc()
     with db() as conn:
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
@@ -862,7 +998,7 @@ def merge_pull_request(
                         "SELECT column_id FROM engineering_tasks WHERE id=?",
                         (task_row["depends_on"],),
                     ).fetchone()
-                    if parent and parent["column_id"] != "done":
+                    if parent and parent["column_id"] not in ("done", "verified"):
                         h2_ok = False
                 dod_list = json.loads(task_row["dod_json"] or "[]")
                 for item in dod_list:
@@ -891,6 +1027,30 @@ def merge_pull_request(
                 updated_task_code = task_row["code"]
 
         # Đồng bộ sang Dual Grading của Giảng viên
+        proj_meta = conn.execute(
+            "SELECT course_id, course FROM engineering_projects WHERE id=?",
+            (pr["project_id"],),
+        ).fetchone()
+        course_row = None
+        if proj_meta:
+            course_row = conn.execute(
+                "SELECT id FROM courses WHERE id=? OR subject_id=? OR code=? LIMIT 1",
+                (proj_meta["course_id"] or "", proj_meta["course_id"] or "", proj_meta["course"] or ""),
+            ).fetchone()
+        if not course_row:
+            course_row = conn.execute("SELECT id FROM courses LIMIT 1").fetchone()
+        resolved_class_id = course_row["id"] if course_row else "class-web"
+
+        user_row = conn.execute(
+            "SELECT user_code FROM users WHERE id=?",
+            (user["id"],),
+        ).fetchone()
+        resolved_student_code = (
+            user_row["user_code"]
+            if user_row and user_row["user_code"]
+            else f"SV-{str(user['id'])[-6:].upper()}"
+        )
+
         dual_id = f"dual-pr-{pr_id}"
         questions = json.loads(pr["defense_questions_json"] or "[]")
         transcript = [
@@ -910,10 +1070,10 @@ def merge_pull_request(
                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 dual_id,
-                "class-web",
+                resolved_class_id,
                 user["id"],
                 pr["author_name"],
-                "2210801",
+                resolved_student_code,
                 f"[Git PR #{int(pr['pr_number']):02d}] {pr['title']}",
                 pr_url,
                 datetime.now().strftime("%H:%M · Hôm nay"),
@@ -1209,6 +1369,7 @@ def sync_github_live(
     Đồng bộ dữ liệu thời gian thực từ GitHub REST API công khai về CSDL SQLite/MySQL `codemind_ai`.
     Kéo commits thật, PRs thật, cập nhật topology cây Metro-line và sơ đồ kiến trúc động.
     """
+    _require_roles(user, ("student", "admin"), "đồng bộ GitHub Repository")
     with db() as conn:
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
@@ -1217,6 +1378,7 @@ def sync_github_live(
         repo = conn.execute("SELECT * FROM git_repositories WHERE project_id = ?", (project_id,)).fetchone()
         repo_url = payload.get("repoUrl") or (repo["repo_url"] if repo else "https://github.com/Hoaba-clouch/E-learningProject")
         remote_res = _fetch_remote_github_data(repo_url)
+        is_remote_live = bool(remote_res.get("ok"))
         slug = remote_res["slug"]
         now = now_utc()
         now_label = datetime.now().strftime("%H:%M · Hôm nay")
@@ -1263,17 +1425,22 @@ def sync_github_live(
                 login_low = raw_login.lower()
 
                 if is_default_codemind:
-                    # Ánh xạ tên tác giả thân thiện cho đề tài gốc
-                    if "hoaba" in raw_login.lower() or "hoaba" in raw_author_name.lower():
-                        author_name = "Nguyễn Bá Hòa"
-                        author_role = "Leader / Architect"
-                        author_avatar = "H"
-                        author_color = "#2563eb"
-                    elif "huy" in raw_login.lower() or "vonhathuy" in raw_login.lower():
+                    # Phân bổ hợp lý tác giả cho đề tài gốc theo module thực tế
+                    if any(k in login_low or k in msg_low for k in ("huy", "vonhathuy", "kanban", "trello", "frontend", "react", "tailwind", "modal", "ui")):
                         author_name = "Võ Nhật Huy"
                         author_role = "Frontend / Fullstack"
                         author_avatar = "H"
                         author_color = "#16a34a"
+                    elif any(k in login_low or k in msg_low for k in ("nghi", "evaluator", "docker", "mysql", "alembic", "migration", "ast", "test", "db")):
+                        author_name = "Phan Đình Nghị"
+                        author_role = "Backend / Database"
+                        author_avatar = "N"
+                        author_color = "#9333ea"
+                    elif "hoaba" in login_low or "hoaba" in raw_author_name.lower() or len(raw_author_name) > 0:
+                        author_name = "Nguyễn Bá Hòa"
+                        author_role = "Leader / Architect"
+                        author_avatar = "H"
+                        author_color = "#2563eb"
                     else:
                         author_name = raw_author_name
                         author_role = "Core Developer"
@@ -1354,6 +1521,21 @@ def sync_github_live(
                         branch_color = "#ec4899"
                         cy = 345
 
+                if any(k in msg_low for k in ("ui", "frontend", "kanban", "react", "tailwind", "modal")):
+                    commit_files = ["src/screens/KanbanBoard.tsx", "src/components/GitPrReviewPanel.tsx"]
+                elif any(k in msg_low for k in ("jwt", "auth", "login", "security")):
+                    commit_files = ["backend/app/core/security.py", "backend/app/api/v1/auth.py"]
+                elif any(k in msg_low for k in ("alembic", "migration", "mysql", "db", "schema")):
+                    commit_files = ["backend/app/core/database.py", "backend/alembic/env.py"]
+                elif any(k in msg_low for k in ("docker", "evaluator", "ci", "pipeline", "test")):
+                    commit_files = ["backend/app/services/evaluator.py", ".github/workflows/ci.yml"]
+                else:
+                    clean_mod = re.sub(r"[^a-zA-Z0-9_-]", "_", branch.split("/")[-1])[:18] or "core"
+                    commit_files = [f"backend/app/services/{clean_mod}.py", "src/App.tsx"]
+
+                additions_val = 24 + ((idx * 29 + len(raw_msg)) % 160)
+                deletions_val = 3 + ((idx * 11 + len(branch)) % 34)
+
                 commit_date_str = author_commit.get("date") or now
                 try:
                     dt_utc = datetime.fromisoformat(commit_date_str.replace("Z", "+00:00"))
@@ -1380,7 +1562,7 @@ def sync_github_live(
                            id, project_id, sha, author_name, author_role, author_avatar, author_color,
                            branch, branch_color, task_code, message, committed_at_label, time_ago_label,
                            additions, deletions, files_changed_json, cx, cy, position_order, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 32, 8, ?, ?, ?, ?, ?)""",
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         commit_id,
                         project_id,
@@ -1395,7 +1577,9 @@ def sync_github_live(
                         raw_msg,
                         date_label,
                         time_ago,
-                        json.dumps(["src/App.tsx", "package.json"], ensure_ascii=False),
+                        additions_val,
+                        deletions_val,
+                        json.dumps(commit_files, ensure_ascii=False),
                         70 + idx * 75,
                         cy,
                         idx + 1,
@@ -1406,7 +1590,12 @@ def sync_github_live(
 
         prs_synced = 0
         raw_prs = remote_res.get("prs", [])
-        if not raw_prs and not is_default_codemind:
+        existing_pr_cnt_row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM git_pull_requests WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        existing_pr_cnt = int(existing_pr_cnt_row["cnt"] or 0) if existing_pr_cnt_row else 0
+        if not raw_prs and (not is_default_codemind or existing_pr_cnt == 0):
             raw_prs = _generate_synthetic_prs_for_repo(slug, project_id)
 
         if raw_prs:
@@ -1415,11 +1604,45 @@ def sync_github_live(
                 pr_num = int(pr.get("number", pr.get("pr_number", 1)))
                 pr_id = pr.get("id") or f"gh-pr-{project_id}-{pr_num}"
                 pr_title = pr.get("title") or f"Pull Request #{pr_num}"
+                pr_desc = pr.get("body") or pr.get("description") or "Đồng bộ trực tiếp từ GitHub remote repository."
                 pr_user = pr.get("author_name") or (pr.get("user") or {}).get("login") or "GitHub Dev"
-                pr_status = pr.get("status") or ("merged" if pr.get("merged_at") else ("closed" if pr.get("state") == "closed" else "open"))
+                raw_status = str(pr.get("status") or "").lower()
+                if raw_status in ("open", "changes_requested", "approved", "merged"):
+                    pr_status = raw_status
+                elif pr.get("merged_at"):
+                    pr_status = "merged"
+                elif raw_status == "closed" or pr.get("state") == "closed":
+                    pr_status = "changes_requested"
+                else:
+                    pr_status = "open"
+
                 source_b = pr.get("source_branch") or (pr.get("head") or {}).get("ref") or "feature/remote"
                 target_b = pr.get("target_branch") or (pr.get("base") or {}).get("ref") or "main"
                 pr_task = pr.get("task_code") or _extract_task_code(None, pr_title) or f"TSK-PR{pr_num:02d}"
+
+                score, scanned_status, blast_radius, summary, findings, diff_preview, questions = _run_ai_ast_scanner(
+                    pr_title, pr_desc, source_b, pr_task, ""
+                )
+                if pr_status == "merged":
+                    for f in findings:
+                        f["resolved"] = True
+                    score = max(score, 95)
+                    peer_reviewer = "Võ Nhật Huy" if pr_user != "Võ Nhật Huy" else "Phan Đình Nghị"
+                    peer_approved = 1
+                    one_click_fixed = 1
+                    peer_comment = "LGTM — Đã kiểm thử chéo & xác nhận DoD."
+                elif pr_status == "approved":
+                    peer_reviewer = "Võ Nhật Huy" if pr_user != "Võ Nhật Huy" else "Phan Đình Nghị"
+                    peer_approved = 1
+                    one_click_fixed = 0
+                    peer_comment = "Đã Peer Approve, sẵn sàng Merge."
+                else:
+                    if scanned_status == "changes_requested" and pr_status == "open":
+                        pr_status = "changes_requested"
+                    peer_reviewer = None
+                    peer_approved = 0
+                    one_click_fixed = 0
+                    peer_comment = "Cần rà soát lại các tiêu chí AST/DoD trước khi Merge." if pr_status == "changes_requested" else ""
 
                 conn.execute(
                     """INSERT INTO git_pull_requests (
@@ -1428,27 +1651,35 @@ def sync_github_live(
                            status, merge_strategy, ai_review_score, ai_blast_radius, ai_summary,
                            ai_findings_json, diff_preview_json, defense_questions_json,
                            peer_reviewer, peer_approved, peer_comment, one_click_fixed, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Developer', ?, '#2563eb', ?, 'squash', 95, 'Low (2 files)', ?, ?, ?, ?, 'AI Senior Reviewer', 1, '', 1, ?)""",
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Developer', ?, '#2563eb', ?, 'squash', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         pr_id,
                         project_id,
                         pr_num,
                         pr_title,
-                        pr.get("body") or pr.get("description") or "Live synced from GitHub remote repository.",
+                        pr_desc,
                         source_b,
                         target_b,
                         pr_task,
                         pr_user,
-                        pr_user[:2].upper(),
+                        (pr_user[:1] or "D").upper(),
                         pr_status,
-                        f"Đồng bộ trực tiếp từ GitHub #{pr_num}. Vượt qua kiểm tra tự động.",
-                        json.dumps([{"file": "src/App.tsx", "rule": "AST Clean", "status": "pass"}], ensure_ascii=False),
-                        json.dumps([{"file": "src/App.tsx", "diff": "@@ -1,5 +1,6 @@"}], ensure_ascii=False),
-                        json.dumps([{"persona": "Hội đồng AI", "question": f"Giải thích mục tiêu kỹ thuật của PR #{pr_num}?"}], ensure_ascii=False),
+                        score,
+                        blast_radius,
+                        summary,
+                        json.dumps(findings, ensure_ascii=False),
+                        json.dumps(diff_preview, ensure_ascii=False),
+                        json.dumps(questions, ensure_ascii=False),
+                        peer_reviewer,
+                        peer_approved,
+                        peer_comment,
+                        one_click_fixed,
                         now,
                     ),
                 )
                 prs_synced += 1
+        else:
+            prs_synced = existing_pr_cnt
 
         # Đồng thời cập nhật sơ đồ kiến trúc động của dự án theo đúng Repo mới
         arch_data = get_default_architecture_for_project(project_id, project["name"], repo_url)
@@ -1475,7 +1706,7 @@ def sync_github_live(
         "commitsSynced": commits_synced,
         "prsSynced": prs_synced,
         "lastSyncedAt": now_label,
-        "isRemoteLive": True,
+        "isRemoteLive": is_remote_live,
     }
 
 
@@ -1532,6 +1763,7 @@ def save_project_architecture(
     """
     Lưu cập nhật sơ đồ kiến trúc phân tầng (Nodes, Edges, Subsystems, Flows) vào MySQL `project_architectures`.
     """
+    _require_roles(user, ("student", "instructor"), "lưu sơ đồ kiến trúc")
     with db() as conn:
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
@@ -1569,6 +1801,7 @@ def generate_project_architecture(
     """
     AI Scanner: Trích xuất và tự động tái cấu trúc sơ đồ kiến trúc phân tầng từ Repo GitHub và lưu vào MySQL.
     """
+    _require_roles(user, ("student", "instructor"), "tái cấu trúc sơ đồ kiến trúc bằng AI")
     with db() as conn:
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:

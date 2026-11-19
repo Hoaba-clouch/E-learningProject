@@ -38,5 +38,10 @@ class GitPrPeerApproveIn(BaseModel):
     )
 
 
+class GitPrRequestChangesIn(BaseModel):
+    reviewer_name: str | None = Field(default=None, max_length=120)
+    comment: str = Field(min_length=4, max_length=1000)
+
+
 class GitPrMergeIn(BaseModel):
     merge_strategy: str = Field(default="squash", min_length=2, max_length=40)
