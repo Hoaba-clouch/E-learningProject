@@ -5,8 +5,11 @@ import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../ut
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
+import MarloToast from "../components/MarloToast";
 import {
+  AlertCircle,
   ArrowLeft,
+  Play,
   CheckCircle2,
   ChevronRight,
   Code2,
@@ -144,6 +147,39 @@ export default function LearningWorkspace({
   const [quizDone, setQuizDone] = useState<boolean>(false);
   const [showXpToast, setShowXpToast] = useState<boolean>(false);
   const quizConfettiRef = useRef<HTMLDivElement>(null);
+
+  // Track watched videos per lesson (key: `${subjectId}_${lessonId}`)
+  const [watchedVideoLessonKeys, setWatchedVideoLessonKeys] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("codemind_watched_video_lessons");
+      return raw ? new Set(JSON.parse(raw)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage((curr) => (curr === msg ? null : curr)), 3500);
+  }, []);
+
+  const handleVideoCompleted = useCallback((lessonId: string) => {
+    const key = `${selectedSubjectId}_${lessonId}`;
+    setWatchedVideoLessonKeys((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      try {
+        localStorage.setItem("codemind_watched_video_lessons", JSON.stringify(Array.from(next)));
+      } catch (e) {
+        console.error("Failed to persist watched video", e);
+      }
+      return next;
+    });
+    showToast("🎉 Đã hoàn tất video bài giảng! Bây giờ bạn có thể bấm hoàn thành bài học để nhận thưởng XP.");
+    triggerMarloConfetti(0.5, 0.4);
+  }, [selectedSubjectId, showToast]);
 
   // Hydrate student learning overview (XP, completed lessons, chapter submissions, DB courses)
   useEffect(() => {
@@ -338,6 +374,9 @@ export default function LearningWorkspace({
     }
   }
 
+  const isLessonDoneInDb = activeMultiLesson.status === "done";
+  const isVideoCompleted = isLessonDoneInDb || watchedVideoLessonKeys.has(`${selectedSubjectId}_${activeMultiLesson.id}`);
+
   const activeDbCourse = learningOverview?.courses.find((c) => c.subjectId === selectedSubjectId);
   const activeDbChapter =
     activeDbCourse?.chapters?.[activeChapter.number - 1] || activeDbCourse?.chapters?.[0];
@@ -469,6 +508,11 @@ export default function LearningWorkspace({
 
   const handleMarkLessonDone = async () => {
     if (completingLesson) return;
+    if (!isVideoCompleted && !isLessonDoneInDb) {
+      showToast("⚠️ Bạn cần xem hết video bài giảng của bài học này trước khi được tính là hoàn thành bài học!");
+      setTab("video");
+      return;
+    }
     setCompletingLesson(true);
     try {
       const res = await completeStudentLessonApi({
@@ -1031,42 +1075,75 @@ export default function LearningWorkspace({
 
                   {/* Callout Sơ đồ tư duy cuối chương - Neutral Minimalist */}
                   <div
-                    className="animate-cascade-item p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex items-center justify-between flex-wrap gap-4"
+                    className="animate-cascade-item p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4"
                     style={{ animationDelay: activeMultiLesson.codeSnippet ? "460ms" : "400ms" }}
                   >
-                    <div className="flex items-center gap-3.5">
-                      <div className="p-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shrink-0">
+                    <div className="flex items-start gap-3.5">
+                      <div className="p-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shrink-0 mt-0.5">
                         <GitBranch size={18} />
                       </div>
-                      <div>
+                      <div className="space-y-1">
                         <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                           Tổng kết kiến thức Chương {activeChapter.number}
                         </h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           Xem Sơ đồ Tư duy (Mindmap) cuối chương để hệ thống hóa kiến thức tóm gọn các nút then chốt.
                         </p>
+                        {!isVideoCompleted && !isLessonDoneInDb && (
+                          <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium pt-0.5">
+                            <AlertCircle size={13} className="shrink-0" />
+                            <span>Điều kiện hoàn thành: Phải xem hết video bài giảng trước khi được tính là hoàn thành bài học.</span>
+                          </div>
+                        )}
                       </div>
                     </div>
+
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={handleMarkLessonDone}
-                        disabled={completingLesson || activeMultiLesson.status === "done"}
-                        className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer active:scale-95 shadow-2xs ${
-                          activeMultiLesson.status === "done"
-                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 cursor-default"
-                            : "bg-amber-500 hover:bg-amber-400 text-slate-950"
-                        }`}
-                      >
-                        <CheckCircle2 size={15} />
-                        <span>
-                          {activeMultiLesson.status === "done"
-                            ? "Đã hoàn thành bài học ✓"
-                            : completingLesson
-                            ? "Đang lưu tiến độ..."
-                            : `Hoàn thành bài học (+${activeMultiLesson.xp || 50} XP)`}
-                        </span>
-                      </button>
+                      {!isVideoCompleted && !isLessonDoneInDb ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              showToast("⚠️ Bạn cần xem hết video bài giảng của bài học này trước khi được tính là hoàn thành bài đọc!");
+                              setTab("video");
+                            }}
+                            className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer bg-slate-200/90 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 hover:border-amber-500/60 hover:text-amber-600 dark:hover:text-amber-400 shadow-2xs"
+                            title="Chưa đủ điều kiện: Cần xem hết video bài giảng trước"
+                          >
+                            <Lock size={15} />
+                            <span>Chưa xem hết video bài giảng</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setTab("video")}
+                            className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm shadow-rose-950/20"
+                          >
+                            <Play size={14} className="fill-white" />
+                            <span>Xem Video ngay →</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleMarkLessonDone}
+                          disabled={completingLesson || isLessonDoneInDb}
+                          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer active:scale-95 shadow-2xs ${
+                            isLessonDoneInDb
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 cursor-default"
+                              : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20"
+                          }`}
+                        >
+                          <CheckCircle2 size={15} />
+                          <span>
+                            {isLessonDoneInDb
+                              ? "Đã hoàn thành bài học ✓"
+                              : completingLesson
+                              ? "Đang lưu tiến độ..."
+                              : `Hoàn thành bài học (+${activeMultiLesson.xp || 50} XP)`}
+                          </span>
+                        </button>
+                      )}
 
                       <button
                         onClick={() => setTab("mindmap")}
@@ -1161,6 +1238,8 @@ export default function LearningWorkspace({
                 mentorMascot={mentorMascot}
                 customYoutubeId={activeMultiLesson.youtubeId}
                 customScenes={activeMultiLesson.videoScenes}
+                isVideoCompleted={isVideoCompleted}
+                onVideoCompleted={handleVideoCompleted}
                 onNavigateToTab={(targetTab) => {
                   if (targetTab !== "code") {
                     setTab(targetTab as Tab);
@@ -1361,6 +1440,13 @@ export default function LearningWorkspace({
           </div>
         </main>
       </div>
+
+      {toastMessage && (
+        <MarloToast
+          message={toastMessage}
+          showUndo={false}
+        />
+      )}
     </div>
   );
 }

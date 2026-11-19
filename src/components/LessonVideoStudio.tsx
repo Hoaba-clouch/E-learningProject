@@ -15,6 +15,7 @@ import {
   CornerDownLeft,
   Share2,
   Check,
+  CheckCircle2,
   RotateCcw,
   UserCheck,
   ChevronRight,
@@ -43,6 +44,8 @@ interface LessonVideoStudioProps {
   onNavigateToTab?: (tab: "lecture" | "quiz" | "code" | "mindmap") => void;
   customYoutubeId?: string;
   customScenes?: { id?: string; title: string; text?: string; script?: string; time?: string }[];
+  isVideoCompleted?: boolean;
+  onVideoCompleted?: (lessonId: string) => void;
 }
 
 export function LessonVideoStudio({
@@ -53,6 +56,8 @@ export function LessonVideoStudio({
   onNavigateToTab,
   customYoutubeId,
   customScenes,
+  isVideoCompleted = false,
+  onVideoCompleted,
 }: LessonVideoStudioProps) {
   const currentVideo: VideoLectureInfo = getF8VideoLecture(subjectId, lessonId, lessonTitle);
   const resolvedLessonId = lessonId || currentVideo.lessonId || "1.1";
@@ -75,6 +80,37 @@ export function LessonVideoStudio({
   const [isAddingNote, setIsAddingNote] = useState<boolean>(false);
   const [videoTimestamp, setVideoTimestamp] = useState<number>(0);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [localWatched, setLocalWatched] = useState<boolean>(false);
+  const isEffectiveCompleted = isVideoCompleted || localWatched;
+
+  // Lắng nghe sự kiện kết thúc từ YouTube IFrame (với enablejsapi=1)
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      try {
+        let payload = e.data;
+        if (typeof payload === "string") {
+          payload = JSON.parse(payload);
+        }
+        if (
+          payload &&
+          (payload.event === "onStateChange" || payload.infoDelivery) &&
+          (payload.info === 0 || payload.info?.playerState === 0)
+        ) {
+          setLocalWatched(true);
+          onVideoCompleted?.(resolvedLessonId);
+        }
+      } catch {
+        // Ignored non-json messages
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [resolvedLessonId, onVideoCompleted]);
+
+  const handleMarkVideoFinished = () => {
+    setLocalWatched(true);
+    onVideoCompleted?.(resolvedLessonId);
+  };
 
   useEffect(() => {
     const updateIndicator = () => {
@@ -210,7 +246,7 @@ export function LessonVideoStudio({
         <div className="relative aspect-video w-full max-h-[500px] bg-black">
           <iframe
             key={`${effectiveYoutubeId}-${videoTimestamp}`}
-            src={`https://www.youtube-nocookie.com/embed/${effectiveYoutubeId}?autoplay=${videoTimestamp > 0 ? 1 : 0}&start=${videoTimestamp}&rel=0&modestbranding=1`}
+            src={`https://www.youtube-nocookie.com/embed/${effectiveYoutubeId}?enablejsapi=1&autoplay=${videoTimestamp > 0 ? 1 : 0}&start=${videoTimestamp}&rel=0&modestbranding=1`}
             title={currentVideo.title}
             className="w-full h-full border-0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -237,6 +273,36 @@ export function LessonVideoStudio({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* 🎬 Nút xác nhận xem hết video bài giảng để mở khóa bài học */}
+            {isEffectiveCompleted ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs select-none shadow-xs">
+                <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                <span>Đã xem hết video bài giảng ✓</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleMarkVideoFinished}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold transition cursor-pointer flex items-center gap-1.5 text-xs active:scale-95 shadow-md shadow-amber-500/20"
+                title="Bấm để xác nhận hoàn thành xem video bài giảng này"
+              >
+                <CheckCircle2 size={13} className="text-slate-950" />
+                <span>Xác nhận đã xem hết video</span>
+              </button>
+            )}
+
+            {isEffectiveCompleted && (
+              <button
+                type="button"
+                onClick={() => onNavigateToTab?.("lecture")}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs active:scale-95"
+                title="Quay lại Bài đọc để bấm hoàn thành bài học và nhận điểm XP"
+              >
+                <FileText size={13} />
+                <span>Đến Bài đọc nhận XP →</span>
+              </button>
+            )}
+
             <button
               onClick={handleCopyShare}
               className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer flex items-center gap-1.5 text-xs border border-slate-700"
