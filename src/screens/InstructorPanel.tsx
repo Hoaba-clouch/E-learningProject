@@ -4091,7 +4091,7 @@ Mã nguồn của bài học này được thiết kế để vượt qua 100% c
 
 
 
-      <header className="marlo-card relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <header className="marlo-card mb-4 sm:mb-5 relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 
 
 
