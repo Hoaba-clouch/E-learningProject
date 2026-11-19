@@ -260,8 +260,11 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
     if (role === "instructor" && activeTab === "week") {
       setActiveTab("exams");
       setDisplayedTab("exams");
+    } else if (role === "student" && (activeTab === "exams" || displayedTab === "exams")) {
+      setActiveTab("week");
+      setDisplayedTab("week");
     }
-  }, [role]);
+  }, [role, activeTab, displayedTab]);
   const [roomSessions, setRoomSessions] = useState<MarloRoomSession[]>(INITIAL_ROOM_SESSIONS);
   const [mentoringRequests, setMentoringRequests] = useState<StudentMentoringRequest[]>(INITIAL_MENTORING_REQUESTS);
   const [isBookRoomModalOpen, setIsBookRoomModalOpen] = useState(false);
@@ -1547,7 +1550,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
 
           <div className="flex items-center gap-2.5">
             <MarloTitle
-              text={role === "instructor" ? "Lịch Giảng Dạy & Hội Đồng Đồ Án" : "Lịch Học Vụ & Hạn Nộp Sprint"}
+              text={role === "instructor" ? "Lịch Giảng Dạy & Hội Đồng Đồ Án" : "Lịch Học Vụ & Cố Vấn Học Tập"}
               className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E1D1B] dark:text-white font-sans"
             />
             {role === "instructor" && (
@@ -1561,7 +1564,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
 
             {role === "instructor"
               ? "Quản lý ca trực phòng Lab, lịch hội đồng chấm thi vấn đáp AI Council và phê duyệt lịch hẹn 1-1 với các nhóm sinh viên."
-              : "Hôm nay có 2 ca thi kiểm tra năng lực cuối khóa và 4 khung giờ hẹn trước giảng viên đang mở để hỏi bài đồ án."}
+              : "Xem thời khóa biểu học vụ, theo dõi lịch trình sprint và đặt lịch hẹn cố vấn 1-1 với Thầy Cô / Mentor."}
 
           </p>
 
@@ -1581,7 +1584,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
 
               type="text"
 
-              placeholder="Tìm ca thi, môn học, giảng viên..."
+              placeholder={role === "instructor" ? "Tìm ca thi, môn học, giảng viên..." : "Tìm môn học, lịch hẹn, giảng viên..."}
 
               value={searchQuery}
 
@@ -1599,61 +1602,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
 
           </div>
 
-
-
-          {/* Kudos Button */}
-
-          <button
-
-            onClick={() => showToast("Đã gửi lời cảm ơn và Kudos tới Thầy Phước!")}
-
-            className={role === "instructor" ? "hidden" : "btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"}
-
-          >
-
-            <Award size={14} className="text-[#E5A023]" />
-
-            <span>Kudos Thầy Cô</span>
-
-          </button>
-
-
-
-          {/* Quick Role Switcher Pill for seamless instant testing */}
-          <div className="flex items-center gap-1 bg-[#F2EFE9] dark:bg-slate-800 p-1 rounded-full border border-[#E5E2DA] dark:border-slate-700 text-xs">
-            <button
-              type="button"
-              onClick={() => {
-                onRoleChange?.("instructor");
-                switchTab("exams");
-              }}
-              className={`px-3 py-1 rounded-full font-bold transition flex items-center ${
-                role === "instructor"
-                  ? "bg-[#E5A023] text-white shadow-2xs"
-                  : "text-[#7A7873] dark:text-slate-400 hover:text-black dark:hover:text-white"
-              }`}
-              title="Chuyển sang góc nhìn Giảng viên: Book phòng hội đồng, quản lý thi và duyệt cố vấn"
-            >
-              <span>Giảng viên</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onRoleChange?.("student");
-                switchTab("week");
-              }}
-              className={`px-3 py-1 rounded-full font-bold transition flex items-center ${
-                role === "student"
-                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs"
-                  : "text-[#7A7873] dark:text-slate-400 hover:text-black dark:hover:text-white"
-              }`}
-              title="Chuyển sang góc nhìn Học viên: Xem thời khóa biểu và gửi yêu cầu hỏi bài"
-            >
-              <span>Học viên</span>
-            </button>
-          </div>
-
-          {/* Book Room Modal Trigger: Authentic Marlo Primary Action for Instructors */}
+          {/* Strictly Role-Based Primary Action */}
           {role === "instructor" ? (
             <button
               type="button"
@@ -1670,10 +1619,10 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
             <button
               type="button"
               onClick={() => setShowBookingModal(true)}
-              className="btn-marlo-primary btn--primary magnetic flex items-center px-4 py-2 font-bold text-xs"
-              title="Đặt lịch hẹn giảng viên hoặc xin cố vấn"
+              className="btn-marlo-primary btn--primary magnetic flex items-center shadow-md px-4 py-2 font-bold text-xs"
+              title="Đặt lịch hẹn cố vấn học tập 1-1 với Thầy Cô / Mentor"
             >
-              <span>Book a session</span>
+              <span>Book Cố Vấn Học Tập</span>
             </button>
           )}
 
@@ -1739,7 +1688,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
               aria-current={activeTab === "week" ? "page" : undefined}
               onClick={() => switchTab("week")}
             >
-              Week
+              Lịch Tuần
             </button>
             <button
               type="button"
@@ -1750,10 +1699,16 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
             </button>
             <button
               type="button"
-              aria-current={activeTab === "exams" ? "page" : undefined}
-              onClick={() => switchTab("exams")}
+              aria-current={activeTab === "mentoring" ? "page" : undefined}
+              onClick={() => switchTab("mentoring")}
+              className="flex items-center gap-1.5"
             >
-              Lịch Thi Định Kỳ
+              <span>Lịch Cố Vấn</span>
+              {mentoringRequests.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px] font-bold">
+                  {mentoringRequests.length}
+                </span>
+              )}
             </button>
           </>
         )}
@@ -1944,24 +1899,35 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
             <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <b className="text-sm font-bold text-amber-900 dark:text-amber-200 block">
-                  Danh Sách Học Viên Nhờ Giảng Viên Cố Vấn 1-1
+                  {role === "instructor" ? "Danh Sách Học Viên Nhờ Giảng Viên Cố Vấn 1-1" : "Lịch Hẹn Cố Vấn 1-1 Của Bạn"}
                 </b>
                 <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-0.5">
-                  Sinh viên gửi câu hỏi kỹ thuật và yêu cầu khung giờ hẹn. Giảng viên có thể nhấn "Duyệt & Book Phòng Ngay" để xếp lịch phòng họp.
+                  {role === "instructor"
+                    ? "Sinh viên gửi câu hỏi kỹ thuật và yêu cầu khung giờ hẹn. Giảng viên có thể duyệt và xếp phòng cố vấn."
+                    : "Theo dõi tiến độ duyệt và trạng thái xếp phòng các buổi hẹn nhờ Thầy Cô cố vấn đồ án."}
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setBookRoomInitialValues({ kind: "mentor", title: "Cố vấn Kỹ thuật 1-1 với Học viên" });
-                  setIsBookRoomModalOpen(true);
-                }}
-                className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5 text-xs px-4 py-2 flex-none"
-              >
-                <Plus size={15} strokeWidth={2.5} />
-                <span>+ Tạo Phiên Cố Vấn Mới</span>
-              </button>
+              {role === "instructor" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBookRoomInitialValues({ kind: "mentor", title: "Cố vấn Kỹ thuật 1-1 với Học viên" });
+                    setIsBookRoomModalOpen(true);
+                  }}
+                  className="btn-marlo-primary btn--primary magnetic flex items-center text-xs px-4 py-2 flex-none font-bold"
+                >
+                  <span>Tạo Phiên Cố Vấn Mới</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowBookingModal(true)}
+                  className="btn-marlo-primary btn--primary magnetic flex items-center text-xs px-4 py-2 flex-none font-bold shadow-xs"
+                >
+                  <span>Book Cố Vấn Học Tập</span>
+                </button>
+              )}
             </div>
 
             {/* List of Mentoring Requests */}
@@ -1989,7 +1955,7 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                       </div>
 
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-500 font-medium">Khung giờ học viên mong muốn:</span>
+                        <span className="text-slate-500 font-medium">Khung giờ hẹn mong muốn:</span>
                         <b className="text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
                           {req.requestedDate} · {req.preferredTime}
                         </b>
@@ -2006,9 +1972,8 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                     <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
                       <div>
                         {isApproved ? (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 inline-flex items-center gap-1.5">
-                            <Check size={13} strokeWidth={2.5} />
-                            Đã duyệt & Đã book phòng
+                          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 inline-flex items-center">
+                            Đã duyệt & Đã xếp phòng
                           </span>
                         ) : (
                           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
@@ -2017,52 +1982,53 @@ export default function EngineeringScheduleRota({ role = "student", onNavigate, 
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {!isApproved && (
+                      {role === "instructor" && (
+                        <div className="flex items-center gap-2">
+                          {!isApproved && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBookRoomInitialValues({
+                                  title: `Cố vấn 1-1: ${req.studentName} (${req.project.split(" - ")[0]})`,
+                                  kind: "mentor",
+                                  studentName: req.studentName,
+                                  room: "Phòng Cố vấn Mentor Studio",
+                                  duration: req.durationMins,
+                                });
+                                setIsBookRoomModalOpen(true);
+                              }}
+                              className="px-4 py-2 rounded-xl bg-[#f29b23] hover:bg-[#ee8420] text-slate-950 text-xs font-bold transition shadow-xs flex items-center cursor-pointer"
+                            >
+                              <span>Duyệt & Book Phòng Ngay</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => {
-                              setBookRoomInitialValues({
-                                title: `Cố vấn 1-1: ${req.studentName} (${req.project.split(" - ")[0]})`,
+                              const newSes: MarloRoomSession = {
+                                id: `ses-${Date.now()}`,
+                                title: `Cố vấn Online: ${req.studentName}`,
                                 kind: "mentor",
+                                at: Date.now() + 3600000 * 2,
+                                mins: req.durationMins,
+                                projectName: req.project,
+                                who: [req.studentId],
                                 studentName: req.studentName,
-                                room: "Phòng Cố vấn Mentor Studio",
-                                duration: req.durationMins,
-                              });
-                              setIsBookRoomModalOpen(true);
+                                examinerOrMentor: "Thầy Nguyễn Phước",
+                                room: "Google Meet Trực Tuyến",
+                                done: false,
+                                notes: req.topic,
+                                statusText: "Đã duyệt Online",
+                              };
+                              handleBookNewRoomSession(newSes);
                             }}
-                            className="px-4 py-2 rounded-xl bg-[#f29b23] hover:bg-[#ee8420] text-slate-950 text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition"
                           >
-                            <DoorOpen size={14} strokeWidth={2.2} />
-                            <span>✓ Duyệt & Book Phòng Ngay</span>
+                            Chuyển Online (Meet)
                           </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newSes: MarloRoomSession = {
-                              id: `ses-${Date.now()}`,
-                              title: `Cố vấn Online: ${req.studentName}`,
-                              kind: "mentor",
-                              at: Date.now() + 3600000 * 2,
-                              mins: req.durationMins,
-                              projectName: req.project,
-                              who: [req.studentId],
-                              studentName: req.studentName,
-                              examinerOrMentor: "Thầy Nguyễn Phước",
-                              room: "Google Meet Trực Tuyến",
-                              done: false,
-                              notes: req.topic,
-                              statusText: "Đã duyệt Online",
-                            };
-                            handleBookNewRoomSession(newSes);
-                          }}
-                          className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition"
-                        >
-                          Chuyển Online (Meet)
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
