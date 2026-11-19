@@ -1299,64 +1299,35 @@ export default function AdminDashboard({
   return (
 
     <div
-
       ref={adminRef}
-
-      className="min-h-full max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-7 pb-20 relative flex flex-col select-none"
-
+      className="min-h-full max-w-[1720px] mx-auto p-3 sm:p-4 lg:p-5 pb-10 relative flex flex-col select-none"
     >
-
       {/* Floating Marlo Toast */}
-
       {toastMsg && <MarloToast message={toastMsg} showUndo={false} />}
 
-
-
       {/* Optional System Broadcast Banner */}
-
       {activeBroadcast && (
-
-        <div className="marlo-card mb-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center justify-between gap-3 text-xs font-semibold text-[#8F5404] dark:text-amber-300">
-
+        <div className="marlo-card mb-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 flex items-center justify-between gap-2.5 text-xs font-semibold text-[#8F5404] dark:text-amber-300">
           <div className="flex items-center gap-2 min-w-0">
-
             <Radio size={15} className="text-[#EE8420] shrink-0" />
-
             <span className="truncate">THÔNG BÁO HỆ THỐNG: {activeBroadcast}</span>
-
           </div>
-
           <button
-
             type="button"
-
             onClick={() => {
-
               setActiveBroadcast(null);
-
               void clearBroadcastApi();
-
             }}
-
             className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 shrink-0 cursor-pointer"
-
             title="Đóng thông báo"
-
           >
-
             <X size={14} />
-
           </button>
-
         </div>
-
       )}
 
-
-
       {/* ─── CARD 1: UNIFIED ADMIN GOVERNANCE HEADER ────────────────────────── */}
-
-      <header className="marlo-card relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <header className="marlo-card relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs p-3.5 sm:p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
 
         <div className="min-w-0">
 
@@ -1459,62 +1430,34 @@ export default function AdminDashboard({
 
 
       {/* Seamless Connector 1 */}
-
-      <LiquidCardConnector />
-
-
+      <LiquidCardConnector className="h-2 -my-0.5" />
 
       {/* ─── CARD 2: FLOATING SEGMENTED TAB BAR (TWO-WAY SYNCED WITH SIDEBAR) ── */}
-
-      <div className="relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-2 shadow-xs flex flex-wrap items-center justify-between gap-3">
-
+      <div className="relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-1.5 shadow-xs flex flex-wrap items-center justify-between gap-2.5">
         <MarloSegmentedControl<AdminTab>
-
           value={tab}
-
           onChange={handleSelectTab}
-
           options={[
-
             { id: "overview", label: "Tổng quan", icon: <Activity size={14} /> },
-
             { id: "users", label: "Người dùng & RBAC", icon: <Users size={14} />, badge: users.length },
-
             { id: "classes", label: "Học phần & Sandbox", icon: <GraduationCap size={14} />, badge: classesList.length },
-
             { id: "ai", label: "AI & Docker Quota", icon: <Bot size={14} /> },
-
             { id: "sessions", label: "An ninh & Phiên JWT", icon: <Shield size={14} />, badge: jwtSessions.length },
-
             { id: "audit", label: "Nhật ký Kiểm toán", icon: <History size={14} />, badge: auditLogs.length },
-
           ]}
-
         />
 
-
-
         <div className="hidden xl:flex items-center gap-2 px-3 text-xs font-mono text-slate-500 dark:text-slate-400">
-
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
-
           <span>{stats.sandboxReadyCount}/{classesList.length} Sandbox · {stats.untrustedSessions} Phiên cần chú ý</span>
-
         </div>
-
       </div>
 
-
-
       {/* Seamless Connector 2 */}
-
-      <LiquidCardConnector />
-
-
+      <LiquidCardConnector className="h-2 -my-0.5" />
 
       {/* ─── TAB CONTENT BODY ───────────────────────────────────────────────── */}
-
-      <div ref={contentRef} key={tab} className="relative z-10 space-y-5">
+      <div ref={contentRef} key={tab} className="relative z-10 space-y-3">
 
         {/* ====================================================================
 
@@ -2467,255 +2410,130 @@ export default function AdminDashboard({
 
 
         {/* ====================================================================
-
             TAB 3: 6 CNTT COURSES, INSTRUCTOR ASSIGNMENT & SANDBOX/3D TOGGLES
-
            ==================================================================== */}
-
         {tab === "classes" && (
-
-          <div className="animate-screen-enter space-y-4">
-
-            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
-
-              <div className="flex flex-wrap items-center gap-2.5">
-
+          <div className="animate-screen-enter space-y-2.5">
+            <div className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-2.5 sm:p-3 shadow-xs flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-
                   Sức khỏe lớp:
-
                 </span>
-
                 <MarloSegmentedControl<"all" | "Tốt" | "Ổn định" | "Cần theo dõi">
-
                   size="sm"
-
                   value={classHealthFilter}
-
                   onChange={setClassHealthFilter}
-
                   options={[
-
                     { id: "all", label: "Tất cả" },
-
                     { id: "Tốt", label: "Tốt" },
-
                     { id: "Ổn định", label: "Ổn định" },
-
                     { id: "Cần theo dõi", label: "Cần theo dõi" },
-
                   ]}
-
                 />
-
               </div>
 
-
-
               <button
-
                 type="button"
-
                 onClick={() => setIsAddClassModalOpen(true)}
-
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] px-4 py-2 text-xs font-bold cursor-pointer"
-
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] px-3.5 py-1.5 text-xs font-bold cursor-pointer transition active:scale-95 shadow-xs"
               >
-
                 <Plus size={14} />
-
                 <span>Tạo lớp học phần</span>
-
               </button>
-
             </div>
 
-
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
               {filteredClasses.map((cls) => (
-
                 <div
-
                   key={cls.id}
-
-                  className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-xs flex flex-col justify-between space-y-4"
-
+                  className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-3.5 sm:p-4 shadow-xs flex flex-col justify-between space-y-2.5 hover:border-slate-300 dark:hover:border-slate-700 transition"
                 >
-
                   <div>
-
                     <div className="flex items-start justify-between gap-2">
-
                       <span className="font-mono text-xs font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 rounded-lg">
-
                         {cls.code}
-
                       </span>
-
                       <span
-
                         className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold ${
-
                           cls.health === "Cần theo dõi"
-
                             ? "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400"
-
                             : "bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
-
                         }`}
-
                       >
-
                         {cls.health}
-
                       </span>
-
                     </div>
 
-
-
-                    <h3 className="mt-3 text-sm font-bold text-slate-950 dark:text-white leading-snug">
-
+                    <h3 className="mt-2 text-xs sm:text-sm font-bold text-slate-950 dark:text-white leading-snug">
                       {cls.name}
-
                     </h3>
-
-                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-
+                    <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                       Giảng viên:{" "}
-
                       <span className="font-bold text-slate-800 dark:text-slate-200">
-
                         {cls.teacher}
-
                       </span>
-
                     </div>
-
                     <div className="text-[11px] font-mono text-slate-400 mt-0.5 truncate">
-
                       {cls.room} · {cls.dockerImage}
-
                     </div>
 
-
-
-                    <div className="mt-3.5 grid grid-cols-2 gap-2 text-xs">
-
-                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2.5">
-
-                        <div className="text-base font-black font-mono text-slate-900 dark:text-white">
-
+                    <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2">
+                        <div className="text-sm sm:text-base font-black font-mono text-slate-900 dark:text-white">
                           {cls.students}
-
                         </div>
-
-                        <div className="text-[10.5px] text-slate-500">Học viên</div>
-
+                        <div className="text-[10px] text-slate-500">Học viên</div>
                       </div>
-
-                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2.5">
-
-                        <div className="text-base font-black font-mono text-[#EE8420]">
-
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2">
+                        <div className="text-sm sm:text-base font-black font-mono text-[#EE8420]">
                           {cls.pendingDualReviews}
-
                         </div>
-
-                        <div className="text-[10.5px] text-slate-500">Bài chờ duyệt</div>
-
+                        <div className="text-[10px] text-slate-500">Bài chờ duyệt</div>
                       </div>
-
                     </div>
 
-
-
-                    <div className="mt-3.5 space-y-1">
-
+                    <div className="mt-2 space-y-0.5">
                       <div className="flex justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-
                         <span>Tiến độ chương trình</span>
-
                         <span className="font-mono font-bold">{cls.progressPct}%</span>
-
                       </div>
-
-                      <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-
+                      <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                         <div
-
                           className={`h-full rounded-full ${
-
                             cls.health === "Cần theo dõi"
-
                               ? "bg-[#EE8420]"
-
                               : "bg-[#14161a] dark:bg-white"
-
                           }`}
-
                           style={{ width: `${cls.progressPct}%` }}
-
                         />
-
                       </div>
-
                     </div>
-
-
 
                     {/* Inline Sandbox & 3D AI Toggles */}
-
-                    <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 text-[11px]">
-
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5 text-[11px]">
                       <button
-
                         type="button"
-
                         onClick={() => handleToggleClassFlag(cls.id, "sandboxEnabled")}
-
-                        className={`flex-1 rounded-lg border px-2 py-1.5 font-bold transition cursor-pointer ${
-
+                        className={`flex-1 rounded-lg border px-2 py-1 font-bold transition cursor-pointer text-[10.5px] ${
                           cls.sandboxEnabled
-
                             ? "border-[#141619] bg-[#141619] text-white dark:border-white dark:bg-white dark:text-[#141619]"
-
                             : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-400"
-
                         }`}
-
                       >
-
                         Docker: {cls.sandboxEnabled ? "BẬT" : "TẮT"}
-
                       </button>
-
                       <button
-
                         type="button"
-
                         onClick={() => handleToggleClassFlag(cls.id, "aiDefenseEnabled")}
-
-                        className={`flex-1 rounded-lg border px-2 py-1.5 font-bold transition cursor-pointer ${
-
+                        className={`flex-1 rounded-lg border px-2 py-1 font-bold transition cursor-pointer text-[10.5px] ${
                           cls.aiDefenseEnabled
-
                             ? "border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
-
                             : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-400"
-
                         }`}
-
                       >
-
                         AI 3D: {cls.aiDefenseEnabled ? "BẬT" : "TẮT"}
-
                       </button>
-
                     </div>
-
                   </div>
 
 
