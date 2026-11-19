@@ -1018,10 +1018,10 @@ button:disabled {
   border-color: #334155 !important;
 }
 
-.theme-dark .text-slate-950,
-.theme-dark .text-slate-900,
-.theme-dark .text-slate-800,
-.theme-dark .text-gray-900 {
+.theme-dark .text-slate-950:not(.dark\:text-slate-950):not(.dark\:text-slate-900):not(.dark\:bg-white):not(.bg-\[\#f59e0b\]):not(.bg-amber-500),
+.theme-dark .text-slate-900:not(.dark\:text-slate-950):not(.dark\:text-slate-900):not(.dark\:bg-white):not(.bg-\[\#f59e0b\]):not(.bg-amber-500),
+.theme-dark .text-slate-800:not(.dark\:text-slate-950):not(.dark\:text-slate-900):not(.dark\:bg-white),
+.theme-dark .text-gray-900:not(.dark\:text-slate-950):not(.dark\:text-slate-900):not(.dark\:bg-white) {
   color: #f8fafc !important;
 }
 

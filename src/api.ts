@@ -2194,14 +2194,15 @@ function dispatchXpUpdated() {
   }
 }
 
-export async function getWorkspaceAuthToken(): Promise<string | null> {
-  const existing = getToken("student");
+export async function getWorkspaceAuthToken(preferredRole?: SessionRole): Promise<string | null> {
+  const role: SessionRole = preferredRole || inferTabRole();
+  const existing = getToken(role);
   if (existing && existing !== "mock-token") {
     return existing;
   }
   return (
-    (await ensureRoleSession("student").catch(() => null)) ||
-    getToken("student")
+    (await ensureRoleSession(role).catch(() => null)) ||
+    getToken(role)
   );
 }
 
@@ -2306,8 +2307,12 @@ export interface WorkspaceProjectDto {
   totalXp?: number;
   pointsBurned: number;
   budgetStr?: string;
+  lead?: string;
   instructor?: string;
   instructorAvatar?: string;
+  finalScore?: number | null;
+  evaluationStatus?: string | null;
+  evaluationFeedback?: string | null;
   members: any[];
   team: any[];
   colorHex?: string;
@@ -2381,6 +2386,7 @@ export async function updateWorkspaceProjectApi(
     name?: string;
     sprint?: string;
     due_date?: string;
+    instructor?: string;
     team?: any[];
   }
 ): Promise<WorkspaceProjectDto | null> {
@@ -2432,7 +2438,8 @@ export async function createWorkspaceTaskApi(
 
 export async function batchCreateWorkspaceTasksApi(
   projectId: string,
-  tasks: Record<string, any>[]
+  tasks: Record<string, any>[],
+  replace: boolean = false
 ): Promise<any[] | null> {
   const token = await getWorkspaceAuthToken();
   try {
@@ -2444,7 +2451,7 @@ export async function batchCreateWorkspaceTasksApi(
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ tasks }),
+        body: JSON.stringify({ tasks, replace }),
       }
     );
     if (!res.ok) return null;
@@ -2568,7 +2575,9 @@ export async function reviewWorkspaceTaskApi(
   feedback: string = "",
   rating?: number
 ): Promise<{ error?: string; task?: any; xp_awarded?: number }> {
-  const token = await getWorkspaceAuthToken();
+  const activeRole = inferTabRole();
+  const roleForReview: SessionRole = activeRole === "admin" ? "admin" : "instructor";
+  const token = await getWorkspaceAuthToken(roleForReview);
   try {
     const res = await fetch(
       `${API_BASE}/v1/kanban/workspace/tasks/${encodeURIComponent(taskId)}/review`,
@@ -2583,6 +2592,9 @@ export async function reviewWorkspaceTaskApi(
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    if ((data.xp_awarded || 0) > 0) {
+      dispatchXpUpdated();
+    }
     return data;
   } catch {
     return { error: "Lỗi kết nối Backend" };
@@ -2626,7 +2638,9 @@ export async function evaluateProjectApi(
     member_scores: any[];
   }
 ): Promise<{ error?: string; status?: string; eval_id?: string; final_score?: number }> {
-  const token = await getWorkspaceAuthToken();
+  const activeRole = inferTabRole();
+  const roleForEval: SessionRole = activeRole === "admin" ? "admin" : "instructor";
+  const token = await getWorkspaceAuthToken(roleForEval);
   try {
     const res = await fetch(
       `${API_BASE}/v1/kanban/workspace/projects/${encodeURIComponent(projectId)}/evaluate`,
@@ -2641,6 +2655,7 @@ export async function evaluateProjectApi(
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    dispatchXpUpdated();
     return data;
   } catch {
     return { error: "Lỗi kết nối Backend" };

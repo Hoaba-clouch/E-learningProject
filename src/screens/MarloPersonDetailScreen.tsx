@@ -17,18 +17,22 @@ import {
   MARLO_PROJECT_STATUS,
   MARLO_TASK_STATUS,
   MARLO_HUES,
+  toWorkspaceProjectId,
   MarloTask,
 } from "../marlo-engine/marloData";
+import { createWorkspaceTaskApi } from "../api";
 import "../marlo-engine/marloStyles.css";
 
 interface Props {
   personId?: string;
+  role?: "student" | "instructor" | "admin";
   onNavigateBack: () => void;
   onNavigateToProject: (projectId: string) => void;
 }
 
 export default function MarloPersonDetailScreen({
   personId = "hoa",
+  role = "student",
   onNavigateBack,
   onNavigateToProject,
 }: Props) {
@@ -70,8 +74,14 @@ export default function MarloPersonDetailScreen({
     setTimeout(() => setToastMsg(null), 3000);
   };
 
+  const isAdvisor = member.skill === "advisor";
+
   // Toggle status cycle
   const handleCycleStatus = () => {
+    if (isAdvisor && role === "student") {
+      showToast("⚠️ Học viên không thể thay đổi trạng thái công tác của Giảng viên Hội đồng.");
+      return;
+    }
     const statuses: ("in" | "remote" | "off")[] = ["in", "remote", "off"];
     const nextIdx = (statuses.indexOf(memberStatus) + 1) % statuses.length;
     const nextStatus = statuses[nextIdx];
@@ -80,9 +90,13 @@ export default function MarloPersonDetailScreen({
     showToast(`✓ Đã đổi trạng thái ${member.name} thành "${MARLO_MEMBER_STATUS_LABEL[nextStatus]}"`);
   };
 
-  const handleAssignTask = (e: React.FormEvent) => {
+  const handleAssignTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignTitle.trim()) return;
+    if (isAdvisor) {
+      showToast("⚠️ Không thể giao công việc sinh viên cho Giảng viên / Hội đồng Khảo thí.");
+      return;
+    }
 
     addMarloTask({
       title: assignTitle.trim(),
@@ -95,9 +109,28 @@ export default function MarloPersonDetailScreen({
       due: Date.now() + 4 * 86400000,
     });
 
+    const wsProjId = toWorkspaceProjectId(assignProjectId);
+    void createWorkspaceTaskApi(wsProjId, {
+      code: `TSK-${Math.floor(Math.random() * 899 + 100)}`,
+      title: assignTitle.trim(),
+      description: `${assignTitle.trim()} — Giao trực tiếp cho ${member.name}.`,
+      column: "ready",
+      priority: assignPriority === "med" ? "medium" : assignPriority,
+      moscow: assignPriority === "high" ? "must" : "should",
+      points: Math.max(1, Math.min(21, Math.round((Number(assignEst) || 8) / 2))),
+      assignee: {
+        name: member.name,
+        avatar: member.name.charAt(0).toUpperCase(),
+        role: member.role,
+      },
+      estimateHours: Number(assignEst) || 8,
+      dueDate: "15/12/2026",
+      epic: "Sprint Goal",
+    });
+
     setAssignTitle("");
     setIsAssignModalOpen(false);
-    showToast(`✓ Đã giao công việc mới cho ${member.name}!`);
+    showToast(`✓ Đã giao công việc mới cho ${member.name} và đồng bộ Bảng Kanban!`);
   };
 
   // ─── AUTHENTIC MARLO GSAP ENTRANCE ANIMATION ───
@@ -267,15 +300,17 @@ export default function MarloPersonDetailScreen({
               </span>
             </button>
 
-            <button
-              type="button"
-              className="btn btn--primary flex items-center gap-2"
-              onClick={() => setIsAssignModalOpen(true)}
-              title="Giao công việc mới cho nhân sự này"
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              <span>Giao việc (Assign task)</span>
-            </button>
+            {!isAdvisor && role !== "admin" && (
+              <button
+                type="button"
+                className="btn btn--primary flex items-center gap-2"
+                onClick={() => setIsAssignModalOpen(true)}
+                title="Giao công việc mới cho thành viên này"
+              >
+                <Plus size={16} strokeWidth={2.5} />
+                <span>Giao việc kỹ thuật</span>
+              </button>
+            )}
           </div>
         </section>
 

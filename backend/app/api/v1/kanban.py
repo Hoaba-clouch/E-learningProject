@@ -245,6 +245,7 @@ def _serialize_task(row: Any) -> dict[str, Any]:
         "title": d["title"],
         "description": d["description"] or "",
         "column": d["column_id"],
+        "column_id": d["column_id"],
         "priority": d["priority"] or "medium",
         "moscow": d["moscow"] or "should",
         "points": int(d["points"] or 3),
@@ -273,10 +274,33 @@ def _serialize_task(row: Any) -> dict[str, Any]:
         res["submissionRequirement"] = d["submission_requirement"]
     if d.get("submission_url"):
         res["submissionUrl"] = d["submission_url"]
+    latest_note = None
+    for lg in reversed(audit_logs):
+        if isinstance(lg, dict) and lg.get("note"):
+            latest_note = str(lg["note"])
+            break
+    if latest_note:
+        res["reviewFeedback"] = latest_note
     return res
 
 
-def _serialize_project(proj_row: Any, task_rows: list[Any]) -> dict[str, Any]:
+DEFAULT_PROJECT_MENTORS: dict[str, str] = {
+    "prj-codemind": "TS. Nguyễn Phước (GV Hướng dẫn)",
+    "prj-compiler": "ThS. Trần Minh Quân (GV Hướng dẫn)",
+    "prj-devnet": "Cô Trần Thị B (GV Hướng dẫn)",
+    "prj-ecommerce": "TS. Nguyễn Phước (GV Hướng dẫn)",
+    "prj-faceattend": "TS. Lê Hoàng Mai (GV Hướng dẫn)",
+    "prj-medai": "TS. Lê Hoàng Mai (GV Hướng dẫn)",
+    "prj-pintos": "ThS. Trần Minh Quân (GV Hướng dẫn)",
+    "prj-security": "TS. Đặng Quốc Bảo (GV Hướng dẫn)",
+}
+
+
+def _serialize_project(
+    proj_row: Any,
+    task_rows: list[Any],
+    eval_row: Any | None = None,
+) -> dict[str, Any]:
     p = dict(proj_row)
     tasks_out = [_serialize_task(t) for t in task_rows]
     tasks_total = len(tasks_out)
@@ -288,9 +312,20 @@ def _serialize_project(proj_row: Any, task_rows: list[Any]) -> dict[str, Any]:
 
     raw_team = json.loads(p.get("team_json") or "[]")
     cntt_members, team_members = _normalize_team(raw_team)
+    for idx, cm in enumerate(cntt_members):
+        cm["isLead"] = idx == 0
 
     slate_status = _normalize_project_status(p.get("status"))
     kanban_status = _to_kanban_project_status(p.get("status"))
+
+    lead_name = team_members[0]["name"] if team_members else "Nguyễn Bá Hòa"
+    raw_instructor = str(p.get("instructor_label") or "").strip()
+    if not raw_instructor or "(lead)" in raw_instructor.lower():
+        raw_instructor = DEFAULT_PROJECT_MENTORS.get(
+            p["id"], "TS. Nguyễn Phước (GV Hướng dẫn)"
+        )
+
+    ev_dict = row_dict(eval_row) if eval_row else None
 
     return {
         "id": p["id"],
@@ -312,8 +347,12 @@ def _serialize_project(proj_row: Any, task_rows: list[Any]) -> dict[str, Any]:
         "totalXp": story_budget,
         "pointsBurned": points_burned,
         "budgetStr": f"{story_budget:,} SP",
-        "instructor": p["instructor_label"],
+        "lead": lead_name,
+        "instructor": raw_instructor,
         "instructorAvatar": (team_members[0]["avatar"] if team_members else "H"),
+        "finalScore": float(ev_dict["final_score"]) if ev_dict and ev_dict.get("final_score") is not None else None,
+        "evaluationStatus": str(ev_dict.get("status") or "graded") if ev_dict else None,
+        "evaluationFeedback": str(ev_dict.get("feedback") or "") if ev_dict else None,
         "members": cntt_members,
         "team": team_members,
         "colorHex": p["color_hex"],
@@ -325,7 +364,7 @@ def _serialize_project(proj_row: Any, task_rows: list[Any]) -> dict[str, Any]:
 
 
 def _check_h2_constraint(conn: Any, task_row: Any, target_col: str) -> None:
-    if target_col != "done":
+    if target_col not in ("done", "verified"):
         return
     dep_id = task_row["depends_on"]
     if not dep_id:
@@ -334,7 +373,7 @@ def _check_h2_constraint(conn: Any, task_row: Any, target_col: str) -> None:
         "SELECT id, code, title, column_id FROM engineering_tasks WHERE id=? AND project_id=?",
         (dep_id, task_row["project_id"]),
     ).fetchone()
-    if parent and parent["column_id"] != "done":
+    if parent and parent["column_id"] not in ("done", "verified"):
         raise HTTPException(
             status_code=422,
             detail=(
@@ -344,21 +383,38 @@ def _check_h2_constraint(conn: Any, task_row: Any, target_col: str) -> None:
         )
 
 
-def _award_task_done_xp(conn: Any, user: dict[str, Any], task_row: Any, target_col: str) -> int:
-    if target_col != "done" or int(task_row["xp_awarded"] or 0) > 0:
-        return 0
-    prof = conn.execute("SELECT id FROM student_profiles WHERE user_id=?", (user["id"],)).fetchone()
+def _credit_student_xp(conn: Any, xp_amount: int) -> bool:
+    if xp_amount <= 0:
+        return False
+    prof = conn.execute(
+        "SELECT user_id, radar_teamwork FROM student_profiles LIMIT 1"
+    ).fetchone()
     if not prof:
-        return 0
+        return False
+    next_radar = min(100.0, float(prof["radar_teamwork"] or 80.0) + 0.5)
     conn.execute(
         """UPDATE student_profiles
-           SET exp_points = exp_points + 15,
-               radar_teamwork = MIN(100.0, radar_teamwork + 0.5)
+           SET exp_points = exp_points + ?,
+               radar_teamwork = ?
            WHERE user_id=?""",
-        (user["id"],),
+        (xp_amount, next_radar, prof["user_id"]),
     )
-    conn.execute("UPDATE engineering_tasks SET xp_awarded = 1 WHERE id=?", (task_row["id"],))
-    return 15
+    return True
+
+
+def _award_task_done_xp(conn: Any, user: dict[str, Any], task_row: Any, target_col: str) -> int:
+    current_awarded = int(dict(task_row).get("xp_awarded") or 0)
+    if target_col == "verified" and current_awarded < 50:
+        xp_reward = max(50, int(dict(task_row).get("points") or 3) * 10)
+        delta = xp_reward - current_awarded
+        if _credit_student_xp(conn, delta):
+            conn.execute("UPDATE engineering_tasks SET xp_awarded = ? WHERE id=?", (xp_reward, task_row["id"]))
+            return delta
+    if target_col == "done" and current_awarded == 0:
+        if _credit_student_xp(conn, 15):
+            conn.execute("UPDATE engineering_tasks SET xp_awarded = 15 WHERE id=?", (task_row["id"],))
+            return 15
+    return 0
 
 
 def _append_column_audit_log(
@@ -445,7 +501,7 @@ def _insert_workspace_task(
 
 @router.get("/kanban/workspace")
 def get_kanban_workspace(_: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    """Lấy toàn bộ 8+ dự án kỹ thuật và 35+ task Kanban đồng bộ SQLite cho Dự án & Kanban Board."""
+    """Lấy toàn bộ 8+ dự án kỹ thuật và 35+ task Kanban đồng bộ CSDL cho Dự án & Kanban Board."""
     with db() as conn:
         proj_rows = conn.execute(
             "SELECT * FROM engineering_projects ORDER BY created_at DESC, rowid ASC"
@@ -453,12 +509,22 @@ def get_kanban_workspace(_: dict[str, Any] = Depends(current_user)) -> dict[str,
         task_rows = conn.execute(
             "SELECT * FROM engineering_tasks ORDER BY position_order ASC, rowid ASC"
         ).fetchall()
+        eval_rows = conn.execute(
+            "SELECT * FROM project_evaluations ORDER BY graded_at ASC"
+        ).fetchall()
 
     tasks_by_proj: dict[str, list[Any]] = {}
     for tr in task_rows:
         tasks_by_proj.setdefault(tr["project_id"], []).append(tr)
 
-    projects = [_serialize_project(p, tasks_by_proj.get(p["id"], [])) for p in proj_rows]
+    eval_by_proj: dict[str, Any] = {}
+    for er in eval_rows:
+        eval_by_proj[er["project_id"]] = er
+
+    projects = [
+        _serialize_project(p, tasks_by_proj.get(p["id"], []), eval_by_proj.get(p["id"]))
+        for p in proj_rows
+    ]
     total_tasks = sum(p["tasksTotal"] for p in projects)
     total_done = sum(p["tasksDone"] for p in projects)
     return {
@@ -502,8 +568,8 @@ def create_workspace_project(
         )
 
     sp_budget = payload.story_points if payload.story_points is not None else 600
-    due_text = payload.due_text or (f"due {payload.due_date}" if payload.due_date else "in 30 days")
-    lead_name = f"{team_list[0]['name']} (Lead)" if team_list else "Nguyễn Bá Hòa (Lead)"
+    due_text = payload.due_text or (f"Hạn {payload.due_date}" if payload.due_date else "Còn 30 ngày")
+    default_mentor = "TS. Nguyễn Phước (GV Hướng dẫn)"
 
     with db() as conn:
         conn.execute(
@@ -530,7 +596,7 @@ def create_workspace_project(
                 32.0,
                 34.0,
                 "amber",
-                lead_name,
+                default_mentor,
                 json.dumps(team_list, ensure_ascii=False),
                 user["id"],
                 now,
@@ -592,6 +658,11 @@ def patch_workspace_project(
         name = payload.name.strip() if payload.name is not None else existing["name"]
         sprint = payload.sprint if payload.sprint is not None else existing["sprint"]
         due_date = payload.due_date if payload.due_date is not None else existing["due_date"]
+        instructor_label = (
+            payload.instructor.strip()
+            if payload.instructor is not None and payload.instructor.strip()
+            else existing["instructor_label"]
+        )
         team_json = (
             json.dumps(payload.team, ensure_ascii=False)
             if payload.team is not None
@@ -600,17 +671,21 @@ def patch_workspace_project(
 
         conn.execute(
             """UPDATE engineering_projects
-               SET fav=?, status=?, name=?, sprint=?, due_date=?, team_json=?, updated_at=?
+               SET fav=?, status=?, name=?, sprint=?, due_date=?, instructor_label=?, team_json=?, updated_at=?
                WHERE id=?""",
-            (fav, norm_status, name, sprint, due_date, team_json, now, project_id),
+            (fav, norm_status, name, sprint, due_date, instructor_label, team_json, now, project_id),
         )
         proj_row = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         task_rows = conn.execute(
             "SELECT * FROM engineering_tasks WHERE project_id=? ORDER BY position_order ASC, rowid ASC",
             (project_id,),
         ).fetchall()
+        eval_row = conn.execute(
+            "SELECT * FROM project_evaluations WHERE project_id=? ORDER BY graded_at DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
 
-    return {"project": _serialize_project(proj_row, task_rows)}
+    return {"project": _serialize_project(proj_row, task_rows, eval_row)}
 
 
 @router.post("/kanban/workspace/projects/{project_id}/tasks", status_code=status.HTTP_201_CREATED)
@@ -649,11 +724,15 @@ def batch_create_workspace_tasks(
         if not proj:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
 
-        max_pos = conn.execute(
-            "SELECT COALESCE(MAX(position_order), -1) m FROM engineering_tasks WHERE project_id=?",
-            (project_id,),
-        ).fetchone()["m"]
-        next_pos = int(max_pos) + 1
+        if payload.replace:
+            conn.execute("DELETE FROM engineering_tasks WHERE project_id=?", (project_id,))
+            next_pos = 0
+        else:
+            max_pos = conn.execute(
+                "SELECT COALESCE(MAX(position_order), -1) m FROM engineering_tasks WHERE project_id=?",
+                (project_id,),
+            ).fetchone()["m"]
+            next_pos = int(max_pos) + 1
         id_remap: dict[str, str] = {}
 
         for idx, item in enumerate(payload.tasks):
@@ -949,32 +1028,42 @@ def review_workspace_task(
     payload: TaskReviewIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Giảng viên thẩm định & nghiệm thu Task (Approve -> verified hoặc Request Revision -> in_progress)."""
+    """Giảng viên thẩm định & nghiệm thu Task (Approve -> verified hoặc Request Revision -> fail)."""
     if user.get("role") not in ("instructor", "admin"):
         raise HTTPException(status_code=403, detail="Chỉ Giảng viên hoặc Admin mới có quyền thẩm định task.")
 
     now = now_utc()
+    ts_display = datetime.now().strftime("%d/%m/%Y %H:%M")
     actor_name = user.get("full_name") or user.get("display_name") or "Giảng viên"
     with db() as conn:
         task = conn.execute("SELECT * FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
         if not task:
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
 
-        target_col = "verified" if payload.decision == "approve" else "in_progress"
+        target_col = "verified" if payload.decision == "approve" else "fail"
         existing_logs = json.loads(task["audit_logs_json"] or "[]")
-        action_note = f"Giảng viên {actor_name} đã nghiệm thu task." if payload.decision == "approve" else f"Giảng viên {actor_name} yêu cầu sửa lại: {payload.feedback}"
+        clean_fb = (payload.feedback or "").strip()
+        if payload.decision == "approve":
+            action_note = (
+                f"Giảng viên {actor_name} đã nghiệm thu task"
+                + (f": {clean_fb}" if clean_fb else ".")
+            )
+        else:
+            action_note = (
+                f"Giảng viên {actor_name} yêu cầu sửa lại: "
+                + (clean_fb or "Cần bổ sung test cases và hoàn thiện tiêu chí DoD.")
+            )
         existing_logs.append({
             "user": actor_name,
-            "fromColumn": task["column_id"],
-            "toColumn": target_col,
-            "timestamp": now,
+            "fromColumn": COLUMN_LABEL.get(task["column_id"], task["column_id"]),
+            "toColumn": COLUMN_LABEL.get(target_col, target_col),
+            "timestamp": ts_display,
             "note": action_note,
         })
 
         xp_awarded = 0
-        if payload.decision == "approve" and int(task.get("xp_awarded") or 0) == 0:
-            xp_awarded = max(50, int(task["points"]) * 10)
-            conn.execute("UPDATE engineering_tasks SET xp_awarded=? WHERE id=?", (xp_awarded, task_id))
+        if payload.decision == "approve":
+            xp_awarded = _award_task_done_xp(conn, user, task, "verified")
 
         conn.execute(
             "UPDATE engineering_tasks SET column_id=?, audit_logs_json=?, updated_at=? WHERE id=?",
@@ -1028,10 +1117,11 @@ def get_project_evaluation(
 
         total_done_points = 0
         for t in tasks:
-            assignee = json.loads(t["assignee_json"] or "{}")
-            pts = int(t.get("points") or 0)
-            col = t["column_id"]
-            dods = json.loads(t["dod_json"] or "[]")
+            td = dict(t)
+            assignee = json.loads(td.get("assignee_json") or "{}")
+            pts = int(td.get("points") or 0)
+            col = td["column_id"]
+            dods = json.loads(td.get("dod_json") or "[]")
             m_id = assignee.get("id")
 
             # Ghép nối linh hoạt theo ID hoặc Họ tên thành viên
@@ -1135,6 +1225,7 @@ def evaluate_project(
             "UPDATE engineering_projects SET status='delivered', tl_color='done', updated_at=? WHERE id=?",
             (now, project_id),
         )
+        _credit_student_xp(conn, 150)
 
         team = json.loads(proj["team_json"] or "[]")
         for m in team:

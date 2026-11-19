@@ -14,11 +14,12 @@ import {
 import "../marlo-engine/marloStyles.css";
 
 interface Props {
+  role?: "student" | "instructor" | "admin";
   onSelectPerson: (personId: string) => void;
   onNavigateToProject?: (projectId: string) => void;
 }
 
-export default function MarloTeamScreen({ onSelectPerson, onNavigateToProject }: Props) {
+export default function MarloTeamScreen({ role = "student", onSelectPerson, onNavigateToProject }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"people" | "leads">("people");

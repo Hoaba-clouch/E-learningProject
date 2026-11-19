@@ -18,7 +18,7 @@ interface MarloNewTaskModalProps {
   onAddTask: (task: KanbanTask) => void;
   teamMembers: TeamMember[];
   currentProjectName?: string;
-  projects?: { id: string; name: string }[];
+  projects?: { id: string; name: string; team?: TeamMember[] }[];
 }
 
 export default function MarloNewTaskModal({
@@ -31,7 +31,14 @@ export default function MarloNewTaskModal({
 }: MarloNewTaskModalProps) {
   const [title, setTitle] = useState("");
   const [project, setProject] = useState(currentProjectName);
-  const [assigneeId, setAssigneeId] = useState(teamMembers[0]?.id || "");
+  const activeProjectMembers = (() => {
+    const matchedProj = projects.find((p) => p.name === project);
+    if (matchedProj?.team && matchedProj.team.length > 0) {
+      return matchedProj.team;
+    }
+    return teamMembers;
+  })();
+  const [assigneeId, setAssigneeId] = useState(activeProjectMembers[0]?.id || "");
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
@@ -43,12 +50,15 @@ export default function MarloNewTaskModal({
   const [newChecklistText, setNewChecklistText] = useState("");
   const [isClosing, setIsClosing] = useState(false);
 
-  // Sync default assignee if teamMembers changes
+  // Sync default assignee if project or teamMembers changes
   useEffect(() => {
-    if (teamMembers.length > 0 && !assigneeId) {
-      setAssigneeId(teamMembers[0].id);
+    if (activeProjectMembers.length > 0) {
+      const exists = activeProjectMembers.some((m) => m.id === assigneeId);
+      if (!exists) {
+        setAssigneeId(activeProjectMembers[0].id);
+      }
     }
-  }, [teamMembers, assigneeId]);
+  }, [activeProjectMembers, assigneeId]);
 
   useEffect(() => {
     if (currentProjectName) {
@@ -93,8 +103,8 @@ export default function MarloNewTaskModal({
     if (!title.trim()) return;
 
     const selectedMember =
-      teamMembers.find((m) => m.id === assigneeId) ||
-      teamMembers[0] || {
+      activeProjectMembers.find((m) => m.id === assigneeId) ||
+      activeProjectMembers[0] || {
         name: "Nguyễn Bá Hòa",
         avatar: "H",
         role: "Leader & Architect",
@@ -168,10 +178,10 @@ export default function MarloNewTaskModal({
         <div className="flex items-start justify-between px-6 pt-6 pb-2">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-              New task
+              Tạo công việc kỹ thuật mới
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              It lands on the board and in the assignee's list.
+              Thẻ sẽ được thêm trực tiếp vào cột Cần làm và danh sách cá nhân của thành viên.
             </p>
           </div>
           <button
@@ -187,14 +197,14 @@ export default function MarloNewTaskModal({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-3 space-y-4 text-xs">
           {/* Task Name */}
           <div className="space-y-1.5">
-            <label className="font-semibold text-slate-700 dark:text-slate-300">Task</label>
+            <label className="font-semibold text-slate-700 dark:text-slate-300">Tên hạng mục công việc *</label>
             <input
               type="text"
               autoFocus
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Trim the 15s cut-down"
+              placeholder="VD: Thiết kế API xác thực JWT & bộ kiểm thử tự động"
               className="w-full rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#f59e0b] focus:bg-white dark:focus:bg-[#1c2230] transition shadow-2xs"
             />
           </div>
@@ -203,7 +213,7 @@ export default function MarloNewTaskModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Project */}
             <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Project</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300">Đồ án</label>
               <div className="relative">
                 <select
                   value={project}
@@ -228,14 +238,14 @@ export default function MarloNewTaskModal({
 
             {/* Assignee */}
             <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Assignee</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300">Thành viên phụ trách</label>
               <div className="relative">
                 <select
                   value={assigneeId}
                   onChange={(e) => setAssigneeId(e.target.value)}
                   className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f59e0b] transition cursor-pointer"
                 >
-                  {teamMembers.map((m) => (
+                  {activeProjectMembers.map((m) => (
                     <option key={m.id} value={m.id} className="dark:bg-[#181d28]">
                       {m.name} ({m.role})
                     </option>
@@ -250,7 +260,7 @@ export default function MarloNewTaskModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Due */}
             <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Due</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300">Hạn hoàn thành</label>
               <div className="relative">
                 <input
                   type="date"
@@ -263,7 +273,7 @@ export default function MarloNewTaskModal({
 
             {/* Estimate (hours) */}
             <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Estimate (hours)</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300">Thời lượng ước tính (giờ)</label>
               <div className="relative">
                 <input
                   type="number"
@@ -279,16 +289,16 @@ export default function MarloNewTaskModal({
 
           {/* Priority */}
           <div className="space-y-1.5">
-            <label className="font-semibold text-slate-700 dark:text-slate-300">Priority</label>
+            <label className="font-semibold text-slate-700 dark:text-slate-300">Mức độ ưu tiên</label>
             <div className="relative">
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
                 className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f59e0b] transition cursor-pointer"
               >
-                <option value="low" className="dark:bg-[#181d28]">Low</option>
-                <option value="medium" className="dark:bg-[#181d28]">Medium</option>
-                <option value="high" className="dark:bg-[#181d28]">High</option>
+                <option value="low" className="dark:bg-[#181d28]">Thấp (P2)</option>
+                <option value="medium" className="dark:bg-[#181d28]">Trung bình (P1)</option>
+                <option value="high" className="dark:bg-[#181d28]">Cao (P0)</option>
               </select>
               <ChevronDown size={14} className="pointer-events-none absolute right-3 top-3 text-slate-400" />
             </div>
@@ -380,14 +390,14 @@ export default function MarloNewTaskModal({
               onClick={handleClose}
               className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#181d28] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs cursor-pointer transition shadow-2xs"
             >
-              Cancel
+              Hủy
             </button>
             <button
               type="submit"
               disabled={!title.trim()}
               className="px-5 py-2.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] disabled:opacity-50 text-slate-950 font-bold text-xs shadow-xs active:scale-97 cursor-pointer transition flex items-center gap-1.5"
             >
-              Add task
+              Thêm công việc
             </button>
           </div>
         </form>

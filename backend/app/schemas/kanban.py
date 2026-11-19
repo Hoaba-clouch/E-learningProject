@@ -44,6 +44,7 @@ class WorkspaceProjectPatchIn(BaseModel):
     name: str | None = None
     sprint: str | None = None
     due_date: str | None = None
+    instructor: str | None = None
     team: list[dict[str, Any]] | None = None
 
 
@@ -77,6 +78,7 @@ class WorkspaceTaskCreateIn(BaseModel):
 
 class WorkspaceTaskBatchCreateIn(BaseModel):
     tasks: list[WorkspaceTaskCreateIn] = Field(default_factory=list)
+    replace: bool = False
 
 
 class WorkspaceTaskPatchIn(BaseModel):

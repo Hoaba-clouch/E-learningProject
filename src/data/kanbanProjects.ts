@@ -10,6 +10,11 @@ export interface Project {
   status: "in-progress" | "planning" | "review" | "delivered";
   fav?: boolean;
   dueDate: string;
+  lead?: string;
+  instructor?: string;
+  finalScore?: number | null;
+  evaluationStatus?: string | null;
+  evaluationFeedback?: string | null;
   tasks: KanbanTask[];
   team: TeamMember[];
 }

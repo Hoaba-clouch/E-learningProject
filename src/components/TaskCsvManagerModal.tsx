@@ -53,7 +53,7 @@ interface TaskCsvManagerModalProps {
   onClose: () => void;
   tasks: KanbanTask[];
   teamMembers: TeamMember[];
-  onImportTasks: (newTasks: KanbanTask[]) => void;
+  onImportTasks: (newTasks: KanbanTask[], replace?: boolean) => void;
 }
 
 // RFC-4180 CSV Parser
@@ -112,6 +112,7 @@ export default function TaskCsvManagerModal({
   const [daysPerSprint, setDaysPerSprint] = useState<number>(7);
   const [targetColumn, setTargetColumn] = useState<ColumnId>("backlog");
   const [assignmentMode, setAssignmentMode] = useState<"round-robin" | string>("round-robin");
+  const [importMode, setImportMode] = useState<"append" | "replace">("append");
   const [ignoreSampleRows, setIgnoreSampleRows] = useState<boolean>(true);
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [shouldRender, setShouldRender] = useState(isOpen);
@@ -383,7 +384,8 @@ export default function TaskCsvManagerModal({
         assigneeMember = teamMembers.find((m) => m.name === assignmentMode) || teamMembers[0];
       }
 
-      const generatedCode = `TSK-${String(tasks.length + i + 1).padStart(2, "0")}`;
+      const baseIndex = importMode === "replace" ? i + 1 : tasks.length + i + 1;
+      const generatedCode = `TSK-${String(baseIndex).padStart(2, "0")}`;
       const taskId = `imported-${Date.now()}-${i}`;
 
       return {
@@ -402,7 +404,7 @@ export default function TaskCsvManagerModal({
         },
         estimateHours: Math.max(2, Math.round(r.points * 1.5)),
         dueDate: `Ngày ${r.projectDay}`,
-        epic: r.isBonus ? "Bonus Features" : "Sprint Core",
+        epic: r.isBonus ? "Tính năng Bonus" : "Hạng mục Cốt lõi",
         epicColor: r.isBonus
           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
           : "bg-blue-50 text-blue-700 border-blue-200",
@@ -419,7 +421,7 @@ export default function TaskCsvManagerModal({
       };
     });
 
-    onImportTasks(newTasks);
+    onImportTasks(newTasks, importMode === "replace");
     handleRequestClose();
   };
 
@@ -434,39 +436,39 @@ export default function TaskCsvManagerModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative flex max-h-[90vh] w-full max-w-5xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden ${
+        className={`relative flex max-h-[90vh] w-full max-w-5xl flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden ${
           isClosing ? "marlo-modal-out" : "marlo-modal"
         }`}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/70">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/70 dark:bg-slate-900">
           <div className="flex items-center gap-2.5">
 
             <div>
-              <h3 className="text-base font-bold text-slate-900">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
                 Nhập & Xuất Task Chuẩn Định Dạng Thầy Hướng Dẫn
               </h3>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Hỗ trợ 8 cột chuẩn: STT, Ngày (*), Sprint, Tên task (*), Mô tả, Điểm (*), Yêu cầu nộp, Bonus
               </p>
             </div>
           </div>
           <button
             onClick={handleRequestClose}
-            className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-200/60 hover:text-slate-700 transition"
+            className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Modal Tabs Navigation */}
-        <div className="flex border-b border-slate-200 px-6 bg-white gap-2 pt-2">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 bg-white dark:bg-slate-900 gap-2 pt-2">
           <button
             onClick={() => setActiveTab("import")}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
               activeTab === "import"
-                ? "border-slate-900 text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "border-slate-900 text-slate-900 dark:border-amber-400 dark:text-amber-400"
+                : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
             <Upload size={14} />
@@ -476,8 +478,8 @@ export default function TaskCsvManagerModal({
             onClick={() => setActiveTab("template")}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
               activeTab === "template"
-                ? "border-slate-900 text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "border-slate-900 text-slate-900 dark:border-amber-400 dark:text-amber-400"
+                : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
             <TableProperties size={14} />
@@ -487,8 +489,8 @@ export default function TaskCsvManagerModal({
             onClick={() => setActiveTab("export")}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
               activeTab === "export"
-                ? "border-slate-900 text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "border-slate-900 text-slate-900 dark:border-amber-400 dark:text-amber-400"
+                : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
             <Download size={14} />
@@ -590,12 +592,25 @@ export default function TaskCsvManagerModal({
                         onChange={(e) => setAssignmentMode(e.target.value)}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs text-slate-800 focus:outline-hidden"
                       >
-                        <option value="round-robin">Tự động chia đều cho 3 thành viên</option>
+                        <option value="round-robin">Tự động chia đều cho {teamMembers.length} thành viên</option>
                         {teamMembers.map((m) => (
                           <option key={m.id} value={m.name}>
                             Gán cho {m.name} ({m.role})
                           </option>
                         ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-medium text-slate-600 block mb-0.5">
+                        Chế độ ghi vào Đồ án:
+                      </label>
+                      <select
+                        value={importMode}
+                        onChange={(e) => setImportMode(e.target.value as "append" | "replace")}
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs text-slate-800 focus:outline-hidden"
+                      >
+                        <option value="append">Nối thêm vào danh sách hiện tại ({tasks.length} task)</option>
+                        <option value="replace">Thay thế toàn bộ task cũ của đồ án</option>
                       </select>
                     </div>
                     <label className="flex items-center gap-1.5 pt-1 text-[11px] text-slate-700 cursor-pointer">
@@ -906,21 +921,21 @@ export default function TaskCsvManagerModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3.5 bg-slate-50/70">
-          <div className="text-xs text-slate-500">
+        <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 px-6 py-3.5 bg-slate-50/70 dark:bg-slate-900">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
             {activeTab === "import" && (
               <span>
-                Sẵn sàng nạp: <strong className="text-slate-900">{parsedData.validCount} task</strong> (Tổng: {parsedData.totalPoints} pts)
+                Sẵn sàng nạp: <strong className="text-slate-900 dark:text-white">{parsedData.validCount} task</strong> (Tổng: {parsedData.totalPoints} pts • {importMode === "replace" ? "Thay thế task cũ" : "Nối thêm"})
               </span>
             )}
-            {activeTab === "template" && <span>Quy chuẩn chấm điểm đồ án Rikkei Education</span>}
+            {activeTab === "template" && <span>Quy chuẩn chấm điểm đồ án Kỹ nghệ Phần mềm</span>}
             {activeTab === "export" && <span>Dữ liệu đồng bộ trực tiếp từ Kanban Board</span>}
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={handleRequestClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-100 transition"
+              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-100 dark:hover:bg-slate-700 transition"
             >
               Đóng
             </button>
@@ -928,10 +943,10 @@ export default function TaskCsvManagerModal({
               <button
                 onClick={handleExecuteImport}
                 disabled={parsedData.validCount === 0}
-                className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="flex items-center gap-1.5 rounded-xl bg-slate-900 dark:bg-amber-500 px-5 py-2 text-xs font-semibold text-white dark:text-slate-950 shadow-xs hover:bg-slate-800 dark:hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 <PlusCircle size={14} />
-                <span>Nạp {parsedData.validCount} Task Vào Kanban</span>
+                <span>{importMode === "replace" ? `Thay Thế Bằng ${parsedData.validCount} Task Mới` : `Nạp Thêm ${parsedData.validCount} Task Vào Kanban`}</span>
               </button>
             )}
           </div>

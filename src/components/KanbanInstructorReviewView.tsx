@@ -4,15 +4,10 @@ import {
   CheckCircle2,
   RotateCcw,
   GitCommit,
-  User,
-  Sparkles,
   ExternalLink,
-  Layers,
   ArrowRight,
-  Filter,
   AlertCircle,
   Clock,
-  Award,
 } from "lucide-react";
 import type { KanbanTask, TeamMember } from "../screens/KanbanBoard";
 
@@ -31,7 +26,7 @@ export default function KanbanInstructorReviewView({
   onSelectTask,
   onGoToBoard,
 }: Props) {
-  const [filterView, setFilterView] = useState<"pending" | "verified" | "all">("pending");
+  const [filterView, setFilterView] = useState<"pending" | "verified" | "revision" | "all">("pending");
   const [revisionTaskId, setRevisionTaskId] = useState<string | null>(null);
   const [revisionFeedback, setRevisionFeedback] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,11 +34,13 @@ export default function KanbanInstructorReviewView({
   // Filter tasks based on review status
   const pendingTasks = tasks.filter((t) => t.column === "done");
   const verifiedTasks = tasks.filter((t) => t.column === "verified");
+  const revisionTasks = tasks.filter((t) => t.column === "fail");
 
   const displayedTasks = tasks.filter((t) => {
     if (filterView === "pending") return t.column === "done";
     if (filterView === "verified") return t.column === "verified";
-    return t.column === "done" || t.column === "verified";
+    if (filterView === "revision") return t.column === "fail";
+    return t.column === "done" || t.column === "verified" || t.column === "fail";
   });
 
   const totalPendingPoints = pendingTasks.reduce((acc, t) => acc + (t.points || 0), 0);
@@ -150,11 +147,11 @@ export default function KanbanInstructorReviewView({
 
       {/* ─── Filter Pills ─── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800">
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800 flex-wrap">
           <button
             type="button"
             onClick={() => setFilterView("pending")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               filterView === "pending"
                 ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -169,7 +166,7 @@ export default function KanbanInstructorReviewView({
           <button
             type="button"
             onClick={() => setFilterView("verified")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               filterView === "verified"
                 ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -183,14 +180,29 @@ export default function KanbanInstructorReviewView({
 
           <button
             type="button"
+            onClick={() => setFilterView("revision")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              filterView === "revision"
+                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <span>Đã yêu cầu sửa</span>
+            <span className="px-1.5 py-0.2 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 text-[10px]">
+              {revisionTasks.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setFilterView("all")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
               filterView === "all"
                 ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
-            Tất cả ({pendingTasks.length + verifiedTasks.length})
+            Tất cả ({pendingTasks.length + verifiedTasks.length + revisionTasks.length})
           </button>
         </div>
 
@@ -208,6 +220,8 @@ export default function KanbanInstructorReviewView({
           <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
             {filterView === "pending"
               ? "Không có công việc nào đang chờ nghiệm thu"
+              : filterView === "revision"
+              ? "Không có công việc nào đang bị yêu cầu sửa"
               : "Chưa có công việc nào trong danh mục này"}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">
@@ -227,6 +241,7 @@ export default function KanbanInstructorReviewView({
         <div className="space-y-3.5">
           {displayedTasks.map((task) => {
             const isVerified = task.column === "verified";
+            const isRevision = task.column === "fail";
             const memberObj = teamMembers.find((m) => m.name === task.assignee?.name);
 
             return (
@@ -239,23 +254,28 @@ export default function KanbanInstructorReviewView({
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-200/80 dark:border-slate-700/80">
-                        {task.code || task.id}
+                        #{task.code || task.id}
                       </span>
                       <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 px-2 py-0.5 rounded-md">
                         {task.points} Story Points
                       </span>
                       {task.priority && (
                         <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                          {task.priority}
+                          {task.priority === "high" ? "Cao" : task.priority === "medium" ? "Trung bình" : "Thấp"}
                         </span>
                       )}
                       {isVerified ? (
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold border border-slate-200/80 dark:border-slate-800 flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold border border-emerald-200/80 dark:border-emerald-800 flex items-center gap-1">
                           <CheckCircle2 size={12} />
-                          <span>Đã Nghiệm Thu (+{task.points * 10} XP)</span>
+                          <span>Đã Nghiệm Thu (+{Math.max(50, task.points * 10)} XP)</span>
+                        </span>
+                      ) : isRevision ? (
+                        <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] font-bold border border-rose-200/80 dark:border-rose-800 flex items-center gap-1">
+                          <AlertCircle size={12} />
+                          <span>Đã yêu cầu sinh viên sửa lại</span>
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-bold border border-slate-200/80 dark:border-slate-800 flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-bold border border-amber-200/80 dark:border-amber-800 flex items-center gap-1">
                           <Clock size={12} />
                           <span>Chờ Giảng viên duyệt</span>
                         </span>
@@ -268,6 +288,13 @@ export default function KanbanInstructorReviewView({
                     >
                       {task.title}
                     </h4>
+
+                    {task.reviewFeedback && (
+                      <div className="text-xs text-rose-700 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200/70 dark:border-rose-800/60">
+                        <span className="font-bold">Nhận xét Giảng viên: </span>
+                        {task.reviewFeedback}
+                      </div>
+                    )}
 
                     {task.userStory?.want && (
                       <p className="text-xs text-slate-600 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
@@ -328,7 +355,7 @@ export default function KanbanInstructorReviewView({
                           title="Yêu cầu nhóm bổ sung hoặc sửa đổi mã nguồn"
                         >
                           <RotateCcw size={13} />
-                          <span>Yêu cầu sửa</span>
+                          <span>{isRevision ? "Cập nhật yêu cầu sửa" : "Yêu cầu sửa"}</span>
                         </button>
                       </>
                     ) : (
@@ -340,7 +367,7 @@ export default function KanbanInstructorReviewView({
                         <button
                           type="button"
                           onClick={() => handleOpenRevisionModal(task.id)}
-                          className="px-2.5 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 text-xs transition"
+                          className="px-2.5 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 text-xs transition cursor-pointer"
                           title="Đổi ý và yêu cầu sửa đổi lại"
                         >
                           <RotateCcw size={12} />
@@ -351,7 +378,7 @@ export default function KanbanInstructorReviewView({
                     <button
                       type="button"
                       onClick={() => onSelectTask(task)}
-                      className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition"
+                      className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
                       title="Xem chi tiết thẻ công việc"
                     >
                       <ExternalLink size={15} />
@@ -369,7 +396,7 @@ export default function KanbanInstructorReviewView({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn">
           <div className="w-full max-w-md rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#0f1219] p-6 shadow-xl space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400">
                 <RotateCcw size={18} />
               </div>
               <div>
@@ -377,7 +404,7 @@ export default function KanbanInstructorReviewView({
                   Yêu Cầu Sửa Đổi & Bổ Sung
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Công việc sẽ được trả về trạng thái Đang làm để sinh viên hoàn thiện.
+                  Công việc sẽ được chuyển sang cột Cần sửa lại kèm nhận xét của Giảng viên.
                 </p>
               </div>
             </div>

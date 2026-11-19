@@ -449,17 +449,32 @@ export default function App() {
             onOpenWorkspace={openWorkspaceTarget}
           />
         );
-      case "kanban": return <KanbanBoard initialProjectId={selectedKanbanProjectId} role={role} />;
+      case "kanban": return (
+        <KanbanBoard
+          initialProjectId={selectedKanbanProjectId}
+          onSelectProject={(pId) => {
+            setSelectedKanbanProjectId(pId);
+            setSelectedMarloProjectId(pId);
+          }}
+          role={role}
+        />
+      );
       case "schedule": return <EngineeringScheduleRota role={role} onNavigate={setScreen} onRoleChange={setRole} />;
       case "projects": return (
         <MarloProjectsScreen
           role={role}
           onOpenProject={(p) => {
-            if (p?.id) setSelectedKanbanProjectId(p.id);
+            if (p?.id) {
+              setSelectedKanbanProjectId(p.id);
+              setSelectedMarloProjectId(p.id);
+            }
             setScreen("kanban");
           }}
           onOpenProjectDetail={(pId) => {
-            if (pId) setSelectedMarloProjectId(pId);
+            if (pId) {
+              setSelectedMarloProjectId(pId);
+              setSelectedKanbanProjectId(pId);
+            }
             setScreen("project-detail");
           }}
         />
@@ -467,6 +482,7 @@ export default function App() {
       case "project-detail": return (
         <MarloProjectDetailScreen
           projectId={selectedMarloProjectId}
+          role={role}
           onNavigateBack={() => setScreen("projects")}
           onNavigateToPerson={(personId) => {
             setSelectedMarloPersonId(personId);
@@ -474,18 +490,21 @@ export default function App() {
           }}
           onNavigateToKanban={(prjId) => {
             setSelectedKanbanProjectId(prjId);
+            setSelectedMarloProjectId(prjId);
             setScreen("kanban");
           }}
         />
       );
       case "team": return (
         <MarloTeamScreen
+          role={role}
           onSelectPerson={(personId) => {
             setSelectedMarloPersonId(personId);
             setScreen("person-detail");
           }}
           onNavigateToProject={(prjId) => {
             setSelectedMarloProjectId(prjId);
+            setSelectedKanbanProjectId(prjId);
             setScreen("project-detail");
           }}
         />
@@ -493,9 +512,11 @@ export default function App() {
       case "person-detail": return (
         <MarloPersonDetailScreen
           personId={selectedMarloPersonId}
+          role={role}
           onNavigateBack={() => setScreen("team")}
           onNavigateToProject={(prjId) => {
             setSelectedMarloProjectId(prjId);
+            setSelectedKanbanProjectId(prjId);
             setScreen("project-detail");
           }}
         />

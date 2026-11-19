@@ -1,33 +1,72 @@
-import React, { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Plus, ExternalLink, X, CheckCircle2, Crown } from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import {
+  ChevronLeft,
+  Plus,
+  ExternalLink,
+  X,
+  CheckCircle2,
+  Crown,
+  ShieldCheck,
+  GraduationCap,
+  Lock,
+  Sparkles,
+} from "lucide-react";
 import gsap from "gsap";
 import {
   getMarloProject,
   getMarloMember,
-  getMarloMembers,
-  getProjectTasks,
-  getProjectHoursStats,
+  resolveMarloMemberByName,
+  toWorkspaceProjectId,
   addMarloTask,
   updateMarloProjectStatus,
-  updateMarloTaskStatus,
   MARLO_PROJECT_STATUS,
-  MARLO_TASK_COLS,
   MARLO_HUES,
-  formatCurrency,
-  formatFullCurrency,
-  MarloTask,
 } from "../marlo-engine/marloData";
+import {
+  fetchKanbanWorkspace,
+  updateWorkspaceProjectApi,
+  createWorkspaceTaskApi,
+  type WorkspaceProjectDto,
+} from "../api";
 import "../marlo-engine/marloStyles.css";
 
 interface Props {
   projectId?: string;
+  role?: "student" | "instructor" | "admin";
   onNavigateBack: () => void;
   onNavigateToPerson: (personId: string) => void;
   onNavigateToKanban?: (projectId: string) => void;
 }
 
+const PROJECT_BRIEFS: Record<string, string> = {
+  "prj-codemind":
+    "Hệ thống LMS thông minh tích hợp Gia sư Socratic, giám sát liêm chính mã nguồn qua Docker Sandbox và phòng thi phản biện AI Council 3D.",
+  "prj-compiler":
+    "Xây dựng bộ phân tích từ vựng Lexer, cú pháp đệ quy xuống (Recursive Descent Parser), cây cú pháp trừu tượng AST và sinh mã trung gian C++.",
+  "prj-devnet":
+    "Nền tảng chia sẻ đoạn mã nguồn trực tuyến hỗ trợ cây phân nhánh Fork Tree, Monaco Editor tích hợp và bình luận theo từng dòng code.",
+  "prj-ecommerce":
+    "Hệ thống thương mại điện tử chịu tải cao, đảm bảo tính nhất quán dữ liệu phân tán với Saga Pattern, Redis Cache và Kafka Event Streaming.",
+  "prj-faceattend":
+    "Điểm danh tự động qua camera RTSP độ trễ thấp, lượng tử hóa MobileFaceNet INT8 chạy trực tiếp trên vi điều khiển nhúng Raspberry Pi 4.",
+  "prj-medai":
+    "Mô hình DenseNet-121 kết hợp Grad-CAM khoanh vùng tổn thương phổi trên ảnh X-quang và trợ lý truy xuất y văn chuẩn xác bằng RAG.",
+  "prj-pintos":
+    "Cài đặt thuật toán điều độ MLFQS, đồng bộ hóa Semaphore/Lock và hệ thống quản lý bộ nhớ ảo Virtual Memory trên kiến trúc x86.",
+  "prj-security":
+    "Công cụ Fuzzing SQLi, XSS, Command Injection tự động dò quét API backend trong môi trường cô lập, phát hiện lỗ hổng và xuất báo cáo CVE.",
+};
+
+const DETAIL_TASK_COLUMNS = [
+  { id: "todo", label: "Cần làm" },
+  { id: "doing", label: "Đang làm" },
+  { id: "done", label: "Hoàn thành" },
+  { id: "verified", label: "Đã nghiệm thu" },
+] as const;
+
 export default function MarloProjectDetailScreen({
-  projectId = "codemind",
+  projectId = "prj-codemind",
+  role = "student",
   onNavigateBack,
   onNavigateToPerson,
   onNavigateToKanban,
@@ -35,69 +74,249 @@ export default function MarloProjectDetailScreen({
   const containerRef = useRef<HTMLDivElement>(null);
   const progressCircleRef = useRef<SVGCircleElement>(null);
 
-  // Sync state with dynamic store
-  const [dataVersion, setDataVersion] = useState(0);
+  const fallbackProject = getMarloProject(projectId) || getMarloProject("codemind")!;
+  const targetWsId = toWorkspaceProjectId(projectId);
 
-  const project = getMarloProject(projectId) || getMarloProject("codemind")!;
-  const [currentStatus, setCurrentStatus] = useState(project.status);
-  const tasks = getProjectTasks(project.id);
-  const stats = getProjectHoursStats(project.id);
-  const allMembers = getMarloMembers();
+  const [wsProject, setWsProject] = useState<WorkspaceProjectDto | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<string>(fallbackProject.status);
 
-  // Listen for storage changes across tabs & components
+  const isSprintLocked = useMemo(() => {
+    try {
+      return (
+        localStorage.getItem(`codemind_kanban_sprint_locked_${targetWsId}`) === "true" ||
+        localStorage.getItem("codemind_kanban_sprint_locked") === "true" ||
+        localStorage.getItem("codemind_projects_submission_locked") === "true"
+      );
+    } catch {
+      return false;
+    }
+  }, [targetWsId]);
+
+  const loadWorkspaceProject = async () => {
+    const ws = await fetchKanbanWorkspace();
+    if (!ws?.projects?.length) return;
+    const matched =
+      ws.projects.find((p) => p.id === projectId || p.id === targetWsId) ||
+      ws.projects.find((p) => p.name.toLowerCase() === fallbackProject.name.toLowerCase()) ||
+      ws.projects[0];
+    if (matched) {
+      setWsProject(matched);
+      setCurrentStatus(matched.status || "active");
+    }
+  };
+
   useEffect(() => {
-    const handleDataChanged = () => setDataVersion((v) => v + 1);
-    window.addEventListener("codemind-marlo-data-changed", handleDataChanged);
-    return () => window.removeEventListener("codemind-marlo-data-changed", handleDataChanged);
-  }, []);
+    void loadWorkspaceProject();
+  }, [projectId, targetWsId]);
 
-  const doneTasksCount = tasks.filter((t) => t.status === "done").length;
-  const progressPercent = tasks.length > 0 ? Math.round((doneTasksCount / tasks.length) * 100) : 0;
-  const leadMember = getMarloMember(project.lead);
+  // Unified display fields from live MySQL workspace (with safe fallback)
+  const displayId = wsProject?.id || targetWsId;
+  const displayName = wsProject?.name || fallbackProject.name;
+  const displayCourse = wsProject?.course || fallbackProject.client;
+  const displayKind = wsProject?.kind || fallbackProject.kind;
+  const displaySprint = wsProject?.sprint || "Sprint 1 (Tuần 1 - 4)";
+  const displayBrief =
+    PROJECT_BRIEFS[displayId] ||
+    fallbackProject.brief ||
+    `Đồ án kỹ nghệ phần mềm thuộc học phần ${displayCourse}, phát triển theo quy trình Agile/Scrum và kiểm định Ràng buộc cứng H2.`;
+  const displayMentor = wsProject?.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)";
+  const displayDueText =
+    wsProject?.dueDate
+      ? `Hạn nộp: ${wsProject.dueDate}`
+      : wsProject?.dueText || "Hạn nộp: 15/12/2026";
+
+  // Normalize team members (ONLY students of this project, never mixing council professors into student list)
+  const projectStudents = useMemo(() => {
+    if (wsProject?.team?.length) {
+      return wsProject.team.map((m: any, idx: number) => {
+        const resolved = resolveMarloMemberByName(m.name);
+        return {
+          id: resolved.id,
+          rawId: m.id || resolved.id,
+          name: m.name,
+          role: m.role || resolved.role,
+          initials:
+            m.initials ||
+            "".join?.call(
+              (m.name || "SV")
+                .trim()
+                .split(/\s+/)
+                .slice(-2)
+                .map((w: string) => w[0]?.toUpperCase() || ""),
+              ""
+            ) ||
+            resolved.initials ||
+            "SV",
+          avatar: m.avatar || (m.name || "S").trim().charAt(0).toUpperCase(),
+          hue: resolved.hue || ((idx % 6) + 1),
+          isLead: idx === 0,
+        };
+      });
+    }
+    return fallbackProject.team
+      .map((memId) => getMarloMember(memId))
+      .filter((m): m is NonNullable<typeof m> => Boolean(m) && m.skill !== "advisor")
+      .map((m, idx) => ({
+        id: m.id,
+        rawId: m.id,
+        name: m.name,
+        role: m.role,
+        initials: m.initials || m.name.slice(0, 2).toUpperCase(),
+        avatar: m.name.charAt(0).toUpperCase(),
+        hue: m.hue,
+        isLead: idx === 0 || m.id === fallbackProject.lead,
+      }));
+  }, [wsProject, fallbackProject]);
+
+  const leadStudent = projectStudents.find((s) => s.isLead) || projectStudents[0];
+
+  // Normalize tasks from live MySQL project
+  const normalizedTasks = useMemo(() => {
+    if (wsProject?.tasks) {
+      return wsProject.tasks.map((t: any) => {
+        const col = String(t.column || "ready");
+        let bucket: "todo" | "doing" | "done" | "verified" = "todo";
+        if (col === "backlog" || col === "ready") bucket = "todo";
+        else if (col === "in-progress" || col === "fail") bucket = "doing";
+        else if (col === "done") bucket = "done";
+        else if (col === "verified") bucket = "verified";
+
+        const assigneeName =
+          typeof t.assignee === "object"
+            ? t.assignee?.name || leadStudent?.name || "Nguyễn Bá Hòa"
+            : String(t.assignee || leadStudent?.name || "Nguyễn Bá Hòa");
+        const resolvedMember = resolveMarloMemberByName(assigneeName);
+
+        return {
+          id: t.id,
+          code: t.code ? (String(t.code).startsWith("#") ? String(t.code) : `#${t.code}`) : "#TSK",
+          title: t.title,
+          bucket,
+          rawColumn: col,
+          assigneeName,
+          personId: resolvedMember.id,
+          points: Number(t.points || 3),
+          priority: t.priority === "high" ? "high" : t.priority === "low" ? "low" : "med",
+        };
+      });
+    }
+    return [];
+  }, [wsProject, leadStudent]);
+
+  const totalTasksCount = normalizedTasks.length;
+  const doneTasksCount = normalizedTasks.filter(
+    (t) => t.bucket === "done" || t.bucket === "verified"
+  ).length;
+  const verifiedTasksCount = normalizedTasks.filter((t) => t.bucket === "verified").length;
+  const progressPercent =
+    totalTasksCount > 0 ? Math.round((doneTasksCount / totalTasksCount) * 100) : 0;
+
+  const totalStoryPoints =
+    wsProject?.storyPoints ||
+    normalizedTasks.reduce((sum, t) => sum + t.points, 0) ||
+    600;
+  const completedStoryPoints =
+    wsProject?.pointsBurned !== undefined
+      ? wsProject.pointsBurned
+      : Math.round((totalStoryPoints * progressPercent) / 100);
 
   // Calculate circular SVG progress
   const strokeWidth = 8;
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
-  const targetStrokeDashoffset = circumference - (progressPercent / 100) * circumference;
+  const targetStrokeDashoffset =
+    circumference - (progressPercent / 100) * circumference;
 
   // ─── Modal States ───
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskWho, setNewTaskWho] = useState(project.lead);
-  const [newTaskEst, setNewTaskEst] = useState(5);
-  const [newTaskPriority, setNewTaskPriority] = useState<"high" | "med" | "low">("high");
+  const [newTaskAssigneeName, setNewTaskAssigneeName] = useState("");
+  const [newTaskPoints, setNewTaskPoints] = useState(5);
+  const [newTaskPriority, setNewTaskPriority] = useState<"high" | "medium" | "low">("high");
+
+  useEffect(() => {
+    if (projectStudents.length > 0 && !newTaskAssigneeName) {
+      setNewTaskAssigneeName(projectStudents[0].name);
+    }
+  }, [projectStudents, newTaskAssigneeName]);
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const showToast = (msg: string) => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
+    setTimeout(() => setToastMsg(null), 3200);
   };
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
+    if (isSprintLocked && role === "student") {
+      showToast("🔒 Sprint hoặc Cổng nộp đang bị khóa bởi Ban Đào Tạo.");
+      return;
+    }
 
+    const chosenStudent =
+      projectStudents.find((s) => s.name === newTaskAssigneeName) ||
+      projectStudents[0] || {
+        id: "hoa",
+        name: "Nguyễn Bá Hòa",
+        role: "Leader & Architect",
+        avatar: "H",
+      };
+
+    const codeSuffix = Math.floor(Math.random() * 899 + 100);
+    const createdPayload = {
+      code: `TSK-${codeSuffix}`,
+      title: newTaskTitle.trim(),
+      description: `${newTaskTitle.trim()} — Hạng mục kỹ thuật thuộc đồ án ${displayName}.`,
+      column: "ready",
+      priority: newTaskPriority,
+      moscow: newTaskPriority === "high" ? "must" : "should",
+      points: Math.max(1, Math.min(21, Number(newTaskPoints) || 5)),
+      assignee: {
+        name: chosenStudent.name,
+        avatar: chosenStudent.avatar,
+        role: chosenStudent.role,
+      },
+      estimateHours: Math.max(2, (Number(newTaskPoints) || 5) * 1.5),
+      dueDate: wsProject?.dueDate || "15/12/2026",
+      epic: displaySprint,
+      epicColor: "bg-amber-50 text-amber-700 border-amber-200",
+      checklist: [
+        { id: `chk-1-${Date.now()}`, text: "Thiết kế & cài đặt mã nguồn sạch 3 tầng", done: false },
+        { id: `chk-2-${Date.now()}`, text: "Vượt qua bộ kiểm thử tự động Docker Sandbox", done: false },
+      ],
+    };
+
+    const savedTask = await createWorkspaceTaskApi(displayId, createdPayload);
     addMarloTask({
       title: newTaskTitle.trim(),
-      projectId: project.id,
-      who: newTaskWho,
+      projectId: displayId,
+      who: chosenStudent.id,
       status: "todo",
-      priority: newTaskPriority,
+      priority: newTaskPriority === "medium" ? "med" : newTaskPriority,
       kind: "architecture",
-      est: Number(newTaskEst) || 5,
+      est: Number(newTaskPoints) || 5,
       due: Date.now() + 3 * 86400000,
     });
 
+    if (savedTask) {
+      await loadWorkspaceProject();
+    }
     setNewTaskTitle("");
     setIsAddTaskModalOpen(false);
-    showToast(`✓ Đã thêm công việc kỹ thuật mới vào đồ án ${project.name}!`);
+    showToast(`✓ Đã thêm thẻ "${createdPayload.title}" và đồng bộ sang Bảng Kanban!`);
   };
 
-  const handleStatusChange = (newStatus: any) => {
+  const handleStatusChange = async (newStatus: string) => {
+    if (role === "student" && newStatus === "delivered") {
+      showToast("⚠️ Trạng thái 'Đã bảo vệ xong' chỉ do Giảng viên hoặc Hội đồng xác nhận sau khi chấm DoD.");
+      return;
+    }
     setCurrentStatus(newStatus);
-    updateMarloProjectStatus(project.id, newStatus);
-    showToast(`✓ Đã cập nhật trạng thái đồ án thành "${MARLO_PROJECT_STATUS[newStatus]}"`);
+    updateMarloProjectStatus(displayId, newStatus as any);
+    await updateWorkspaceProjectApi(displayId, { status: newStatus });
+    await loadWorkspaceProject();
+    showToast(`✓ Đã đồng bộ trạng thái đồ án thành "${MARLO_PROJECT_STATUS[newStatus] || newStatus}"`);
   };
 
   // ─── AUTHENTIC MARLO GSAP ENTRANCE ANIMATION ───
@@ -106,82 +325,26 @@ export default function MarloProjectDetailScreen({
     const ctx = gsap.context(() => {
       gsap.fromTo(
         ".backlink, .phead",
-        { opacity: 0, y: -12 },
-        { opacity: 1, y: 0, duration: 0.45, ease: "power2.out", stagger: 0.08 }
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.4, ease: "power2.out", stagger: 0.06, clearProps: "transform,opacity" }
       );
-
       gsap.fromTo(
         ".pd__stat",
-        { opacity: 0, y: 22, scale: 0.97 },
+        { opacity: 0, y: 16 },
         {
           opacity: 1,
           y: 0,
-          scale: 1,
-          duration: 0.5,
-          ease: "back.out(1.2)",
-          stagger: 0.06,
-          delay: 0.1,
-          clearProps: "transform,opacity",
-        }
-      );
-
-      gsap.fromTo(
-        ".pd__tasks, .stack > section",
-        { opacity: 0, y: 24 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.55,
-          ease: "power3.out",
-          stagger: 0.08,
-          delay: 0.25,
-          clearProps: "transform,opacity",
-        }
-      );
-
-      gsap.fromTo(
-        ".bars__bar",
-        { scaleY: 0, transformOrigin: "bottom center" },
-        {
-          scaleY: 1,
-          duration: 0.7,
-          ease: "back.out(1.4)",
-          stagger: 0.035,
-          delay: 0.35,
-          clearProps: "transform",
-        }
-      );
-
-      if (progressCircleRef.current) {
-        gsap.fromTo(
-          progressCircleRef.current,
-          { strokeDashoffset: circumference },
-          {
-            strokeDashoffset: targetStrokeDashoffset,
-            duration: 1.1,
-            ease: "power2.out",
-            delay: 0.2,
-          }
-        );
-      }
-
-      gsap.fromTo(
-        ".pd__task",
-        { opacity: 0, y: 8 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
+          duration: 0.45,
           ease: "power2.out",
-          stagger: 0.02,
-          delay: 0.4,
+          stagger: 0.05,
+          delay: 0.08,
           clearProps: "transform,opacity",
         }
       );
     }, containerRef);
 
     return () => ctx.revert();
-  }, [project.id]);
+  }, [displayId]);
 
   return (
     <div
@@ -190,8 +353,8 @@ export default function MarloProjectDetailScreen({
     >
       {/* Toast Notification */}
       {toastMsg && (
-        <div className="fixed top-6 right-6 z-50 px-4 py-2.5 rounded-2xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold shadow-xl border border-slate-700 dark:border-slate-300 flex items-center gap-2 animate-bounce">
-          <CheckCircle2 size={16} className="text-[#f29b23]" />
+        <div className="fixed top-6 right-6 z-50 px-4 py-2.5 rounded-2xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold shadow-xl border border-slate-700 dark:border-slate-300 flex items-center gap-2">
+          <CheckCircle2 size={16} className="text-[#f29b23] shrink-0" />
           <span>{toastMsg}</span>
         </div>
       )}
@@ -205,36 +368,66 @@ export default function MarloProjectDetailScreen({
           title="Quay lại danh sách đồ án"
         >
           <ChevronLeft size={16} />
-          <span>Danh sách đồ án (The slate)</span>
+          <span>Danh sách đồ án</span>
         </button>
 
         {/* Page Header */}
         <div className="phead flex flex-wrap items-end justify-between gap-4 mb-6">
           <div className="phead__text flex-1 min-w-[280px]">
-            <span className="eyebrow text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold mb-1 block">
-              {project.client} · {project.kind}
-            </span>
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              {project.name}
+            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+              <span className="eyebrow text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
+                {displayCourse} · {displayKind}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono">
+                {displaySprint}
+              </span>
+              {wsProject?.finalScore != null && (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                  <ShieldCheck size={12} />
+                  <span>Điểm Hội đồng DoD: {wsProject.finalScore}/10</span>
+                </span>
+              )}
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              {displayName}
             </h1>
             <p className="text-slate-600 dark:text-slate-400 text-sm mt-1.5 max-w-3xl leading-relaxed">
-              {project.brief}
+              {displayBrief}
             </p>
           </div>
 
-          <div className="phead__actions flex items-center gap-3">
-            <button
-              type="button"
-              className="btn btn--primary flex items-center justify-center font-semibold text-xs px-4"
-              onClick={() => setIsAddTaskModalOpen(true)}
-              title="Thêm công việc kỹ thuật mới"
-            >
-              <span>Thêm việc</span>
-            </button>
+          <div className="phead__actions flex items-center gap-2.5">
+            {onNavigateToKanban && (
+              <button
+                type="button"
+                onClick={() => onNavigateToKanban(displayId)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer shadow-2xs"
+              >
+                Mở Bảng Kanban ({totalTasksCount})
+              </button>
+            )}
+            {role === "student" && (
+              <button
+                type="button"
+                disabled={isSprintLocked}
+                className={`btn btn--primary flex items-center justify-center gap-1.5 font-semibold text-xs px-4 ${
+                  isSprintLocked ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+                onClick={() => setIsAddTaskModalOpen(true)}
+                title={
+                  isSprintLocked
+                    ? "Sprint đang bị khóa bởi Ban Đào Tạo"
+                    : "Thêm công việc kỹ thuật mới đồng bộ sang Bảng Kanban"
+                }
+              >
+                {isSprintLocked ? <Lock size={14} /> : <Plus size={14} />}
+                <span>{isSprintLocked ? "Sprint Đã Khóa" : "Thêm việc"}</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* 3 Stat Cards (Không tính giờ công) */}
+        {/* 3 Academic Stat Cards (100% Unified Story Points & DoD Progress) */}
         <div className="pd__stats grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* Card 1: Progress Donut */}
           <section className="card pd__stat pd__stat--hero flex items-center gap-4">
@@ -267,67 +460,100 @@ export default function MarloProjectDetailScreen({
               </div>
             </div>
             <div className="flex flex-col">
-              <small className="text-xs text-slate-500 font-semibold">Tiến độ Sprint</small>
+              <small className="text-xs text-slate-500 font-semibold">Tiến độ Sprint & DoD</small>
               <b className="text-base font-bold text-slate-800 dark:text-slate-200">
-                {doneTasksCount} / {tasks.length} tasks xong
+                {doneTasksCount} / {totalTasksCount} hạng mục hoàn tất
               </b>
               <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {project.status === "delivered" ? "Đã nghiệm thu xong" : "Hạn nộp: Còn 5 ngày"}
+                {currentStatus === "delivered"
+                  ? "Đã bảo vệ & nghiệm thu"
+                  : `${verifiedTasksCount} thẻ đã được GVHD nghiệm thu · ${displayDueText}`}
               </span>
             </div>
           </section>
 
-          {/* Card 2: Budget Used */}
+          {/* Card 2: Story Points & Academic Effort (Replaced fake VNĐ Grant Disbursed) */}
           <section className="card pd__stat flex flex-col justify-between">
-            <small className="text-xs text-slate-500 font-semibold">Kinh phí nghiên cứu đã giải ngân</small>
-            <b className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 my-1">
-              {formatCurrency(stats.budgetUsed)}
-            </b>
+            <div className="flex items-center justify-between">
+              <small className="text-xs text-slate-500 font-semibold">
+                Quỹ Điểm Kỹ Nghệ (Story Points)
+              </small>
+              <span className="text-[11px] font-mono font-bold text-[#f29b23] flex items-center gap-1">
+                <Sparkles size={12} />
+                <span>Chuẩn Scrum</span>
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 my-1">
+              <b className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 font-mono">
+                {completedStoryPoints.toLocaleString("en-US")} SP
+              </b>
+              <span className="text-xs font-semibold text-slate-400 font-mono">
+                / {totalStoryPoints.toLocaleString("en-US")} SP
+              </span>
+            </div>
             <div>
-              <div className="w-full bg-[#e1e2e5] dark:bg-[#2c2d31] h-2 rounded-full overflow-hidden mb-1">
+              <div className="w-full bg-[#e1e2e5] dark:bg-[#2c2d31] h-2 rounded-full overflow-hidden mb-1.5">
                 <div
                   className="bg-[#f29b23] h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (stats.budgetUsed / project.budget) * 100)}%` }}
+                  style={{ width: `${Math.min(100, progressPercent)}%` }}
                 />
               </div>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                Hạn mức tài trợ: {formatFullCurrency(project.budget)}
-              </span>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span>Tỷ lệ đốt điểm (Burned): {progressPercent}%</span>
+                {wsProject?.finalScore != null ? (
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    Điểm DoD: {wsProject.finalScore}/10
+                  </span>
+                ) : (
+                  <span>Ràng buộc cứng H2</span>
+                )}
+              </div>
             </div>
           </section>
 
           {/* Card 3: Status Dropdown & Lead */}
           <section className="card pd__stat flex flex-col justify-between">
-            <small className="text-xs text-slate-500 font-semibold">Trạng thái đồ án</small>
+            <div className="flex items-center justify-between">
+              <small className="text-xs text-slate-500 font-semibold">Trạng thái đồ án</small>
+              {role === "student" && (
+                <span className="text-[10px] text-slate-400">Đồng bộ Kanban</span>
+              )}
+            </div>
             <div className="my-1">
               <select
                 value={currentStatus}
+                disabled={isSprintLocked && role === "student"}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                className="w-full h-10 px-3 bg-[#ecedef] dark:bg-[#222326] border border-[#14161a26] dark:border-[#ffffff24] rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23] cursor-pointer"
+                className="w-full h-10 px-3 bg-[#ecedef] dark:bg-[#222326] border border-[#14161a26] dark:border-[#ffffff24] rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23] cursor-pointer disabled:opacity-60"
               >
                 {Object.keys(MARLO_PROJECT_STATUS).map((key) => (
-                  <option key={key} value={key}>
+                  <option
+                    key={key}
+                    value={key}
+                    disabled={role === "student" && key === "delivered"}
+                  >
                     {MARLO_PROJECT_STATUS[key]}
+                    {role === "student" && key === "delivered" ? " (Do GVHD chốt)" : ""}
                   </option>
                 ))}
               </select>
             </div>
-            {leadMember && (
+            {leadStudent && (
               <div
-                onClick={() => onNavigateToPerson(leadMember.id)}
+                onClick={() => onNavigateToPerson(leadStudent.id)}
                 className="mt-1 pt-2 border-t border-[#14161a14] dark:border-[#ffffff12] flex items-center justify-between gap-2 cursor-pointer group"
-                title={`Xem hồ sơ Nhóm trưởng: ${leadMember.name}`}
+                title={`Xem hồ sơ Nhóm trưởng: ${leadStudent.name}`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="relative shrink-0">
                     <div
                       className="av av--xs font-bold shadow-2xs text-[10px]"
                       style={{
-                        background: (MARLO_HUES[leadMember.hue] || { bg: "#e6d6c4", text: "#161718" }).bg,
-                        color: (MARLO_HUES[leadMember.hue] || { bg: "#e6d6c4", text: "#161718" }).text,
+                        background: (MARLO_HUES[leadStudent.hue] || { bg: "#e6d6c4", text: "#161718" }).bg,
+                        color: (MARLO_HUES[leadStudent.hue] || { bg: "#e6d6c4", text: "#161718" }).text,
                       }}
                     >
-                      {leadMember.initials}
+                      {leadStudent.initials}
                     </div>
                     <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-[7px] font-black shadow-xs">
                       ★
@@ -341,7 +567,7 @@ export default function MarloProjectDetailScreen({
                       </span>
                     </div>
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-amber-600 transition truncate block">
-                      {leadMember.name}
+                      {leadStudent.name}
                     </span>
                   </div>
                 </div>
@@ -351,76 +577,90 @@ export default function MarloProjectDetailScreen({
           </section>
         </div>
 
-        {/* Main Grid: Left Tasks Columns vs Right Hours & Team Stack */}
-        <div className="pd__grid grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-6 items-start">
+        {/* Main Grid: Left Tasks Columns vs Right Mentor & Student Team Stack */}
+        <div className="pd__grid grid grid-cols-1 xl:grid-cols-[1.65fr_1fr] gap-6 items-start">
           {/* Left: Tasks by where they stand */}
           <section className="card pd__tasks">
             <div className="chead flex items-center justify-between mb-4">
               <div className="chead__text">
-                <h2 className="text-lg font-bold">Danh sách công việc kỹ thuật</h2>
-                <p className="text-xs text-slate-500">Phân loại theo giai đoạn Sprint</p>
+                <h2 className="text-lg font-bold">Danh sách công việc kỹ thuật ({totalTasksCount})</h2>
+                <p className="text-xs text-slate-500">
+                  Đồng bộ trực tiếp với Bảng Kanban 6 cột và CSDL MySQL
+                </p>
               </div>
               {onNavigateToKanban && (
                 <button
                   type="button"
-                  onClick={() => onNavigateToKanban(project.id)}
-                  className="linkbtn flex items-center font-semibold text-sm"
+                  onClick={() => onNavigateToKanban(displayId)}
+                  className="linkbtn flex items-center font-semibold text-sm cursor-pointer"
                   title="Mở bảng Kanban chi tiết"
                 >
-                  <span>Mở bảng Kanban</span>
+                  <span>Mở bảng Kanban →</span>
                 </button>
               )}
             </div>
 
-            {/* 4 Task Columns */}
-            <div className="pd__cols grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              {MARLO_TASK_COLS.map((col) => {
-                const colTasks = tasks.filter((t) => t.status === col.id);
+            {/* 4 Task Columns with full readable headers & cards */}
+            <div className="pd__cols grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {DETAIL_TASK_COLUMNS.map((col) => {
+                const colTasks = normalizedTasks.filter((t) => t.bucket === col.id);
                 return (
                   <div key={col.id} className="pd__col flex flex-col gap-2 min-w-0">
-                    <div className="pd__colhead flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 pb-1.5 border-b border-slate-200 dark:border-slate-800">
-                      <span className="truncate">
-                        {col.label}
-                      </span>
-                      <span className="badge text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <div className="pd__colhead flex items-center justify-between gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 pb-2 border-b border-slate-200 dark:border-slate-800">
+                      <span className="whitespace-nowrap">{col.label}</span>
+                      <span className="badge text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
                         {colTasks.length}
                       </span>
                     </div>
 
-                    <div className="flex flex-col gap-2 mt-1 min-w-0">
+                    <div className="flex flex-col gap-2.5 mt-1 min-w-0">
                       {colTasks.length === 0 ? (
-                        <div className="text-xs text-slate-400 italic py-3 text-center">Trống</div>
+                        <div className="text-xs text-slate-400 italic py-4 text-center rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                          Chưa có thẻ
+                        </div>
                       ) : (
-                        colTasks.map((task) => {
-                          const whoMember = getMarloMember(task.who);
-                          return (
-                            <div
-                              key={task.id}
-                              className="p-2.5 rounded-xl bg-[#ecedef] hover:bg-[#e1e2e5] dark:bg-[#222326] dark:hover:bg-[#2c2d31] transition-all flex flex-col gap-1.5 cursor-pointer border border-transparent hover:border-slate-300 dark:hover:border-slate-700 min-w-0"
-                              onClick={() => {
-                                if (whoMember) onNavigateToPerson(whoMember.id);
-                              }}
-                              title={`${task.title} - Phụ trách: ${whoMember?.name || "Chưa giao"}`}
-                            >
-                              <div className="flex items-baseline gap-1.5 min-w-0">
-                                {task.code && (
-                                  <span className="text-[11px] font-bold font-mono text-[#f29b23] shrink-0">
-                                    {task.code}:
-                                  </span>
-                                )}
-                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate flex-1">
-                                  {task.title}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-1 border-t border-black/5 dark:border-white/5">
-                                <span className="truncate max-w-[120px]">{whoMember ? whoMember.name : "Chưa phân công"}</span>
-                                <span className={task.priority === "high" ? "text-rose-600 dark:text-rose-400 font-bold" : ""}>
-                                  {task.priority === "high" ? "Ưu tiên cao" : "Bình thường"}
-                                </span>
-                              </div>
+                        colTasks.map((task) => (
+                          <div
+                            key={task.id}
+                            className="p-3 rounded-xl bg-[#ecedef] hover:bg-[#e1e2e5] dark:bg-[#222326] dark:hover:bg-[#2c2d31] transition-all flex flex-col gap-2 cursor-pointer border border-transparent hover:border-slate-300 dark:hover:border-slate-700 min-w-0"
+                            onClick={() => {
+                              if (onNavigateToKanban) {
+                                onNavigateToKanban(displayId);
+                              } else {
+                                onNavigateToPerson(task.personId);
+                              }
+                            }}
+                            title={`${task.code}: ${task.title} — Phụ trách: ${task.assigneeName}`}
+                          >
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-[10.5px] font-bold font-mono text-[#f29b23] bg-[#f29b23]/10 px-1.5 py-0.5 rounded">
+                                {task.code}
+                              </span>
+                              <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                {task.points} SP
+                              </span>
                             </div>
-                          );
-                        })
+
+                            <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 break-words">
+                              {task.title}
+                            </p>
+
+                            <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-1.5 border-t border-black/5 dark:border-white/5">
+                              <span className="truncate font-semibold text-slate-700 dark:text-slate-300">
+                                {task.assigneeName}
+                              </span>
+                              <span
+                                className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                  task.priority === "high"
+                                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                                    : "bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                }`}
+                              >
+                                {task.priority === "high" ? "Cao" : task.priority === "low" ? "Thấp" : "Vừa"}
+                              </span>
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -429,94 +669,111 @@ export default function MarloProjectDetailScreen({
             </div>
           </section>
 
-          {/* Right Stack: Team List (Đã loại bỏ hoàn toàn biểu đồ giờ cống hiến) */}
-          <div className="stack flex flex-col gap-6">
-            {/* Team List */}
+          {/* Right Stack: Official Advisor & Student Team List */}
+          <div className="stack flex flex-col gap-5">
+            {/* Faculty Advisor Card */}
+            <section className="card">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-[#f29b23] shrink-0">
+                  <GraduationCap size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 font-mono block">
+                    Giảng viên Hướng dẫn & Thẩm định DoD
+                  </span>
+                  <b className="text-sm font-bold text-slate-900 dark:text-white truncate block mt-0.5">
+                    {displayMentor}
+                  </b>
+                </div>
+              </div>
+            </section>
+
+            {/* Student Team List (Single Clean Badge per Row) */}
             <section className="card">
               <div className="chead mb-3">
                 <div className="chead__text">
-                  <h2 className="text-lg font-bold">Thành viên thực hiện</h2>
+                  <h2 className="text-lg font-bold">Thành viên nhóm sinh viên</h2>
                   <p className="text-xs text-slate-500">
-                    {project.team.length} nhân sự tham gia đồ án này
+                    {projectStudents.length} sinh viên trực tiếp thực hiện đồ án
                   </p>
                 </div>
               </div>
 
               <div className="pd__team flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
-                {[...project.team]
-                  .sort((a, b) => (a === project.lead ? -1 : b === project.lead ? 1 : 0))
-                  .map((memId) => {
-                    const m = getMarloMember(memId);
-                    if (!m) return null;
-                    const hue = MARLO_HUES[m.hue] || { bg: "#e6d6c4", text: "#161718" };
-                    const isLead = project.lead === m.id;
+                {projectStudents.map((m) => {
+                  const hue = MARLO_HUES[m.hue] || { bg: "#e6d6c4", text: "#161718" };
+                  const isLead = m.isLead;
 
-                    return (
-                      <div
-                        key={m.id}
-                        onClick={() => onNavigateToPerson(m.id)}
-                        className={`pd__person py-2.5 px-2 flex items-center justify-between gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/60 rounded-xl transition cursor-pointer ${
-                          isLead ? "bg-amber-50/60 dark:bg-amber-950/20" : ""
-                        }`}
-                        title={`Xem chi tiết hồ sơ thành viên ${m.name}`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="relative shrink-0">
-                            <div
-                              className="av av--sm font-bold shadow-2xs"
-                              style={{ background: hue.bg, color: hue.text }}
+                  return (
+                    <div
+                      key={m.rawId}
+                      onClick={() => onNavigateToPerson(m.id)}
+                      className={`pd__person py-3 px-2.5 flex items-center justify-between gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/60 rounded-xl transition cursor-pointer ${
+                        isLead ? "bg-amber-50/50 dark:bg-amber-950/20" : ""
+                      }`}
+                      title={`Xem chi tiết hồ sơ thành viên ${m.name}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="relative shrink-0">
+                          <div
+                            className="av av--sm font-bold shadow-2xs"
+                            style={{ background: hue.bg, color: hue.text }}
+                          >
+                            {m.initials}
+                          </div>
+                          {isLead && (
+                            <span
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-xs"
+                              title="Nhóm trưởng đồ án (Team Lead)"
                             >
-                              {m.initials}
-                            </div>
-                            {isLead && (
-                              <span
-                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-xs"
-                                title="Nhóm trưởng đồ án (Team Lead)"
-                              >
-                                <Crown size={9} className="fill-slate-950 text-slate-950" />
-                              </span>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <b className="text-sm font-semibold text-slate-900 dark:text-slate-100 block truncate">
-                                {m.name}
-                              </b>
-                              {isLead && (
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono flex items-center gap-1">
-                                  <Crown size={9} className="fill-amber-500 text-amber-500" />
-                                  <span>Nhóm trưởng (Lead)</span>
-                                </span>
-                              )}
-                            </div>
-                            <small className="text-xs text-slate-500 dark:text-slate-400 block truncate">
-                              {m.role}
-                            </small>
-                          </div>
+                              <Crown size={9} className="fill-slate-950 text-slate-950" />
+                            </span>
+                          )}
                         </div>
-
-                        <div className="text-right flex-none">
-                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-200/70 dark:bg-slate-800 px-2.5 py-1 rounded-full">
-                            {isLead ? "Nhóm trưởng" : "Thành viên"}
-                          </span>
+                        <div className="min-w-0 flex-1">
+                          <b className="text-sm font-bold text-slate-900 dark:text-slate-100 block truncate">
+                            {m.name}
+                          </b>
+                          <small className="text-xs text-slate-500 dark:text-slate-400 block truncate">
+                            {m.role}
+                          </small>
                         </div>
                       </div>
-                    );
-                  })}
+
+                      <div className="text-right shrink-0">
+                        {isLead ? (
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono inline-flex items-center gap-1">
+                            <Crown size={10} className="fill-amber-500 text-amber-500" />
+                            <span>Nhóm trưởng</span>
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-200/70 dark:bg-slate-800 px-2.5 py-1 rounded-full">
+                            Thành viên
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           </div>
         </div>
       </div>
 
-      {/* ─── REAL MODAL: ADD TASK ─── */}
+      {/* ─── REAL MODAL: ADD TASK (SYNCED TO MYSQL & KANBAN) ─── */}
       {isAddTaskModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="w-full max-w-md bg-white dark:bg-[#1b1c1e] rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Thêm Công Việc Mới Vào Đồ Án
-              </h3>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Thêm Công Việc Mới Vào Đồ Án
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Đồng bộ trực tiếp sang cột Cần làm trên Bảng Kanban
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsAddTaskModalOpen(false)}
@@ -534,24 +791,24 @@ export default function MarloProjectDetailScreen({
                 <input
                   type="text"
                   required
-                  placeholder="VD: Cài đặt module phân tán Redis Lock..."
+                  placeholder="VD: Thiết kế schema CSDL & cài đặt Redis Lock..."
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-[#f29b23]/30"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-[#f29b23]/30"
                 />
               </div>
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Người chịu trách nhiệm
+                  Sinh viên phụ trách (Thành viên nhóm)
                 </label>
                 <select
-                  value={newTaskWho}
-                  onChange={(e) => setNewTaskWho(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
+                  value={newTaskAssigneeName}
+                  onChange={(e) => setNewTaskAssigneeName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none"
                 >
-                  {allMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
+                  {projectStudents.map((m) => (
+                    <option key={m.rawId} value={m.name}>
                       {m.name} ({m.role})
                     </option>
                   ))}
@@ -567,9 +824,9 @@ export default function MarloProjectDetailScreen({
                     type="number"
                     min={1}
                     max={21}
-                    value={newTaskEst}
-                    onChange={(e) => setNewTaskEst(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
+                    value={newTaskPoints}
+                    onChange={(e) => setNewTaskPoints(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none"
                   />
                 </div>
                 <div>
@@ -579,11 +836,11 @@ export default function MarloProjectDetailScreen({
                   <select
                     value={newTaskPriority}
                     onChange={(e) => setNewTaskPriority(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none"
                   >
-                    <option value="high">Ưu tiên cao</option>
-                    <option value="med">Bình thường</option>
-                    <option value="low">Thấp</option>
+                    <option value="high">Ưu tiên cao (P0)</option>
+                    <option value="medium">Bình thường (P1)</option>
+                    <option value="low">Thấp (P2)</option>
                   </select>
                 </div>
               </div>
@@ -592,13 +849,13 @@ export default function MarloProjectDetailScreen({
                 <button
                   type="button"
                   onClick={() => setIsAddTaskModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-[#f29b23] hover:bg-[#d48419] text-white rounded-xl shadow-xs transition"
+                  className="px-5 py-2 text-xs font-bold bg-[#f29b23] hover:bg-[#d48419] text-white rounded-xl shadow-xs transition cursor-pointer"
                 >
                   Xác Nhận Tạo Task
                 </button>

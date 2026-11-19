@@ -25,14 +25,8 @@ interface SlateModalProps {
   onSelectProject: (projectId: string) => void;
   onOpenNewProjectModal: () => void;
   onTogglePinProject: (projectId: string) => void;
+  canCreateProject?: boolean;
 }
-
-const statusLabels: Record<string, { label: string; badge: string }> = {
-  "in-progress": { label: "Đang thực hiện", badge: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800" },
-  planning: { label: "Chuẩn bị", badge: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800" },
-  review: { label: "Chờ nghiệm thu", badge: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800" },
-  delivered: { label: "Đã hoàn thành", badge: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800" },
-};
 
 export function MarloProjectSlateModal({
   isOpen,
@@ -42,6 +36,7 @@ export function MarloProjectSlateModal({
   onSelectProject,
   onOpenNewProjectModal,
   onTogglePinProject,
+  canCreateProject = true,
 }: SlateModalProps) {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -97,16 +92,18 @@ export function MarloProjectSlateModal({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                onClose();
-                onOpenNewProjectModal();
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-97"
-            >
-              <Plus size={14} />
-              <span>Tạo dự án mới</span>
-            </button>
+            {canCreateProject && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenNewProjectModal();
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-97"
+              >
+                <Plus size={14} />
+                <span>Đăng ký đồ án mới</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
@@ -280,29 +277,29 @@ export function MarloProjectSlateModal({
                         : "bg-[#8f5404] dark:bg-[#f6b95e]"
                     }`} />
                     {isDone
-                      ? "Delivered"
+                      ? "Đã hoàn thành"
                       : proj.status === "review"
-                      ? "Client review"
+                      ? "Chờ nghiệm thu"
                       : proj.status === "planning"
-                      ? "Planning"
-                      : "In post"}
+                      ? "Lên kế hoạch"
+                      : "Đang phát triển"}
                   </span>
 
                   <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#62656b] dark:text-[#a0a3a9]">
                     <Check size={12} strokeWidth={2.5} className="text-[#62656b]" />
-                    <span>{doneTasks}/{totalTasks}</span>
+                    <span>{doneTasks}/{totalTasks} task</span>
                   </span>
 
                   <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#62656b] dark:text-[#a0a3a9]">
                     <Clock size={12} className="text-[#62656b]" />
-                    <span>{isDone ? "Delivered" : proj.dueDate}</span>
+                    <span>{isDone ? "Đã bảo vệ" : proj.dueDate}</span>
                   </span>
                 </div>
 
-                {/* Budget used bar (Authentic Marlo 1:1 replica) */}
+                {/* Tiến độ Story Points bar */}
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
-                    <span className="text-[#62656b] dark:text-[#a0a3a9]">Budget used</span>
+                    <span className="text-[#62656b] dark:text-[#a0a3a9]">Tiến độ Story Points</span>
                     <span className="font-bold text-[#161718] dark:text-white font-mono">{progress}%</span>
                   </div>
                   <div className="h-1.5 w-full bg-[#e1e2e5] dark:bg-[#2c2d31] rounded-full overflow-hidden">
@@ -317,7 +314,7 @@ export function MarloProjectSlateModal({
                   </div>
                 </div>
 
-                {/* Footer: Avatar stack + Story points / budget value */}
+                {/* Footer: Avatar stack + Story points value */}
                 <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800/80">
                   <div className="flex -space-x-1.5 overflow-hidden">
                     {proj.team.slice(0, 4).map((m, idx) => {
@@ -326,8 +323,8 @@ export function MarloProjectSlateModal({
                       return (
                         <div
                           key={idx}
-                          style={{ backgroundColor: pastelBg, color: pastelText }}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[10.5px] font-bold ring-2 ring-white dark:ring-slate-900"
+                          style={{ backgroundColor: pastelBg, color: pastelText, zIndex: 10 - idx }}
+                          className="relative inline-flex h-7 w-7 items-center justify-center rounded-full text-[10.5px] font-bold ring-2 ring-white dark:ring-slate-900"
                           title={`${m.name} (${m.role})`}
                         >
                           {m.avatar}
@@ -342,7 +339,7 @@ export function MarloProjectSlateModal({
                   </div>
 
                   <span className="text-sm font-bold text-[#161718] dark:text-white font-mono">
-                    {proj.id === "prj-compiler" ? "£96,400" : (totalTasks > 0 ? `${totalTasks * 12} SP` : "£96,400")}
+                    {(proj as any).storyPoints ? `${(proj as any).storyPoints} SP` : `${Math.max(150, totalTasks * 60)} SP`}
                   </span>
                 </div>
               </div>
@@ -354,27 +351,26 @@ export function MarloProjectSlateModal({
   );
 }
 
-// ── CREATE NEW PROJECT MODAL (EXACT 1:1 REPLICA OF MARLO DESIGN) ──
+// ── CREATE NEW PROJECT MODAL (LOCALIZED ACADEMIC SOFTWARE ENGINEERING CAPSTONE) ──
 const DEFAULT_TEAM_MEMBERS = [
-  "Dara",
-  "Inès",
-  "Kwame",
-  "Yuki",
-  "Ravi",
-  "Aoife",
-  "Tomás",
-  "Leila",
+  "Nguyễn Bá Hòa",
+  "Võ Nhật Huy",
+  "Phan Đình Nghị",
+  "Lê Thị Hà",
+  "Hoàng Trọng Nam",
+  "Đỗ Mỹ Linh",
+  "Trần Minh Tuấn",
+  "Lê Quốc Bảo",
 ];
 
 const KIND_OPTIONS = [
-  "Commercial",
-  "Brand Film",
-  "Trailer",
-  "Docuseries",
-  "Fullstack Web",
-  "AI Engine",
-  "Mobile App",
-  "Cloud Platform",
+  "AI / Agent System",
+  "Fullstack Web & Cloud",
+  "Microservices & Distributed",
+  "Compiler & Systems",
+  "Edge AI & IoT",
+  "Cybersecurity & DevSecOps",
+  "Mobile & Cross-platform",
 ];
 
 interface NewProjectModalProps {
@@ -386,10 +382,10 @@ interface NewProjectModalProps {
 export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewProjectModalProps) {
   const [name, setName] = useState("");
   const [client, setClient] = useState("");
-  const [kind, setKind] = useState("Commercial");
-  const [budget, setBudget] = useState("18000");
+  const [kind, setKind] = useState("AI / Agent System");
+  const [budget, setBudget] = useState("600");
   const [deliveryDate, setDeliveryDate] = useState("15/12/2026");
-  const [selectedTeam, setSelectedTeam] = useState<string[]>(["Dara"]);
+  const [selectedTeam, setSelectedTeam] = useState<string[]>(["Nguyễn Bá Hòa", "Võ Nhật Huy"]);
   const [isClosing, setIsClosing] = useState(false);
 
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -454,9 +450,10 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = name.trim() || "Aria Launch Spot";
-    const finalClient = client.trim() || "Ferro Cycles";
-    const budgetNum = Number(budget.replace(/[^0-9]/g, "")) || 18000;
+    const finalName = name.trim() || "Hệ thống Kiểm thử Tự động AI Sandbox";
+    const finalClient = client.trim() || "CS499 · Đồ án Tốt nghiệp Kỹ sư CNTT";
+    const spNum = Math.max(100, Number(budget.replace(/[^0-9]/g, "")) || 600);
+    const finalTeam = selectedTeam.length > 0 ? selectedTeam : ["Nguyễn Bá Hòa"];
 
     onCreateProject({
       id: `prj-${Date.now()}`,
@@ -464,16 +461,18 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
       name: finalName,
       client: finalClient,
       course: finalClient,
-      sprint: "Sprint 1",
+      sprint: "Sprint 1 (Tuần 1 - 4)",
       kind,
       status: "planning",
       fav: true,
       dueDate: deliveryDate || "15/12/2026",
-      budget: budgetNum,
-      budgetStr: `£${budgetNum.toLocaleString()}`,
-      storyPoints: Math.round(budgetNum / 100),
-      teamMembers: selectedTeam,
+      budget: spNum,
+      budgetStr: `${spNum.toLocaleString()} SP`,
+      storyPoints: spNum,
+      teamMembers: finalTeam,
     });
+    setName("");
+    setClient("");
     handleAnimatedClose();
   };
 
@@ -485,17 +484,19 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
     >
       <div
         ref={cardRef}
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[500px] rounded-[30px] border border-slate-200/90 dark:border-slate-800 bg-[#fcfbfa] dark:bg-[#1a1b1e] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] p-6 sm:p-7 select-none relative"
+        className="w-full max-w-[520px] rounded-[30px] border border-slate-200/90 dark:border-slate-800 bg-[#fcfbfa] dark:bg-[#1a1b1e] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] p-6 sm:p-7 select-none relative"
       >
         {/* Header: Title + Subtitle + Close 'X' button */}
         <div className="flex items-start justify-between mb-5">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#16171a] dark:text-white font-sans">
-              New project
+              Đăng ký Đồ án Kỹ nghệ Mới
             </h2>
             <p className="text-xs sm:text-sm text-[#62656b] dark:text-[#a0a3a9] mt-0.5 font-normal">
-              Put a job on the slate.
+              Khởi tạo không gian đồ án nhóm, học phần, quỹ Story Points và thành viên.
             </p>
           </div>
           <button
@@ -509,41 +510,42 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Row 1: Project name (focused by default with amber ring) + Client */}
+          {/* Row 1: Project name + Course */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Project name
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Tên đề tài đồ án *
               </label>
               <input
                 type="text"
+                required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Aria Launch Spot"
+                placeholder="VD: AI Sandbox Code Grader"
                 autoFocus
                 className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-sm font-normal text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Client
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Học phần / Mã lớp
               </label>
               <input
                 type="text"
                 value={client}
                 onChange={(e) => setClient(e.target.value)}
-                placeholder="e.g. Ferro Cycles"
+                placeholder="VD: CS499 · Đồ án Tốt nghiệp"
                 className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-sm font-normal text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs"
               />
             </div>
           </div>
 
-          {/* Row 2: Kind + Budget (£) */}
+          {/* Row 2: Kind + Story Points */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Kind
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Phân loại kỹ thuật
               </label>
               <div className="relative">
                 <select
@@ -565,14 +567,17 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Budget (£)
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Quỹ điểm (Story Points)
               </label>
               <input
-                type="text"
+                type="number"
+                min={100}
+                max={5000}
+                step={50}
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
-                placeholder="18000"
+                placeholder="600"
                 className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-sm font-normal text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs"
               />
             </div>
@@ -580,8 +585,8 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
 
           {/* Row 3: Delivery date */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              Delivery date
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Hạn nộp & Bảo vệ dự kiến (DD/MM/YYYY)
             </label>
             <div className="relative">
               <input
@@ -600,24 +605,30 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
 
           {/* Row 4: Team member selector pills */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              Team
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Thành viên nhóm sinh viên ({selectedTeam.length} người)
+              </label>
+              <span className="text-[10.5px] text-slate-400">
+                Người đầu tiên là Nhóm trưởng
+              </span>
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               {DEFAULT_TEAM_MEMBERS.map((member) => {
                 const isSelected = selectedTeam.includes(member);
+                const isFirst = selectedTeam[0] === member;
                 return (
                   <button
                     key={member}
                     type="button"
                     onClick={() => toggleTeamMember(member)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs transition-all duration-150 cursor-pointer active:scale-95 select-none ${
+                    className={`px-3 py-1.5 rounded-xl text-xs transition-all duration-150 cursor-pointer active:scale-95 select-none ${
                       isSelected
-                        ? "bg-[#14161a] text-white dark:bg-white dark:text-slate-950 font-semibold shadow-2xs"
+                        ? "bg-[#14161a] text-white dark:bg-amber-500 dark:text-slate-950 font-semibold shadow-2xs"
                         : "bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                     }`}
                   >
-                    {member}
+                    {isFirst ? `★ ${member}` : member}
                   </button>
                 );
               })}
@@ -631,13 +642,13 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
               onClick={handleAnimatedClose}
               className="px-4.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-750 transition cursor-pointer active:scale-95 shadow-2xs"
             >
-              Cancel
+              Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white dark:text-slate-950 bg-[#EE8420] hover:bg-[#d97316] rounded-2xl shadow-xs transition cursor-pointer active:scale-95"
+              className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-[#EE8420] hover:bg-[#d97316] rounded-2xl shadow-xs transition cursor-pointer active:scale-95"
             >
-              Create project
+              Khởi tạo Đồ án
             </button>
           </div>
         </form>

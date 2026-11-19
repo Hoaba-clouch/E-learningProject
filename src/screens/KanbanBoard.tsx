@@ -308,6 +308,8 @@ export interface KanbanTask {
 
   isBonus?: boolean;
 
+  reviewFeedback?: string;
+
   auditLogs?: TaskAuditLog[];
 
 }
@@ -1778,6 +1780,8 @@ export interface KanbanBoardProps {
 
   role?: Role;
 
+  onSelectProject?: (projectId: string) => void;
+
 }
 
 
@@ -1787,6 +1791,8 @@ export default function KanbanBoard({
   initialProjectId,
 
   role = "student",
+
+  onSelectProject,
 
 }: KanbanBoardProps = {}) {
 
@@ -1800,7 +1806,29 @@ export default function KanbanBoard({
 
     if (!res.error && res.task) {
 
-      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, column: res.task.column_id } : t)));
+      const nextCol = (res.task.column || res.task.column_id) as ColumnId;
+
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                column: nextCol,
+                reviewFeedback: feedback || t.reviewFeedback,
+              }
+            : t
+        )
+      );
+
+      setSelectedTask((prev) =>
+        prev && prev.id === taskId
+          ? {
+              ...prev,
+              column: nextCol,
+              reviewFeedback: feedback || prev.reviewFeedback,
+            }
+          : prev
+      );
 
       void reloadWorkspace();
 
@@ -1846,7 +1874,10 @@ export default function KanbanBoard({
 
   const [currentProjectId, setCurrentProjectId] = useState<string>(() => initialProjectId || "prj-codemind");
 
-
+  const selectProject = (nextProjId: string) => {
+    setCurrentProjectId(nextProjId);
+    onSelectProject?.(nextProjId);
+  };
 
   const normalizeWorkspaceProject = (p: any): Project => ({
 
@@ -1867,6 +1898,16 @@ export default function KanbanBoard({
     fav: p.fav,
 
     dueDate: p.dueDate,
+
+    lead: p.lead || p.team?.[0]?.name || "Nguyễn Bá Hòa",
+
+    instructor: p.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)",
+
+    finalScore: p.finalScore ?? null,
+
+    evaluationStatus: p.evaluationStatus ?? null,
+
+    evaluationFeedback: p.evaluationFeedback ?? null,
 
     tasks: Array.isArray(p.tasks) ? p.tasks : [],
 
@@ -2112,7 +2153,7 @@ export default function KanbanBoard({
 
     setProjects((prev) => [newProj, ...prev]);
 
-    setCurrentProjectId(newProj.id);
+    selectProject(newProj.id);
 
   };
 
@@ -2175,19 +2216,38 @@ export default function KanbanBoard({
     }
   }, [role, activeTab]);
 
-  const [isSprintLocked, setIsSprintLocked] = useState<boolean>(() => {
+  const readSprintLockedForProject = (projId: string): boolean => {
     try {
+      if (localStorage.getItem("codemind_projects_submission_locked") === "true") {
+        return true;
+      }
+      const scoped = localStorage.getItem(`codemind_kanban_sprint_locked_${projId}`);
+      if (scoped !== null) {
+        return scoped === "true";
+      }
       return localStorage.getItem("codemind_kanban_sprint_locked") === "true";
     } catch {
       return false;
     }
-  });
+  };
+
+  const [isSprintLocked, setIsSprintLocked] = useState<boolean>(() =>
+    readSprintLockedForProject(initialProjectId || "prj-codemind")
+  );
+
+  useEffect(() => {
+    setIsSprintLocked(readSprintLockedForProject(currentProjectId));
+  }, [currentProjectId]);
 
   const toggleSprintLock = () => {
     const next = !isSprintLocked;
     setIsSprintLocked(next);
     try {
+      localStorage.setItem(`codemind_kanban_sprint_locked_${currentProjectId}`, String(next));
       localStorage.setItem("codemind_kanban_sprint_locked", String(next));
+      if (!next) {
+        localStorage.setItem("codemind_projects_submission_locked", "false");
+      }
     } catch (e) {
       console.error("Failed to persist sprint locked state", e);
     }
@@ -2195,9 +2255,9 @@ export default function KanbanBoard({
     setUndoToast({
       taskId: "sprint-lock",
       taskCode: "SPRINT",
-      taskTitle: next ? "Đã khóa Sprint 1" : "Đã mở lại Sprint 1",
+      taskTitle: next ? "Đã khóa Sprint" : "Đã mở lại Sprint",
       customMessage: next
-        ? "🔒 Đã khóa Sprint. Sinh viên không thể di chuyển hoặc tạo task mới."
+        ? "🔒 Đã khóa Sprint dự án này. Sinh viên không thể di chuyển, xóa hoặc tạo task mới."
         : "🔓 Đã mở lại Sprint. Sinh viên có thể tiếp tục cập nhật task.",
       undone: false,
     });
@@ -2267,6 +2327,9 @@ export default function KanbanBoard({
 
 
   const handleDeleteTask = (taskToDelete: KanbanTask) => {
+    if (role !== "student" || isSprintLocked || taskToDelete.column === "verified") {
+      return;
+    }
 
     const taskIndex = tasks.findIndex((t) => t.id === taskToDelete.id);
 
@@ -3334,13 +3397,13 @@ export default function KanbanBoard({
 
 
 
-  const handleImportCsvTasks = (newTasks: KanbanTask[]) => {
+  const handleImportCsvTasks = (newTasks: KanbanTask[], replace = false) => {
 
-    setTasks((prev) => [...prev, ...newTasks]);
+    setTasks((prev) => (replace ? [...newTasks] : [...prev, ...newTasks]));
 
     handleTabChange("board");
 
-    void batchCreateWorkspaceTasksApi(currentProjectId, newTasks);
+    void batchCreateWorkspaceTasksApi(currentProjectId, newTasks, replace);
 
   };
 
@@ -3697,7 +3760,7 @@ export default function KanbanBoard({
 
         memberStats[name].totalPts += t.points;
 
-        if (t.column === "done") {
+        if (t.column === "done" || t.column === "verified") {
 
           memberStats[name].donePts += t.points;
 
@@ -3761,11 +3824,11 @@ export default function KanbanBoard({
 
     // Hard Constraint H2 Check
 
-    if (targetCol === "done" && task.dependsOn) {
+    if ((targetCol === "done" || targetCol === "verified") && task.dependsOn) {
 
       const parent = getTaskById(task.dependsOn);
 
-      if (parent && parent.column !== "done") {
+      if (parent && parent.column !== "done" && parent.column !== "verified") {
 
         setH2Violation({ task, blockingTask: parent });
 
@@ -4767,7 +4830,7 @@ export default function KanbanBoard({
 
 
 
-            <div ref={projectDropdownRef} className="relative z-30">
+            <div ref={projectDropdownRef} className="relative z-50">
 
               <div className="flex items-center gap-2.5 flex-wrap">
 
@@ -4829,6 +4892,12 @@ export default function KanbanBoard({
 
                 </span>
 
+                {currentProject.finalScore != null && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 dark:bg-emerald-950/50 dark:border-emerald-800/60 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 font-mono">
+                    <ShieldCheck size={12} className="text-emerald-500" /> Điểm DoD: {currentProject.finalScore}/10
+                  </span>
+                )}
+
               </div>
 
 
@@ -4845,6 +4914,13 @@ export default function KanbanBoard({
 
                 </span>
 
+                {currentProject.instructor && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[10.5px]">
+                    <GraduationCap size={11} className="text-slate-500" />
+                    <span>GVHD: {currentProject.instructor}</span>
+                  </span>
+                )}
+
                 <span>• Ràng buộc cứng H2 & Anti-Freerider</span>
 
               </p>
@@ -4855,7 +4931,7 @@ export default function KanbanBoard({
 
               {isProjectDropdownOpen && (
 
-                <div className="absolute left-0 top-full mt-2 w-80 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#12141a] shadow-xl p-2 z-50 animate-fade-in select-none">
+                <div className="absolute left-0 top-full mt-2 w-80 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl p-2 z-[999] animate-fade-in select-none">
 
                   <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 mb-1">
 
@@ -4901,7 +4977,7 @@ export default function KanbanBoard({
 
                           onClick={() => {
 
-                            setCurrentProjectId(proj.id);
+                            selectProject(proj.id);
 
                             setIsProjectDropdownOpen(false);
 
@@ -4955,27 +5031,29 @@ export default function KanbanBoard({
 
                   <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
 
-                    <button
+                    {role === "student" && !isSprintLocked && (
+                      <button
 
-                      type="button"
+                        type="button"
 
-                      onClick={() => {
+                        onClick={() => {
 
-                        setIsProjectDropdownOpen(false);
+                          setIsProjectDropdownOpen(false);
 
-                        setIsNewProjectModalOpen(true);
+                          setIsNewProjectModalOpen(true);
 
-                      }}
+                        }}
 
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 transition shadow-2xs cursor-pointer active:scale-97"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 transition shadow-2xs cursor-pointer active:scale-97"
 
-                    >
+                      >
 
-                      <Plus size={13} />
+                        <Plus size={13} />
 
-                      <span>Tạo dự án mới</span>
+                        <span>Tạo dự án mới</span>
 
-                    </button>
+                      </button>
+                    )}
 
                     <button
 
@@ -4989,11 +5067,11 @@ export default function KanbanBoard({
 
                       }}
 
-                      className="px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                      className={`${role === "student" && !isSprintLocked ? "px-2.5" : "w-full"} py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer`}
 
                     >
 
-                      Lưới dự án
+                      Xem lưới tất cả dự án
 
                     </button>
 
@@ -5068,9 +5146,12 @@ export default function KanbanBoard({
 
                 {/* Teacher CSV Format Button */}
                 <button
-                  onClick={() => setCsvModalOpen(true)}
-                  className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
-                  title="Nhập / Xuất task chuẩn định dạng 8 cột của Hội đồng Phản biện"
+                  disabled={isSprintLocked}
+                  onClick={() => !isSprintLocked && setCsvModalOpen(true)}
+                  className={`btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5 ${
+                    isSprintLocked ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  title={isSprintLocked ? "Sprint đang bị khóa" : "Nhập / Xuất task chuẩn định dạng 8 cột của Hội đồng Phản biện"}
                 >
                   <FileSpreadsheet size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
                   <span>CSV Mẫu Task</span>
@@ -5078,12 +5159,16 @@ export default function KanbanBoard({
 
                 {/* AI WBS Generator - Authentic Marlo Golden Primary Pill */}
                 <button
+                  disabled={isSprintLocked}
                   onClick={() => {
+                    if (isSprintLocked) return;
                     setAiModalOpen(true);
                     setAiStage("input");
                   }}
-                  className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
-                  title="Khởi tạo cây phân rã công việc tự động bằng AI Socratic"
+                  className={`btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5 ${
+                    isSprintLocked ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  title={isSprintLocked ? "Sprint đang bị khóa" : "Khởi tạo cây phân rã công việc tự động bằng AI Socratic"}
                 >
                   <Sparkles size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
                   <span>AI Phân rã WBS</span>
@@ -5093,7 +5178,7 @@ export default function KanbanBoard({
 
 
 
-            {/* ── Marlo Action Pill Group: [ ↓ Export ] & [ + New task ] (100% Authentic Marlo) ── */}
+            {/* ── Marlo Action Pill Group: [ ↓ Xuất CSV ] & [ + Thêm việc mới ] ── */}
 
             <div className="flex items-center gap-2 pl-1 border-l border-slate-200 dark:border-slate-800">
 
@@ -5106,13 +5191,13 @@ export default function KanbanBoard({
                   title="Xuất danh sách công việc sang file CSV"
                 >
                   <Download size={14} className="stroke-[2.5]" />
-                  <span>Export</span>
+                  <span>Xuất CSV</span>
                 </button>
               )}
 
 
 
-              {/* + New task Button (Student only: Disabled when sprint is locked by Admin) */}
+              {/* + Thêm việc mới Button (Student only: Disabled when sprint is locked by Admin) */}
 
               {role === "student" && (
 
@@ -5134,13 +5219,13 @@ export default function KanbanBoard({
 
                   }`}
 
-                  title={isSprintLocked ? "Sprint đang bị khóa bởi Ban Đào Tạo" : "Tạo công việc mới (Marlo Task) có checklist"}
+                  title={isSprintLocked ? "Sprint đang bị khóa bởi Ban Đào Tạo" : "Tạo công việc mới có checklist"}
 
                 >
 
                   <Plus size={15} className="stroke-[2.5]" />
 
-                  <span>{isSprintLocked ? "Sprint Khóa" : "New task"}</span>
+                  <span>{isSprintLocked ? "Sprint Đã Khóa" : "Thêm việc mới"}</span>
 
                 </button>
 
@@ -5263,6 +5348,7 @@ export default function KanbanBoard({
                     },
 
                     { id: "dependencies", label: "Cây Phụ Thuộc (WBS)", icon: <Link2 size={14} /> },
+                    { id: "analytics", label: "Biểu đồ & Burndown", icon: <BarChart3 size={14} /> },
 
                   ]
 
@@ -5305,6 +5391,7 @@ export default function KanbanBoard({
                     },
 
                     { id: "dependencies", label: "Cây Phụ thuộc (H2)", icon: <Link2 size={14} /> },
+                    { id: "analytics", label: "Biểu đồ & Burndown", icon: <BarChart3 size={14} /> },
 
                   ]
 
@@ -5316,7 +5403,7 @@ export default function KanbanBoard({
 
                       id: "my-tasks",
 
-                      label: "Của mình",
+                      label: "Việc của tôi",
 
                       icon: <UserCheck size={14} />,
 
@@ -5345,6 +5432,7 @@ export default function KanbanBoard({
                     },
 
                     { id: "dependencies", label: "Cây Phụ thuộc (H2)", icon: <Link2 size={14} /> },
+                    { id: "analytics", label: "Biểu đồ & Burndown", icon: <BarChart3 size={14} /> },
 
                   ]
 
@@ -5502,13 +5590,15 @@ export default function KanbanBoard({
 
           items={[
 
-            { id: "done", label: "Đã nghiệm thu", count: tasks.filter(t => t.column === "done" || t.column === "verified").reduce((s, t) => s + t.points, 0), color: "#14161a" },
+            { id: "verified", label: "Đã nghiệm thu", count: tasks.filter(t => t.column === "verified").reduce((s, t) => s + t.points, 0), color: "#10b981" },
+
+            { id: "done", label: "Hoàn thành (Chờ duyệt)", count: tasks.filter(t => t.column === "done").reduce((s, t) => s + t.points, 0), color: "#14161a" },
 
             { id: "prog", label: "Đang làm", count: tasks.filter(t => t.column === "in-progress").reduce((s, t) => s + t.points, 0), color: "#f59e0b" },
 
-            { id: "ready", label: "Sẵn sàng", count: tasks.filter(t => t.column === "ready").reduce((s, t) => s + t.points, 0), color: "#fbbf24" },
+            { id: "ready", label: "Cần làm", count: tasks.filter(t => t.column === "ready").reduce((s, t) => s + t.points, 0), color: "#fbbf24" },
 
-            { id: "backlog", label: "Tồn đọng", count: tasks.filter(t => t.column === "backlog").reduce((s, t) => s + t.points, 0), color: "#94a3b8" },
+            { id: "backlog", label: "Backlog", count: tasks.filter(t => t.column === "backlog").reduce((s, t) => s + t.points, 0), color: "#94a3b8" },
 
           ]}
 
@@ -5729,7 +5819,7 @@ export default function KanbanBoard({
 
                     const parentTask = task.dependsOn ? getTaskById(task.dependsOn) : null;
 
-                    const isParentDone = parentTask ? parentTask.column === "done" : true;
+                    const isParentDone = parentTask ? (parentTask.column === "done" || parentTask.column === "verified") : true;
 
                     const isLocked = !isParentDone;
 
@@ -5868,27 +5958,29 @@ export default function KanbanBoard({
 
                               </button>
 
-                              <button
+                              {role === "student" && !isSprintLocked && task.column !== "verified" && (
+                                <button
 
-                                type="button"
+                                  type="button"
 
-                                onClick={(e) => {
+                                  onClick={(e) => {
 
-                                  e.stopPropagation();
+                                    e.stopPropagation();
 
-                                  handleDeleteTask(task);
+                                    handleDeleteTask(task);
 
-                                }}
+                                  }}
 
-                                title="Xóa thẻ này"
+                                  title="Xóa thẻ này"
 
-                                className="opacity-0 group-hover:opacity-100 hover:text-rose-600 transition cursor-pointer p-0.5 rounded hover:bg-rose-50"
+                                  className="opacity-0 group-hover:opacity-100 hover:text-rose-600 transition cursor-pointer p-0.5 rounded hover:bg-rose-50"
 
-                              >
+                                >
 
-                                <Trash2 size={10} />
+                                  <Trash2 size={10} />
 
-                              </button>
+                                </button>
+                              )}
 
                               {isLocked && parentTask && (
 
@@ -6130,8 +6222,8 @@ export default function KanbanBoard({
 
 
 
-                {/* Inline Quick Add Card - Trello Style (Only for Students when sprint is unlocked) */}
-                {role === "student" && !isSprintLocked && (
+                {/* Inline Quick Add Card - Trello Style (Only for Students on Backlog / Cần làm / Đang làm when sprint is unlocked) */}
+                {role === "student" && !isSprintLocked && (col.id === "backlog" || col.id === "ready" || col.id === "in-progress") && (
                   inlineAddingCol === col.id ? (
                     <div className="mt-1.5 rounded-xl border border-amber-400/80 bg-white dark:bg-slate-800 p-2 shadow-xs">
                       <textarea
@@ -6204,7 +6296,7 @@ export default function KanbanBoard({
 
         <KanbanInstructorReviewView
 
-          tasks={tasks}
+          tasks={filteredTasks}
 
           teamMembers={teamMembers}
 
@@ -6226,15 +6318,17 @@ export default function KanbanBoard({
 
         <KanbanMyTasksView
 
-          tasks={tasks}
+          tasks={filteredTasks}
 
-          currentUser={teamMembers[0]}
+          currentUser={teamMembers[0] || { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Leader", color: "bg-slate-900" }}
 
           onSelectTask={(task) => setSelectedTask(task)}
 
           onToggleComplete={handleToggleTaskComplete}
 
           onOpenAddTask={() => setIsNewTaskModalOpen(true)}
+
+          isSprintLocked={isSprintLocked}
 
         />
 
@@ -6250,7 +6344,7 @@ export default function KanbanBoard({
 
           teamMembers={teamMembers}
 
-          tasks={tasks}
+          tasks={filteredTasks}
 
           sprintStats={{ ...sprintStats, percentage: sprintStats.percentDone }}
 
@@ -6259,6 +6353,8 @@ export default function KanbanBoard({
           onFilterByMember={handleFilterByMember}
 
           role={role}
+
+          isSprintLocked={isSprintLocked}
 
         />
 
@@ -6272,7 +6368,7 @@ export default function KanbanBoard({
 
         <KanbanActivityStreamView
 
-          tasks={tasks}
+          tasks={filteredTasks}
 
           teamMembers={teamMembers}
 
@@ -6324,9 +6420,9 @@ export default function KanbanBoard({
 
 
 
-          <div className="space-y-3.5 max-w-4xl">
+          <div className="space-y-3.5 w-full">
 
-            {tasks
+            {filteredTasks
 
               .filter((t) => t.dependsOn)
 
@@ -6334,7 +6430,24 @@ export default function KanbanBoard({
 
                 const parent = getTaskById(task.dependsOn!);
 
-                const isParentDone = parent?.column === "done";
+                const isParentDone = parent?.column === "done" || parent?.column === "verified";
+
+                const formatColBadge = (col?: ColumnId) => {
+                  switch (col) {
+                    case "verified":
+                      return "Đã nghiệm thu";
+                    case "done":
+                      return "Hoàn thành";
+                    case "in-progress":
+                      return "Đang làm";
+                    case "ready":
+                      return "Cần làm";
+                    case "fail":
+                      return "Cần sửa lại";
+                    default:
+                      return "Backlog";
+                  }
+                };
 
                 return (
 
@@ -6374,7 +6487,7 @@ export default function KanbanBoard({
 
                         >
 
-                          {parent?.column === "done" ? "Hoàn thành" : parent?.column === "in-progress" ? "Đang làm" : parent?.column || "Backlog"}
+                          {formatColBadge(parent?.column)}
 
                         </span>
 
@@ -6444,7 +6557,7 @@ export default function KanbanBoard({
 
                           className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase ${
 
-                            task.column === "done"
+                            task.column === "done" || task.column === "verified"
 
                               ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60"
 
@@ -6454,7 +6567,7 @@ export default function KanbanBoard({
 
                         >
 
-                          {task.column === "done" ? "Hoàn thành" : task.column === "in-progress" ? "Đang làm" : task.column}
+                          {formatColBadge(task.column)}
 
                         </span>
 
@@ -6498,21 +6611,21 @@ export default function KanbanBoard({
 
           {/* Header & Quick Action */}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs ">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs ">
 
             <div>
 
               <div className="flex items-center gap-2">
 
-                <h2 className="text-base font-bold text-slate-900">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
 
                   Báo cáo Tiến độ & Sức khỏe Dự án (Sprint Analytics)
 
                 </h2>
 
-                <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 border border-rose-200 flex items-center gap-1">
+                <span className="rounded-full bg-rose-50 dark:bg-rose-950/50 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1">
 
-                  <Activity size={12} className="text-rose-600 animate-pulse" />
+                  <Activity size={12} className="text-rose-600 dark:text-rose-400 animate-pulse" />
 
                   Burndown Chart Đường Đỏ
 
@@ -6520,7 +6633,7 @@ export default function KanbanBoard({
 
               </div>
 
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
 
                 Theo dõi đường cháy việc thực tế (Red line), vận tốc nhóm qua các Sprint và đóng góp của {teamMembers.length} thành viên.
 
@@ -6534,7 +6647,7 @@ export default function KanbanBoard({
 
                 onClick={() => setHandbookOpen(true)}
 
-                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/50 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 cursor-pointer"
 
               >
 
@@ -6544,19 +6657,21 @@ export default function KanbanBoard({
 
               </button>
 
-              <button
+              {role === "student" && !isSprintLocked && (
+                <button
 
-                onClick={() => setMemberModalOpen(true)}
+                  onClick={() => setMemberModalOpen(true)}
 
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
 
-              >
+                >
 
-                <UserPlus size={13} />
+                  <UserPlus size={13} />
 
-                Quản lý Thành viên
+                  Quản lý Thành viên
 
-              </button>
+                </button>
+              )}
 
             </div>
 
@@ -6568,23 +6683,23 @@ export default function KanbanBoard({
 
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs animate-cascade-2 hover:shadow-md transition-all">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs animate-cascade-2 hover:shadow-md transition-all">
 
               <span className="text-[11px] font-medium text-slate-400 block mb-1">Tổng Điểm Sprint:</span>
 
               <div className="flex items-baseline gap-1.5">
 
-                <span className="text-2xl font-black text-slate-900">
+                <span className="text-2xl font-black text-slate-900 dark:text-white">
 
                   <AnimatedNumber value={sprintStats.totalPoints} trigger={analyticsAnimTrigger} key={`an-tp-${kanbanAnimKey}`} />
 
                 </span>
 
-                <span className="text-xs font-bold text-slate-500">Story Points</span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Story Points</span>
 
               </div>
 
-              <p className="text-[10px] text-slate-400 mt-1">Cam kết 9 tasks trong Sprint 1</p>
+              <p className="text-[10px] text-slate-400 mt-1">Cam kết {tasks.length} tasks trong {currentProject.sprint}</p>
 
             </div>
 
@@ -7300,17 +7415,13 @@ export default function KanbanBoard({
 
         <div onClick={handleCloseMemberModal} className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 ${isMemberModalClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
 
-          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl ${isMemberModalClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl ${isMemberModalClosing ? "marlo-modal-out" : "marlo-modal"}`}>
 
-            
-
-          
-
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
 
               <div className="flex items-center gap-2.5">
 
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
 
                   <Users size={18} />
 
@@ -7318,15 +7429,17 @@ export default function KanbanBoard({
 
                 <div>
 
-                  <h3 className="text-base font-bold text-slate-900">Quản lý Thành viên Nhóm</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Danh sách Thành viên Nhóm</h3>
 
-                  <p className="text-xs text-slate-500">Thêm hoặc bớt thành viên để AI phân rã chuẩn</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {role === "student" && !isSprintLocked ? "Thêm hoặc bớt thành viên thực hiện đồ án" : "Danh sách sinh viên phụ trách đồ án này"}
+                  </p>
 
                 </div>
 
               </div>
 
-              <button onClick={handleCloseMemberModal} className="text-slate-400 hover:text-slate-600">
+              <button onClick={handleCloseMemberModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
 
                 <X size={18} />
 
@@ -7346,7 +7459,7 @@ export default function KanbanBoard({
 
                   key={m.id}
 
-                  className="flex items-center justify-between rounded-xl border border-slate-200 p-2.5 bg-slate-50/50"
+                  className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 bg-slate-50/50 dark:bg-slate-800/50"
 
                 >
 
@@ -7360,21 +7473,21 @@ export default function KanbanBoard({
 
                     <div>
 
-                      <p className="text-xs font-bold text-slate-800">{m.name}</p>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{m.name}</p>
 
-                      <p className="text-[10px] text-slate-500">{m.role}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">{m.role}</p>
 
                     </div>
 
                   </div>
 
-                  {teamMembers.length > 1 && (
+                  {role === "student" && !isSprintLocked && teamMembers.length > 1 && (
 
                     <button
 
                       onClick={() => handleRemoveMember(m.id)}
 
-                      className="p-1 text-slate-400 hover:text-rose-600 transition"
+                      className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
 
                       title="Xóa thành viên"
 
@@ -7394,63 +7507,65 @@ export default function KanbanBoard({
 
 
 
-            {/* Add New Member Input */}
+            {/* Add New Member Input (Student only when unlocked) */}
 
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3.5 space-y-2.5 mb-5">
+            {role === "student" && !isSprintLocked && (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3.5 space-y-2.5 mb-5">
 
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
 
-                <UserPlus size={14} className="text-amber-500" /> Thêm thành viên mới:
+                  <UserPlus size={14} className="text-amber-500" /> Thêm thành viên mới:
 
-              </span>
+                </span>
 
-              <div className="space-y-2">
+                <div className="space-y-2">
 
-                <input
+                  <input
 
-                  type="text"
+                    type="text"
 
-                  value={newMemberName}
+                    value={newMemberName}
 
-                  onChange={(e) => setNewMemberName(e.target.value)}
+                    onChange={(e) => setNewMemberName(e.target.value)}
 
-                  placeholder="Họ và tên (ví dụ: Nguyễn Văn Nam)"
+                    placeholder="Họ và tên (ví dụ: Nguyễn Văn Nam)"
 
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-amber-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-amber-500 focus:outline-hidden"
 
-                />
+                  />
 
-                <input
+                  <input
 
-                  type="text"
+                    type="text"
 
-                  value={newMemberRole}
+                    value={newMemberRole}
 
-                  onChange={(e) => setNewMemberRole(e.target.value)}
+                    onChange={(e) => setNewMemberRole(e.target.value)}
 
-                  placeholder="Vai trò (ví dụ: DevOps / UI Designer)"
+                    placeholder="Vai trò (ví dụ: DevOps / UI Designer)"
 
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-amber-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-amber-500 focus:outline-hidden"
 
-                />
+                  />
+
+                </div>
+
+                <button
+
+                  onClick={handleAddMember}
+
+                  disabled={!newMemberName.trim()}
+
+                  className="w-full rounded-xl bg-[#14161a] dark:bg-white py-1.5 text-xs font-semibold text-white dark:text-slate-950 shadow-xs hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
+
+                >
+
+                  + Thêm vào Nhóm
+
+                </button>
 
               </div>
-
-              <button
-
-                onClick={handleAddMember}
-
-                disabled={!newMemberName.trim()}
-
-                className="w-full rounded-xl bg-[#14161a] dark:bg-white py-1.5 text-xs font-semibold text-white dark:text-slate-950 shadow-xs hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
-
-              >
-
-                + Thêm vào Nhóm
-
-              </button>
-
-            </div>
+            )}
 
 
 
@@ -7460,7 +7575,7 @@ export default function KanbanBoard({
 
                 onClick={handleCloseMemberModal}
 
-                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                className="rounded-xl bg-slate-900 dark:bg-white px-4 py-2 text-xs font-semibold text-white dark:text-slate-950 shadow-sm hover:bg-slate-800 cursor-pointer"
 
               >
 
@@ -8356,6 +8471,12 @@ export default function KanbanBoard({
 
         teamMembers={teamMembers}
 
+        role={role}
+
+        isSprintLocked={isSprintLocked}
+
+        onReviewTask={handleInstructorReview}
+
         onClose={() => setSelectedTask(null)}
 
         onUpdateTask={(updated) => {
@@ -8366,9 +8487,10 @@ export default function KanbanBoard({
 
           if (
 
-            updated.column === "done" &&
+            (updated.column === "done" || updated.column === "verified") &&
 
             prevTask?.column !== "done" &&
+            prevTask?.column !== "verified" &&
 
             updated.dependsOn
 
@@ -8376,7 +8498,7 @@ export default function KanbanBoard({
 
             const parent = getTaskById(updated.dependsOn);
 
-            if (parent && parent.column !== "done") {
+            if (parent && parent.column !== "done" && parent.column !== "verified") {
 
               safeUpdated = {
 
@@ -8424,11 +8546,11 @@ export default function KanbanBoard({
 
           const task = tasks.find((t) => t.id === taskId);
 
-          if (col === "done" && task?.dependsOn) {
+          if ((col === "done" || col === "verified") && task?.dependsOn) {
 
             const parent = getTaskById(task.dependsOn);
 
-            if (parent && parent.column !== "done") {
+            if (parent && parent.column !== "done" && parent.column !== "verified") {
 
               setH2Violation({ task, blockingTask: parent });
 
@@ -8518,7 +8640,7 @@ export default function KanbanBoard({
 
         currentProjectName={currentProject?.name}
 
-        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        projects={projects.map((p) => ({ id: p.id, name: p.name, team: p.team }))}
 
       />
 
@@ -9126,7 +9248,7 @@ export default function KanbanBoard({
 
         const dragParent = dragTask.dependsOn ? getTaskById(dragTask.dependsOn) : null;
 
-        const dragIsLocked = dragParent ? dragParent.column !== "done" : false;
+        const dragIsLocked = dragParent ? (dragParent.column !== "done" && dragParent.column !== "verified") : false;
 
 
 
@@ -9330,11 +9452,13 @@ export default function KanbanBoard({
 
         currentProjectId={currentProjectId}
 
-        onSelectProject={(id) => setCurrentProjectId(id)}
+        onSelectProject={(id) => selectProject(id)}
 
         onOpenNewProjectModal={() => setIsNewProjectModalOpen(true)}
 
         onTogglePinProject={handleTogglePinProject}
+
+        canCreateProject={role === "student" && !isSprintLocked}
 
       />
 
@@ -9380,13 +9504,13 @@ export default function KanbanBoard({
 
 
 
-      {/* ── FLOATING TOAST NOTIFICATION WITH UNDO PILL (Exact Marlo Design from user images) ── */}
+      {/* ── FLOATING TOAST NOTIFICATION WITH UNDO PILL ── */}
 
       {undoToast && (
 
         <MarloToast
 
-          showUndo={!undoToast.undone}
+          showUndo={!undoToast.undone && !undoToast.customMessage}
 
           onUndo={handleUndo}
 
@@ -9396,7 +9520,7 @@ export default function KanbanBoard({
 
               undoToast.action === "delete" ? (
 
-                <>“{undoToast.taskTitle}” restored.</>
+                <>Đã khôi phục thẻ “{undoToast.taskTitle}”.</>
 
               ) : (
 
@@ -9410,7 +9534,7 @@ export default function KanbanBoard({
 
             ) : undoToast.action === "delete" ? (
 
-              <>“{undoToast.taskTitle}” deleted.</>
+              <>Đã xóa thẻ “{undoToast.taskTitle}”.</>
 
             ) : (
 
@@ -9422,7 +9546,7 @@ export default function KanbanBoard({
 
                 <span className="text-slate-700 dark:text-slate-300 font-medium">
 
-                  {undoToast.toCol === "in-progress" ? "In progress" : undoToast.toCol === "done" ? "Done" : undoToast.toColTitle}
+                  {undoToast.toColTitle}
 
                 </span>
 

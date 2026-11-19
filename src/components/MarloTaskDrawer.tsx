@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Check,
@@ -7,6 +8,9 @@ import {
   GitPullRequest,
   RotateCcw,
   ChevronDown,
+  ShieldCheck,
+  AlertCircle,
+  Lock,
 } from "lucide-react";
 import MarloSegmentedControl from "./MarloSegmentedControl";
 import type { KanbanTask, ColumnId, TeamMember } from "../screens/KanbanBoard";
@@ -14,10 +18,13 @@ import type { KanbanTask, ColumnId, TeamMember } from "../screens/KanbanBoard";
 interface Props {
   task: KanbanTask | null;
   teamMembers?: TeamMember[];
+  role?: "student" | "instructor" | "admin";
+  isSprintLocked?: boolean;
   onClose: () => void;
   onUpdateTask?: (updated: KanbanTask) => void;
   onDeleteTask?: (task: KanbanTask) => void;
   onMoveColumn?: (taskId: string, col: ColumnId) => void;
+  onReviewTask?: (taskId: string, decision: "approve" | "request_revision", feedback?: string) => void;
 }
 
 const DEFAULT_MEMBERS: TeamMember[] = [
@@ -26,24 +33,47 @@ const DEFAULT_MEMBERS: TeamMember[] = [
   { id: "3", name: "Phan Đình Nghị", avatar: "N", role: "Backend & Database", color: "#64748b" },
 ];
 
-// 4-Step Marlo Pipeline matching the uploaded image (media_1794373665534_e3dd0e3c.jpg)
+// 4-Step Academic Pipeline: Cần làm -> Đang làm -> Hoàn thành (Chờ duyệt) -> Đã nghiệm thu
 const MARLO_STEPS: { id: ColumnId; name: string; short: string }[] = [
-  { id: "ready", name: "Up next", short: "Sẵn sàng" },
-  { id: "in-progress", name: "In progress", short: "Đang làm" },
-  { id: "verified", name: "In review", short: "Thẩm định" },
-  { id: "done", name: "Done", short: "Hoàn thành" },
+  { id: "ready", name: "Cần làm", short: "Sẵn sàng" },
+  { id: "in-progress", name: "Đang làm", short: "Thực thi" },
+  { id: "done", name: "Hoàn thành", short: "Chờ duyệt" },
+  { id: "verified", name: "Đã nghiệm thu", short: "Đạt DoD" },
 ];
+
+function computeDueStatusLabel(dueDate?: string, column?: ColumnId): { text: string; isUrgent: boolean } {
+  if (column === "verified") return { text: "Đã nghiệm thu DoD", isUrgent: false };
+  if (column === "done") return { text: "Đang chờ GVHD nghiệm thu", isUrgent: false };
+  if (column === "fail") return { text: "Cần chỉnh sửa theo góp ý", isUrgent: true };
+  if (!dueDate) return { text: "Trong Sprint hiện tại", isUrgent: false };
+  const parts = dueDate.split("/");
+  if (parts.length >= 2) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    if (!isNaN(day) && !isNaN(month)) {
+      if (month === 11 && day < 10) return { text: "Cần ưu tiên hoàn tất", isUrgent: true };
+      if (month === 11 && day <= 12) return { text: "Sắp đến hạn", isUrgent: true };
+      return { text: "Đúng tiến độ Sprint", isUrgent: false };
+    }
+  }
+  return { text: "Đúng tiến độ Sprint", isUrgent: false };
+}
 
 export default function MarloTaskDrawer({
   task,
   teamMembers,
+  role = "student",
+  isSprintLocked = false,
   onClose,
   onUpdateTask,
   onDeleteTask,
   onMoveColumn,
+  onReviewTask,
 }: Props) {
   const [isClosing, setIsClosing] = useState(false);
   const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
+  const [revisionNote, setRevisionNote] = useState("");
+  const [showRevisionInput, setShowRevisionInput] = useState(false);
 
   const handleClose = () => {
     if (isClosing) return;
@@ -51,10 +81,11 @@ export default function MarloTaskDrawer({
     setTimeout(() => {
       onClose();
       setIsClosing(false);
-    }, 280);
+      setShowRevisionInput(false);
+      setRevisionNote("");
+    }, 260);
   };
 
-  // Close on ESC key
   useEffect(() => {
     if (!task) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -66,24 +97,24 @@ export default function MarloTaskDrawer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [task, isClosing]);
 
-  if (!task) return null;
+  if (!task || typeof document === "undefined") return null;
 
   const currentColumn = task.column;
   const isDone = currentColumn === "done";
   const isVerified = currentColumn === "verified";
   const isCompleted = isDone || isVerified;
+  const isReadOnlyForRole = isSprintLocked || role === "admin";
 
-  // Compute current step index (0 to 3)
+  // Compute current step index (0 to 3): ready (0) -> in-progress (1) -> done (2) -> verified (3)
   const getStepIndex = (col: ColumnId) => {
     if (col === "backlog" || col === "ready") return 0;
-    if (col === "in-progress") return 1;
-    if (col === "verified") return 2;
-    if (col === "done") return 3;
+    if (col === "in-progress" || col === "fail") return 1;
+    if (col === "done") return 2;
+    if (col === "verified") return 3;
     return 0;
   };
   const activeStepIdx = getStepIndex(currentColumn);
 
-  // Checks priority: task.checklist (from Kanban) or task.definitionOfDone
   const checks =
     task.checklist && task.checklist.length > 0
       ? task.checklist
@@ -93,36 +124,36 @@ export default function MarloTaskDrawer({
 
   const completedChecksCount = checks.filter((c) => c.done).length;
 
-  // Toggle checklist item
+  // Toggle checklist item (NEVER auto-jumps to "verified" behind Instructor's back!)
   const toggleCheck = (id: string) => {
+    if (isSprintLocked) return;
     const updateList = (list?: typeof task.checklist) =>
       list ? list.map((item) => (item.id === id ? { ...item, done: !item.done } : item)) : [];
 
     const updatedChecklist = updateList(task.checklist);
     const updatedDoD = updateList(task.definitionOfDone);
 
-    const activeList = updatedChecklist.length > 0 ? updatedChecklist : updatedDoD;
-    const allDone = activeList.length > 0 && activeList.every((item) => item.done);
-
-    let newCol = task.column;
-    if (allDone && (task.column === "in-progress" || task.column === "ready")) {
-      newCol = "verified";
-      onMoveColumn?.(task.id, "verified");
-    }
-
     onUpdateTask?.({
       ...task,
       checklist: updatedChecklist,
       definitionOfDone: updatedDoD,
-      column: newCol,
     });
   };
 
   const handleStepClick = (colId: ColumnId) => {
+    if (isSprintLocked) return;
+    if (role === "student" && colId === "verified") {
+      onMoveColumn?.(task.id, "verified"); // Triggers KanbanBoard's student restriction notice
+      return;
+    }
     onMoveColumn?.(task.id, colId);
   };
 
   const handleToggleMarkDone = () => {
+    if (isSprintLocked) return;
+    if (isVerified && role === "student") {
+      return; // Students cannot reopen an already instructor-verified task
+    }
     if (isCompleted) {
       onMoveColumn?.(task.id, "in-progress");
     } else {
@@ -154,60 +185,105 @@ export default function MarloTaskDrawer({
     (currentMember?.color?.startsWith("#") ? currentMember.color : undefined) ||
     (assigneeName.includes("Hòa") ? "#14161a" : assigneeName.includes("Huy") ? "#f59e0b" : "#64748b");
 
-  const projectName = task.epic || "CS201 · Đồ án OOP";
-  const dueText = task.dueDate || "06 Nov 2026";
+  const projectName = task.epic || "CS499 · Đồ án Kỹ nghệ";
+  const dueText = task.dueDate || "15/11/2026";
+  const dueMeta = computeDueStatusLabel(dueText, currentColumn);
   const estHours = task.estimateHours || (task.points ? task.points * 2 : 6);
+  const reviewFeedback =
+    (task as any).reviewFeedback ||
+    task.auditLogs
+      ?.slice()
+      .reverse()
+      .find((lg: any) => lg?.note)?.note;
 
-  return (
-    <div className="fixed inset-0 z-50 pointer-events-none select-none">
+  return createPortal(
+    <div className="fixed inset-0 z-[9998] pointer-events-none select-none">
       {/* Scrim Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/45 backdrop-blur-xs pointer-events-auto ${
+        className={`fixed inset-0 bg-black/50 backdrop-blur-xs pointer-events-auto ${
           isClosing ? "marlo-scrim-out" : "marlo-scrim"
         }`}
         onClick={handleClose}
       />
 
-      {/* ─── FLOATING ROUNDED DRAWER (EXACT MARLO-APP REPLICA) ─── */}
+      {/* ─── FLOATING ROUNDED DRAWER (PORTALED TO DOCUMENT.BODY SO NEVER CLIPPED) ─── */}
       <div
-        className={`fixed top-2.5 bottom-2.5 right-2.5 sm:top-3.5 sm:bottom-3.5 sm:right-3.5 w-[calc(100vw-20px)] sm:w-[540px] max-w-[calc(100vw-20px)] h-[calc(100dvh-20px)] sm:h-[calc(100dvh-28px)] max-h-[calc(100dvh-20px)] sm:max-h-[calc(100dvh-28px)] z-50 pointer-events-auto rounded-[28px] sm:rounded-[34px] bg-[#ffffff] dark:bg-[#12141a] border border-[#e2e8f0] dark:border-[#222838] shadow-[0_25px_80px_rgba(0,0,0,0.38)] flex flex-col overflow-hidden ${
+        role="dialog"
+        aria-modal="true"
+        className={`fixed top-3 bottom-3 right-3 sm:top-4 sm:bottom-4 sm:right-4 w-[calc(100vw-24px)] sm:w-[540px] max-w-[calc(100vw-24px)] z-[9999] pointer-events-auto rounded-[28px] sm:rounded-[32px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-[0_25px_80px_rgba(0,0,0,0.45)] flex flex-col overflow-hidden ${
           isClosing ? "marlo-drawer-out" : "marlo-drawer"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Rubber Stamp Slam for Completed Task */}
-        {isCompleted && (
+        {/* Rubber Stamp Slam for Verified Task */}
+        {isVerified && (
           <div className="absolute right-14 top-16 pointer-events-none select-none z-30 rubber-stamp-slam">
-            <div className="border-[3px] border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-300 font-mono font-black text-sm tracking-[0.2em] px-3.5 py-1 rounded-xl uppercase shadow-md bg-emerald-50/95 dark:bg-emerald-950/90 backdrop-blur-xs flex items-center gap-1.5 -rotate-6">
-              <CheckCheck size={16} className="stroke-[3]" />
-              <span>DoD 100% • VERIFIED</span>
+            <div className="border-[3px] border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-300 font-mono font-black text-xs tracking-[0.18em] px-3 py-1 rounded-xl uppercase shadow-md bg-emerald-50/95 dark:bg-emerald-950/90 backdrop-blur-xs flex items-center gap-1.5 -rotate-6">
+              <CheckCheck size={15} className="stroke-[3]" />
+              <span>ĐÃ NGHIỆM THU • +{task.points * 10} XP</span>
             </div>
           </div>
         )}
 
         {/* ─── DRAWER HEADER ─── */}
-        <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-4 border-b border-[#f1f5f9] dark:border-[#1e2433] shrink-0 bg-inherit">
+        <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl sm:text-2xl font-black text-[#0f172a] dark:text-[#f8fafc] tracking-tight leading-tight">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold text-[11px]">
+                #{task.code}
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono font-bold text-[11px]">
+                {task.points} Story Points
+              </span>
+              {currentColumn === "fail" && (
+                <span className="px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold text-[11px]">
+                  Cần sửa lại
+                </span>
+              )}
+            </div>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
               {task.title}
             </h2>
-            <p className="text-xs text-[#94a3b8] font-medium mt-1 truncate">
-              {projectName} — #{task.code} · {task.moscow ? `MoSCoW: ${task.moscow.toUpperCase()}` : "Sprint Backlog"}
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1 truncate">
+              {projectName} · {task.moscow ? `MoSCoW: ${task.moscow.toUpperCase()}` : "Sprint Backlog"}
             </p>
           </div>
 
           <button
             onClick={handleClose}
             title="Đóng (Esc)"
-            className="w-9 h-9 rounded-full flex items-center justify-center text-[#64748b] hover:text-[#0f172a] dark:text-[#94a3b8] dark:hover:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#1e2433] transition cursor-pointer shrink-0"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* ─── SCROLLABLE DRAWER BODY (STAGGERED CASCADE ENTRY) ─── */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5 text-xs text-[#334155] dark:text-[#cbd5e1] marlo-drawer-body">
-          {/* 1. MARLO STEPPER (4-Step Progress Track) */}
+        {/* ─── SCROLLABLE DRAWER BODY ─── */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5 text-xs text-slate-700 dark:text-slate-300 marlo-drawer-body bg-white dark:bg-slate-900">
+          {/* Instructor Feedback Banner if present */}
+          {reviewFeedback && (
+            <div
+              className={`p-3.5 rounded-2xl border flex items-start gap-2.5 ${
+                currentColumn === "fail"
+                  ? "bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-200"
+                  : "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-200"
+              }`}
+            >
+              {currentColumn === "fail" ? (
+                <AlertCircle size={16} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              ) : (
+                <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              )}
+              <div className="text-xs leading-relaxed">
+                <strong className="block font-bold mb-0.5">
+                  {currentColumn === "fail" ? "Yêu cầu chỉnh sửa từ Giảng viên:" : "Nhận xét nghiệm thu của Giảng viên:"}
+                </strong>
+                <span>{reviewFeedback}</span>
+              </div>
+            </div>
+          )}
+
+          {/* 1. MARLO STEPPER (4-Step Progress Track: Cần làm -> Đang làm -> Hoàn thành -> Đã nghiệm thu) */}
           <div className="pt-1 pb-2">
             <ul className="marlo-stepper">
               {MARLO_STEPS.map((step, idx) => {
@@ -216,7 +292,9 @@ export default function MarloTaskDrawer({
                 return (
                   <li
                     key={step.id}
-                    className={`${isStepDone ? "is-done" : ""} ${isStepNow ? "is-now" : ""} cursor-pointer`}
+                    className={`${isStepDone ? "is-done" : ""} ${isStepNow ? "is-now" : ""} ${
+                      isSprintLocked ? "cursor-not-allowed opacity-70" : "cursor-pointer"
+                    }`}
                     onClick={() => handleStepClick(step.id)}
                     title={`Chuyển sang ${step.name}`}
                   >
@@ -244,14 +322,14 @@ export default function MarloTaskDrawer({
             </ul>
           </div>
 
-          {/* 2. AUTHENTIC MARLO SEGMENTED CONTROL WITH LIQUID BLACK SLIDING PILL */}
+          {/* 2. AUTHENTIC MARLO SEGMENTED CONTROL */}
           <div className="pt-0.5">
             <MarloSegmentedControl<ColumnId>
               value={
                 currentColumn === "backlog"
                   ? "ready"
                   : currentColumn === "fail"
-                  ? "verified"
+                  ? "in-progress"
                   : currentColumn
               }
               options={MARLO_STEPS.map((step) => ({
@@ -266,29 +344,30 @@ export default function MarloTaskDrawer({
           </div>
 
           {/* 3. TASK DESCRIPTION */}
-          <div className="text-[13px] leading-relaxed text-[#475569] dark:text-[#94a3b8]">
+          <div className="text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">
             {task.description ||
               `Task ${task.code}: Triển khai và hoàn thiện module theo tài liệu đặc tả kiến trúc phần mềm, đảm bảo các tiêu chí nghiệm thu DoD.`}
           </div>
 
-          {/* 4. METADATA KEY-VALUE TABLE (Exact Marlo Key-Value Layout) */}
-          <div className="rounded-2xl border border-[#f1f5f9] dark:border-[#1e2433] bg-[#fafafa] dark:bg-[#141824]/60 p-4 space-y-3">
-            {/* Project */}
+          {/* 4. METADATA KEY-VALUE TABLE (100% Vietnamese Academic Terminology) */}
+          <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-4 space-y-3">
+            {/* Project / Module */}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#64748b] dark:text-[#94a3b8] font-medium">Project</span>
-              <span className="font-bold text-[#f97316] hover:underline cursor-pointer">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Phân hệ / Đồ án</span>
+              <span className="font-bold text-[#f97316]">
                 {projectName}
               </span>
             </div>
 
             {/* Assignee - Interactive Selector */}
             <div className="flex items-center justify-between text-xs relative">
-              <span className="text-[#64748b] dark:text-[#94a3b8] font-medium">Assignee</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Người phụ trách</span>
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setIsAssigneePickerOpen((v) => !v)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white dark:bg-[#1e2433] hover:bg-slate-50 dark:hover:bg-[#252d3f] border border-[#e2e8f0] dark:border-[#2e374d] hover:border-orange-300 dark:hover:border-orange-500/50 text-[#0f172a] dark:text-white font-semibold shadow-2xs transition-all cursor-pointer group"
+                  disabled={isReadOnlyForRole}
+                  onClick={() => !isReadOnlyForRole && setIsAssigneePickerOpen((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold shadow-2xs transition-all cursor-pointer disabled:cursor-not-allowed group"
                   title="Nhấn để chọn người phụ trách"
                 >
                   <div
@@ -301,24 +380,25 @@ export default function MarloTaskDrawer({
                   {assigneeRole && (
                     <span className="text-[10px] text-slate-400 font-normal">({assigneeRole})</span>
                   )}
-                  <ChevronDown
-                    size={13}
-                    className={`text-slate-400 transition-transform duration-150 ${
-                      isAssigneePickerOpen ? "rotate-180 text-[#f97316]" : "group-hover:text-slate-600 dark:group-hover:text-slate-300"
-                    }`}
-                  />
+                  {!isReadOnlyForRole && (
+                    <ChevronDown
+                      size={13}
+                      className={`text-slate-400 transition-transform duration-150 ${
+                        isAssigneePickerOpen ? "rotate-180 text-[#f97316]" : ""
+                      }`}
+                    />
+                  )}
                 </button>
 
-                {/* Floating Assignee Picker Popover */}
                 {isAssigneePickerOpen && (
                   <>
                     <div
                       className="fixed inset-0 z-40"
                       onClick={() => setIsAssigneePickerOpen(false)}
                     />
-                    <div className="absolute right-0 top-full mt-1.5 z-50 w-72 rounded-2xl bg-white dark:bg-[#181d29] border border-[#e2e8f0] dark:border-[#2a3245] shadow-[0_16px_40px_rgba(0,0,0,0.22)] p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150">
-                      <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                        Chọn người phụ trách
+                    <div className="absolute right-0 top-full mt-1.5 z-50 w-72 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-1.5 space-y-1">
+                      <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Chọn thành viên phụ trách
                       </div>
                       <div className="space-y-0.5 max-h-56 overflow-y-auto">
                         {membersList.map((m) => {
@@ -333,20 +413,20 @@ export default function MarloTaskDrawer({
                                   assignee: {
                                     name: m.name,
                                     avatar: m.avatar || m.name.charAt(0).toUpperCase(),
-                                    role: m.role || "Member",
+                                    role: m.role || "Developer",
                                   },
                                 });
                                 setIsAssigneePickerOpen(false);
                               }}
                               className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors cursor-pointer ${
                                 isSelected
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold border border-slate-200 dark:border-slate-700 shadow-2xs"
-                                  : "hover:bg-slate-100 dark:hover:bg-[#222938] text-slate-700 dark:text-slate-200"
+                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                                  : "hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-200"
                               }`}
                             >
                               <div
-                                className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[10px] font-bold shrink-0 shadow-2xs"
-                                style={{ backgroundColor: m.color || "#f97316" }}
+                                className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[10px] font-bold shrink-0"
+                                style={{ backgroundColor: m.color?.startsWith("#") ? m.color : "#f97316" }}
                               >
                                 {m.avatar || m.name.charAt(0).toUpperCase()}
                               </div>
@@ -357,7 +437,7 @@ export default function MarloTaskDrawer({
                                 )}
                               </div>
                               {isSelected && (
-                                <Check size={14} className="text-slate-900 dark:text-white shrink-0 stroke-[2.5]" />
+                                <Check size={14} className="text-amber-500 shrink-0 stroke-[2.5]" />
                               )}
                             </button>
                           );
@@ -369,46 +449,64 @@ export default function MarloTaskDrawer({
               </div>
             </div>
 
-            {/* Due */}
+            {/* Due Date (Dynamic status instead of hardcoded '5 days ago') */}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#64748b] dark:text-[#94a3b8] font-medium">Due</span>
-              <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono">
-                {dueText} · <span className="font-bold">5 days ago</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Hạn hoàn thành</span>
+              <span
+                className={`font-semibold font-mono ${
+                  dueMeta.isUrgent
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-slate-800 dark:text-slate-200"
+                }`}
+              >
+                {dueText} · <span className="font-sans font-bold">{dueMeta.text}</span>
               </span>
             </div>
 
             {/* Priority */}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#64748b] dark:text-[#94a3b8] font-medium">Priority</span>
-              <span className="px-2.5 py-0.5 rounded-lg bg-[#f1f5f9] dark:bg-[#1e2433] text-[#475569] dark:text-[#cbd5e1] font-bold text-[11px]">
-                {task.priority === "high" ? "High" : task.priority === "medium" ? "Medium" : "Low"}
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Độ ưu tiên</span>
+              <span
+                className={`px-2.5 py-0.5 rounded-lg font-bold text-[11px] ${
+                  task.priority === "high"
+                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                    : task.priority === "medium"
+                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                }`}
+              >
+                {task.priority === "high"
+                  ? "Cao (P0)"
+                  : task.priority === "medium"
+                  ? "Trung bình (P1)"
+                  : "Thấp (P2)"}
               </span>
             </div>
 
-            {/* Work */}
+            {/* Work & Story Points */}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#64748b] dark:text-[#94a3b8] font-medium">Work</span>
-              <span className="font-bold text-[#0f172a] dark:text-white">
-                {task.epic || "Module"} · {estHours} h estimated ({task.points} pts)
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Khối lượng ước tính</span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {estHours} giờ thực hành · {task.points} Story Points
               </span>
             </div>
           </div>
 
           {/* 5. GITHUB INTEGRATION CARD */}
           {task.deliverable && (
-            <div className="p-3.5 rounded-2xl bg-[#fafafa] dark:bg-[#141824]/60 border border-[#f1f5f9] dark:border-[#1e2433] space-y-2 text-xs">
+            <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-[#0f172a] dark:text-white flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                   <GitPullRequest size={14} className="text-[#f97316]" />
-                  <span>GitHub Integration</span>
+                  <span>Liên kết GitHub & Minh chứng</span>
                 </span>
                 <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold text-[10px]">
                   Yêu cầu nộp: {task.deliverable.label}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-[#64748b]">
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
                 <span>
-                  Mã task: <strong className="font-mono text-blue-600 dark:text-blue-400">#{task.code}</strong>
+                  Mã task: <strong className="font-mono text-amber-600 dark:text-amber-400">#{task.code}</strong>
                 </span>
                 <span className="font-mono text-[10px] text-slate-400">feature/{task.code.toLowerCase()}</span>
               </div>
@@ -417,12 +515,12 @@ export default function MarloTaskDrawer({
 
           {/* 6. USER STORY (SCRUM SPEC) */}
           {task.userStory && (
-            <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/25 border border-blue-100 dark:border-blue-900/40 text-xs space-y-1 leading-relaxed">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 font-mono mb-1">
-                Scrum User Story:
+            <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 text-xs space-y-1 leading-relaxed">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 font-mono mb-1">
+                Đặc tả Scrum User Story:
               </div>
               <p>
-                <strong className="text-blue-700 dark:text-blue-300">Là (Role):</strong> {task.userStory.role}
+                <strong className="text-amber-800 dark:text-amber-300">Là (Role):</strong> {task.userStory.role}
               </p>
               <p>
                 <strong className="text-slate-900 dark:text-white">Tôi muốn (Goal):</strong> {task.userStory.want}
@@ -433,11 +531,11 @@ export default function MarloTaskDrawer({
             </div>
           )}
 
-          {/* 7. AUTHENTIC MARLO CHECKLIST WITH ORANGE CHECKMARKS */}
+          {/* 7. CHECKLIST & DOD */}
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between">
-              <h3 className="text-[11px] font-black uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
-                Checklist
+              <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Checklist & Tiêu chuẩn DoD
               </h3>
               {checks.length > 0 && (
                 <span className="text-[11px] font-mono font-bold text-[#f97316]">
@@ -447,16 +545,17 @@ export default function MarloTaskDrawer({
             </div>
 
             {checks.length === 0 ? (
-              <p className="text-xs text-[#94a3b8] italic p-2">Không có checklist cho task này.</p>
+              <p className="text-xs text-slate-400 italic p-2">Không có checklist cho thẻ này.</p>
             ) : (
               <div className="space-y-1.5">
                 {checks.map((item) => (
                   <div
                     key={item.id}
                     onClick={() => toggleCheck(item.id)}
-                    className={`marlo-check-card ${item.done ? "is-done" : ""}`}
+                    className={`marlo-check-card ${item.done ? "is-done" : ""} ${
+                      isSprintLocked ? "pointer-events-none opacity-75" : ""
+                    }`}
                   >
-                    {/* The authentic Marlo Orange Checkbox */}
                     <div
                       className="marlo-chk-box"
                       data-checked={item.done ? "true" : "false"}
@@ -472,44 +571,135 @@ export default function MarloTaskDrawer({
               </div>
             )}
           </div>
+
+          {/* 8. INSTRUCTOR INLINE REVIEW BOX (When role === "instructor" and task is in "done") */}
+          {role === "instructor" && onReviewTask && (isDone || currentColumn === "fail") && (
+            <div className="p-4 rounded-2xl border border-amber-300/80 dark:border-amber-800/70 bg-amber-50/60 dark:bg-amber-950/25 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                  <ShieldCheck size={15} className="text-amber-600" />
+                  <span>Hội đồng / Giảng viên Thẩm định Task</span>
+                </span>
+                <span className="text-[10.5px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                  +{task.points * 10} XP khi duyệt
+                </span>
+              </div>
+
+              {showRevisionInput ? (
+                <div className="space-y-2">
+                  <textarea
+                    rows={2}
+                    value={revisionNote}
+                    onChange={(e) => setRevisionNote(e.target.value)}
+                    placeholder="Nhập nhận xét chi tiết yêu cầu sinh viên bổ sung hoặc sửa lại..."
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-amber-500"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowRevisionInput(false)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onReviewTask(
+                          task.id,
+                          "request_revision",
+                          revisionNote.trim() || "Cần bổ sung test case biên và hoàn thiện tiêu chí DoD."
+                        );
+                        setShowRevisionInput(false);
+                        setRevisionNote("");
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Gửi Yêu cầu sửa
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onReviewTask(task.id, "approve")}
+                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    <Check size={14} strokeWidth={2.8} />
+                    <span>Nghiệm thu (+{task.points * 10} XP)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowRevisionInput(true)}
+                    className="py-2 px-3 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Yêu cầu sửa</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* ─── DRAWER FOOTER (FORMFOOT) ─── */}
-        <div className="px-6 py-4 bg-[#ffffff] dark:bg-[#12141a] border-t border-[#f1f5f9] dark:border-[#1e2433] flex items-center justify-between shrink-0">
-          {/* Left Delete button */}
-          <button
-            type="button"
-            onClick={() => onDeleteTask?.(task)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition cursor-pointer"
-          >
-            <Trash2 size={15} />
-            <span>Delete</span>
-          </button>
+        {/* ─── DRAWER FOOTER ─── */}
+        <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+          {/* Left Delete button (Only for Student on non-verified tasks when Sprint is unlocked) */}
+          {role === "student" && !isVerified && !isSprintLocked ? (
+            <button
+              type="button"
+              onClick={() => onDeleteTask?.(task)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-semibold transition cursor-pointer"
+            >
+              <Trash2 size={15} />
+              <span>Xóa thẻ</span>
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+              {isSprintLocked ? (
+                <>
+                  <Lock size={12} className="text-rose-500" />
+                  <span>Sprint đang khóa kiểm toán</span>
+                </>
+              ) : isVerified ? (
+                <>
+                  <ShieldCheck size={13} className="text-emerald-500" />
+                  <span>Thẻ đã được GVHD nghiệm thu</span>
+                </>
+              ) : (
+                <span>Chế độ giám sát & thẩm định</span>
+              )}
+            </span>
+          )}
 
           {/* Right Action: Mark Done / Reopen */}
-          <button
-            type="button"
-            onClick={handleToggleMarkDone}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-md hover:shadow-lg active:scale-95 cursor-pointer ${
-              isCompleted
-                ? "bg-[#0f172a] dark:bg-white text-white dark:text-[#0f172a] hover:opacity-90"
-                : "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white"
-            }`}
-          >
-            {isCompleted ? (
-              <>
-                <RotateCcw size={14} />
-                <span>Reopen task</span>
-              </>
-            ) : (
-              <>
-                <Check size={14} className="stroke-[3]" />
-                <span>Mark done</span>
-              </>
-            )}
-          </button>
+          {!isSprintLocked && role !== "admin" && !(role === "student" && isVerified) && (
+            <button
+              type="button"
+              onClick={handleToggleMarkDone}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-md hover:shadow-lg active:scale-95 cursor-pointer ${
+                isCompleted
+                  ? "bg-slate-800 dark:bg-slate-700 text-white hover:opacity-90"
+                  : "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white"
+              }`}
+            >
+              {isCompleted ? (
+                <>
+                  <RotateCcw size={14} />
+                  <span>Mở lại công việc</span>
+                </>
+              ) : (
+                <>
+                  <Check size={14} className="stroke-[3]" />
+                  <span>Đánh dấu Hoàn thành</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

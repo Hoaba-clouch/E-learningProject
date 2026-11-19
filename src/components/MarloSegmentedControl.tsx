@@ -44,17 +44,21 @@ export default function MarloSegmentedControl<T extends string = string>({
   const containerRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLSpanElement>(null);
   const isFirstRender = useRef(true);
+  const prevValueRef = useRef(value);
+  const optionsKey = options.map((o) => `${o.id}:${o.label}:${o.badge ?? ""}`).join("|");
 
   useLayoutEffect(() => {
     const activeBtn = containerRef.current?.querySelector<HTMLElement>(
       `[aria-pressed="true"]`
     );
+    const shouldAnimate = !isFirstRender.current && prevValueRef.current !== value;
     animateMarloPill(thumbRef.current, activeBtn, {
-      animate: !isFirstRender.current,
+      animate: shouldAnimate,
       radius,
     });
     isFirstRender.current = false;
-  }, [value, radius]);
+    prevValueRef.current = value;
+  }, [value, radius, optionsKey]);
 
   useEffect(() => {
     const reposition = () => {
@@ -68,10 +72,17 @@ export default function MarloSegmentedControl<T extends string = string>({
     };
 
     const ro = new ResizeObserver(reposition);
-    if (containerRef.current) ro.observe(containerRef.current);
+    if (containerRef.current) {
+      ro.observe(containerRef.current);
+      containerRef.current.querySelectorAll("button").forEach((btn) => ro.observe(btn));
+    }
     document.fonts?.ready?.then(reposition);
-    return () => ro.disconnect();
-  }, [radius]);
+    const timer = setTimeout(reposition, 120);
+    return () => {
+      clearTimeout(timer);
+      ro.disconnect();
+    };
+  }, [radius, optionsKey]);
 
   const triggerPop = (btn: HTMLElement) => {
     // 🏷️ Ported 1:1 from Marlo (marlo-app/src/kit.jsx - function ho)
