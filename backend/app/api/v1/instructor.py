@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -335,28 +336,52 @@ def get_students_analytics(
         target_class_id = selected_course["id"] if selected_course else None
         assigned_course = selected_course["code"] if selected_course else (course_code or "ALL")
 
-        # Đếm tổng số bài học đã phát hành thực tế trong giáo trình
+        # Đếm tổng số bài học đã phát hành thực tế trong giáo trình & tập hợp mã hợp lệ
         total_course_lessons = 0
+        published_lesson_keys: set[str] = set()
+        published_keys_by_subject: dict[str, set[str]] = {}
         if selected_course:
+            subj_key = str(selected_course.get("subject_id") or "")
+            keys = published_keys_by_subject.setdefault(subj_key, set())
             try:
-                for ch in json.loads(selected_course.get("chapters_json") or "[]"):
+                for ch_idx, ch in enumerate(json.loads(selected_course.get("chapters_json") or "[]"), start=1):
                     if ch.get("status") == "Bản nháp":
                         continue
-                    total_course_lessons += sum(
-                        1 for ls in ch.get("lessons", []) if ls.get("status") != "Bản nháp"
-                    )
+                    pub_ls = [ls for ls in ch.get("lessons", []) if ls.get("status") != "Bản nháp"]
+                    total_course_lessons += len(pub_ls)
+                    for ls_idx, ls in enumerate(pub_ls, start=1):
+                        lid = str(ls.get("id") or "").strip()
+                        if lid:
+                            published_lesson_keys.add(lid)
+                            keys.add(lid)
+                        m = re.match(r"^(\d+\.\d+)\b", str(ls.get("title") or "").strip())
+                        if m:
+                            published_lesson_keys.add(m.group(1))
+                            keys.add(m.group(1))
+                        code_fallback = f"{ch_idx}.{ls_idx}"
+                        published_lesson_keys.add(code_fallback)
+                        keys.add(code_fallback)
             except Exception:
                 total_course_lessons = 0
         else:
-            all_courses = conn.execute("SELECT chapters_json FROM courses").fetchall()
+            all_courses = conn.execute("SELECT subject_id, chapters_json FROM courses").fetchall()
             for c in all_courses:
+                subj_key = str(c.get("subject_id") or "")
+                keys = published_keys_by_subject.setdefault(subj_key, set())
                 try:
-                    for ch in json.loads(c.get("chapters_json") or "[]"):
+                    for ch_idx, ch in enumerate(json.loads(c.get("chapters_json") or "[]"), start=1):
                         if ch.get("status") == "Bản nháp":
                             continue
-                        total_course_lessons += sum(
-                            1 for ls in ch.get("lessons", []) if ls.get("status") != "Bản nháp"
-                        )
+                        pub_ls = [ls for ls in ch.get("lessons", []) if ls.get("status") != "Bản nháp"]
+                        total_course_lessons += len(pub_ls)
+                        for ls_idx, ls in enumerate(pub_ls, start=1):
+                            lid = str(ls.get("id") or "").strip()
+                            if lid:
+                                keys.add(lid)
+                            m = re.match(r"^(\d+\.\d+)\b", str(ls.get("title") or "").strip())
+                            if m:
+                                keys.add(m.group(1))
+                            keys.add(f"{ch_idx}.{ls_idx}")
                 except Exception:
                     pass
 
@@ -378,25 +403,55 @@ def get_students_analytics(
             code_val = st["user_code"] or ""
             display_name = st["display_name"] or st["full_name"] or "Học viên"
 
-            # 1. Tiến độ bài học thực tế từ student_lesson_progress
+            # 1. Tiến độ bài học thực tế từ student_lesson_progress (khớp đúng bài đã phát hành)
             if target_subject_id:
+                done_rows = conn.execute(
+                    """SELECT DISTINCT lesson_id
+                       FROM student_lesson_progress
+                       WHERE user_id = ? AND subject_id = ?""",
+                    (uid_val, target_subject_id),
+                ).fetchall()
                 prog_row = conn.execute(
-                    """SELECT COUNT(DISTINCT lesson_id) AS lessons_done,
-                              AVG(CASE WHEN quiz_total > 0 THEN (quiz_score * 10.0 / quiz_total) ELSE NULL END) AS avg_quiz_pct
+                    """SELECT AVG(CASE WHEN quiz_total > 0 THEN (quiz_score * 10.0 / quiz_total) ELSE NULL END) AS avg_quiz_pct
                        FROM student_lesson_progress
                        WHERE user_id = ? AND subject_id = ?""",
                     (uid_val, target_subject_id),
                 ).fetchone()
+                if published_lesson_keys:
+                    matched_done = sum(
+                        1 for r in done_rows if str(r["lesson_id"]) in published_lesson_keys
+                    )
+                    lessons_done = min(total_course_lessons, matched_done)
+                else:
+                    lessons_done = (
+                        min(total_course_lessons, len(done_rows))
+                        if total_course_lessons > 0
+                        else len(done_rows)
+                    )
             else:
+                done_rows = conn.execute(
+                    """SELECT DISTINCT subject_id, lesson_id
+                       FROM student_lesson_progress
+                       WHERE user_id = ?""",
+                    (uid_val,),
+                ).fetchall()
                 prog_row = conn.execute(
-                    """SELECT COUNT(*) AS lessons_done,
-                              AVG(CASE WHEN quiz_total > 0 THEN (quiz_score * 10.0 / quiz_total) ELSE NULL END) AS avg_quiz_pct
+                    """SELECT AVG(CASE WHEN quiz_total > 0 THEN (quiz_score * 10.0 / quiz_total) ELSE NULL END) AS avg_quiz_pct
                        FROM student_lesson_progress
                        WHERE user_id = ?""",
                     (uid_val,),
                 ).fetchone()
+                matched_done = sum(
+                    1
+                    for r in done_rows
+                    if str(r["lesson_id"]) in published_keys_by_subject.get(str(r["subject_id"]), set())
+                )
+                lessons_done = (
+                    min(total_course_lessons, matched_done)
+                    if total_course_lessons > 0
+                    else len(done_rows)
+                )
 
-            lessons_done = int(prog_row["lessons_done"] or 0) if prog_row else 0
             pct = (
                 min(100, round((lessons_done / total_course_lessons) * 100))
                 if total_course_lessons > 0
@@ -466,10 +521,12 @@ def get_students_analytics(
             elif total_subs > 0 and avg_quiz < 6.5:
                 risk_status = "at_risk"
                 risk_label = "Điểm thực hành < 6.5"
-            elif pct == 0 and lessons_done == 0:
+            elif lessons_done == 0 and total_subs == 0 and avg_def == 0 and tasks_done == 0:
                 risk_status = "at_risk"
                 risk_label = "Chưa bắt đầu học"
-            elif pct >= 70 and (avg_quiz >= 8.0 or exp_points >= 600):
+            elif (pct >= 70 or avg_def >= 85 or avg_quiz >= 8.5) and (
+                avg_quiz >= 8.0 or avg_def >= 85 or exp_points >= 600
+            ):
                 risk_status = "top_performer"
                 risk_label = "Xuất sắc"
             else:

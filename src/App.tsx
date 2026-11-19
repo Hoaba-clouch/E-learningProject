@@ -21,7 +21,7 @@ import SecurityDevicesScreen from "./screens/SecurityDevicesScreen";
 import MarloProjectDetailScreen from "./screens/MarloProjectDetailScreen";
 import MarloTeamScreen from "./screens/MarloTeamScreen";
 import MarloPersonDetailScreen from "./screens/MarloPersonDetailScreen";
-import { logoutUser } from "./api";
+import { logoutUser, setTabSessionRole } from "./api";
 
 export type Screen =
   | "login"
@@ -136,20 +136,31 @@ export default function App() {
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   };
   const [role, setRoleState] = useState<Role>(() => {
+    let initial: Role = "student";
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const r = params.get("role");
-      if (r === "instructor" || r === "admin" || r === "student") return r as Role;
-      const stored = window.localStorage.getItem("code-mind-role");
-      if (stored === "instructor" || stored === "admin" || stored === "student") return stored as Role;
+      const s = params.get("screen") || "";
+      if (r === "instructor" || r === "admin" || r === "student") {
+        initial = r as Role;
+      } else if (s.startsWith("instructor")) {
+        initial = "instructor";
+      } else if (s.startsWith("admin")) {
+        initial = "admin";
+      } else {
+        const stored = window.localStorage.getItem("code-mind-role");
+        if (stored === "instructor" || stored === "admin" || stored === "student") {
+          initial = stored as Role;
+        }
+      }
+      setTabSessionRole(initial);
     }
-    if (screen.startsWith("instructor")) return "instructor";
-    if (screen.startsWith("admin")) return "admin";
-    return "student";
+    return initial;
   });
 
   const setRole = (nextRole: Role) => {
     setRoleState(nextRole);
+    setTabSessionRole(nextRole);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("role", nextRole);
@@ -311,7 +322,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    void logoutUser();
+    void logoutUser(role);
     setScreen("login");
   };
 

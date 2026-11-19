@@ -26,6 +26,8 @@ import {
   fetchNotificationsApi,
   markNotificationReadApi,
   markAllNotificationsReadApi,
+  fetchInstructorCourses,
+  fetchInstructorChapterSubmissions,
   type AppNotification,
 } from "../api";
 
@@ -55,14 +57,16 @@ export default function MarloGlobalHeader({
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notificationsList, setNotificationsList] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [streakDays, setStreakDays] = useState<number>(14);
-  const [xpPoints, setXpPoints] = useState<number>(3240);
+  const [streakDays, setStreakDays] = useState<number>(0);
+  const [xpPoints, setXpPoints] = useState<number>(0);
+  const [instructorCoursesCount, setInstructorCoursesCount] = useState<number>(16);
+  const [instructorPendingCount, setInstructorPendingCount] = useState<number>(0);
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
     const loadNotifs = () => {
-      fetchNotificationsApi().then((data) => {
+      fetchNotificationsApi(role).then((data) => {
         if (!active || !data) return;
         setNotificationsList(data.notifications || []);
         setUnreadCount(data.unread_count || 0);
@@ -75,6 +79,35 @@ export default function MarloGlobalHeader({
       clearInterval(timer);
     };
   }, [role]);
+
+  useEffect(() => {
+    if ((role !== "instructor" && !screen.startsWith("instructor")) || screen.startsWith("admin")) {
+      return;
+    }
+    let active = true;
+    const loadInstructorCounts = () => {
+      fetchInstructorCourses().then((courses) => {
+        if (active && courses && courses.length > 0) {
+          setInstructorCoursesCount(courses.length);
+        }
+      });
+      fetchInstructorChapterSubmissions().then((ov) => {
+        if (active && ov?.summary) {
+          setInstructorPendingCount(
+            (ov.summary.pendingCount || 0) + (ov.summary.flaggedCount || 0)
+          );
+        }
+      });
+    };
+    loadInstructorCounts();
+    window.addEventListener("codemind-courses-updated", loadInstructorCounts);
+    window.addEventListener("codemind-instructor-updated", loadInstructorCounts);
+    return () => {
+      active = false;
+      window.removeEventListener("codemind-courses-updated", loadInstructorCounts);
+      window.removeEventListener("codemind-instructor-updated", loadInstructorCounts);
+    };
+  }, [role, screen]);
 
   useEffect(() => {
     if (role !== "student" || screen.startsWith("admin") || screen.startsWith("instructor")) {
@@ -152,16 +185,16 @@ export default function MarloGlobalHeader({
   ];
 
   return (
-    <header className="w-full flex items-center justify-between py-3.5 px-6 sm:px-8 bg-transparent border-0 transition-all shrink-0 relative z-30">
+    <header className="w-full flex items-center justify-between gap-3 py-3 px-4 sm:px-6 bg-transparent border-0 transition-all shrink-0 relative z-30">
       {/* ── LEFT: Pill Search Bar (Marlo Style with ⌘K Shortcut) ────────── */}
-      <div className="flex items-center gap-3 min-w-0 flex-1 max-w-[420px] shrink">
+      <div className="flex items-center gap-3 min-w-[200px] flex-1 max-w-[380px]">
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="group flex h-11 sm:h-12 w-full items-center justify-between rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-4.5 text-sm text-slate-500 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200 cursor-pointer"
+          className="group flex h-11 sm:h-12 w-full items-center justify-between gap-2 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-4 text-sm text-slate-500 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200 cursor-pointer"
           title="Mở bảng lệnh nhanh (Ctrl+K / ⌘K)"
         >
-          <div className="flex items-center gap-2 truncate">
+          <div className="flex items-center gap-2 min-w-0 truncate">
             <Search size={16} className="text-slate-400 transition group-hover:text-[#EE8420] dark:text-slate-500 dark:group-hover:text-[#F29B23] shrink-0" />
             <span className="truncate font-normal">Tìm kiếm task, bài học, dự án...</span>
           </div>
@@ -172,9 +205,9 @@ export default function MarloGlobalHeader({
       </div>
 
       {/* ── RIGHT: Merged Marlo Shell Controls + CodeMind Student Stats ─── */}
-      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         {/* Date & Sprint Status Indicator */}
-        <div className="hidden lg:flex h-11 sm:h-12 items-center gap-2.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-4 text-sm font-medium text-slate-700 dark:border-slate-800 dark:text-slate-200 shadow-xs shrink-0 whitespace-nowrap">
+        <div className="hidden 2xl:flex h-11 sm:h-12 items-center gap-2.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-4 text-sm font-medium text-slate-700 dark:border-slate-800 dark:text-slate-200 shadow-xs shrink-0 whitespace-nowrap">
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
@@ -217,19 +250,19 @@ export default function MarloGlobalHeader({
               type="button"
               onClick={() => onNavigate("instructor-courses")}
               className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-700 dark:border-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
-              title="Quản lý 16 Môn học CNTT 5 Chặng"
+              title={`Quản lý ${instructorCoursesCount} Môn học CNTT`}
             >
               <BookOpen size={15} className="text-slate-500 dark:text-slate-400 shrink-0" />
-              <span className="whitespace-nowrap">16 Môn học</span>
+              <span className="whitespace-nowrap">{instructorCoursesCount} Môn học</span>
             </button>
             <button
               type="button"
               onClick={() => onNavigate("instructor-grading")}
               className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-900 dark:border-slate-800 dark:text-white hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
-              title="5 bài nộp CI/CD & Phản biện AI đang chờ duyệt"
+              title={`${instructorPendingCount} bài nộp đang chờ duyệt hoặc cần kiểm tra`}
             >
               <span className="w-2 h-2 rounded-full bg-[#EE8420] shrink-0" />
-              <span className="whitespace-nowrap">5 Chờ duyệt</span>
+              <span className="whitespace-nowrap">{instructorPendingCount} Chờ duyệt</span>
             </button>
           </div>
         )}
@@ -262,11 +295,11 @@ export default function MarloGlobalHeader({
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="flex h-11 sm:h-12 items-center gap-2 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-4 sm:px-5 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-xs transition hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 active:scale-95 dark:border-slate-800 cursor-pointer shrink-0 whitespace-nowrap"
-          title="Tạo task mới hoặc hành động nhanh"
+          className="flex h-11 w-11 sm:h-12 sm:w-12 2xl:w-auto 2xl:px-4 items-center justify-center gap-2 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-xs transition hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 active:scale-95 dark:border-slate-800 cursor-pointer shrink-0 whitespace-nowrap"
+          title="Tạo task mới hoặc hành động nhanh (Ctrl+K)"
         >
-          <Plus size={15} className="stroke-[2.5] text-slate-600 dark:text-slate-300 shrink-0" />
-          <span className="whitespace-nowrap">Tạo mới</span>
+          <Plus size={16} className="stroke-[2.5] text-slate-600 dark:text-slate-300 shrink-0" />
+          <span className="hidden 2xl:inline whitespace-nowrap">Tạo mới</span>
         </button>
 
         {/* Marlo Authentic Dual Sun/Moon Capsule Switcher (.themesw with sliding spring knob) */}
@@ -318,7 +351,7 @@ export default function MarloGlobalHeader({
                     <div
                       key={n.id}
                       onClick={async () => {
-                        await markNotificationReadApi(n.id);
+                        await markNotificationReadApi(n.id, role);
                         setNotificationsList((prev) =>
                           prev.map((item) => (item.id === n.id ? { ...item, is_read: 1 } : item))
                         );
@@ -355,7 +388,7 @@ export default function MarloGlobalHeader({
                 <button
                   type="button"
                   onClick={async () => {
-                    await markAllNotificationsReadApi();
+                    await markAllNotificationsReadApi(role);
                     setNotificationsList((prev) => prev.map((item) => ({ ...item, is_read: 1 })));
                     setUnreadCount(0);
                   }}

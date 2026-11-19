@@ -19,6 +19,11 @@ import {
   GitBranch,
 } from "lucide-react";
 import type { SubjectModuleData, ChapterItem, LessonItem } from "../data/multiChapterCurriculum";
+import {
+  getLessonDisplayCode,
+  stripDuplicateChapterPrefix,
+  stripDuplicateLessonCode,
+} from "../utils/lessonFormat";
 
 interface MultiChapterSidebarProps {
   subject: SubjectModuleData;
@@ -110,8 +115,15 @@ function ChapterLessonGroup({
         className="pointer-events-none opacity-0 absolute z-0 rounded-[14px] bg-[#141619] dark:bg-[#F4F4F6] shadow-[0_4px_16px_rgba(0,0,0,0.14)]"
       />
 
-      {chapter.lessons.map((lesson) => {
+      {chapter.lessons.map((lesson, lIdx) => {
         const isActive = activeKey === lesson.id;
+        const displayCode = getLessonDisplayCode(
+          lesson.id,
+          lesson.title,
+          chapter.number,
+          lIdx
+        );
+        const cleanTitle = stripDuplicateLessonCode(lesson.title, displayCode);
 
         return (
           <button
@@ -181,7 +193,7 @@ function ChapterLessonGroup({
                       : "text-slate-900 dark:text-slate-100 font-semibold"
                   }`}
                 >
-                  {lesson.id} · {lesson.title}
+                  {displayCode} · {cleanTitle}
                 </span>
                 <div
                   className={`flex items-center gap-2.5 text-xs mt-1 transition-colors duration-150 ${
@@ -455,7 +467,7 @@ export function MultiChapterSidebar({
                     ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
                     : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
-                title={`Chương ${chapter.number}: ${chapter.title} (${chapter.progressPct}% hoàn thành)`}
+                title={`Chương ${chapter.number}: ${stripDuplicateChapterPrefix(chapter.title, chapter.number)} (${chapter.progressPct}% hoàn thành)`}
               >
                 {chapter.number.toString().padStart(2, "0")}
                 {isDone && (
@@ -507,9 +519,16 @@ export function MultiChapterSidebar({
         </div>
 
         <div className="mt-2.5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1.5 font-medium">
+          <span className="flex items-center gap-1.5 font-medium font-mono">
             <Star size={13} className="fill-amber-400 text-amber-400" />
-            {subject.totalXp} XP tích lũy
+            {(() => {
+              const allLessons = subject.chapters.flatMap((c) => c.lessons || []);
+              const earnedXp = allLessons
+                .filter((l) => l.status === "done")
+                .reduce((sum, l) => sum + (Number(l.xp) || 0), 0);
+              const totalXp = allLessons.reduce((sum, l) => sum + (Number(l.xp) || 0), 0);
+              return `${earnedXp}/${totalXp} XP môn học`;
+            })()}
           </span>
           <span className="flex items-center gap-1.5 font-mono">
             <Clock size={13} />
@@ -543,7 +562,7 @@ export function MultiChapterSidebar({
                     )}
                   </div>
                   <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition leading-snug mt-1">
-                    {chapter.title}
+                    {stripDuplicateChapterPrefix(chapter.title, chapter.number)}
                   </h3>
                   <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-mono">
                     <span>{(chapter.lessons?.length || 0)} bài học</span>

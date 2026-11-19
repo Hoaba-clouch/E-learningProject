@@ -385,8 +385,23 @@ export function LessonMindmapStudio({
       nextFreeY = Math.max(nextFreeY, rootRes.bottomY + 20);
     }
 
-    // Bảo đảm hiển thị cả các node mồ côi (orphan nodes chưa có cạnh nối từ root) để không bị tàng hình
-    const orphanNodes = currentData.nodes.filter((n) => !placeVisited.has(n.id));
+    // Bảo đảm chỉ hiển thị các node thực sự không thể đi tới từ root (không ép các nhánh đang chủ động thu gọn phải hiện lại)
+    const reachableFromRoot = new Set<string>();
+    if (rootNodeId && nodeMap.has(rootNodeId)) {
+      const stack = [rootNodeId];
+      while (stack.length > 0) {
+        const curr = stack.pop()!;
+        if (reachableFromRoot.has(curr)) continue;
+        reachableFromRoot.add(curr);
+        const children = childrenMap.get(curr) || [];
+        for (const cid of children) {
+          if (nodeMap.has(cid) && !reachableFromRoot.has(cid)) {
+            stack.push(cid);
+          }
+        }
+      }
+    }
+    const orphanNodes = currentData.nodes.filter((n) => !reachableFromRoot.has(n.id));
     if (orphanNodes.length > 0) {
       let orphanX = 40;
       let orphanY = nextFreeY;
@@ -575,26 +590,50 @@ export function LessonMindmapStudio({
               </span>
 
               {/* Collapse to Main Branches */}
-              <button
-                type="button"
-                onClick={handleCollapseToMain}
-                className="px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
-                title="Thu gọn về các bài chính"
-              >
-                <FolderClosed size={12} className="text-slate-500" />
-                <span className="text-[11px]">Chỉ bài chính</span>
-              </button>
+              {(() => {
+                const isMainCollapsed =
+                  Boolean(rootNodeId) &&
+                  expandedNodeIds.size === 1 &&
+                  expandedNodeIds.has(rootNodeId);
+                const isAllExpanded =
+                  currentData.nodes.length > 0 &&
+                  currentData.nodes.every((n) => {
+                    const children = childrenMap.get(n.id) || [];
+                    return children.length === 0 || expandedNodeIds.has(n.id);
+                  });
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCollapseToMain}
+                      className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                        isMainCollapsed
+                          ? "bg-[#141619] border-[#141619] text-white dark:bg-white dark:border-white dark:text-[#141619] shadow-xs"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
+                      }`}
+                      title="Thu gọn về các bài chính"
+                    >
+                      <FolderClosed size={12} />
+                      <span className="text-[11px]">Chỉ bài chính</span>
+                    </button>
 
-              {/* Expand All */}
-              <button
-                type="button"
-                onClick={handleExpandAll}
-                className="px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-300"
-                title="Mở rộng toàn bộ cây"
-              >
-                <FolderOpen size={12} className="text-blue-600" />
-                <span className="text-[11px]">Mở tất cả</span>
-              </button>
+                    {/* Expand All */}
+                    <button
+                      type="button"
+                      onClick={handleExpandAll}
+                      className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                        isAllExpanded && !isMainCollapsed
+                          ? "bg-blue-600 border-blue-600 text-white shadow-xs"
+                          : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-300"
+                      }`}
+                      title="Mở rộng toàn bộ cây"
+                    >
+                      <FolderOpen size={12} />
+                      <span className="text-[11px]">Mở tất cả</span>
+                    </button>
+                  </>
+                );
+              })()}
 
               {/* Fit view button */}
               <FitViewButton />

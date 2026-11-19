@@ -181,6 +181,7 @@ export function InstructorChapterGradingView({
       };
 
       await gradeInstructorChapterSubmission(activeSub.id, payload);
+      window.dispatchEvent(new CustomEvent("codemind-instructor-updated"));
       onNotify?.(
         action === "approve"
           ? `✓ Đã phê duyệt bài tập của ${activeSub.studentName} (${activeSub.score}/10)!`

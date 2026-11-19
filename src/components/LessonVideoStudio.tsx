@@ -397,7 +397,8 @@ export function LessonVideoStudio({
       {/* ─── VIDEO PLAYER CONTAINER (16:9 F8 STYLE) ─────────────────── */}
       <div
         key={`video-screen-${currentVideo.subjectCode}-${effectiveYoutubeId}`}
-        className="animate-fade-in rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-950 overflow-hidden shadow-sm h-auto"
+        className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-950 overflow-hidden shadow-sm h-auto"
+        style={{ transform: "none" }}
       >
         {/* Top bar of video */}
         <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs text-slate-300">
@@ -423,6 +424,7 @@ export function LessonVideoStudio({
         {/* Video Screen */}
         <div
           className="relative aspect-video w-full max-h-[500px] bg-black"
+          style={{ transform: "none", isolation: "isolate" }}
           onMouseDown={() => setHasInteractedWithPlayer(true)}
           onClick={() => setHasInteractedWithPlayer(true)}
         >

@@ -35,8 +35,18 @@ import MarloActivityRing from "../components/MarloActivityRing";
 import MarloCapacityBar from "../components/MarloCapacityBar";
 import MarloToast from "../components/MarloToast";
 import { CNTT_PROJECTS, type CNTTProjectItem } from "./MarloProjectsScreen";
-import { fetchKanbanWorkspace, fetchStudentLearningOverview, type StudentLearningOverview } from "../api";
+import {
+  fetchKanbanWorkspace,
+  fetchStudentLearningOverview,
+  getStoredUser,
+  type StudentLearningOverview,
+} from "../api";
 import { MULTI_CHAPTER_SUBJECTS as SUBJECTS } from "../data/multiChapterCurriculum";
+import {
+  extractNumericLessonCode,
+  getLessonDisplayCode,
+  stripDuplicateLessonCode,
+} from "../utils/lessonFormat";
 
 interface Props {
   avatarStyle: AvatarStyle;
@@ -71,9 +81,11 @@ export default function StudentDashboard({
   onLogout,
   onOpenCommandPalette,
 }: Props) {
-  const [totalXp, setTotalXp] = useState(3240);
-  const [streakDays, setStreakDays] = useState(14);
-  const [studentName, setStudentName] = useState("Nguyễn Văn A");
+  const [totalXp, setTotalXp] = useState(0);
+  const [streakDays, setStreakDays] = useState(0);
+  const [studentName, setStudentName] = useState(
+    () => getStoredUser("student")?.name || getStoredUser("student")?.full_name || "Nguyễn Văn A"
+  );
   const [learningOverview, setLearningOverview] = useState<StudentLearningOverview | null>(null);
   const [projectsList, setProjectsList] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
 
@@ -164,7 +176,11 @@ export default function StudentDashboard({
 
     const flatLessons: Array<{
       id: string;
+      rawId: string;
+      displayCode: string;
+      normCode: string | null;
       title: string;
+      cleanTitle: string;
       duration: string;
       xp: number;
       lead: string;
@@ -174,17 +190,46 @@ export default function StudentDashboard({
     }> = [];
 
     chaptersRaw.forEach((ch: any, chIdx: number) => {
+      const baseChap =
+        fallbackSubject.chapters.find((c) => c.id === ch.id) ||
+        fallbackSubject.chapters[chIdx];
+      const baseLessons = baseChap?.lessons || [];
       const pubLessons = (ch.lessons || []).filter((ls: any) => ls.status !== "Bản nháp");
-      pubLessons.forEach((ls: any) => {
+      pubLessons.forEach((ls: any, lIdx: number) => {
+        const normCode = extractNumericLessonCode(ls.id, ls.title);
+        const displayCode = getLessonDisplayCode(ls.id, ls.title, chIdx + 1, lIdx);
+        const baseLesson =
+          baseLessons.find((b) => b.id === ls.id) ||
+          (normCode ? baseLessons.find((b) => b.id === normCode) : undefined);
+        const effectiveId = baseLesson?.id || ls.id;
+        const isDone =
+          doneIds.has(ls.id) ||
+          doneIds.has(effectiveId) ||
+          (normCode ? doneIds.has(normCode) : false) ||
+          doneIds.has(displayCode);
+        const resolvedXp =
+          typeof ls.xp === "number" && ls.xp > 0
+            ? ls.xp
+            : baseLesson?.xp || 60;
+
         flatLessons.push({
-          id: ls.id,
+          id: effectiveId,
+          rawId: ls.id,
+          displayCode,
+          normCode,
           title: ls.title,
-          duration: ls.duration || "~20 phút",
-          xp: typeof ls.xp === "number" ? ls.xp : 60,
-          lead: ls.content?.lead || ls.content?.objective || fallbackSubject.description,
+          cleanTitle: stripDuplicateLessonCode(ls.title, displayCode),
+          duration: ls.duration || baseLesson?.duration || "~20 phút",
+          xp: resolvedXp,
+          lead:
+            ls.content?.lead ||
+            ls.content?.objective ||
+            baseLesson?.lead ||
+            baseLesson?.objective ||
+            fallbackSubject.description,
           chapterNumber: chIdx + 1,
           chapterTitle: ch.title || `Chương ${chIdx + 1}`,
-          done: doneIds.has(ls.id),
+          done: isDone,
         });
       });
     });
@@ -196,11 +241,21 @@ export default function StudentDashboard({
         : null;
 
     const resumeLesson =
-      (lastLessonSaved && flatLessons.find((l) => l.id === lastLessonSaved)) ||
+      (lastLessonSaved &&
+        flatLessons.find(
+          (l) =>
+            l.id === lastLessonSaved ||
+            l.rawId === lastLessonSaved ||
+            l.displayCode === lastLessonSaved
+        )) ||
       flatLessons.find((l) => !l.done) ||
       flatLessons[0] || {
         id: "1.1",
+        rawId: "1.1",
+        displayCode: "1.1",
+        normCode: "1.1",
         title: fallbackSubject.name,
+        cleanTitle: fallbackSubject.name,
         duration: "~20 phút",
         xp: 60,
         lead: fallbackSubject.description,
@@ -218,9 +273,23 @@ export default function StudentDashboard({
       subRows.filter((s) => s.subject_id === fallbackSubject.id).map((s) => s.chapter_number)
     ).size;
 
-    const quizRecords = completedRows.filter(
-      (r) => r.subject_id === fallbackSubject.id && r.quiz_total > 0
-    );
+    const publishedKeys = new Set<string>();
+    flatLessons.forEach((l) => {
+      publishedKeys.add(l.id);
+      publishedKeys.add(l.rawId);
+      publishedKeys.add(l.displayCode);
+      if (l.normCode) publishedKeys.add(l.normCode);
+    });
+
+    const quizRecords =
+      doneCount > 0
+        ? completedRows.filter(
+            (r) =>
+              r.subject_id === fallbackSubject.id &&
+              r.quiz_total > 0 &&
+              publishedKeys.has(r.lesson_id)
+          )
+        : [];
     const quizAvgPct =
       quizRecords.length > 0
         ? Math.round(
@@ -507,11 +576,11 @@ export default function StudentDashboard({
   });
 
   return (
-    <div ref={dashboardRef} className="min-h-full p-4 sm:p-6 lg:p-7 relative select-none transform-gpu">
+    <div ref={dashboardRef} className="min-h-full p-4 sm:p-6 lg:p-7 relative select-none">
       {/* ─── 1. TOP HEADER (MARLO PAGE HEAD) ─── */}
-      <header className="marlo-card mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200/90 dark:border-slate-800">
-        <div className="min-w-0">
-          <div className="theme-primary-text truncate text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+      <header className="marlo-card mb-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-slate-200/90 dark:border-slate-800">
+        <div className="min-w-0 flex-1">
+          <div className="theme-primary-text text-xs font-bold uppercase tracking-wider flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span>CodeMind Campus</span>
             <span className="text-slate-300 dark:text-slate-700">·</span>
             <span>Khoa Công nghệ Thông tin & AI</span>
@@ -637,7 +706,7 @@ export default function StudentDashboard({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="pill pill--accent font-mono text-[10.5px] font-bold tracking-wide">
-                      CHƯƠNG {focusLearning.resumeLesson.chapterNumber} · BÀI {focusLearning.resumeLesson.id}
+                      CHƯƠNG {focusLearning.resumeLesson.chapterNumber} · BÀI {focusLearning.resumeLesson.displayCode}
                     </span>
                     <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
                       {focusLearning.resumeLesson.done ? "Đã hoàn thành" : "Đang học"}
@@ -653,7 +722,7 @@ export default function StudentDashboard({
                   </div>
 
                   <h2 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-2.5 leading-snug tracking-tight">
-                    {focusLearning.resumeLesson.title}
+                    {focusLearning.resumeLesson.cleanTitle}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed max-w-2xl">
                     {focusLearning.resumeLesson.lead}
@@ -779,7 +848,7 @@ export default function StudentDashboard({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3">
                   {[
                     {
                       step: "Chặng 1",
@@ -832,7 +901,7 @@ export default function StudentDashboard({
                           {m.step}
                         </span>
                         <span
-                          className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full ${
+                          className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
                             m.done
                               ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
                               : m.active

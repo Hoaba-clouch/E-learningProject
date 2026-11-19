@@ -448,6 +448,27 @@ import {
 
 
 import { CNTT_PROJECTS } from "./MarloProjectsScreen";
+import { MULTI_CHAPTER_SUBJECTS } from "../data/multiChapterCurriculum";
+import { extractNumericLessonCode } from "../utils/lessonFormat";
+
+function getEffectiveLessonXp(subjectId: string | undefined, lesson: Lesson): number {
+  if (typeof (lesson as any).xp === "number" && (lesson as any).xp > 0) {
+    return (lesson as any).xp;
+  }
+  const subj = MULTI_CHAPTER_SUBJECTS.find((s) => s.id === subjectId);
+  const code = extractNumericLessonCode(lesson.id, lesson.title);
+  if (subj) {
+    for (const ch of subj.chapters) {
+      const matched = ch.lessons.find(
+        (l) => l.id === lesson.id || (code ? l.id === code : false)
+      );
+      if (matched && typeof matched.xp === "number" && matched.xp > 0) {
+        return matched.xp;
+      }
+    }
+  }
+  return 60;
+}
 
 
 
@@ -2203,23 +2224,15 @@ export default function InstructorPanel({
 
     await decideDualSubmission(activeSubmission.id, {
 
-
-
       action: "approve",
-
-
 
       final_score: score,
 
-
-
       instructor_feedback: feedbackText,
-
-
 
     });
 
-
+    window.dispatchEvent(new CustomEvent("codemind-instructor-updated"));
 
     notify(`Đã phê duyệt ${score}/100 cho ${activeSubmission.studentName}.`);
 
@@ -2295,19 +2308,13 @@ export default function InstructorPanel({
 
     await decideDualSubmission(activeSubmission.id, {
 
-
-
       action: "redefense",
-
-
 
       instructor_feedback: feedbackText,
 
-
-
     });
 
-
+    window.dispatchEvent(new CustomEvent("codemind-instructor-updated"));
 
     notify(`Đã gửi yêu cầu bảo vệ lại 3D AI cho ${activeSubmission.studentName}.`);
 
@@ -2603,7 +2610,7 @@ export default function InstructorPanel({
     const preset = getSubjectAigcPreset(activeClass?.subjectId || "", activeClass?.code || "CS201", lesson.title);
     setEditTitle(lesson.title || "");
     setEditDuration(lesson.duration || "15 phút");
-    setEditXp(typeof (lesson as any).xp === "number" ? (lesson as any).xp : 150);
+    setEditXp(getEffectiveLessonXp(activeClass?.subjectId, lesson));
     setEditDocuments(Array.isArray(lesson.documents) ? lesson.documents : []);
     setAigcTriggeredInModal(false);
     setEditReading(content.reading || "");
@@ -3647,225 +3654,83 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
       {/* ─── CARD 1: UNIFIED INSTRUCTOR SHELL HEADER ────────────────────────── */}
+      <header className="marlo-card mb-4 sm:mb-5 relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs p-4 sm:p-5 flex flex-col gap-3.5">
+        {/* Row 1: Title & Academic Metadata Pills */}
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                CodeMind Teaching OS
+              </span>
+              <span className="text-slate-300 dark:text-slate-700">·</span>
+              <span className="text-[11px] font-mono font-semibold text-amber-600 dark:text-amber-400">
+                {activeClass.code} · {classes.length} học phần
+              </span>
+            </div>
 
+            <MarloTitle
+              text="Không gian Giảng viên & Thẩm định Socratic"
+              className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 dark:text-white leading-snug"
+            />
 
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Đồng bộ 1-1 với học viên: Quản lý giáo trình, Docker CI/CD Test Cases, Master Mindmap và Hội đồng Phản biện AI 3D.
+            </p>
+          </div>
 
-      <header className="marlo-card mb-4 sm:mb-5 relative z-10 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-xs p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-
-
-
-        <div className="min-w-0">
-
-
-
-          <div className="flex flex-wrap items-center gap-2 mb-1.5">
-
-
-
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-
-
-
-              CodeMind Teaching OS
-
-
-
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+              <GraduationCap size={14} className="text-slate-500 dark:text-slate-400 shrink-0" />
+              <span>{activeClass.semester}</span>
             </span>
 
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-xs font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span>Trọng số: CI/CD {rubric.cicdWeightPct}% · Phản biện AI {rubric.defenseWeightPct}%</span>
+            </div>
+          </div>
+        </div>
 
-
-            <span className="text-slate-300 dark:text-slate-700">·</span>
-
-
-
+        {/* Row 2: Course Switcher & Quick Action Buttons */}
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 hidden sm:inline">
+              Lớp học phần:
+            </span>
             <select
-
-
-
               aria-label="Chọn lớp học phần"
-
-
-
               value={selectedClassId}
-
-
-
               onChange={(e) => handleClassSelect(e.target.value)}
-
-
-
-              className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 transition"
-
-
-
+              className="w-full sm:w-auto sm:min-w-[300px] max-w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold rounded-xl px-3 py-2 outline-none cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 transition"
             >
-
-
-
               {classes.map((c) => (
-
-
-
                 <option key={c.id} value={c.id}>
-
-
-
                   {c.code} — {c.name} ({c.studentCount} HV)
-
-
-
                 </option>
-
-
-
               ))}
-
-
-
             </select>
-
-
-
           </div>
 
-
-
-          <MarloTitle
-
-
-
-            text="Không gian Giảng viên & Thẩm định Socratic"
-
-
-
-            className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 dark:text-white leading-tight"
-
-
-
-          />
-
-
-
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-
-
-
-            Đồng bộ 1-1 với học viên: Quản lý giáo trình, Docker CI/CD Test Cases, Master Mindmap và Hội đồng Phản biện AI 3D.
-
-
-
-          </p>
-
-
-
-        </div>
-
-
-
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-
-
-
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-
-
-
-            <GraduationCap size={14} className="text-slate-500 dark:text-slate-400" />
-
-
-
-            <span>{activeClass.semester}</span>
-
-
-
-          </span>
-
-
-
-          <button
-
-
-
-            type="button"
-
-
-
-            onClick={() => onNavigate?.("defense-room")}
-
-
-
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 transition cursor-pointer shadow-2xs"
-
-
-
-          >
-
-
-
-            <ShieldCheck size={14} className="text-[#EE8420]" />
-
-
-
-            <span>Phòng Phản biện 3D</span>
-
-
-
-          </button>
-
-
-
-          <button
-
-
-
-            type="button"
-
-
-
-            onClick={() => setIsCopilotOpen(true)}
-
-
-
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] dark:hover:bg-white px-3.5 py-2 text-xs font-bold transition cursor-pointer shadow-xs"
-
-
-
-          >
-
-
-
-            <WandSparkles size={14} />
-
-
-
-            <span>AI Teaching Co-Pilot</span>
-
-
-
-          </button>
-
-
-
-          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-xs font-mono text-slate-500 dark:text-slate-400">
-
-
-
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-
-
-
-            <span>Trọng số: CI/CD {rubric.cicdWeightPct}% · Phản biện AI {rubric.defenseWeightPct}%</span>
-
-
-
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigate?.("defense-room")}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 transition cursor-pointer shadow-2xs whitespace-nowrap"
+            >
+              <ShieldCheck size={14} className="text-[#EE8420]" />
+              <span>Phòng Phản biện 3D</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCopilotOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] dark:hover:bg-white px-3.5 py-2 text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              <WandSparkles size={14} />
+              <span>AI Teaching Co-Pilot</span>
+            </button>
           </div>
-
-
-
         </div>
-
-
-
       </header>
 
 
@@ -3914,7 +3779,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                  {overviewScope === "class" ? `${activeClass.code} · ${activeClass.name}` : "Tổng hợp 6 Học phần CNTT"}
+                  {overviewScope === "class" ? `${activeClass.code} · ${activeClass.name}` : `Tổng hợp ${classes.length} Học phần CNTT`}
 
 
 
@@ -3995,77 +3860,77 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
                 <MarloActivityRing
-
-
-
-                  title="Tỷ lệ hoàn thành chương & bài tập"
-
-
-
+                  title="Phân bổ Năng lực & Nghiệm thu Thực tế"
                   subtitle={
-
-
-
-                    overviewScope === "class"
-
-
-
+                    studentsAnalytics.length > 0
+                      ? `Dữ liệu MySQL thật trên ${studentsAnalytics.length} học viên`
+                      : overviewScope === "class"
                       ? `Tổng hợp lớp ${activeClass.code} tuần hiện tại`
-
-
-
                       : `Tổng hợp trung bình ${classes.length} lớp học phần`
-
-
-
                   }
-
-
-
                   actionText="Mở Chấm điểm"
-
-
-
                   onAction={() => handleTabSwitch("grading")}
-
-
-
                   centerValue={overviewStats.avgCompletion}
-
-
-
                   centerLabel="hoàn thành"
-
-
-
-                  segments={[
-
-
-
-                    { id: "wait", label: "Chưa nộp", value: 14, count: Math.max(2, Math.round(overviewStats.studentCount * 0.14)), color: "#cbd5e1" },
-
-
-
-                    { id: "review", label: "Chờ duyệt kép", value: Math.max(12, overviewStats.pendingCount * 6), count: overviewStats.pendingCount + overviewStats.flaggedCount, color: "#64748b" },
-
-
-
-                    { id: "moving", label: "Đang thực hành", value: 24, count: Math.round(overviewStats.studentCount * 0.24), color: "#f97316" },
-
-
-
-                    { id: "done", label: "Đã đạt chuẩn", value: overviewStats.avgCompletion, count: Math.round((overviewStats.studentCount * overviewStats.avgCompletion) / 100), color: "#1e293b" },
-
-
-
-                  ]}
-
-
-
+                  segments={
+                    studentsAnalytics.length > 0
+                      ? (() => {
+                          const totalSt = Math.max(1, studentsAnalytics.length);
+                          return [
+                            {
+                              id: "risk",
+                              label: "Cần hỗ trợ",
+                              value: Math.round((overviewStats.atRiskCount / totalSt) * 100),
+                              count: overviewStats.atRiskCount,
+                              color: "#cbd5e1",
+                            },
+                            {
+                              id: "track",
+                              label: "Đúng tiến độ",
+                              value: Math.round((overviewStats.onTrackCount / totalSt) * 100),
+                              count: overviewStats.onTrackCount,
+                              color: "#f97316",
+                            },
+                            {
+                              id: "top",
+                              label: "Xuất sắc",
+                              value: Math.round((overviewStats.topPerformersCount / totalSt) * 100),
+                              count: overviewStats.topPerformersCount,
+                              color: "#1e293b",
+                            },
+                          ];
+                        })()
+                      : [
+                          {
+                            id: "flagged",
+                            label: "Cần kiểm tra",
+                            value: Math.round(
+                              (overviewStats.flaggedCount / Math.max(1, overviewStats.totalSubs)) * 100
+                            ),
+                            count: overviewStats.flaggedCount,
+                            color: "#cbd5e1",
+                          },
+                          {
+                            id: "review",
+                            label: "Chờ duyệt kép",
+                            value: Math.round(
+                              (overviewStats.pendingCount / Math.max(1, overviewStats.totalSubs)) * 100
+                            ),
+                            count: overviewStats.pendingCount,
+                            color: "#f97316",
+                          },
+                          {
+                            id: "done",
+                            label: "Đã đạt chuẩn",
+                            value: Math.round(
+                              (overviewStats.gradedCount / Math.max(1, overviewStats.totalSubs)) * 100
+                            ),
+                            count: overviewStats.gradedCount,
+                            color: "#1e293b",
+                          },
+                        ]
+                  }
                   className="marlo-card h-full rounded-[24px] dark:bg-[#14161F]"
-
-
-
                 />
 
 
@@ -4451,49 +4316,32 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
                 {/* Mastery Capacity Bar */}
-
-
-
                 <MarloCapacityBar
-
-
-
-                  title="Phân bổ Trạng thái Học tập & Thẩm định Bài nộp"
-
-
-
-                  subtitle="Thống kê thực tế từ MySQL: Bài đã chấm, chờ duyệt & cảnh báo lệch điểm"
-
-
-
-                  totalLabel="hồ sơ / học viên"
-
-
-
+                  title={
+                    studentsAnalytics.length > 0
+                      ? "Phân bổ Trạng thái Học tập (MySQL)"
+                      : "Phân bổ Thẩm định Bài nộp CI/CD"
+                  }
+                  subtitle={
+                    studentsAnalytics.length > 0
+                      ? "Thống kê thực tế từ MySQL: Học viên Xuất sắc, Đúng tiến độ & Cần hỗ trợ"
+                      : "Thống kê thực tế: Bài đã chấm, chờ duyệt & cảnh báo lệch điểm"
+                  }
+                  totalLabel={studentsAnalytics.length > 0 ? "học viên" : "bài nộp"}
                   className="bg-slate-50/40 dark:bg-slate-900/40 border-slate-200/70"
-
-
-
-                  items={[
-
-
-
-                    { id: "graded", label: "Đã phê duyệt chuẩn", count: overviewStats.gradedCount + overviewStats.topPerformersCount, color: "#14161a" },
-
-
-
-                    { id: "pending", label: "Đang học / Chờ duyệt", count: overviewStats.pendingCount + overviewStats.onTrackCount, color: "#64748b" },
-
-
-
-                    { id: "flagged", label: "Cần hỗ trợ / Lệch điểm", count: overviewStats.flaggedCount + overviewStats.atRiskCount, color: "#EE8420" },
-
-
-
-                  ]}
-
-
-
+                  items={
+                    studentsAnalytics.length > 0
+                      ? [
+                          { id: "top", label: "Xuất sắc", count: overviewStats.topPerformersCount, color: "#14161a" },
+                          { id: "track", label: "Đúng tiến độ", count: overviewStats.onTrackCount, color: "#64748b" },
+                          { id: "risk", label: "Cần hỗ trợ", count: overviewStats.atRiskCount, color: "#EE8420" },
+                        ]
+                      : [
+                          { id: "graded", label: "Đã phê duyệt chuẩn", count: overviewStats.gradedCount, color: "#14161a" },
+                          { id: "pending", label: "Đang chờ duyệt", count: overviewStats.pendingCount, color: "#64748b" },
+                          { id: "flagged", label: "Cần hỗ trợ / Lệch điểm", count: overviewStats.flaggedCount, color: "#EE8420" },
+                        ]
+                  }
                 />
 
 
@@ -5447,13 +5295,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
                               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-
-
-
-                                +{(lesson as any).xp ?? 150} XP
-
-
-
+                                +{getEffectiveLessonXp(activeClass?.subjectId, lesson)} XP
                               </span>
 
 
@@ -8106,28 +7948,13 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
       {lessonModalOpen && selectedLesson && (
-
-
-
         <div
-
-
-
           onClick={() => setLessonModalOpen(false)}
-
-
-
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-xs p-4"
-
-
-
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
         >
-
-
-
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-[95vw] max-w-5xl xl:max-w-6xl max-h-[92vh] rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            className="w-[95vw] max-w-5xl xl:max-w-6xl max-h-[92vh] rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden"
           >
             {/* ── MODAL HEADER ──────────────────────────────────────────────── */}
             <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
@@ -8296,8 +8123,8 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
                         <span className="text-[10px] font-bold text-slate-400 uppercase">Chọn nhanh:</span>
                         {[
                           { title: "Kế thừa C++ (F8 Official)", id: "M6FwepHC6vM" },
-                          { title: "Đa hình & Bảng ảo vtable", id: "0QUZ3w6U9-I" },
-                          { title: "Smart Pointers (unique/shared)", id: "UOBHzG63UDA" },
+                          { title: "Đa hình & Bảng ảo vtable", id: "m2ZsYwZuns4" },
+                          { title: "Smart Pointers (unique/shared)", id: "JtWcUHRyqkA" },
                         ].map((v) => (
                           <button
                             key={v.id}
@@ -8317,7 +8144,10 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
                         <span>Khung xem trước Video (16:9 Live Preview):</span>
                         <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">Đồng bộ học viên 100%</span>
                       </div>
-                      <div className="relative aspect-video w-full max-w-2xl mx-auto rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-black shadow-sm">
+                      <div
+                        className="relative aspect-video w-full max-w-2xl mx-auto rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-black shadow-sm"
+                        style={{ transform: "none", isolation: "isolate" }}
+                      >
                         <iframe
                           src={`https://www.youtube-nocookie.com/embed/${extractYoutubeId(editYoutubeUrl)}?rel=0&modestbranding=1`}
                           title="YouTube Preview"
@@ -9059,37 +8889,13 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
       {tcModalOpen && activeTcAssignment && (
-
-
-
         <div
-
-
-
           onClick={() => setTcModalOpen(false)}
-
-
-
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-xs p-4"
-
-
-
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
         >
-
-
-
           <div
-
-
-
             onClick={(e) => e.stopPropagation()}
-
-
-
-            className="w-full max-w-2xl max-h-[86vh] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden"
-
-
-
+            className="w-full max-w-3xl max-h-[88vh] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden"
           >
 
 
@@ -9178,41 +8984,59 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
                     Lưu đề bài Lab
                   </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    value={editAssignTitle}
-                    onChange={(e) => setEditAssignTitle(e.target.value)}
-                    placeholder="Tiêu đề bài tập Lab..."
-                    className="sm:col-span-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-semibold outline-none"
-                  />
-                  <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2">
-                    <span className="text-[11px] text-slate-400 font-mono">Điểm/XP:</span>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                  <div className="sm:col-span-3 space-y-1">
+                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Tiêu đề bài tập Lab
+                    </label>
                     <input
-                      type="number"
-                      min={10}
-                      max={1000}
-                      value={editAssignPoints}
-                      onChange={(e) => setEditAssignPoints(Number(e.target.value) || 100)}
-                      className="w-16 bg-transparent text-xs font-mono font-bold outline-none"
+                      type="text"
+                      value={editAssignTitle}
+                      onChange={(e) => setEditAssignTitle(e.target.value)}
+                      placeholder="Tiêu đề bài tập Lab..."
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-900 dark:text-white outline-none"
                     />
                   </div>
+                  <div className="sm:col-span-1 space-y-1">
+                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Điểm / XP
+                    </label>
+                    <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2">
+                      <span className="text-[11px] text-slate-400 font-mono">+</span>
+                      <input
+                        type="number"
+                        min={10}
+                        max={1000}
+                        value={editAssignPoints}
+                        onChange={(e) => setEditAssignPoints(Number(e.target.value) || 100)}
+                        className="w-full bg-transparent text-xs font-mono font-bold text-slate-900 dark:text-white outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <textarea
-                    rows={2}
-                    value={editAssignDesc}
-                    onChange={(e) => setEditAssignDesc(e.target.value)}
-                    placeholder="Yêu cầu bài tập & tiêu chí đánh giá..."
-                    className="sm:col-span-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs outline-none resize-none"
-                  />
+                <div className="space-y-1">
+                  <label className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Docker Sandbox Image
+                  </label>
                   <input
                     type="text"
                     value={editAssignDockerImage}
                     onChange={(e) => setEditAssignDockerImage(e.target.value)}
                     placeholder="codemind/cpp20-sandbox:latest"
-                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 font-mono text-[11px] outline-none"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 font-mono text-xs text-slate-900 dark:text-white outline-none"
                     title="Docker image chạy test"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Mô tả yêu cầu & Tiêu chí đánh giá
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editAssignDesc}
+                    onChange={(e) => setEditAssignDesc(e.target.value)}
+                    placeholder="Yêu cầu bài tập & tiêu chí đánh giá..."
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs text-slate-900 dark:text-white leading-relaxed outline-none resize-y overflow-y-auto"
                   />
                 </div>
               </div>
@@ -10701,46 +10525,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-      {!isCopilotOpen && (
-
-
-
-        <button
-
-
-
-          type="button"
-
-
-
-          onClick={() => setIsCopilotOpen(true)}
-
-
-
-          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-[#141619] hover:bg-black text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 px-4 py-3 text-xs font-bold shadow-lg border border-black/10 dark:border-white/20 transition cursor-pointer"
-
-
-
-        >
-
-
-
-          <Bot size={16} />
-
-
-
-          <span>AI Co-Pilot Giảng viên</span>
-
-
-
-        </button>
-
-
-
-      )}
-
-
-
+      {/* Copilot Floating Drawer triggered from Shell Header */}
       {isCopilotOpen && (
 
 

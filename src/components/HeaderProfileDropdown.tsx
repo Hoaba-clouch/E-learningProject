@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { getStoredUser, fetchCurrentUser } from "../api";
+import { getStoredUser, fetchCurrentUser, ensureRoleSession } from "../api";
 import {
   UserRound,
   Moon,
@@ -89,20 +89,41 @@ export function HeaderProfileDropdown({
     };
   }, [isOpen, isClosing]);
 
-  const [currentUser, setCurrentUser] = useState<any>(() => getStoredUser());
+  const [currentUser, setCurrentUser] = useState<any>(() => getStoredUser(role));
 
   useEffect(() => {
     let active = true;
-    const user = getStoredUser();
-    if (user) {
-      setCurrentUser(user);
-    } else {
-      fetchCurrentUser().then((u) => {
-        if (active && u) setCurrentUser(u);
+    const syncUser = () => {
+      const cached = getStoredUser(role);
+      if (cached) {
+        setCurrentUser(cached);
+        return;
+      }
+      ensureRoleSession(role).then(() => {
+        if (!active) return;
+        const freshCached = getStoredUser(role);
+        if (freshCached) {
+          setCurrentUser(freshCached);
+        } else {
+          fetchCurrentUser(role).then((u) => {
+            if (active && u) setCurrentUser(u);
+          });
+        }
       });
-    }
+    };
+    syncUser();
+
+    const handleAuthUpdated = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (!detail?.role || detail.role === role) {
+        const updated = getStoredUser(role);
+        if (active && updated) setCurrentUser(updated);
+      }
+    };
+    window.addEventListener("codemind-auth-updated", handleAuthUpdated);
     return () => {
       active = false;
+      window.removeEventListener("codemind-auth-updated", handleAuthUpdated);
     };
   }, [role]);
 
@@ -110,9 +131,9 @@ export function HeaderProfileDropdown({
     currentUser?.name ||
     currentUser?.full_name ||
     (role === "student"
-      ? "Minh Anh"
+      ? "Học viên CodeMind"
       : role === "instructor"
-      ? "Cô Trần Thị B"
+      ? "Giảng viên CodeMind"
       : "Admin AIO");
 
   const userCode =
@@ -123,6 +144,20 @@ export function HeaderProfileDropdown({
       : role === "instructor"
       ? "GV-104"
       : "ADM-01");
+
+  const userInitials = React.useMemo(() => {
+    const cleaned = String(userName || "")
+      .replace(/^(cô|thầy|ts\.?|ths\.?|pgs\.?)\s+/i, "")
+      .trim();
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+    if (parts.length === 1 && parts[0].length >= 2) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+    return role === "student" ? "HV" : role === "instructor" ? "GV" : "AD";
+  }, [userName, role]);
 
   return (
     <div className="relative inline-block text-left shrink-0" ref={dropdownRef}>
@@ -142,7 +177,7 @@ export function HeaderProfileDropdown({
         {/* User Avatar with status indicator */}
         <div className="relative shrink-0">
           <span className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 shadow-2xs font-mono">
-            {role === "student" ? "NA" : role === "instructor" ? "TB" : "AD"}
+            {userInitials}
           </span>
           <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-[#1b1c1e]" />
         </div>

@@ -24,6 +24,44 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const TOKEN_KEY = "codemind.access_token";
 const REFRESH_TOKEN_KEY = "codemind.refresh_token";
 const TOKEN_ROLE_KEY = "codemind.token_role";
+const USER_INFO_KEY = "codemind.user_info";
+const TAB_ROLE_KEY = "codemind.tab_role";
+
+export type SessionRole = "student" | "instructor" | "admin";
+
+function isSessionRole(val?: string | null): val is SessionRole {
+  return val === "student" || val === "instructor" || val === "admin";
+}
+
+export function setTabSessionRole(role: SessionRole) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(TAB_ROLE_KEY, role);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function inferTabRole(): SessionRole {
+  if (typeof window === "undefined") return "student";
+  try {
+    const url = new URLSearchParams(window.location.search);
+    const qRole = url.get("role");
+    if (isSessionRole(qRole)) return qRole;
+    const qScreen = url.get("screen") || "";
+    if (qScreen.startsWith("admin")) return "admin";
+    if (qScreen.startsWith("instructor")) return "instructor";
+    const tabRole = window.sessionStorage.getItem(TAB_ROLE_KEY);
+    if (isSessionRole(tabRole)) return tabRole;
+    const legacyRole =
+      window.localStorage.getItem(TOKEN_ROLE_KEY) ||
+      window.localStorage.getItem("code-mind-role");
+    if (isSessionRole(legacyRole)) return legacyRole;
+  } catch {
+    // Ignore storage/url errors
+  }
+  return "student";
+}
 
 export interface TestCaseResult {
   id: number;
@@ -78,8 +116,24 @@ export interface KanbanBoardData {
   dependencies: Array<{ task_id: string; depends_on_task_id: string }>;
 }
 
-function getToken(): string | null {
-  return typeof window !== "undefined" ? window.localStorage.getItem(TOKEN_KEY) : null;
+function getToken(role?: SessionRole): string | null {
+  if (typeof window === "undefined") return null;
+  const targetRole = role || inferTabRole();
+  const scoped = window.localStorage.getItem(`${TOKEN_KEY}.${targetRole}`);
+  if (scoped && scoped !== "mock-token") {
+    return scoped;
+  }
+  const legacyToken = window.localStorage.getItem(TOKEN_KEY);
+  if (!legacyToken || legacyToken === "mock-token") return null;
+  const legacyRole = window.localStorage.getItem(TOKEN_ROLE_KEY);
+  if (
+    !role ||
+    legacyRole === targetRole ||
+    (targetRole === "instructor" && legacyRole === "admin")
+  ) {
+    return legacyToken;
+  }
+  return null;
 }
 
 function saveSessionTokens(
@@ -89,48 +143,102 @@ function saveSessionTokens(
   user?: any | null
 ) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(TOKEN_KEY, accessToken);
-  if (refreshToken) {
-    window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  const normalizedRole: SessionRole | null = isSessionRole(role)
+    ? role
+    : isSessionRole(user?.role)
+    ? user.role
+    : null;
+
+  if (normalizedRole) {
+    window.localStorage.setItem(`${TOKEN_KEY}.${normalizedRole}`, accessToken);
+    if (refreshToken) {
+      window.localStorage.setItem(`${REFRESH_TOKEN_KEY}.${normalizedRole}`, refreshToken);
+    }
+    if (user) {
+      window.localStorage.setItem(
+        `${USER_INFO_KEY}.${normalizedRole}`,
+        JSON.stringify(user)
+      );
+    }
   }
-  if (role) {
-    window.localStorage.setItem(TOKEN_ROLE_KEY, role);
+
+  // Only update shared legacy keys when no role is specified or this tab owns that role,
+  // preventing simultaneous Student/Instructor tabs from clobbering each other's tokens.
+  const tabRole = window.sessionStorage.getItem(TAB_ROLE_KEY) || inferTabRole();
+  if (!normalizedRole || tabRole === normalizedRole) {
+    window.localStorage.setItem(TOKEN_KEY, accessToken);
+    if (refreshToken) {
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    }
+    if (normalizedRole || role) {
+      window.localStorage.setItem(TOKEN_ROLE_KEY, normalizedRole || String(role));
+    }
+    if (user) {
+      window.localStorage.setItem(USER_INFO_KEY, JSON.stringify(user));
+    }
   }
-  if (user) {
-    window.localStorage.setItem("codemind.user_info", JSON.stringify(user));
-  }
+
+  window.dispatchEvent(
+    new CustomEvent("codemind-auth-updated", {
+      detail: { role: normalizedRole, user: user || null },
+    })
+  );
 }
 
-export function getStoredUser(): any | null {
+export function getStoredUser(role?: SessionRole): any | null {
   if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem("codemind.user_info");
+  const targetRole = role || inferTabRole();
+  const scopedRaw = window.localStorage.getItem(`${USER_INFO_KEY}.${targetRole}`);
+  if (scopedRaw) {
+    try {
+      const parsed = JSON.parse(scopedRaw);
+      if (parsed && (!parsed.role || parsed.role === targetRole)) {
+        return parsed;
+      }
+    } catch {
+      // Ignore corrupt scoped cache
+    }
+  }
+  const raw = window.localStorage.getItem(USER_INFO_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!role || !parsed?.role || parsed.role === role) {
+      return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-export function clearSessionTokens() {
+export function clearSessionTokens(role?: SessionRole) {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-  window.localStorage.removeItem(TOKEN_ROLE_KEY);
-  window.localStorage.removeItem("codemind.user_info");
+  const rolesToClear: SessionRole[] = role
+    ? [role]
+    : ["student", "instructor", "admin"];
+  for (const r of rolesToClear) {
+    window.localStorage.removeItem(`${TOKEN_KEY}.${r}`);
+    window.localStorage.removeItem(`${REFRESH_TOKEN_KEY}.${r}`);
+    window.localStorage.removeItem(`${USER_INFO_KEY}.${r}`);
+  }
+  const legacyRole = window.localStorage.getItem(TOKEN_ROLE_KEY);
+  if (!role || legacyRole === role) {
+    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+    window.localStorage.removeItem(TOKEN_ROLE_KEY);
+    window.localStorage.removeItem(USER_INFO_KEY);
+  }
 }
 
 const inFlightRoleSessions: Record<string, Promise<string | null> | undefined> = {};
 
 export async function ensureRoleSession(
-  role: "student" | "instructor" | "admin"
+  role: SessionRole
 ): Promise<string | null> {
   if (typeof window === "undefined") return null;
-  const existing = getToken();
-  const storedRole = window.localStorage.getItem(TOKEN_ROLE_KEY);
-  const roleMatches =
-    storedRole === role || (role === "instructor" && storedRole === "admin");
-  if (existing && existing !== "mock-token" && roleMatches) {
+  const existing = getToken(role);
+  if (existing && existing !== "mock-token") {
     return existing;
   }
   if (!inFlightRoleSessions[role]) {
@@ -147,8 +255,9 @@ export async function ensureRoleSession(
   return inFlightRoleSessions[role]!;
 }
 
-export async function logoutUser(): Promise<void> {
-  const token = getToken();
+export async function logoutUser(role?: SessionRole): Promise<void> {
+  const targetRole = role || inferTabRole();
+  const token = getToken(targetRole);
   try {
     if (token && token !== "mock-token") {
       await fetch(`${API_BASE}/v1/auth/logout`, {
@@ -159,7 +268,7 @@ export async function logoutUser(): Promise<void> {
   } catch {
     // ignore offline errors
   } finally {
-    clearSessionTokens();
+    clearSessionTokens(role);
   }
 }
 
@@ -320,8 +429,13 @@ export async function resetPasswordApi(
   return data;
 }
 
-export async function refreshAccessToken() {
-  const refreshToken = typeof window !== "undefined" ? window.localStorage.getItem(REFRESH_TOKEN_KEY) : null;
+export async function refreshAccessToken(role?: SessionRole) {
+  const targetRole = role || inferTabRole();
+  const refreshToken =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(`${REFRESH_TOKEN_KEY}.${targetRole}`) ||
+        window.localStorage.getItem(REFRESH_TOKEN_KEY)
+      : null;
   if (!refreshToken) throw new Error("Không tìm thấy Refresh Token");
   const res = await fetch(`${API_BASE}/v1/auth/refresh`, {
     method: "POST",
@@ -334,14 +448,21 @@ export async function refreshAccessToken() {
   return data;
 }
 
-export async function fetchCurrentUser() {
-  const token = getToken();
+export async function fetchCurrentUser(role?: SessionRole) {
+  const targetRole = role || inferTabRole();
+  const token =
+    getToken(targetRole) ||
+    (role ? await ensureRoleSession(targetRole).catch(() => null) : null);
   if (!token) return null;
   const res = await fetch(`${API_BASE}/v1/users/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) return null;
-  return await res.json();
+  const user = await res.json();
+  if (typeof window !== "undefined" && user && (!user.role || user.role === targetRole)) {
+    window.localStorage.setItem(`${USER_INFO_KEY}.${targetRole}`, JSON.stringify(user));
+  }
+  return user;
 }
 
 // Compute deterministic SHA-256 for browser / demo
@@ -1969,7 +2090,9 @@ export async function saveStudentVideoProgressApi(payload: {
 }
 
 export async function fetchStudentLearningOverview(): Promise<StudentLearningOverview | null> {
-  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
+  const token =
+    (await ensureRoleSession("student").catch(() => null)) ||
+    getToken("student");
   try {
     const res = await fetch(`${API_BASE}/v1/student/learning-overview`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -2072,11 +2195,14 @@ function dispatchXpUpdated() {
 }
 
 export async function getWorkspaceAuthToken(): Promise<string | null> {
-  const existing = getToken();
+  const existing = getToken("student");
   if (existing && existing !== "mock-token") {
     return existing;
   }
-  return (await ensureRoleSession("student").catch(() => null)) || getToken();
+  return (
+    (await ensureRoleSession("student").catch(() => null)) ||
+    getToken("student")
+  );
 }
 
 export async function submitStudentChapterExercise(payload: {
@@ -3028,7 +3154,7 @@ export interface SecurityOverviewBundle {
 export async function fetchSecurityOverviewApi(
   fallbackRole: "student" | "instructor" | "admin" = "student"
 ): Promise<SecurityOverviewBundle | null> {
-  const existing = getToken();
+  const existing = getToken(fallbackRole);
   const token =
     existing && existing !== "mock-token"
       ? existing
@@ -3196,9 +3322,14 @@ export interface AppNotification {
   created_at: string;
 }
 
-export async function fetchNotificationsApi(): Promise<{ notifications: AppNotification[]; unread_count: number }> {
+export async function fetchNotificationsApi(
+  role?: SessionRole
+): Promise<{ notifications: AppNotification[]; unread_count: number }> {
   try {
-    const token = getToken();
+    const targetRole = role || inferTabRole();
+    const token =
+      getToken(targetRole) ||
+      (await ensureRoleSession(targetRole).catch(() => null));
     if (!token) return { notifications: [], unread_count: 0 };
     const res = await fetch(`${API_BASE}/v1/notifications`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -3210,9 +3341,13 @@ export async function fetchNotificationsApi(): Promise<{ notifications: AppNotif
   }
 }
 
-export async function markNotificationReadApi(id: string): Promise<void> {
+export async function markNotificationReadApi(
+  id: string,
+  role?: SessionRole
+): Promise<void> {
   try {
-    const token = getToken();
+    const targetRole = role || inferTabRole();
+    const token = getToken(targetRole);
     if (!token) return;
     await fetch(`${API_BASE}/v1/notifications/${id}/read`, {
       method: "POST",
@@ -3221,9 +3356,10 @@ export async function markNotificationReadApi(id: string): Promise<void> {
   } catch {}
 }
 
-export async function markAllNotificationsReadApi(): Promise<void> {
+export async function markAllNotificationsReadApi(role?: SessionRole): Promise<void> {
   try {
-    const token = getToken();
+    const targetRole = role || inferTabRole();
+    const token = getToken(targetRole);
     if (!token) return;
     await fetch(`${API_BASE}/v1/notifications/mark-all-read`, {
       method: "POST",
@@ -3387,7 +3523,9 @@ export interface StudentAnalyticsItem {
 
 export async function fetchStudentsAnalyticsApi(courseCode?: string): Promise<StudentAnalyticsItem[]> {
   try {
-    const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+    const token =
+      (await ensureRoleSession("instructor").catch(() => null)) ||
+      getToken("instructor");
     const query = courseCode ? `?course_code=${encodeURIComponent(courseCode)}` : "";
     const res = await fetch(`${API_BASE}/v1/instructor/students-analytics${query}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -3508,7 +3646,9 @@ export async function fetchInstructorChapterSubmissions(
   chapterNumber?: number,
   statusFilter?: string
 ): Promise<ChapterSubmissionsOverview> {
-  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+  const token =
+    (await ensureRoleSession("instructor").catch(() => null)) ||
+    getToken("instructor");
   const params = new URLSearchParams();
   if (subjectId) params.set("subject_id", subjectId);
   if (typeof chapterNumber === "number") params.set("chapter_number", String(chapterNumber));

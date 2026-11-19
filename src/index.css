@@ -244,8 +244,8 @@ button:disabled {
   box-shadow: 0 0 0 1px rgba(var(--theme-primary-rgb), 0.22), 0 10px 26px rgba(var(--theme-primary-rgb), 0.14) !important;
 }
 
-.pc-app-bg .bg-blue-600,
-.pc-app-bg .hover\:bg-blue-700:hover {
+.pc-app-bg .bg-blue-600:not(:disabled),
+.pc-app-bg .hover\:bg-blue-700:hover:not(:disabled) {
   background-color: var(--theme-primary) !important;
 }
 
@@ -1543,8 +1543,8 @@ html:not(.dark) .sidebar-nav-item[aria-current="page"]:hover span {
   fill: #cbd5e1;
 }
 
-.theme-dark.pc-app-bg .bg-blue-600,
-.theme-dark.pc-app-bg .hover\:bg-blue-700:hover {
+.theme-dark.pc-app-bg .bg-blue-600:not(:disabled),
+.theme-dark.pc-app-bg .hover\:bg-blue-700:hover:not(:disabled) {
   background-color: var(--theme-primary) !important;
 }
 

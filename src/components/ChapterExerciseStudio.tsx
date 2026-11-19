@@ -428,7 +428,7 @@ export default function ChapterExerciseStudio({
                     )}
                   </div>
                   {(tc.input || tc.expectedOutput) && (
-                    <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                    <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 break-words whitespace-pre-wrap">
                       In: {tc.input || "—"} → Out: {tc.expectedOutput || "—"}
                     </div>
                   )}
@@ -775,7 +775,7 @@ export default function ChapterExerciseStudio({
 
         {/* ── FORM NHẬP LINK NỘP BÀI (KHI CHƯA NỘP HOẶC ĐANG CHỈNH SỬA) ── */}
         {(gradingPhase === "idle" || isEditing) && (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
@@ -790,14 +790,13 @@ export default function ChapterExerciseStudio({
               <div className="relative">
                 <Link2 size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
-                  type="url"
-                  required
+                  type="text"
                   value={submissionLink}
                   onChange={(e) => {
                     setSubmissionLink(e.target.value);
                     if (submitError) setSubmitError(null);
                   }}
-                  placeholder={`https://github.com/username/${subjectId}-ch${exercise.chapterNumber}-lab`}
+                  placeholder={`https://github.com/owner/${subjectId}-ch${exercise.chapterNumber}-lab`}
                   className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-3 text-xs sm:text-sm text-slate-900 dark:text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-2xs font-mono"
                 />
               </div>
@@ -813,7 +812,7 @@ export default function ChapterExerciseStudio({
                   }}
                   className="text-[11px] font-mono text-blue-600 dark:text-blue-400 hover:underline bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded cursor-pointer"
                 >
-                  github.com/owner/{subjectId}-ch{exercise.chapterNumber}-lab
+                  https://github.com/owner/{subjectId}-ch{exercise.chapterNumber}-lab
                 </button>
               </div>
             </div>

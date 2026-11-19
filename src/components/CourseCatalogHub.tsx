@@ -134,7 +134,7 @@ function _getBaseVisualTheme(id: SubjectId) {
         renderVisualEffect: () => (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
             {/* Memory Address Grid */}
-            <div className="absolute top-2 right-3 font-mono text-[8px] text-cyan-400/80 space-y-0.5 text-right">
+            <div className="absolute top-9 right-3 font-mono text-[8px] text-cyan-400/80 space-y-0.5 text-right">
               <div>0x7FFE2A</div>
               <div>vtable* -&gt; Developer</div>
             </div>
@@ -182,7 +182,7 @@ function _getBaseVisualTheme(id: SubjectId) {
             {/* CRT Scanline Bar */}
             <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.3)_50%)] bg-[length:100%_4px] opacity-40" />
             {/* Live Packet Ping */}
-            <div className="absolute top-2 right-2 flex items-center gap-1 font-mono text-[8px] text-green-400/90 bg-green-950/60 px-1.5 py-0.5 rounded border border-green-800">
+            <div className="absolute top-9 right-2.5 flex items-center gap-1 font-mono text-[8px] text-green-400/90 bg-green-950/60 px-1.5 py-0.5 rounded border border-green-800">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-ping" />
               <span>12ms ping</span>
             </div>
@@ -341,7 +341,7 @@ function _getBaseVisualTheme(id: SubjectId) {
               style={{ animationDuration: "5s" }}
             />
             {/* Shield Alert Badge */}
-            <div className="absolute top-2 right-2 text-red-400 opacity-60">
+            <div className="absolute top-9 right-2.5 text-red-400 opacity-60">
               <ShieldAlert size={14} />
             </div>
           </div>
@@ -391,7 +391,7 @@ function _getBaseVisualTheme(id: SubjectId) {
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             {/* Shimmering Gemini Aurora */}
             <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-gradient-to-br from-blue-500/20 via-indigo-500/20 to-rose-500/20 blur-xl animate-pulse" />
-            <div className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-mono text-amber-200 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800">
+            <div className="absolute top-9 right-2.5 flex items-center gap-1 text-[9px] font-mono text-amber-200 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800">
               <Sparkles size={11} className="text-amber-400" />
               <span>Gemini 2.5</span>
             </div>
@@ -473,7 +473,7 @@ function _getBaseVisualTheme(id: SubjectId) {
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             {/* Gold Trophy Beam Shimmer */}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-300/10 to-transparent animate-pulse" />
-            <div className="absolute top-2 right-2 text-amber-400 opacity-70">
+            <div className="absolute top-9 right-2.5 text-amber-400 opacity-70">
               <Award size={15} />
             </div>
           </div>

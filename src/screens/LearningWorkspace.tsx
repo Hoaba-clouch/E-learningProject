@@ -74,6 +74,11 @@ import { CourseCatalogHub } from "../components/CourseCatalogHub";
 import { MultiChapterSidebar } from "../components/MultiChapterSidebar";
 import LiquidCardConnector from "../components/LiquidCardConnector";
 import { triggerMarloConfetti } from "../utils/confetti";
+import {
+  getLessonDisplayCode,
+  stripDuplicateChapterPrefix,
+  stripDuplicateLessonCode,
+} from "../utils/lessonFormat";
 import type { Assignment } from "../data/instructorData";
 import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
 
@@ -679,6 +684,25 @@ export default function LearningWorkspace({
     }
   }
 
+  const activeLessonIdx = Math.max(
+    0,
+    (activeChapter.lessons || []).findIndex((l) => l.id === activeMultiLesson.id)
+  );
+  const activeDisplayCode = getLessonDisplayCode(
+    activeMultiLesson.id,
+    activeMultiLesson.title,
+    activeChapter.number,
+    activeLessonIdx
+  );
+  const activeCleanLessonTitle = stripDuplicateLessonCode(
+    activeMultiLesson.title,
+    activeDisplayCode
+  );
+  const activeCleanChapterTitle = stripDuplicateChapterPrefix(
+    activeChapter.title,
+    activeChapter.number
+  );
+
   const isLessonDoneInDb = activeMultiLesson.status === "done";
   const videoKey = `${selectedSubjectId}_${activeMultiLesson.id}`;
   const isVideoCompleted = isLessonDoneInDb || watchedVideoLessonKeys.has(videoKey);
@@ -1176,7 +1200,7 @@ export default function LearningWorkspace({
         {/* ── MAIN STAGE ── */}
         <main
           ref={mainRef}
-          className={`flex flex-1 flex-col min-w-0 overflow-y-auto space-y-4 pr-1 relative transition-all duration-300 ${
+          className={`flex flex-1 flex-col min-w-0 overflow-y-auto space-y-4 pr-1 pb-24 relative transition-all duration-300 ${
             isCinemaMode ? "max-w-6xl mx-auto w-full pt-2" : ""
           }`}
         >
@@ -1192,7 +1216,7 @@ export default function LearningWorkspace({
             <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-3.5 sm:p-4 shadow-xs flex items-center justify-between flex-wrap gap-3 shrink-0 relative z-10">
               <div className="flex items-center gap-2.5 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Chương {activeChapter.number}: {activeChapter.title}
+                  Chương {activeChapter.number}: {activeCleanChapterTitle}
                 </span>
                 <span className="text-slate-300 dark:text-slate-700 font-bold">/</span>
                 <span className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1212,10 +1236,12 @@ export default function LearningWorkspace({
                     </>
                   ) : (
                     <>
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-mono font-bold">
-                        {activeMultiLesson.id}
+                      <span className="inline-flex min-w-[28px] h-5 px-2 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 text-[11px] font-mono font-bold">
+                        {activeDisplayCode}
                       </span>
-                      <span className="font-bold text-slate-900 dark:text-white transition-colors">{activeMultiLesson.title}</span>
+                      <span className="font-bold text-slate-900 dark:text-white transition-colors">
+                        {activeCleanLessonTitle}
+                      </span>
                     </>
                   )}
                 </span>
@@ -1227,7 +1253,7 @@ export default function LearningWorkspace({
                   className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer active:scale-95 shadow-2xs"
                 >
                   <ArrowLeft size={14} />
-                  <span>Quay lại bài học ({activeMultiLesson.id})</span>
+                  <span>Quay lại bài học ({activeDisplayCode})</span>
                 </button>
               ) : (
                 <div className="flex items-center gap-2.5">
@@ -1620,7 +1646,7 @@ export default function LearningWorkspace({
 
           {/* ── TAB 2: VIDEO BÀI GIẢNG TƯƠNG TÁC (F8 STYLE) ── */}
           {tab === "video" && (
-            <div key={`video-${selectedSubjectId}-${activeLessonId}`} className="animate-screen-enter flex flex-col space-y-4">
+            <div key={`video-${selectedSubjectId}-${activeLessonId}`} className="flex flex-col space-y-4 w-full">
               <LessonVideoStudio
                 subjectId={selectedSubjectId}
                 userId={currentUserId}
@@ -1734,7 +1760,11 @@ export default function LearningWorkspace({
                       <button
                         onClick={handleQuizSubmit}
                         disabled={!selectedOption}
-                        className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 text-xs transition disabled:opacity-40 cursor-pointer shadow-xs"
+                        className={
+                          selectedOption
+                            ? "rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 text-xs transition cursor-pointer shadow-xs"
+                            : "rounded-xl bg-slate-200 text-slate-600 border border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 font-bold px-5 py-2 text-xs transition cursor-not-allowed"
+                        }
                       >
                         Kiểm tra đáp án
                       </button>
@@ -1871,7 +1901,7 @@ export default function LearningWorkspace({
                   className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                 >
                   <ArrowLeft size={13} />
-                  <span>Quay lại bài học ({activeMultiLesson.id})</span>
+                  <span>Quay lại bài học ({activeDisplayCode})</span>
                 </button>
               </div>
 
