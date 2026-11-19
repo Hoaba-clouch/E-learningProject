@@ -154,7 +154,7 @@ export default function KanbanTeamScrumView({
               <ShieldCheck size={14} />
               Chỉ số Anti-Freerider
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border-0">
               Đồng đều
             </span>
           </div>

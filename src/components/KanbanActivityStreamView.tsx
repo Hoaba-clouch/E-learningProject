@@ -63,8 +63,8 @@ export default function KanbanActivityStreamView({
           time: log.timestamp || "Vừa xong",
           badge: log.toColumn,
           badgeColor: isDoneCol
-            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-            : "bg-amber-50 text-amber-700 border-amber-200",
+            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+            : "bg-amber-500/15 text-amber-700 dark:text-amber-400",
           taskId: task.id,
         });
       });
@@ -82,7 +82,7 @@ export default function KanbanActivityStreamView({
       sub: "main • 12 files changed • +342 / -48 lines",
       time: "12 phút trước",
       badge: "Git Commit",
-      badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
+      badgeColor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
       sha: "8f21a4c",
     },
     {
@@ -96,7 +96,7 @@ export default function KanbanActivityStreamView({
       sub: "Sprint 1 • CSDL PostgreSQL • Nghiệm thu +7.5 pts",
       time: "45 phút trước",
       badge: "Task Done",
-      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      badgeColor: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
       taskId: "task-1",
     },
     {
@@ -110,7 +110,7 @@ export default function KanbanActivityStreamView({
       sub: "Do Task tiền đề #105 đã đạt trạng thái Verified",
       time: "45 phút trước",
       badge: "H2 Unblocked",
-      badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
+      badgeColor: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
     },
     {
       id: "act-4",
@@ -123,7 +123,7 @@ export default function KanbanActivityStreamView({
       sub: "2 reviewers approved • 0 merge conflicts • All 14 tests passed",
       time: "2 giờ trước",
       badge: "PR Merged",
-      badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
+      badgeColor: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
       sha: "e59c02d",
     },
     {
@@ -137,7 +137,7 @@ export default function KanbanActivityStreamView({
       sub: "feature/sandbox • 4 files changed • +189 / -12 lines",
       time: "4 giờ trước",
       badge: "Git Commit",
-      badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
+      badgeColor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
       sha: "3b18f0a",
     },
     {
@@ -151,7 +151,7 @@ export default function KanbanActivityStreamView({
       sub: "develop • 3 files changed • +94 / -18 lines",
       time: "Hôm qua",
       badge: "Git Commit",
-      badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
+      badgeColor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
       sha: "a3182fc",
     },
     {
@@ -165,7 +165,7 @@ export default function KanbanActivityStreamView({
       sub: "Tự động phân bổ vào Backlog, Sprint 1-4 & ánh xạ Ràng buộc H2",
       time: "2 ngày trước",
       badge: "CSV Import",
-      badgeColor: "bg-teal-50 text-teal-700 border-teal-200",
+      badgeColor: "bg-teal-500/15 text-teal-700 dark:text-teal-400",
     },
     ];
   }, [tasks]);
@@ -239,14 +239,14 @@ export default function KanbanActivityStreamView({
                       <span className="text-[11px] text-slate-400 font-medium">({event.role})</span>
 
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider font-mono ${event.badgeColor}`}
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border-0 uppercase tracking-wider font-mono ${event.badgeColor}`}
                       >
                         {event.badge}
                       </span>
 
                       {event.sha && (
-                        <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
-                          <GitCommit size={10} />
+                        <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border-0 flex items-center gap-1">
+                          <GitCommit size={10} className="text-slate-400" />
                           {event.sha}
                         </span>
                       )}
