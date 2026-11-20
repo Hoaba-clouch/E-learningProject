@@ -44,7 +44,7 @@ export default function MarloNewTaskModal({
     d.setDate(d.getDate() + 7);
     return d.toISOString().slice(0, 10);
   });
-  const [estimateHours, setEstimateHours] = useState(4);
+  const [points, setPoints] = useState(5);
   const [priority, setPriority] = useState<Priority>("medium");
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
@@ -126,6 +126,7 @@ export default function MarloNewTaskModal({
       .toUpperCase()
       .padStart(5, "0");
 
+    const parsedPoints = Math.max(1, Number(points) || 5);
     const newTask: KanbanTask = {
       id: `task-${Date.now()}`,
       code: `TE${randomHex}`,
@@ -133,13 +134,13 @@ export default function MarloNewTaskModal({
       description: `${title.trim()} - Triển khai cho đề án ${project}.`,
       column: "ready", // Lands on board in Up next / Ready column
       priority: priority,
-      points: Math.max(1, Math.round(estimateHours / 2)),
+      points: parsedPoints,
       assignee: {
         name: selectedMember.name,
         avatar: selectedMember.avatar || selectedMember.name.charAt(0),
         role: selectedMember.role || "Member",
       },
-      estimateHours: Number(estimateHours) || 4,
+      estimateHours: parsedPoints * 2,
       dueDate: formattedDue,
       epic: project,
       epicColor: "#f97316",
@@ -262,13 +263,16 @@ export default function MarloNewTaskModal({
             </div>
           </div>
 
-          {/* Due & Estimate (hours) (2 columns) */}
+          {/* Due & Estimate SP (2 columns) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Due */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Hạn hoàn thành
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Hạn hoàn thành
+                </label>
+                <span className="text-[10px] text-slate-400">Gợi ý nhanh</span>
+              </div>
               <div className="relative">
                 <input
                   type="date"
@@ -277,22 +281,64 @@ export default function MarloNewTaskModal({
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition"
                 />
               </div>
+              {/* Quick Due Date Presets */}
+              <div className="flex items-center gap-1.5 mt-1.5">
+                {[
+                  { label: "+3 ngày", days: 3 },
+                  { label: "+1 tuần", days: 7 },
+                  { label: "+2 tuần", days: 14 },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + item.days);
+                      setDueDate(d.toISOString().slice(0, 10));
+                    }}
+                    className="flex-1 py-1 rounded-lg text-[10.5px] font-semibold bg-slate-100/70 hover:bg-slate-200/70 dark:bg-slate-800/60 dark:hover:bg-slate-700/60 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/50 transition cursor-pointer text-center"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Estimate (hours) */}
+            {/* Estimate SP (Story Points) */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Thời lượng ước tính (giờ)
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Ước tính SP (Story Points)
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">~{points * 2}h</span>
+              </div>
               <div className="relative">
                 <input
                   type="number"
                   min="1"
-                  max="100"
-                  value={estimateHours}
-                  onChange={(e) => setEstimateHours(Number(e.target.value))}
+                  max="34"
+                  value={points}
+                  onChange={(e) => setPoints(Math.max(1, Number(e.target.value) || 1))}
+                  placeholder="5"
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition"
                 />
+              </div>
+              {/* Quick Fibonacci SP Chips */}
+              <div className="flex items-center gap-1 mt-1.5">
+                {[1, 2, 3, 5, 8, 13].map((sp) => (
+                  <button
+                    key={sp}
+                    type="button"
+                    onClick={() => setPoints(sp)}
+                    className={`flex-1 py-1 rounded-lg text-[10.5px] font-mono font-semibold transition cursor-pointer text-center ${
+                      points === sp
+                        ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 shadow-2xs"
+                        : "bg-slate-100/70 hover:bg-slate-200/70 dark:bg-slate-800/60 dark:hover:bg-slate-700/60 text-slate-600 dark:text-slate-400 border border-transparent"
+                    }`}
+                  >
+                    {sp}p
+                  </button>
+                ))}
               </div>
             </div>
           </div>

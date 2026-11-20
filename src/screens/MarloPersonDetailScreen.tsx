@@ -126,13 +126,13 @@ export default function MarloPersonDetailScreen({
       column: "ready",
       priority: assignPriority,
       moscow: assignPriority === "high" ? "must" : "should",
-      points: Math.max(1, Math.min(21, Math.round((Number(assignEst) || 8) / 2))),
+      points: Math.max(1, Math.min(21, Number(assignEst) || 5)),
       assignee: {
         name: member.name,
         avatar: member.name.charAt(0).toUpperCase(),
         role: member.role,
       },
-      estimateHours: Number(assignEst) || 8,
+      estimateHours: (Number(assignEst) || 5) * 2,
       dueDate: "15/12/2026",
       epic: "Sprint Goal",
     });
@@ -463,12 +463,12 @@ export default function MarloPersonDetailScreen({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Thời lượng ước tính (h)
+                    Ước tính SP (Story Points)
                   </label>
                   <input
                     type="number"
                     min="1"
-                    max="80"
+                    max="34"
                     value={assignEst}
                     onChange={(e) => setAssignEst(Number(e.target.value))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
