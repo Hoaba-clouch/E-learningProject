@@ -493,16 +493,18 @@ function _getBaseVisualTheme(id: SubjectId) {
   }
 }
 
+// 🌟 Chuẩn hóa hiệu ứng rọi sáng thành 1 màu duy nhất: Ánh sáng trắng thanh lịch (Linear / Vercel style)
+const UNIFORM_WHITE_BORDER_HOVER = "group-hover:border-slate-300 dark:group-hover:border-white/50 group-hover:shadow-[0_8px_32px_rgba(255,255,255,0.12)]";
+const WHITE_SPOTLIGHT = "rgba(255, 255, 255, 0.28)";
+const WHITE_HALO = "rgba(255, 255, 255, 0.22)";
+
 function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
   const base = _getBaseVisualTheme(id);
-  const accents = SUBJECT_ACCENT_COLORS[id] || {
-    spotlight: "rgba(242, 155, 35, 0.45)",
-    halo: "rgba(242, 155, 35, 0.55)",
-  };
   return {
     ...base,
-    spotlightColor: accents.spotlight,
-    haloColor: accents.halo,
+    borderHover: UNIFORM_WHITE_BORDER_HOVER,
+    spotlightColor: WHITE_SPOTLIGHT,
+    haloColor: WHITE_HALO,
   };
 }
 
@@ -577,7 +579,7 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
 
           {/* Course Name & Teacher */}
           <div className="pt-2.5 space-y-1">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-[#EE8420] dark:group-hover:text-[#F8BD57] group-hover:translate-x-0.5 transition-all line-clamp-2 leading-snug">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-black dark:group-hover:text-white group-hover:translate-x-0.5 transition-all line-clamp-2 leading-snug">
               {sub.name}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pt-0.5 truncate">
@@ -593,13 +595,13 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
         <div className="pt-3">
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono mb-1">
             <span className="group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-colors">Tiến độ</span>
-            <span className="font-bold text-amber-600 dark:text-amber-400 font-mono group-hover:scale-105 transition-transform">
+            <span className="font-bold text-slate-700 dark:text-slate-300 font-mono group-hover:scale-105 transition-transform">
               {sub.overallProgress}%
             </span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative group-hover:h-2 transition-all">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-400 transition-all duration-500 relative group-hover:shadow-[0_0_14px_rgba(245,158,11,0.85)]"
+              className="h-full rounded-full bg-slate-800 dark:bg-slate-200 transition-all duration-500 relative group-hover:shadow-[0_0_12px_rgba(255,255,255,0.4)]"
               style={{ width: `${sub.overallProgress}%` }}
             >
               <div className="absolute inset-0 f8-shimmer" />
