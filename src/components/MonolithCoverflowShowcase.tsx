@@ -86,7 +86,7 @@ export default function MonolithCoverflowShowcase({ onSelectMonument }: Props) {
   const placeRef = useRef<HTMLParagraphElement>(null);
   const blurbRef = useRef<HTMLParagraphElement>(null);
   const ringRef = useRef<SVGCircleElement>(null);
-  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const imgRefs = useRef<(HTMLImageElement | null)[]>([]);
 
   // Physics & Animation State

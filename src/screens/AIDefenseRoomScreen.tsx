@@ -377,7 +377,11 @@ export default function AIDefenseRoomScreen({
     return () => ctx.revert();
   }, [role]);
 
-  const resetLocalDefenseState = () => {
+  const resetLocalDefenseState = (discardServerDraft: boolean = true) => {
+    const draftToDiscard =
+      discardServerDraft && role === "student" && liveDefenseId && !certificateData
+        ? liveDefenseId
+        : null;
     setLiveDefenseId(null);
     setCurrentRoundIdx(0);
     setDefenseMode("oral");
@@ -391,11 +395,16 @@ export default function AIDefenseRoomScreen({
     setLastEvaluation(null);
     setActionError(null);
     setCertificateData(null);
+    if (draftToDiscard) {
+      void deleteDefenseSessionApi(draftToDiscard, "student")
+        .then(() => loadWorkspace(true))
+        .catch(() => {});
+    }
   };
 
   // Explicit student start (never auto-start in useEffect!)
   const handleStartDefenseSession = async () => {
-    if (!activeProject) return;
+    if (!activeProject || isStartingSession || liveDefenseId) return;
     if (!activeProject.aiDefenseEnabled) {
       setActionError(
         `Phòng Phản Biện AI cho học phần ${activeProject.courseCode} đang bị Quản trị viên tạm khóa.`
@@ -410,7 +419,7 @@ export default function AIDefenseRoomScreen({
         activeProject.classId,
         "student"
       );
-      resetLocalDefenseState();
+      resetLocalDefenseState(false);
       setLiveDefenseId(res.defense_id);
       showToast(`✓ Đã mở phiên phản biện ${res.defense_id} cho ${activeProject.code}.`);
       await loadWorkspace(true);
@@ -1311,8 +1320,12 @@ export default function AIDefenseRoomScreen({
                     {sess.studentName} ({sess.studentCode}) — {sess.projectName}
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Kiến trúc: {sess.architectureScore} · Thuật toán: {sess.algorithmScore} ·
-                    Vận hành: {sess.productionScore} · {sess.transcript.length} lượt thoại
+                    {sess.architectureScore > 0 ||
+                    sess.algorithmScore > 0 ||
+                    sess.productionScore > 0
+                      ? `Kiến trúc: ${(sess.architectureScore / 10).toFixed(1)}/10 · Thuật toán: ${(sess.algorithmScore / 10).toFixed(1)}/10 · Vận hành: ${(sess.productionScore / 10).toFixed(1)}/10`
+                      : "Chưa chấm điểm"}{" "}
+                    · {sess.transcript.length} lượt thoại
                   </p>
                 </div>
 
@@ -1560,7 +1573,13 @@ export default function AIDefenseRoomScreen({
                   }`}
                 >
                   <span>Điều phối Học phần</span>
-                  <span className="px-1.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px]">
+                  <span
+                    className={`px-1.5 rounded-full text-[10px] ${
+                      staffTab === "courses"
+                        ? "bg-emerald-400/25 text-emerald-200 dark:bg-emerald-600/20 dark:text-emerald-900"
+                        : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                    }`}
+                  >
                     {courses.filter((c) => c.aiDefenseEnabled).length}/{courses.length}
                   </span>
                 </button>
@@ -1589,7 +1608,13 @@ export default function AIDefenseRoomScreen({
                 }`}
               >
                 <span>Phiên Bảo Vệ</span>
-                <span className="px-1.5 rounded-full bg-slate-200 dark:bg-slate-700 text-[10px]">
+                <span
+                  className={`px-1.5 rounded-full text-[10px] ${
+                    staffTab === "sessions"
+                      ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-950"
+                      : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                  }`}
+                >
                   {sessions.length}
                 </span>
               </button>

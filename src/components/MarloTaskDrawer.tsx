@@ -245,10 +245,12 @@ export default function MarloTaskDrawer({
   const estHours = task.estimateHours || (task.points ? task.points * 2 : 6);
   const reviewFeedback =
     (task as any).reviewFeedback ||
-    task.auditLogs
-      ?.slice()
-      .reverse()
-      .find((lg: any) => lg?.note)?.note;
+    (
+      task.auditLogs
+        ?.slice()
+        .reverse()
+        .find((lg: any) => lg?.note) as any
+    )?.note;
 
   return createPortal(
     <div className="fixed inset-0 z-[9998] pointer-events-none select-none">

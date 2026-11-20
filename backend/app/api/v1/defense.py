@@ -767,11 +767,10 @@ def delete_defense_session(
         if not is_staff:
             if sess["user_id"] != user["id"]:
                 raise HTTPException(status_code=403, detail="Bạn không có quyền xóa phiên bảo vệ này.")
-            transcript = json.loads(sess["transcript_json"] or "[]")
-            if sess["status"] != "in_progress" or len(transcript) > 0:
+            if sess["status"] != "in_progress":
                 raise HTTPException(
                     status_code=403,
-                    detail="Không thể tự xóa phiên bảo vệ đã có dữ liệu thi hoặc đã chốt điểm.",
+                    detail="Không thể tự xóa phiên bảo vệ đã chốt điểm hoàn tất.",
                 )
 
         sub_id = f"sub-def-{defense_id[4:]}"

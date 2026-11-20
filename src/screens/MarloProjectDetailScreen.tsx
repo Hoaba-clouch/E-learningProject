@@ -147,14 +147,12 @@ export default function MarloProjectDetailScreen({
           role: m.role || resolved.role,
           initials:
             m.initials ||
-            "".join?.call(
-              (m.name || "SV")
-                .trim()
-                .split(/\s+/)
-                .slice(-2)
-                .map((w: string) => w[0]?.toUpperCase() || ""),
-              ""
-            ) ||
+            (m.name || "SV")
+              .trim()
+              .split(/\s+/)
+              .slice(-2)
+              .map((w: string) => w[0]?.toUpperCase() || "")
+              .join("") ||
             resolved.initials ||
             "SV",
           avatar: m.avatar || (m.name || "S").trim().charAt(0).toUpperCase(),
@@ -165,7 +163,7 @@ export default function MarloProjectDetailScreen({
     }
     return fallbackProject.team
       .map((memId) => getMarloMember(memId))
-      .filter((m): m is NonNullable<typeof m> => Boolean(m) && m.skill !== "advisor")
+      .filter((m): m is NonNullable<ReturnType<typeof getMarloMember>> => Boolean(m && m.skill !== "advisor"))
       .map((m, idx) => ({
         id: m.id,
         rawId: m.id,

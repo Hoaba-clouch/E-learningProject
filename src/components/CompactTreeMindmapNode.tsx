@@ -12,7 +12,7 @@ import {
   BookOpen,
 } from "lucide-react";
 
-export interface CompactTreeNodeData {
+export interface CompactTreeNodeData extends Record<string, unknown> {
   title: string;
   badge?: string;
   summary?: string;

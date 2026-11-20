@@ -1554,7 +1554,7 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
               <button
-                onClick={onEnterPlatform}
+                onClick={() => onEnterPlatform()}
                 className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
               >
                 <BookOpen size={15} className="text-[#1c1304] shrink-0" />
@@ -1601,7 +1601,7 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
               </button>
 
               <button
-                onClick={onEnterPlatform}
+                onClick={() => onEnterPlatform()}
                 className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
               >
                 <BookOpen size={15} className="text-[#1c1304] shrink-0" />

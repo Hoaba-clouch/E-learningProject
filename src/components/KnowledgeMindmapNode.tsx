@@ -12,7 +12,16 @@ import {
   Lock,
   Sparkles,
 } from "lucide-react";
-import type { MindmapNodeInfo } from "../data/mindmapData";
+export interface MindmapNodeInfo extends Record<string, unknown> {
+  category: "theory" | "concept" | "architecture" | "checkpoint" | "practice" | "review";
+  status: "completed" | "in-progress" | "locked";
+  tag: string;
+  xp: number;
+  title: string;
+  subtitle: string;
+  desc: string;
+  progressPct: number;
+}
 
 const categoryStyles: Record<
   MindmapNodeInfo["category"],
