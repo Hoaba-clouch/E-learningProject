@@ -22,6 +22,11 @@ import {
   Unlock,
   Video,
   X,
+  FileText,
+  Award,
+  FileCode,
+  Terminal,
+  Users,
 } from "lucide-react";
 import type { Role } from "../App";
 import {
@@ -108,21 +113,25 @@ function matchesSearch(s: AcademicScheduleItem, q: string): boolean {
   );
 }
 
-function getCategoryBarStyle(category: string, isLocked: boolean): string {
+function getCategoryBarStyle(_category: string, _isLocked: boolean): string {
+  return "bg-white dark:bg-[#181d28] hover:bg-slate-50 dark:hover:bg-[#1f2636] text-slate-900 dark:text-slate-100 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs";
+}
+
+function getCategoryIcon(category: string, isLocked: boolean) {
   if (isLocked) {
-    return "bg-rose-50/90 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 border border-rose-200 dark:border-rose-800 border-l-[3.5px] border-l-rose-500 shadow-2xs";
+    return <Lock size={11} className="text-rose-500 dark:text-rose-400 shrink-0" />;
   }
   switch (category) {
     case "exam":
-      return "bg-[#F7EBD9] dark:bg-amber-950/50 text-[#2B2419] dark:text-amber-100 border border-[#EBD0A8] dark:border-amber-800/80 border-l-[3.5px] border-l-[#F29B23] shadow-2xs";
+      return <FileText size={11} className="text-amber-500 dark:text-amber-400 shrink-0" />;
     case "defense":
-      return "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-800/80 border-l-[3.5px] border-l-emerald-600 shadow-2xs";
+      return <Award size={11} className="text-emerald-500 dark:text-emerald-400 shrink-0" />;
     case "review":
-      return "bg-blue-50 dark:bg-blue-950/50 text-blue-950 dark:text-blue-100 border border-blue-200 dark:border-blue-800/80 border-l-[3.5px] border-l-blue-600 shadow-2xs";
+      return <FileCode size={11} className="text-blue-500 dark:text-blue-400 shrink-0" />;
     case "lab":
-      return "bg-purple-50 dark:bg-purple-950/50 text-purple-950 dark:text-purple-100 border border-purple-200 dark:border-purple-800/80 border-l-[3.5px] border-l-purple-600 shadow-2xs";
+      return <Terminal size={11} className="text-purple-500 dark:text-purple-400 shrink-0" />;
     default:
-      return "bg-[#FCE4D6] dark:bg-orange-950/50 text-[#2D2320] dark:text-orange-100 border border-[#F3C4B0] dark:border-orange-800/80 border-l-[3.5px] border-l-[#E8712A] shadow-2xs";
+      return <Users size={11} className="text-[#EE8420] dark:text-[#F29B23] shrink-0" />;
   }
 }
 
@@ -1993,10 +2002,10 @@ export default function EngineeringScheduleRota({
                                   <div
                                     key={h}
                                     title={`Khung ${h}:00 · ${totalBooked}/${totalMax} chỗ đã đặt`}
-                                    className={`py-0.5 text-center font-mono rounded-md font-semibold ${
+                                    className={`py-0.5 text-center font-mono rounded-md font-semibold text-[10px] ${
                                       isFullHour
-                                        ? "bg-[#FCE8E6] text-[#8C2C23] border border-[#F8D2CD] dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60"
-                                        : "bg-[#E5F4E9] text-[#226337] border border-[#CEEAD4] dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60"
+                                        ? "bg-slate-200/80 text-slate-500 dark:bg-slate-800/80 dark:text-slate-400 border border-slate-300/60 dark:border-slate-700/60"
+                                        : "bg-slate-100/90 text-slate-700 dark:bg-slate-800/90 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/60"
                                     }`}
                                   >
                                     {totalBooked}/{totalMax}
@@ -2104,20 +2113,18 @@ export default function EngineeringScheduleRota({
                                             className="flex flex-col justify-center min-w-0 flex-1 overflow-hidden pointer-events-none animate-timeline-text"
                                             style={{ animationDelay: `${groupIdx * 80 + itemIdx * 45 + 130}ms` }}
                                           >
-                                            {/* Line 1: Time, Capacity, and Status Chip (never wrap!) */}
+                                            {/* Line 1: Icon (with status color) + Time + Capacity + Status Chip (never wrap!) */}
                                             <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap leading-none overflow-hidden">
-                                              <span className="font-bold text-[10px] font-mono leading-none whitespace-nowrap shrink-0">
+                                              {getCategoryIcon(sch.category, isLocked)}
+                                              <span className="font-bold text-[10px] font-mono leading-none whitespace-nowrap shrink-0 text-slate-800 dark:text-slate-100">
                                                 {formatScheduleHour(activeStart)}–{formatScheduleHour(activeEnd)}
                                               </span>
-                                              <span className="text-[9.5px] font-mono opacity-80 whitespace-nowrap shrink-0">
+                                              <span className="text-[9.5px] font-mono opacity-80 whitespace-nowrap shrink-0 text-slate-500 dark:text-slate-400">
                                                 ({sch.current_booked}/{sch.max_capacity})
                                               </span>
-                                              {isLocked && (
-                                                <Lock size={10} className="text-rose-600 dark:text-rose-400 shrink-0" />
-                                              )}
                                               {myStatus && (
                                                 <span
-                                                  className="px-1.5 py-0.5 rounded bg-white/85 dark:bg-black/50 text-[9px] font-bold whitespace-nowrap shrink-0 truncate max-w-[90px] leading-tight"
+                                                  className="px-1.5 py-0.5 rounded bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 text-[9px] font-bold whitespace-nowrap shrink-0 truncate max-w-[90px] leading-tight"
                                                   title={getBookingStatusChip(myStatus).label}
                                                 >
                                                   {getBookingStatusChip(myStatus).label}
@@ -2126,7 +2133,7 @@ export default function EngineeringScheduleRota({
                                             </div>
 
                                             {/* Line 2: Title (always single line, never overflows vertically!) */}
-                                            <span className="text-[11px] font-semibold truncate whitespace-nowrap block leading-tight mt-1 text-ellipsis overflow-hidden">
+                                            <span className="text-[11px] font-semibold truncate whitespace-nowrap block leading-tight mt-1 text-ellipsis overflow-hidden text-slate-700 dark:text-slate-200">
                                               {sch.title}
                                             </span>
                                           </div>
