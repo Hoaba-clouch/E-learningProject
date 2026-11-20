@@ -15,6 +15,7 @@ from app.core.timezone import now_utc
 from app.schemas.kanban import (
     TaskCreate,
     TaskMove,
+    ProjectInviteIn,
     WorkspaceAiWbsIn,
     WorkspaceProjectCreateIn,
     WorkspaceProjectPatchIn,
@@ -498,7 +499,7 @@ def is_user_in_project(user: dict[str, Any] | None, proj_row: Any) -> bool:
     if not user:
         return True
     u_role = str(user.get("role") or "").lower()
-    if u_role in ("admin", "org_admin"):
+    if u_role in ("admin", "org_admin", "instructor"):
         return True
 
     uid_val = str(user.get("id") or "").strip()
@@ -507,11 +508,15 @@ def is_user_in_project(user: dict[str, Any] | None, proj_row: Any) -> bool:
 
     p_dict = dict(proj_row)
     leader_id = str(p_dict.get("leader_user_id") or "").strip()
-    if leader_id and leader_id == uid_val:
+    if leader_id and (leader_id == uid_val or leader_id == f"usr-{uid_val}"):
+        return True
+
+    created_by = str(p_dict.get("created_by") or "").strip()
+    if created_by and (created_by == uid_val or created_by == f"usr-{uid_val}"):
         return True
 
     inst_id = str(p_dict.get("instructor_id") or "").strip()
-    if inst_id and inst_id == uid_val:
+    if inst_id and (inst_id == uid_val or inst_id == f"usr-{uid_val}"):
         return True
 
     try:
@@ -530,7 +535,7 @@ def is_user_in_project(user: dict[str, Any] | None, proj_row: Any) -> bool:
             return True
         if tm_email and tm_email == u_email:
             return True
-        if tm_name and (tm_name == u_name or (len(u_name) >= 3 and u_name in tm_name) or (len(tm_name) >= 3 and tm_name in u_name)):
+        if tm_name and u_name and tm_name == u_name:
             return True
 
     return False
@@ -878,10 +883,10 @@ def get_kanban_workspace(
     u_role = str(user.get("role") or "").lower()
     my_projects = [p for p in all_projects if p.get("isMyProject")]
 
-    # Phân quyền: Học viên xem 'auto' hoặc 'my' -> chỉ trả về dự án mình tham gia
-    if scope == "my" or (scope == "auto" and u_role == "student"):
-        projects = my_projects if len(my_projects) > 0 else all_projects
-    elif scope == "my" and u_role in ("instructor", "admin"):
+    # Phân quyền chặt chẽ: Học viên CHỈ thấy và thao tác trên dự án mình tham gia
+    if u_role == "student":
+        projects = my_projects
+    elif scope == "my":
         projects = my_projects
     else:
         projects = all_projects
@@ -930,36 +935,107 @@ def create_workspace_project(
     clean_repo_url = raw_repo_url or f"https://github.com/{repo_slug}"
     target_branch = (payload.target_branch or "main").strip() or "main"
 
-    member_names = payload.team_members or ["Nguyễn Bá Hòa", "Võ Nhật Huy"]
-    team_list: list[dict[str, Any]] = []
-    for idx, m_name in enumerate(member_names):
-        bg, text_col, tw_col = PALETTE_CYCLE[idx % len(PALETTE_CYCLE)]
-        clean = m_name.strip() or f"Thành viên {idx + 1}"
-        team_list.append(
-            {
-                "id": f"tm-{idx + 1}-{uid()[:4]}",
-                "name": clean,
-                "avatar": clean[:1].upper(),
-                "initials": "".join(w[:1] for w in clean.split()[-2:]).upper() or "TM",
-                "role": "Leader & Architect" if idx == 0 else "Developer",
-                "color": tw_col,
-                "bg": bg,
-                "textColor": text_col,
-            }
-        )
+    creator_name = user.get("full_name") or user.get("display_name") or "Sinh viên"
+    creator_initials = "".join(w[:1] for w in creator_name.split()[-2:]).upper() if len(creator_name.split()) >= 2 else creator_name[:2].upper()
+    bg0, text_col0, tw_col0 = PALETTE_CYCLE[0]
+    team_list: list[dict[str, Any]] = [
+        {
+            "id": user["id"],
+            "name": creator_name,
+            "email": user.get("email") or "",
+            "avatar": creator_initials[:1],
+            "initials": creator_initials,
+            "role": "Leader & Architect",
+            "color": tw_col0,
+            "bg": bg0,
+            "textColor": text_col0,
+        }
+    ]
 
     sp_budget = payload.story_points if payload.story_points is not None else 600
     due_text = payload.due_text or (f"Hạn {payload.due_date}" if payload.due_date else "Còn 30 ngày")
     default_mentor = "TS. Nguyễn Phước (GV Hướng dẫn)"
 
     with db() as conn:
+        member_names = payload.team_members or []
+        seen_names = {creator_name.lower()}
+        for idx, m_name in enumerate(member_names, start=1):
+            clean = m_name.strip()
+            if not clean or clean.lower() in seen_names:
+                continue
+            seen_names.add(clean.lower())
+            bg, text_col, tw_col = PALETTE_CYCLE[idx % len(PALETTE_CYCLE)]
+            u_row = conn.execute(
+                "SELECT id, full_name, display_name, email, role FROM users WHERE full_name=? OR display_name=? OR email=? OR id=? LIMIT 1",
+                (clean, clean, clean, clean),
+            ).fetchone()
+            u_id = u_row["id"] if u_row else f"tm-{idx}-{uid()[:4]}"
+            u_email = (u_row["email"] if u_row else "") or ""
+            actual_name = (u_row["full_name"] if u_row else clean) or clean
+            initials = "".join(w[:1] for w in actual_name.split()[-2:]).upper() if len(actual_name.split()) >= 2 else actual_name[:2].upper()
+            role_title = payload.member_roles.get(clean) or payload.member_roles.get(u_id) or "Developer"
+
+            # Tạo lời mời cộng tác (pending) theo chuẩn GitHub, chờ người được mời xác nhận
+            if u_row and u_row["id"] != user["id"]:
+                try:
+                    inv_id = f"inv-{uid()[:8]}"
+                    conn.execute(
+                        """INSERT INTO project_invitations(
+                               id, project_id, project_name, inviter_user_id, inviter_name,
+                               invitee_user_id, invitee_name, invitee_email, role_title,
+                               status, created_at, updated_at
+                           ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
+                        (
+                            inv_id,
+                            proj_id,
+                            payload.name.strip(),
+                            user["id"],
+                            creator_name,
+                            u_row["id"],
+                            actual_name,
+                            u_email,
+                            role_title,
+                            now,
+                            now,
+                        ),
+                    )
+                    notif_id = f"notif-{uid()[:8]}"
+                    conn.execute(
+                        """INSERT INTO notifications(id, user_id, title, message, type, is_read, created_at)
+                           VALUES(?, ?, ?, ?, 'project_invite', 0, ?)""",
+                        (
+                            notif_id,
+                            u_row["id"],
+                            f"Lời mời tham gia đồ án: {payload.name.strip()}",
+                            f"{creator_name} đã mời bạn tham gia đồ án '{payload.name.strip()}' với vai trò {role_title}.",
+                            now,
+                        ),
+                    )
+                except Exception:
+                    pass
+            elif not u_row:
+                # Nếu là thành viên nhập tự do không có tài khoản hệ thống thì thêm luôn vào danh sách hiển thị
+                team_list.append(
+                    {
+                        "id": u_id,
+                        "name": actual_name,
+                        "email": u_email,
+                        "avatar": initials[:1],
+                        "initials": initials,
+                        "role": role_title,
+                        "color": tw_col,
+                        "bg": bg,
+                        "textColor": text_col,
+                    }
+                )
+
         conn.execute(
             """INSERT INTO engineering_projects(
                    id, code, name, client, course, sprint, kind, status, fav,
                    due_date, due_text, story_points_budget, color_hex,
                    tl_start, tl_width, tl_color, instructor_label, team_json,
-                   created_by, created_at, updated_at
-               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   leader_user_id, created_by, created_at, updated_at
+               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 proj_id,
                 code,
@@ -979,6 +1055,7 @@ def create_workspace_project(
                 "amber",
                 default_mentor,
                 json.dumps(team_list, ensure_ascii=False),
+                user["id"],
                 user["id"],
                 now,
                 now,
@@ -1105,6 +1182,328 @@ def patch_workspace_project(
     }
 
 
+@router.get("/kanban/users/search")
+def search_users_for_team(
+    q: str = Query(default="", description="Tìm kiếm theo tên hoặc email"),
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Tìm kiếm tài khoản sinh viên trong CSDL để thêm vào đồ án (như GitHub Collaborators)."""
+    clean_q = q.strip().lower()
+    with db() as conn:
+        if clean_q:
+            like_pat = f"%{clean_q}%"
+            rows = conn.execute(
+                """SELECT id, full_name, display_name, email, role
+                   FROM users
+                   WHERE (role='student' OR role='instructor') AND (
+                       LOWER(full_name) LIKE ? OR
+                       LOWER(display_name) LIKE ? OR
+                       LOWER(email) LIKE ? OR
+                       LOWER(id) LIKE ?
+                   )
+                   ORDER BY full_name ASC LIMIT 25""",
+                (like_pat, like_pat, like_pat, like_pat),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT id, full_name, display_name, email, role
+                   FROM users
+                   WHERE role='student'
+                   ORDER BY full_name ASC LIMIT 25"""
+            ).fetchall()
+
+    results = []
+    for idx, r in enumerate(rows):
+        name = r["full_name"] or r["display_name"] or "Thành viên"
+        initials = "".join(w[:1] for w in name.split()[-2:]).upper() if len(name.split()) >= 2 else name[:2].upper()
+        bg, text_col, tw_col = PALETTE_CYCLE[idx % len(PALETTE_CYCLE)]
+        results.append({
+            "id": r["id"],
+            "name": name,
+            "email": r["email"] or "",
+            "role": r["role"],
+            "initials": initials,
+            "avatar": initials[:1],
+            "color": tw_col,
+            "bg": bg,
+            "textColor": text_col,
+        })
+    return {"users": results, "total": len(results)}
+
+
+@router.post("/kanban/projects/{project_id}/invitations")
+def invite_user_to_project(
+    project_id: str,
+    payload: ProjectInviteIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Mời thành viên mới tham gia vào đồ án (GitHub-style Collaborator Invitation)."""
+    now = now_utc()
+    with db() as conn:
+        proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
+        if not proj:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đồ án")
+
+        u_role = str(user.get("role") or "").lower()
+        if u_role == "student" and not is_user_in_project(user, proj):
+            raise HTTPException(status_code=403, detail="Chỉ thành viên của đồ án mới có quyền mời người khác")
+
+        target_user = conn.execute(
+            "SELECT id, full_name, display_name, email FROM users WHERE id=? OR email=? LIMIT 1",
+            (payload.user_id, payload.user_id),
+        ).fetchone()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Không tìm thấy sinh viên được mời")
+
+        team = json.loads(proj["team_json"] or "[]")
+        for m in team:
+            if m.get("id") == target_user["id"] or m.get("name") == target_user["full_name"]:
+                raise HTTPException(status_code=400, detail=f"{target_user['full_name']} đã là thành viên của đồ án này")
+
+        existing_inv = conn.execute(
+            "SELECT id FROM project_invitations WHERE project_id=? AND invitee_user_id=? AND status='pending'",
+            (project_id, target_user["id"]),
+        ).fetchone()
+        if existing_inv:
+            raise HTTPException(status_code=400, detail=f"Đã gửi lời mời đến {target_user['full_name']} rồi, đang chờ bạn ấy phản hồi")
+
+        inv_id = f"inv-{uid()[:8]}"
+        inviter_name = user.get("full_name") or user.get("display_name") or "Trưởng nhóm"
+        invitee_name = target_user.get("full_name") or target_user.get("display_name") or "Sinh viên"
+
+        conn.execute(
+            """INSERT INTO project_invitations(
+                   id, project_id, project_name, inviter_user_id, inviter_name,
+                   invitee_user_id, invitee_name, invitee_email, role_title,
+                   status, created_at, updated_at
+               ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
+            (
+                inv_id,
+                project_id,
+                proj["name"],
+                user["id"],
+                inviter_name,
+                target_user["id"],
+                invitee_name,
+                target_user["email"] or "",
+                payload.role_title,
+                now,
+                now,
+            ),
+        )
+
+        try:
+            notif_id = f"notif-{uid()[:8]}"
+            conn.execute(
+                """INSERT INTO notifications(id, user_id, title, message, type, is_read, created_at)
+                   VALUES(?, ?, ?, ?, 'project_invite', 0, ?)""",
+                (
+                    notif_id,
+                    target_user["id"],
+                    f"Lời mời tham gia đồ án: {proj['name']}",
+                    f"{inviter_name} đã gửi lời mời bạn tham gia đồ án '{proj['name']}' với vai trò {payload.role_title}.",
+                    now,
+                ),
+            )
+        except Exception:
+            pass
+
+        record_audit_log(
+            inviter_name,
+            user["id"],
+            "INVITE_MEMBER",
+            f"Mời {invitee_name} ({payload.role_title})",
+            "project",
+            "engineering_project",
+            project_id,
+        )
+
+    return {
+        "success": True,
+        "invitation": {
+            "id": inv_id,
+            "project_id": project_id,
+            "project_name": proj["name"],
+            "invitee_name": invitee_name,
+            "role_title": payload.role_title,
+            "status": "pending",
+        },
+        "message": f"Đã gửi lời mời tham gia đồ án đến {invitee_name}!",
+    }
+
+
+@router.get("/kanban/projects/{project_id}/invitations")
+def get_project_pending_invitations(
+    project_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Lấy danh sách lời mời của một đồ án (dành cho màn hình chi tiết đồ án)."""
+    with db() as conn:
+        rows = conn.execute(
+            """SELECT * FROM project_invitations
+               WHERE project_id=?
+               ORDER BY created_at DESC""",
+            (project_id,),
+        ).fetchall()
+    return {"invitations": [row_dict(r) for r in rows]}
+
+
+@router.get("/kanban/invitations")
+def get_user_project_invitations(
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Lấy danh sách lời mời tham gia đồ án của người dùng hiện tại (bao gồm các lời mời đang chờ)."""
+    uid_val = str(user.get("id") or "").strip()
+    u_email = str(user.get("email") or "").strip().lower()
+    with db() as conn:
+        rows = conn.execute(
+            """SELECT i.*, p.client, p.course, p.status as project_status, p.color_hex
+               FROM project_invitations i
+               LEFT JOIN engineering_projects p ON i.project_id = p.id
+               WHERE (i.invitee_user_id = ? OR LOWER(i.invitee_email) = ?)
+               ORDER BY i.created_at DESC""",
+            (uid_val, u_email),
+        ).fetchall()
+
+    invitations = [row_dict(r) for r in rows]
+    pending = [inv for inv in invitations if inv.get("status") == "pending"]
+    return {
+        "invitations": invitations,
+        "pending": pending,
+        "total_pending": len(pending),
+    }
+
+
+@router.post("/kanban/invitations/{invitation_id}/accept")
+def accept_project_invitation(
+    invitation_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Đồng ý tham gia đồ án: cập nhật trạng thái lời mời và thêm người dùng vào team_json để vào làm việc ngay."""
+    now = now_utc()
+    uid_val = str(user.get("id") or "").strip()
+    u_email = str(user.get("email") or "").strip().lower()
+
+    with db() as conn:
+        inv = conn.execute("SELECT * FROM project_invitations WHERE id=?", (invitation_id,)).fetchone()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lời mời")
+
+        if inv["invitee_user_id"] != uid_val and (inv["invitee_email"] or "").lower() != u_email:
+            raise HTTPException(status_code=403, detail="Lời mời này không dành cho bạn")
+
+        proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (inv["project_id"],)).fetchone()
+        if not proj:
+            raise HTTPException(status_code=404, detail="Đồ án không còn tồn tại")
+
+        team = json.loads(proj["team_json"] or "[]")
+        already_in = any(m.get("id") == uid_val or m.get("name") == user.get("full_name") for m in team)
+        if not already_in:
+            u_name = user.get("full_name") or user.get("display_name") or "Sinh viên"
+            initials = "".join(w[:1] for w in u_name.split()[-2:]).upper() if len(u_name.split()) >= 2 else u_name[:2].upper()
+            idx = len(team)
+            bg, text_col, tw_col = PALETTE_CYCLE[idx % len(PALETTE_CYCLE)]
+            team.append({
+                "id": uid_val,
+                "name": u_name,
+                "email": user.get("email") or "",
+                "avatar": initials[:1],
+                "initials": initials,
+                "role": inv["role_title"] or "Developer",
+                "color": tw_col,
+                "bg": bg,
+                "textColor": text_col,
+            })
+            conn.execute(
+                "UPDATE engineering_projects SET team_json=?, updated_at=? WHERE id=?",
+                (json.dumps(team, ensure_ascii=False), now, proj["id"]),
+            )
+
+        conn.execute(
+            "UPDATE project_invitations SET status='accepted', updated_at=? WHERE id=?",
+            (now, invitation_id),
+        )
+
+        record_audit_log(
+            user.get("full_name") or "Sinh viên",
+            user["id"],
+            "ACCEPT_INVITATION",
+            f"Chấp nhận lời mời tham gia {proj['name']} ({inv['role_title']})",
+            "project",
+            "engineering_project",
+            proj["id"],
+        )
+
+    return {
+        "success": True,
+        "message": f"Chúc mừng! Bạn đã chính thức gia nhập đồ án {proj['name']}.",
+        "project_id": proj["id"],
+        "project_name": proj["name"],
+    }
+
+
+@router.post("/kanban/invitations/{invitation_id}/decline")
+def decline_project_invitation(
+    invitation_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Từ chối lời mời tham gia đồ án."""
+    now = now_utc()
+    uid_val = str(user.get("id") or "").strip()
+    u_email = str(user.get("email") or "").strip().lower()
+
+    with db() as conn:
+        inv = conn.execute("SELECT * FROM project_invitations WHERE id=?", (invitation_id,)).fetchone()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lời mời")
+        if inv["invitee_user_id"] != uid_val and (inv["invitee_email"] or "").lower() != u_email:
+            raise HTTPException(status_code=403, detail="Lời mời này không dành cho bạn")
+
+        conn.execute("UPDATE project_invitations SET status='declined', updated_at=? WHERE id=?", (now, invitation_id))
+
+    return {"success": True, "message": "Đã từ chối lời mời tham gia đồ án."}
+
+
+@router.delete("/kanban/projects/{project_id}/members/{member_id}")
+def remove_member_from_project(
+    project_id: str,
+    member_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Gỡ thành viên khỏi đồ án (chỉ Trưởng nhóm đồ án hoặc Giảng viên/Admin)."""
+    now = now_utc()
+    with db() as conn:
+        proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
+        if not proj:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đồ án")
+
+        u_role = str(user.get("role") or "").lower()
+        team = json.loads(proj["team_json"] or "[]")
+        first_member_id = team[0].get("id") if team else None
+        first_member_name = team[0].get("name") if team else None
+        u_name = user.get("full_name") or user.get("display_name") or ""
+        is_leader = (
+            str(proj.get("leader_user_id") or "") in (str(user.get("id") or ""), f"usr-{user.get('id')}")
+            or first_member_id in (str(user.get("id") or ""), f"usr-{user.get('id')}")
+            or (first_member_name and (first_member_name == u_name or first_member_name in u_name))
+            or str(proj.get("created_by") or "") in (str(user.get("id") or ""), f"usr-{user.get('id')}")
+        )
+        is_self = member_id in (str(user.get("id") or ""), f"usr-{user.get('id')}") or (member_id == u_name)
+        if u_role == "student" and not is_leader and not is_self:
+            raise HTTPException(status_code=403, detail="Chỉ nhóm trưởng mới có quyền xóa thành viên khỏi đồ án")
+
+        new_team = [m for m in team if m.get("id") != member_id and m.get("name") != member_id]
+        if len(new_team) == len(team):
+            raise HTTPException(status_code=404, detail="Không tìm thấy thành viên trong đồ án")
+
+        conn.execute(
+            "UPDATE engineering_projects SET team_json=?, updated_at=? WHERE id=?",
+            (json.dumps(new_team, ensure_ascii=False), now, project_id),
+        )
+
+    return {"success": True, "message": "Đã gỡ thành viên khỏi đồ án thành công."}
+
+
 @router.post("/kanban/workspace/projects/{project_id}/tasks", status_code=status.HTTP_201_CREATED)
 def create_workspace_task(
     project_id: str,
@@ -1114,9 +1513,11 @@ def create_workspace_task(
     """Tạo mới 1 Task Kanban trong dự án và lưu vào SQLite."""
     now = now_utc()
     with db() as conn:
-        proj = conn.execute("SELECT id FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
+        proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         if not proj:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+        if str(user.get("role") or "").lower() == "student" and not is_user_in_project(user, proj):
+            raise HTTPException(status_code=403, detail="Chỉ thành viên trong nhóm đồ án này mới có quyền tạo công việc.")
 
         max_pos = conn.execute(
             "SELECT COALESCE(MAX(position_order), -1) m FROM engineering_tasks WHERE project_id=? AND column_id=?",
@@ -1383,6 +1784,12 @@ def patch_workspace_task(
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
 
+        u_role = str(user.get("role") or "").lower()
+        if u_role == "student":
+            proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (existing["project_id"],)).fetchone()
+            if not proj or not is_user_in_project(user, proj):
+                raise HTTPException(status_code=403, detail="Chỉ thành viên của đồ án này mới có quyền chỉnh sửa công việc")
+
         target_col = payload.column if payload.column is not None else existing["column_id"]
         if target_col == "done" and existing["column_id"] != "done":
             _check_h2_constraint(conn, existing, target_col)
@@ -1499,13 +1906,18 @@ def move_workspace_task(
 @router.delete("/kanban/workspace/tasks/{task_id}")
 def delete_workspace_task(
     task_id: str,
-    _: dict[str, Any] = Depends(current_user),
+    user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, str]:
     """Xóa Task khỏi bảng Kanban & giải phóng các khóa phụ thuộc H2 trỏ tới Task này."""
     with db() as conn:
-        existing = conn.execute("SELECT id FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
+        existing = conn.execute("SELECT id, project_id FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
+        u_role = str(user.get("role") or "").lower()
+        if u_role == "student":
+            proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (existing["project_id"],)).fetchone()
+            if not proj or not is_user_in_project(user, proj):
+                raise HTTPException(status_code=403, detail="Chỉ thành viên của đồ án này mới có quyền xóa công việc")
         conn.execute("UPDATE engineering_tasks SET depends_on=NULL WHERE depends_on=?", (task_id,))
         conn.execute("DELETE FROM engineering_tasks WHERE id=?", (task_id,))
     return {"status": "deleted", "id": task_id}

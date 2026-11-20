@@ -23,6 +23,8 @@ import {
   Crown,
   User,
   Layers,
+  Bell,
+  X,
 } from "lucide-react";
 import ProjectGradingModal from "../components/ProjectGradingModal";
 import MarloTitle from "../components/MarloTitle";
@@ -43,8 +45,12 @@ import {
   fetchKanbanWorkspace,
   createWorkspaceProjectApi,
   updateWorkspaceProjectApi,
+  fetchProjectInvitationsApi,
+  acceptProjectInvitationApi,
+  declineProjectInvitationApi,
   getStoredUser,
   type ProjectGitRepoSummary,
+  type ProjectInvitationItem,
 } from "../api";
 
 export interface CNTTMember {
@@ -463,50 +469,90 @@ export default function MarloProjectsScreen({
   const tlInnerRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
 
+  // ─── GitHub-style Collaborator Invitations ───
+  const [pendingInvitations, setPendingInvitations] = useState<ProjectInvitationItem[]>([]);
+
+  const loadInvitations = async () => {
+    try {
+      const res = await fetchProjectInvitationsApi();
+      if (res?.pending) {
+        setPendingInvitations(res.pending);
+      }
+    } catch {
+      setPendingInvitations([]);
+    }
+  };
+
+  useEffect(() => {
+    void loadInvitations();
+  }, []);
+
+  const handleAcceptInvite = async (invId: string, projName: string) => {
+    const res = await acceptProjectInvitationApi(invId);
+    if (res.success) {
+      setToastMsg(`✓ Bạn đã đồng ý gia nhập đồ án "${projName}" thành công!`);
+      void loadInvitations();
+      void loadProjectsFromApi();
+    } else {
+      setToastMsg(`✕ ${res.message}`);
+    }
+  };
+
+  const handleDeclineInvite = async (invId: string) => {
+    const res = await declineProjectInvitationApi(invId);
+    if (res.success) {
+      setToastMsg("Đã từ chối lời mời tham gia đồ án.");
+      void loadInvitations();
+    } else {
+      setToastMsg(`✕ ${res.message}`);
+    }
+  };
+
   const loadProjectsFromApi = async () => {
-    const res = await fetchKanbanWorkspace("all");
-    if (!res?.projects?.length) return;
-    setProjects(
-      res.projects.map((p) => ({
-        id: p.id,
-        name: p.name,
-        client: p.client,
-        course: p.course,
-        kind: p.kind,
-        status: p.status,
-        progress: p.progress,
-        tasksDone: p.tasksDone,
-        tasksTotal: p.tasksTotal,
-        dueText:
-          p.status === "delivered"
-            ? "Đã hoàn thành"
-            : (p.dueText || "").replace(/^in (\d+) days$/i, "Còn $1 ngày").replace(/^Delivered$/i, "Đã hoàn thành") ||
-              `Hạn ${p.dueDate}`,
-        storyPoints: p.storyPoints,
-        pointsBurned: p.pointsBurned,
-        budgetStr: p.budgetStr,
-        lead: p.lead || p.members?.[0]?.name || "Nguyễn Bá Hòa",
-        instructor: p.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)",
-        instructorAvatar: p.instructorAvatar,
-        finalScore: p.finalScore ?? null,
-        totalXp: p.totalXp,
-        members: p.members || [],
-        fav: p.fav,
-        colorHex: p.colorHex,
-        tlStart: p.tlStart,
-        tlWidth: p.tlWidth,
-        tlColor: p.tlColor,
-        gitRepo: p.gitRepo ?? null,
-        isMyProject: p.isMyProject ?? computeIsMyProject(p as any, currentUser),
-        isLead: p.isLead,
-        leaderUserId: p.leaderUserId,
-      }))
-    );
+    const res = await fetchKanbanWorkspace(isStudent ? "my" : "all");
+    if (res?.projects) {
+      setProjects(
+        res.projects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          client: p.client,
+          course: p.course,
+          kind: p.kind,
+          status: p.status,
+          progress: p.progress,
+          tasksDone: p.tasksDone,
+          tasksTotal: p.tasksTotal,
+          dueText:
+            p.status === "delivered"
+              ? "Đã hoàn thành"
+              : (p.dueText || "").replace(/^in (\d+) days$/i, "Còn $1 ngày").replace(/^Delivered$/i, "Đã hoàn thành") ||
+                `Hạn ${p.dueDate}`,
+          storyPoints: p.storyPoints,
+          pointsBurned: p.pointsBurned,
+          budgetStr: p.budgetStr,
+          lead: p.lead || p.members?.[0]?.name || "Nguyễn Bá Hòa",
+          instructor: p.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)",
+          instructorAvatar: p.instructorAvatar,
+          finalScore: p.finalScore ?? null,
+          totalXp: p.totalXp,
+          members: p.members || [],
+          fav: p.fav,
+          colorHex: p.colorHex,
+          tlStart: p.tlStart,
+          tlWidth: p.tlWidth,
+          tlColor: p.tlColor,
+          gitRepo: p.gitRepo ?? null,
+          isMyProject: p.isMyProject ?? computeIsMyProject(p as any, currentUser),
+          isLead: p.isLead,
+          leaderUserId: p.leaderUserId,
+        }))
+      );
+    }
   };
 
   useEffect(() => {
     void loadProjectsFromApi();
-  }, []);
+  }, [isStudent]);
 
   const handleToggleSubmissionLock = () => {
     const next = !anyFrozen;
@@ -582,12 +628,14 @@ export default function MarloProjectsScreen({
     );
   };
 
-  // Scoped projects based on user participation
+  // Scoped projects based on user participation (Strict student scoping)
   const scopedProjects = useMemo(() => {
+    if (isStudent) {
+      return projects.filter((p) => p.isMyProject ?? computeIsMyProject(p, currentUser));
+    }
     if (projectScope === "all") return projects;
-    const enrolled = projects.filter((p) => p.isMyProject ?? computeIsMyProject(p, currentUser));
-    return enrolled.length > 0 ? enrolled : projects;
-  }, [projects, projectScope, currentUser]);
+    return projects.filter((p) => p.isMyProject ?? computeIsMyProject(p, currentUser));
+  }, [projects, projectScope, currentUser, isStudent]);
 
   // Filtered projects for Slate view
   const filteredProjects = useMemo(() => {
@@ -838,6 +886,8 @@ export default function MarloProjectsScreen({
       due_text: newP.dueDate ? `due ${newP.dueDate}` : "in 30 days",
       story_points: storyPts,
       team_members: Array.isArray(newP.teamMembers) ? newP.teamMembers : [],
+      invited_user_ids: newP.invited_user_ids,
+      member_roles: newP.member_roles,
       repo_url: newP.repoUrl,
     });
 
@@ -866,11 +916,13 @@ export default function MarloProjectsScreen({
           tlWidth: saved.tlWidth,
           tlColor: saved.tlColor,
           gitRepo: saved.gitRepo ?? null,
+          isMyProject: true,
+          isLead: true,
         }
       : {
           id: "prj-" + Date.now(),
           name: newP.name,
-          client: newP.client || "Ferro Cycles",
+          client: newP.client || "CodeMind Campus",
           course: newP.course || newP.client || "CNTT-2026 · Đồ án Chuyên ngành",
           kind: (newP.kind || "COMMERCIAL").toUpperCase(),
           status: "active",
@@ -880,7 +932,7 @@ export default function MarloProjectsScreen({
           dueText: newP.dueDate ? `due ${newP.dueDate}` : "in 30 days",
           storyPoints: storyPts,
           pointsBurned: 0,
-          budgetStr: newP.budgetStr || `£${budgetNum.toLocaleString()}`,
+          budgetStr: newP.budgetStr || `${storyPts} SP`,
           members:
             newP.teamMembers && newP.teamMembers.length > 0
               ? newP.teamMembers.map((mName: string, idx: number) => ({
@@ -896,10 +948,14 @@ export default function MarloProjectsScreen({
           tlStart: 45,
           tlWidth: 28,
           tlColor: "amber",
+          isMyProject: true,
+          isLead: true,
         };
     setProjects((prev) => [created, ...prev]);
     setIsNewProjectModalOpen(false);
-    setToastMsg(`${created.name} created.`);
+    setToastMsg(`✓ Đã khởi tạo đồ án "${created.name}" thành công!`);
+    void loadProjectsFromApi();
+    void loadInvitations();
   };
 
   return (
@@ -1043,6 +1099,64 @@ export default function MarloProjectsScreen({
           )}
         </div>
       </div>
+
+      {/* ─── PENDING PROJECT INVITATIONS BANNER (GITHUB COLLABORATOR STYLE) ─── */}
+      {pendingInvitations.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {pendingInvitations.map((inv) => (
+            <div
+              key={inv.id}
+              className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fade-in"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                  <Bell size={20} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>Lời mời tham gia đồ án</span>
+                    <span className="px-1.5 py-0.2 rounded bg-amber-200/60 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-mono text-[10px]">
+                      GitHub Collaborator
+                    </span>
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-0.5">
+                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                      {inv.inviter_name}
+                    </span>{" "}
+                    đã mời bạn gia nhập đồ án{" "}
+                    <span className="font-bold underline decoration-amber-500 decoration-2">
+                      {inv.project_name}
+                    </span>{" "}
+                    với vai trò{" "}
+                    <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-mono font-medium text-slate-700 dark:text-slate-300">
+                      {inv.role_title}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleAcceptInvite(inv.id, inv.project_name)}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer active:scale-95 shadow-xs flex items-center gap-1.5"
+                >
+                  <Check size={14} />
+                  <span>Đồng ý tham gia</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeclineInvite(inv.id)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs transition cursor-pointer active:scale-95 flex items-center gap-1"
+                >
+                  <X size={14} />
+                  <span>Từ chối</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ─── AUTHENTIC MARLO SUB-NAV TABS & SCOPE TOGGLE ─── */}
       <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">

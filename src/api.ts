@@ -2677,6 +2677,8 @@ export async function createWorkspaceProjectApi(payload: {
   due_text?: string;
   story_points?: number;
   team_members?: string[];
+  invited_user_ids?: string[];
+  member_roles?: Record<string, string>;
   repo_url?: string;
   target_branch?: string;
 }): Promise<WorkspaceProjectDto | null> {
@@ -2691,6 +2693,153 @@ export async function createWorkspaceProjectApi(payload: {
     return data.project ?? null;
   } catch {
     return null;
+  }
+}
+
+export interface UserSearchItem {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  initials: string;
+  avatar: string;
+  color: string;
+  bg: string;
+  textColor: string;
+}
+
+export interface ProjectInvitationItem {
+  id: string;
+  project_id: string;
+  project_name: string;
+  inviter_user_id: string;
+  inviter_name: string;
+  invitee_user_id: string;
+  invitee_name: string;
+  invitee_email: string;
+  role_title: string;
+  status: "pending" | "accepted" | "declined";
+  created_at: string;
+  updated_at: string;
+  client?: string;
+  course?: string;
+  project_status?: string;
+  color_hex?: string;
+}
+
+export async function searchUsersForTeamApi(q: string = ""): Promise<UserSearchItem[]> {
+  try {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/users/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.users || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function inviteUserToProjectApi(
+  projectId: string,
+  payload: { user_id: string; role_title?: string }
+): Promise<{ success: boolean; message: string; invitation?: any }> {
+  try {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/projects/${encodeURIComponent(projectId)}/invitations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail || "Không thể gửi lời mời tham gia đồ án");
+    }
+    return data;
+  } catch (err: any) {
+    return { success: false, message: err.message || "Lỗi khi gửi lời mời" };
+  }
+}
+
+export async function fetchProjectDetailInvitationsApi(
+  projectId: string
+): Promise<{ invitations: ProjectInvitationItem[] }> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/kanban/projects/${encodeURIComponent(projectId)}/invitations`
+    );
+    if (!res.ok) return { invitations: [] };
+    return await res.json();
+  } catch {
+    return { invitations: [] };
+  }
+}
+
+export async function fetchProjectInvitationsApi(): Promise<{
+  invitations: ProjectInvitationItem[];
+  pending: ProjectInvitationItem[];
+  total_pending: number;
+}> {
+  try {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/invitations`);
+    if (!res.ok) return { invitations: [], pending: [], total_pending: 0 };
+    return await res.json();
+  } catch {
+    return { invitations: [], pending: [], total_pending: 0 };
+  }
+}
+
+export async function acceptProjectInvitationApi(
+  invitationId: string
+): Promise<{ success: boolean; message: string; project_id?: string }> {
+  try {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/invitations/${encodeURIComponent(invitationId)}/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail || "Không thể chấp nhận lời mời");
+    }
+    return data;
+  } catch (err: any) {
+    return { success: false, message: err.message || "Lỗi khi chấp nhận lời mời" };
+  }
+}
+
+export async function declineProjectInvitationApi(
+  invitationId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/invitations/${encodeURIComponent(invitationId)}/decline`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail || "Không thể từ chối lời mời");
+    }
+    return data;
+  } catch (err: any) {
+    return { success: false, message: err.message || "Lỗi khi từ chối lời mời" };
+  }
+}
+
+export async function removeProjectMemberApi(
+  projectId: string,
+  memberId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/kanban/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(memberId)}`,
+      { method: "DELETE" }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail || "Không thể gỡ thành viên khỏi đồ án");
+    }
+    return data;
+  } catch (err: any) {
+    return { success: false, message: err.message || "Lỗi khi gỡ thành viên" };
   }
 }
 

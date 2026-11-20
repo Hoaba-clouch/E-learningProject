@@ -36,8 +36,15 @@ class WorkspaceProjectCreateIn(BaseModel):
     due_text: str | None = None
     story_points: int | None = None
     team_members: list[str] = Field(default_factory=list)
+    invited_user_ids: list[str] = Field(default_factory=list)
+    member_roles: dict[str, str] = Field(default_factory=dict)
     repo_url: str | None = None
     target_branch: str = "main"
+
+
+class ProjectInviteIn(BaseModel):
+    user_id: str
+    role_title: str = "Developer"
 
 
 class WorkspaceProjectPatchIn(BaseModel):

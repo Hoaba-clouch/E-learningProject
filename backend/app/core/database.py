@@ -1037,6 +1037,24 @@ def _run_safe_migrations(conn: MySQLConnectionWrapper) -> None:
         "ALTER TABLE student_chapter_submissions ADD COLUMN student_name VARCHAR(191) DEFAULT ''",
         "ALTER TABLE student_chapter_submissions ADD COLUMN student_code VARCHAR(64) DEFAULT ''",
         "ALTER TABLE student_chapter_submissions ADD COLUMN valgrind_leaks INT NOT NULL DEFAULT 0",
+        "ALTER TABLE engineering_projects ADD COLUMN leader_user_id VARCHAR(64) DEFAULT 'student-demo'",
+        "ALTER TABLE engineering_projects ADD COLUMN instructor_id VARCHAR(64) DEFAULT 'instructor-demo'",
+        "ALTER TABLE engineering_projects ADD COLUMN instructor_name VARCHAR(191) DEFAULT 'Cô Trần Thị B'",
+        "ALTER TABLE engineering_projects ADD COLUMN course_id VARCHAR(64) DEFAULT 'oop'",
+        """CREATE TABLE IF NOT EXISTS project_invitations (
+            id VARCHAR(64) PRIMARY KEY,
+            project_id VARCHAR(64) NOT NULL,
+            project_name VARCHAR(255) NOT NULL,
+            inviter_user_id VARCHAR(64) NOT NULL,
+            inviter_name VARCHAR(191) NOT NULL,
+            invitee_user_id VARCHAR(64) NOT NULL,
+            invitee_name VARCHAR(191) NOT NULL,
+            invitee_email VARCHAR(191) NOT NULL,
+            role_title VARCHAR(64) NOT NULL DEFAULT 'Developer',
+            status VARCHAR(32) NOT NULL DEFAULT 'pending',
+            created_at VARCHAR(64) NOT NULL,
+            updated_at VARCHAR(64) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
     ]
     for stmt in alter_statements:
         try:

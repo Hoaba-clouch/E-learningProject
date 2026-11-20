@@ -14,10 +14,18 @@ import {
   BookOpen,
   ChevronDown,
   FolderGit2,
+  Crown,
+  UserCheck,
+  Mail,
 } from "lucide-react";
 import gsap from "gsap";
 import type { Project } from "../data/kanbanProjects";
-import { fetchTeamMembersApi } from "../api";
+import {
+  fetchTeamMembersApi,
+  searchUsersForTeamApi,
+  type UserSearchItem,
+  getStoredUser,
+} from "../api";
 
 interface SlateModalProps {
   isOpen: boolean;
@@ -354,11 +362,16 @@ export function MarloProjectSlateModal({
 }
 
 // ── CREATE NEW PROJECT MODAL (LOCALIZED ACADEMIC SOFTWARE ENGINEERING CAPSTONE) ──
-const FALLBACK_TEAM_MEMBERS = [
-  "Nguyễn Bá Hòa",
-  "Võ Nhật Huy",
-  "Phan Đình Nghị",
-];
+interface SelectedCollaborator {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  initials: string;
+  avatar: string;
+  bg?: string;
+  textColor?: string;
+}
 
 const KIND_OPTIONS = [
   "AI / Agent System",
@@ -368,6 +381,15 @@ const KIND_OPTIONS = [
   "Edge AI & IoT",
   "Cybersecurity & DevSecOps",
   "Mobile & Cross-platform",
+];
+
+const COLLABORATOR_ROLES = [
+  "Frontend & AI Dev",
+  "Backend & Database",
+  "Fullstack Dev",
+  "DevOps & Cloud Engineer",
+  "Data Scientist & AI",
+  "Quality Assurance (QA)",
 ];
 
 interface NewProjectModalProps {
@@ -383,31 +405,68 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
   const [budget, setBudget] = useState("600");
   const [deliveryDate, setDeliveryDate] = useState("15/12/2026");
   const [repoUrl, setRepoUrl] = useState("");
-  const [teamOptions, setTeamOptions] = useState<string[]>(FALLBACK_TEAM_MEMBERS);
-  const [selectedTeam, setSelectedTeam] = useState<string[]>(["Nguyễn Bá Hòa", "Võ Nhật Huy"]);
   const [isClosing, setIsClosing] = useState(false);
+
+  // Dynamic logged in creator
+  const currentUser = useMemo(() => getStoredUser(), []);
+  const creatorName = currentUser?.full_name || currentUser?.display_name || currentUser?.name || "Nguyễn Bá Hòa";
+  const creatorEmail = currentUser?.email || "bhoa@gmail.com";
+  const creatorInitials =
+    currentUser?.initials ||
+    (creatorName.split(" ").length >= 2
+      ? creatorName.split(" ").slice(-2).map((w: string) => w[0]).join("").toUpperCase()
+      : creatorName.slice(0, 2).toUpperCase());
+
+  // GitHub-style Collaborator Search & Selection
+  const [selectedCollaborators, setSelectedCollaborators] = useState<SelectedCollaborator[]>([]);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<UserSearchItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const backdropRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  // Debounced search for students from database
   useEffect(() => {
     if (!isOpen) return;
-    let active = true;
-    fetchTeamMembersApi().then((bundle) => {
-      if (!active || !bundle?.members) return;
-      const students = bundle.members.filter((m) => !m.isAdvisor).map((m) => m.name);
-      if (students.length > 0) {
-        setTeamOptions(students);
-        setSelectedTeam((prev) => {
-          const valid = prev.filter((p) => students.includes(p));
-          return valid.length > 0 ? valid : students.slice(0, 2);
-        });
+    if (!userSearchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const users = await searchUsersForTeamApi(userSearchQuery.trim());
+        // Filter out the creator themselves
+        const filtered = users.filter(
+          (u) =>
+            u.email.toLowerCase() !== creatorEmail.toLowerCase() &&
+            u.name.toLowerCase() !== creatorName.toLowerCase()
+        );
+        setSearchResults(filtered);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+        setIsSearchOpen(true);
       }
-    });
-    return () => {
-      active = false;
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [userSearchQuery, isOpen, creatorEmail, creatorName]);
+
+  // Click outside search container to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
+      }
     };
-  }, [isOpen]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Entrance spring animation with GSAP
   useEffect(() => {
@@ -460,9 +519,32 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
     }
   };
 
-  const toggleTeamMember = (member: string) => {
-    setSelectedTeam((prev) =>
-      prev.includes(member) ? prev.filter((m) => m !== member) : [...prev, member]
+  const handleAddCollaborator = (u: UserSearchItem) => {
+    if (selectedCollaborators.some((c) => c.id === u.id || c.email === u.email)) return;
+    setSelectedCollaborators((prev) => [
+      ...prev,
+      {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: "Frontend & AI Dev",
+        initials: u.initials,
+        avatar: u.avatar,
+        bg: u.bg,
+        textColor: u.textColor,
+      },
+    ]);
+    setUserSearchQuery("");
+    setIsSearchOpen(false);
+  };
+
+  const handleRemoveCollaborator = (id: string) => {
+    setSelectedCollaborators((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleRoleChange = (id: string, newRole: string) => {
+    setSelectedCollaborators((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, role: newRole } : c))
     );
   };
 
@@ -471,7 +553,14 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
     const finalName = name.trim() || "Hệ thống Kiểm thử Tự động AI Sandbox";
     const finalClient = client.trim() || "CS499 · Đồ án Tốt nghiệp Kỹ sư CNTT";
     const spNum = Math.max(100, Number(budget.replace(/[^0-9]/g, "")) || 600);
-    const finalTeam = selectedTeam.length > 0 ? selectedTeam : ["Nguyễn Bá Hòa"];
+
+    const memberRoles: Record<string, string> = {
+      [creatorName]: "Leader & Architect",
+    };
+    selectedCollaborators.forEach((c) => {
+      memberRoles[c.name] = c.role;
+      memberRoles[c.id] = c.role;
+    });
 
     onCreateProject({
       id: `prj-${Date.now()}`,
@@ -487,12 +576,15 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
       budget: spNum,
       budgetStr: `${spNum.toLocaleString()} SP`,
       storyPoints: spNum,
-      teamMembers: finalTeam,
+      teamMembers: [creatorName, ...selectedCollaborators.map((c) => c.name)],
+      invited_user_ids: selectedCollaborators.map((c) => c.id),
+      member_roles: memberRoles,
       repoUrl: repoUrl.trim() || undefined,
     });
     setName("");
     setClient("");
     setRepoUrl("");
+    setSelectedCollaborators([]);
     handleAnimatedClose();
   };
 
@@ -507,16 +599,16 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[520px] rounded-[30px] border border-slate-200/90 dark:border-slate-800 bg-[#fcfbfa] dark:bg-[#1a1b1e] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] p-6 sm:p-7 select-none relative"
+        className="w-full max-w-[540px] max-h-[92vh] flex flex-col rounded-[30px] border border-slate-200/90 dark:border-slate-800 bg-[#fcfbfa] dark:bg-[#1a1b1e] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] select-none overflow-hidden"
       >
         {/* Header: Title + Subtitle + Close 'X' button */}
-        <div className="flex items-start justify-between mb-5">
+        <div className="flex items-start justify-between px-6 pt-6 pb-3 shrink-0">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#16171a] dark:text-white font-sans">
               Đăng ký Đồ án Kỹ nghệ Mới
             </h2>
             <p className="text-xs sm:text-sm text-[#62656b] dark:text-[#a0a3a9] mt-0.5 font-normal">
-              Khởi tạo không gian đồ án nhóm, học phần, quỹ Story Points và thành viên.
+              Khởi tạo đồ án nhóm và gửi lời mời cộng tác (GitHub-style Invitation).
             </p>
           </div>
           <button
@@ -529,7 +621,7 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-2 space-y-4">
           {/* Row 1: Project name + Course */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
@@ -607,7 +699,7 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Hạn nộp & Bảo vệ dự kiến (DD/MM/YYYY)
+                Hạn nộp & Bảo vệ dự kiến
               </label>
               <div className="relative">
                 <input
@@ -626,14 +718,14 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Đường dẫn GitHub Repository (tùy chọn)
+                Đường dẫn GitHub Repo
               </label>
               <div className="relative">
                 <input
                   type="url"
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
-                  placeholder="https://github.com/nhom-ban/ten-du-an"
+                  placeholder="https://github.com/nhom/repo"
                   className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs pl-9"
                 />
                 <FolderGit2
@@ -641,46 +733,184 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
                   className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
                 />
               </div>
-              <p className="text-[10.5px] text-slate-400 dark:text-slate-500 mt-1">
-                Tự động đồng bộ sang Git Hub & kiểm chứng link nộp bài Kanban.
-              </p>
             </div>
           </div>
 
-          {/* Row 4: Team member selector pills */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Thành viên nhóm sinh viên ({selectedTeam.length} người)
+          {/* Row 4: GitHub Collaborators Search & Add */}
+          <div className="space-y-3 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                Thành viên & Lời mời tham gia ({selectedCollaborators.length + 1} người)
               </label>
-              <span className="text-[10.5px] text-slate-400">
-                Người đầu tiên là Nhóm trưởng
+              <span className="text-[11px] text-slate-400 font-medium">
+                Dữ liệu thật từ CSDL người dùng
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {teamOptions.map((member) => {
-                const isSelected = selectedTeam.includes(member);
-                const isFirst = selectedTeam[0] === member;
-                return (
-                  <button
-                    key={member}
-                    type="button"
-                    onClick={() => toggleTeamMember(member)}
-                    className={`px-3 py-1.5 rounded-xl text-xs transition-all duration-150 cursor-pointer active:scale-95 select-none ${
-                      isSelected
-                        ? "bg-[#14161a] text-white dark:bg-amber-500 dark:text-slate-950 font-semibold shadow-2xs"
-                        : "bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    {isFirst ? `★ ${member}` : member}
-                  </button>
-                );
-              })}
+
+            {/* Pinned Creator Card */}
+            <div className="flex items-center justify-between p-2.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-800/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                  {creatorInitials}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                      {creatorName}
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded-md">
+                      ★ Nhóm trưởng
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate block">
+                    {creatorEmail}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
+                Leader & Architect
+              </span>
             </div>
+
+            {/* GitHub-style Collaborator Search Input */}
+            <div ref={searchContainerRef} className="relative">
+              <div className="relative">
+                <Search
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  value={userSearchQuery}
+                  onChange={(e) => {
+                    setUserSearchQuery(e.target.value);
+                    setIsSearchOpen(true);
+                  }}
+                  onFocus={() => setIsSearchOpen(true)}
+                  placeholder="Tìm kiếm sinh viên bằng họ tên hoặc email..."
+                  className="w-full pl-9 pr-8 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs"
+                />
+                {isSearching && (
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+
+              {/* Dropdown Results */}
+              {isSearchOpen && userSearchQuery.trim() && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-30 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#16171a] shadow-xl p-1.5 space-y-1">
+                  {searchResults.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-slate-500 dark:text-slate-400">
+                      {isSearching ? "Đang tìm kiếm..." : "Không tìm thấy sinh viên nào phù hợp"}
+                    </div>
+                  ) : (
+                    searchResults.map((user) => {
+                      const isAlreadyAdded = selectedCollaborators.some(
+                        (c) => c.id === user.id || c.email === user.email
+                      );
+                      return (
+                        <div
+                          key={user.id}
+                          className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/70 transition"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              style={{
+                                backgroundColor: user.bg || "#E0E7FF",
+                                color: user.textColor || "#3730A3",
+                              }}
+                              className="w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0"
+                            >
+                              {user.initials}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                                {user.name}
+                              </div>
+                              <div className="text-[10.5px] text-slate-400 font-mono truncate">
+                                {user.email}
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isAlreadyAdded}
+                            onClick={() => handleAddCollaborator(user)}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                              isAlreadyAdded
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                                : "bg-[#EE8420] text-white hover:bg-[#d97316]"
+                            }`}
+                          >
+                            {isAlreadyAdded ? "✓ Đã chọn" : "+ Mời"}
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Selected Collaborators Rows */}
+            {selectedCollaborators.length > 0 && (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {selectedCollaborators.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200/70 dark:border-slate-800 text-xs"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        style={{
+                          backgroundColor: c.bg || "#FCEBBF",
+                          color: c.textColor || "#744210",
+                        }}
+                        className="w-6 h-6 rounded-md font-bold text-[10px] flex items-center justify-center shrink-0"
+                      >
+                        {c.initials}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate block">
+                          {c.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono truncate block">
+                          {c.email}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <select
+                        value={c.role}
+                        onChange={(e) => handleRoleChange(c.id, e.target.value)}
+                        className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                      >
+                        {COLLABORATOR_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCollaborator(c.id)}
+                        className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition cursor-pointer"
+                        title="Xóa khỏi danh sách mời"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Row 5: Actions Cancel + Create project */}
-          <div className="flex items-center justify-end gap-2.5 pt-3">
+          <div className="flex items-center justify-end gap-2.5 pt-3 pb-2">
             <button
               type="button"
               onClick={handleAnimatedClose}

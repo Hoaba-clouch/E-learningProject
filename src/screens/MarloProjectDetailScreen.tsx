@@ -15,6 +15,11 @@ import {
   GitCommit,
   GitPullRequest,
   FolderKanban,
+  UserPlus,
+  Search,
+  Clock,
+  Trash2,
+  Check,
 } from "lucide-react";
 import gsap from "gsap";
 import { animateMarloCards } from "../utils/marloAnimations";
@@ -36,7 +41,12 @@ import {
   fetchKanbanWorkspace,
   updateWorkspaceProjectApi,
   createWorkspaceTaskApi,
+  searchUsersForTeamApi,
+  inviteUserToProjectApi,
+  fetchProjectDetailInvitationsApi,
   type WorkspaceProjectDto,
+  type ProjectInvitationItem,
+  type UserSearchItem,
 } from "../api";
 import "../marlo-engine/marloStyles.css";
 
@@ -253,6 +263,68 @@ export default function MarloProjectDetailScreen({
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3200);
+  };
+
+  // ─── GitHub-style Collaborator Invitation States ───
+  const [pendingInvitations, setPendingInvitations] = useState<ProjectInvitationItem[]>([]);
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [memberSearchResults, setMemberSearchResults] = useState<UserSearchItem[]>([]);
+  const [isMemberSearching, setIsMemberSearching] = useState(false);
+  const [selectedUserToInvite, setSelectedUserToInvite] = useState<UserSearchItem | null>(null);
+  const [selectedRoleToInvite, setSelectedRoleToInvite] = useState("Frontend & AI Dev");
+
+  const loadProjectInvitations = async () => {
+    try {
+      const res = await fetchProjectDetailInvitationsApi(displayId);
+      if (res?.invitations) {
+        setPendingInvitations(res.invitations.filter((i) => i.status === "pending"));
+      }
+    } catch {
+      setPendingInvitations([]);
+    }
+  };
+
+  useEffect(() => {
+    void loadProjectInvitations();
+  }, [displayId]);
+
+  // Debounced live user search
+  useEffect(() => {
+    if (!memberSearchQuery.trim()) {
+      setMemberSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsMemberSearching(true);
+      try {
+        const users = await searchUsersForTeamApi(memberSearchQuery.trim());
+        const existingNames = new Set(projectStudents.map((s) => s.name.toLowerCase()));
+        setMemberSearchResults(users.filter((u) => !existingNames.has(u.name.toLowerCase())));
+      } catch {
+        setMemberSearchResults([]);
+      } finally {
+        setIsMemberSearching(false);
+      }
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [memberSearchQuery, projectStudents]);
+
+  const handleSendInvite = async () => {
+    if (!selectedUserToInvite) return;
+    const res = await inviteUserToProjectApi(displayId, {
+      user_id: selectedUserToInvite.id,
+      role_title: selectedRoleToInvite,
+    });
+    if (res.success) {
+      showToast(res.message || `✓ Đã gửi lời mời tham gia đến ${selectedUserToInvite.name}!`);
+      setSelectedUserToInvite(null);
+      setMemberSearchQuery("");
+      setIsAddMemberModalOpen(false);
+      void loadProjectInvitations();
+    } else {
+      showToast(`✕ ${res.message}`);
+    }
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
@@ -777,13 +849,28 @@ export default function MarloProjectDetailScreen({
 
             {/* Student Team List (Single Clean Badge per Row) */}
             <section className="card">
-              <div className="chead mb-3">
+              <div className="chead mb-3 flex items-center justify-between">
                 <div className="chead__text">
                   <h2 className="text-lg font-bold">Thành viên nhóm sinh viên</h2>
                   <p className="text-xs text-slate-500">
                     {projectStudents.length} sinh viên trực tiếp thực hiện đồ án
                   </p>
                 </div>
+                {!isSprintLocked && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedUserToInvite(null);
+                      setMemberSearchQuery("");
+                      setIsAddMemberModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition cursor-pointer active:scale-95 shadow-xs"
+                    title="Mời sinh viên tham gia đồ án (GitHub-style Collaborator)"
+                  >
+                    <UserPlus size={14} />
+                    <span>Mời thành viên</span>
+                  </button>
+                )}
               </div>
 
               <div className="pd__team flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
@@ -842,6 +929,44 @@ export default function MarloProjectDetailScreen({
                     </div>
                   );
                 })}
+
+                {/* Lời mời đang chờ phản hồi */}
+                {pendingInvitations.length > 0 && (
+                  <div className="pt-3 mt-2 border-t border-dashed border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                        <Clock size={12} />
+                        <span>Lời mời chờ xác nhận ({pendingInvitations.length})</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">Pending</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {pendingInvitations.map((inv) => (
+                        <div
+                          key={inv.id}
+                          className="flex items-center justify-between p-2 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 font-bold text-xs flex items-center justify-center shrink-0">
+                              {(inv.invitee_name || "SV").slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-900 dark:text-white truncate block">
+                                {inv.invitee_name}
+                              </span>
+                              <span className="text-[10.5px] text-slate-500 dark:text-slate-400 font-mono truncate block">
+                                {inv.invitee_email || inv.role_title}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                            Đang chờ đồng ý
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           </div>
@@ -949,6 +1074,183 @@ export default function MarloProjectDetailScreen({
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {/* ─── REAL MODAL: INVITE MEMBER (GITHUB-STYLE COLLABORATOR) ─── */}
+      {isAddMemberModalOpen && (
+        <div
+          onClick={() => setIsAddMemberModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs select-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white dark:bg-[#1b1c1e] rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800"
+          >
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <UserPlus size={18} className="text-amber-500" />
+                  <span>Mời thành viên vào đồ án</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Tìm kiếm sinh viên từ CSDL để gửi lời mời cộng tác (GitHub Collaborator).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddMemberModalOpen(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Search input */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Tìm sinh viên theo họ tên hoặc email
+                </label>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={memberSearchQuery}
+                    onChange={(e) => setMemberSearchQuery(e.target.value)}
+                    placeholder="VD: Nguyễn Văn A, vhuy, hoặc hasib@gmail.com..."
+                    autoFocus
+                    className="w-full pl-9 pr-8 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121316] text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-amber-500"
+                  />
+                  {isMemberSearching && (
+                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                      <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Search results list */}
+              {memberSearchQuery.trim() && (
+                <div className="max-h-48 overflow-y-auto space-y-1 rounded-2xl border border-slate-200 dark:border-slate-800 p-1.5 bg-slate-50/50 dark:bg-slate-900/40">
+                  {memberSearchResults.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-slate-400">
+                      {isMemberSearching ? "Đang tìm kiếm..." : "Không tìm thấy sinh viên nào phù hợp"}
+                    </div>
+                  ) : (
+                    memberSearchResults.map((u) => {
+                      const isSelected = selectedUserToInvite?.id === u.id;
+                      return (
+                        <div
+                          key={u.id}
+                          onClick={() => setSelectedUserToInvite(u)}
+                          className={`flex items-center justify-between p-2 rounded-xl transition cursor-pointer ${
+                            isSelected
+                              ? "bg-amber-500/15 border border-amber-500/30"
+                              : "hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              style={{ backgroundColor: u.bg || "#E0E7FF", color: u.textColor || "#3730A3" }}
+                              className="w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0"
+                            >
+                              {u.initials}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white truncate block">
+                                {u.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono truncate block">
+                                {u.email}
+                              </span>
+                            </div>
+                          </div>
+                          {isSelected ? (
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950 px-2 py-0.5 rounded-md">
+                              ✓ Đang chọn
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 hover:text-slate-600">
+                              Chọn
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* Selected User preview & Role Selector */}
+              {selectedUserToInvite && (
+                <div className="p-3 rounded-2xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Người được mời: <span className="text-amber-600">{selectedUserToInvite.name}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserToInvite(null)}
+                      className="text-[11px] text-slate-400 hover:text-red-500 cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Vai trò đảm nhiệm trong đồ án:
+                    </label>
+                    <select
+                      value={selectedRoleToInvite}
+                      onChange={(e) => setSelectedRoleToInvite(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white outline-none cursor-pointer"
+                    >
+                      <option value="Frontend & AI Dev">Frontend & AI Dev</option>
+                      <option value="Backend & Database">Backend & Database</option>
+                      <option value="Fullstack Dev">Fullstack Dev</option>
+                      <option value="DevOps & Cloud Engineer">DevOps & Cloud Engineer</option>
+                      <option value="Data Scientist & AI">Data Scientist & AI</option>
+                      <option value="Quality Assurance (QA)">Quality Assurance (QA)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddMemberModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedUserToInvite}
+                  onClick={handleSendInvite}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition active:scale-95 ${
+                    selectedUserToInvite
+                      ? "bg-amber-500 hover:bg-amber-600 shadow-xs cursor-pointer"
+                      : "bg-slate-300 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                  }`}
+                >
+                  Gửi lời mời tham gia
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 text-xs font-semibold shadow-xl flex items-center gap-2">
+          <span>{toastMsg}</span>
+          <button onClick={() => setToastMsg(null)} className="p-0.5 hover:opacity-75 cursor-pointer">
+            <X size={14} />
+          </button>
         </div>
       )}
     </div>
