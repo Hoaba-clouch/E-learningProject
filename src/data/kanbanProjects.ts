@@ -1,4 +1,5 @@
 import type { KanbanTask, TeamMember } from "../screens/KanbanBoard";
+import type { ProjectGitRepoSummary } from "../api";
 
 export interface Project {
   id: string;
@@ -15,6 +16,7 @@ export interface Project {
   finalScore?: number | null;
   evaluationStatus?: string | null;
   evaluationFeedback?: string | null;
+  gitRepo?: ProjectGitRepoSummary | null;
   tasks: KanbanTask[];
   team: TeamMember[];
 }

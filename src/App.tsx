@@ -98,10 +98,16 @@ export default function App() {
   const [selectedKanbanProjectId, setSelectedKanbanProjectId] = useState<string>("prj-codemind");
   const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>("codemind");
   const [selectedMarloPersonId, setSelectedMarloPersonId] = useState<string>("hoa");
+  const [gitHubInitialTab, setGitHubInitialTab] = useState<
+    "topology" | "prs" | "gitdiagram" | "analytics" | "gitflow" | undefined
+  >(undefined);
   const mainRef = useRef<HTMLElement>(null);
 
   const setScreen = (nextScreen: Screen) => {
     setScreenState(nextScreen);
+    if (nextScreen !== "github") {
+      setGitHubInitialTab(undefined);
+    }
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("screen", nextScreen);
@@ -111,6 +117,24 @@ export default function App() {
         url.searchParams.delete("tab");
         url.searchParams.delete("tutor");
       }
+      window.history.replaceState({}, "", url.toString());
+    }
+    mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  };
+
+  const openGitHubForProject = (
+    projectId?: string,
+    tab?: "topology" | "prs" | "gitdiagram" | "analytics" | "gitflow"
+  ) => {
+    if (projectId) {
+      setSelectedKanbanProjectId(projectId);
+      setSelectedMarloProjectId(projectId);
+    }
+    setGitHubInitialTab(tab);
+    setScreenState("github");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("screen", "github");
       window.history.replaceState({}, "", url.toString());
     }
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -406,7 +430,11 @@ export default function App() {
           <GitProjectHub
             role={role}
             initialProjectId={selectedKanbanProjectId}
-            onSelectProject={setSelectedKanbanProjectId}
+            initialViewMode={gitHubInitialTab}
+            onSelectProject={(pId) => {
+              setSelectedKanbanProjectId(pId);
+              setSelectedMarloProjectId(pId);
+            }}
             onNavigate={setScreen}
           />
         );
@@ -457,6 +485,8 @@ export default function App() {
             setSelectedKanbanProjectId(pId);
             setSelectedMarloProjectId(pId);
           }}
+          onNavigate={setScreen}
+          onOpenGitHub={(pId, tab) => openGitHubForProject(pId, tab)}
           role={role}
         />
       );
@@ -478,6 +508,7 @@ export default function App() {
             }
             setScreen("project-detail");
           }}
+          onOpenGitHub={(pId) => openGitHubForProject(pId)}
         />
       );
       case "project-detail": return (
@@ -494,6 +525,7 @@ export default function App() {
             setSelectedMarloProjectId(prjId);
             setScreen("kanban");
           }}
+          onNavigateToGitHub={(prjId) => openGitHubForProject(prjId)}
         />
       );
       case "team": return (

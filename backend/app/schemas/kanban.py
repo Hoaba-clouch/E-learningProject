@@ -36,6 +36,8 @@ class WorkspaceProjectCreateIn(BaseModel):
     due_text: str | None = None
     story_points: int | None = None
     team_members: list[str] = Field(default_factory=list)
+    repo_url: str | None = None
+    target_branch: str = "main"
 
 
 class WorkspaceProjectPatchIn(BaseModel):

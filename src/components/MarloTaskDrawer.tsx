@@ -6,6 +6,11 @@ import {
   CheckCheck,
   Trash2,
   GitPullRequest,
+  GitCommit,
+  GitFork,
+  FolderGit2,
+  ExternalLink,
+  Link2,
   RotateCcw,
   ChevronDown,
   ShieldCheck,
@@ -14,16 +19,20 @@ import {
 } from "lucide-react";
 import MarloSegmentedControl from "./MarloSegmentedControl";
 import type { KanbanTask, ColumnId, TeamMember } from "../screens/KanbanBoard";
+import type { ProjectGitRepoSummary } from "../api";
 
 interface Props {
   task: KanbanTask | null;
   teamMembers?: TeamMember[];
+  projectGitRepo?: ProjectGitRepoSummary | null;
   role?: "student" | "instructor" | "admin";
   isSprintLocked?: boolean;
   onClose: () => void;
   onUpdateTask?: (updated: KanbanTask) => void;
+  onSaveSubmissionUrl?: (task: KanbanTask, url: string) => Promise<string | null>;
+  onOpenGitHub?: (tab?: "topology" | "prs") => void;
   onDeleteTask?: (task: KanbanTask) => void;
-  onMoveColumn?: (taskId: string, col: ColumnId) => void;
+  onMoveColumn?: (taskId: string, col: ColumnId) => boolean | void;
   onReviewTask?: (taskId: string, decision: "approve" | "request_revision", feedback?: string) => void;
 }
 
@@ -62,10 +71,13 @@ function computeDueStatusLabel(dueDate?: string, column?: ColumnId): { text: str
 export default function MarloTaskDrawer({
   task,
   teamMembers,
+  projectGitRepo,
   role = "student",
   isSprintLocked = false,
   onClose,
   onUpdateTask,
+  onSaveSubmissionUrl,
+  onOpenGitHub,
   onDeleteTask,
   onMoveColumn,
   onReviewTask,
@@ -74,6 +86,16 @@ export default function MarloTaskDrawer({
   const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
   const [revisionNote, setRevisionNote] = useState("");
   const [showRevisionInput, setShowRevisionInput] = useState(false);
+  const [submissionUrlDraft, setSubmissionUrlDraft] = useState(task?.submissionUrl || "");
+  const [submissionUrlError, setSubmissionUrlError] = useState<string | null>(null);
+  const [submissionUrlSuccess, setSubmissionUrlSuccess] = useState<string | null>(null);
+  const [isSavingUrl, setIsSavingUrl] = useState(false);
+
+  useEffect(() => {
+    setSubmissionUrlDraft(task?.submissionUrl || "");
+    setSubmissionUrlError(null);
+    setSubmissionUrlSuccess(null);
+  }, [task?.id, task?.submissionUrl]);
 
   const handleClose = () => {
     if (isClosing) return;
@@ -157,6 +179,10 @@ export default function MarloTaskDrawer({
     if (isCompleted) {
       onMoveColumn?.(task.id, "in-progress");
     } else {
+      const accepted = onMoveColumn?.(task.id, "done");
+      if (accepted === false) {
+        return;
+      }
       const markAll = (list?: typeof task.checklist) =>
         list ? list.map((c) => ({ ...c, done: true })) : [];
       const updatedChecklist = markAll(task.checklist);
@@ -166,9 +192,37 @@ export default function MarloTaskDrawer({
         ...task,
         checklist: updatedChecklist,
         definitionOfDone: updatedDoD,
-        column: "done",
       });
-      onMoveColumn?.(task.id, "done");
+    }
+  };
+
+  const handleSaveLink = async () => {
+    const clean = submissionUrlDraft.trim();
+    if (!clean || !/^https?:\/\//i.test(clean)) {
+      setSubmissionUrlError("Vui lòng nhập URL hợp lệ bắt đầu bằng https:// hoặc http://");
+      return;
+    }
+    const slugLow = (projectGitRepo?.repoSlug || "").trim().toLowerCase();
+    if (slugLow && !clean.toLowerCase().includes(`github.com/${slugLow}`)) {
+      setSubmissionUrlError(
+        `Link phải thuộc kho lưu trữ của dự án (${projectGitRepo?.repoSlug}). VD: https://github.com/${projectGitRepo?.repoSlug}/pull/1`
+      );
+      return;
+    }
+    setSubmissionUrlError(null);
+    setSubmissionUrlSuccess(null);
+    if (onSaveSubmissionUrl) {
+      setIsSavingUrl(true);
+      const errMsg = await onSaveSubmissionUrl(task, clean);
+      setIsSavingUrl(false);
+      if (errMsg) {
+        setSubmissionUrlError(errMsg);
+      } else {
+        setSubmissionUrlSuccess("Đã lưu link minh chứng GitHub!");
+      }
+    } else {
+      onUpdateTask?.({ ...task, submissionUrl: clean });
+      setSubmissionUrlSuccess("Đã lưu link minh chứng!");
     }
   };
 
@@ -492,26 +546,205 @@ export default function MarloTaskDrawer({
             </div>
           </div>
 
-          {/* 5. GITHUB INTEGRATION CARD */}
-          {task.deliverable && (
-            <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <GitPullRequest size={14} className="text-[#f97316]" />
-                  <span>Liên kết GitHub & Minh chứng</span>
+          {/* 5. GITHUB INTEGRATION CARD (REAL COMMITS, PRS & REPO PROOF LINK) */}
+          <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <FolderGit2 size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <span className="font-bold text-slate-900 dark:text-white">
+                  Liên kết GitHub &amp; Minh chứng
                 </span>
-                <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold text-[10px]">
-                  Yêu cầu nộp: {task.deliverable.label}
-                </span>
+                <strong className="font-mono text-[11px] text-amber-600 dark:text-amber-400">
+                  #{task.code}
+                </strong>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500">
-                <span>
-                  Mã task: <strong className="font-mono text-amber-600 dark:text-amber-400">#{task.code}</strong>
-                </span>
-                <span className="font-mono text-[10px] text-slate-400">feature/{task.code.toLowerCase()}</span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {task.deliverable && (
+                  <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold text-[10px]">
+                    {task.deliverable.label}
+                  </span>
+                )}
+                {onOpenGitHub && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenGitHub("prs")}
+                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/70 text-blue-700 dark:text-blue-300 font-bold text-[10.5px] inline-flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <GitFork size={11} />
+                    <span>Mở Git Hub →</span>
+                  </button>
+                )}
               </div>
             </div>
-          )}
+
+            {projectGitRepo?.repoSlug && (
+              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="font-mono truncate">Repo: {projectGitRepo.repoSlug}</span>
+                {task.gitActivity?.hasValidGitProof ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold text-[10px] shrink-0">
+                    ✓ Đủ điều kiện minh chứng Git
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold text-[10px] shrink-0">
+                    Chưa có Commit/PR
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Real Pull Requests linked to this task code */}
+            {task.gitActivity && task.gitActivity.pullRequests.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                  Pull Requests gắn #{task.code} ({task.gitActivity.pullRequests.length})
+                </div>
+                {task.gitActivity.pullRequests.map((pr) => {
+                  const stLow = (pr.status || "open").toLowerCase();
+                  const badgeCls =
+                    stLow === "merged"
+                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      : stLow === "approved"
+                      ? "bg-blue-500/15 text-blue-700 dark:text-blue-300"
+                      : stLow === "changes_requested"
+                      ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                      : "bg-amber-500/15 text-amber-700 dark:text-amber-300";
+                  const statusLabel =
+                    stLow === "merged"
+                      ? "Merged"
+                      : stLow === "approved"
+                      ? "Approved"
+                      : stLow === "changes_requested"
+                      ? "Cần sửa"
+                      : "Open";
+                  return (
+                    <div
+                      key={pr.id}
+                      className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-700/80"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <GitPullRequest size={12} className="text-blue-500 shrink-0" />
+                          <span className="font-mono font-bold text-[11px] text-slate-800 dark:text-slate-100">
+                            PR #{String(pr.prNumber).padStart(2, "0")}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${badgeCls}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5">
+                          {pr.title}
+                        </p>
+                      </div>
+                      <a
+                        href={pr.prUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+                        title="Xem PR trên GitHub"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Real Commits linked to this task code */}
+            {task.gitActivity && task.gitActivity.commits.length > 0 && (
+              <div className="space-y-1 pt-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                  Commits gắn #{task.code} ({task.gitActivity.commitsCount})
+                </div>
+                {task.gitActivity.commits.slice(0, 4).map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200/60 dark:border-slate-800"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <GitCommit size={12} className="text-emerald-500 shrink-0" />
+                      <span className="font-mono text-[10.5px] font-bold text-slate-700 dark:text-slate-200 shrink-0">
+                        {c.sha}
+                      </span>
+                      <span className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
+                        {c.message}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 shrink-0">{c.authorName}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(!task.gitActivity ||
+              (task.gitActivity.commitsCount === 0 && task.gitActivity.pullRequests.length === 0)) && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Chưa có Commit/PR gắn mã <strong className="font-mono">#{task.code}</strong> trên Git Hub — hãy tạo Commit/PR kèm mã task hoặc dán link trực tiếp thuộc{" "}
+                <strong className="font-mono">{projectGitRepo?.repoSlug || "GitHub Repo dự án"}</strong> bên dưới.
+              </p>
+            )}
+
+            {/* Submission Proof URL Input (Student editable) or Readonly Display */}
+            <div className="pt-1.5 border-t border-slate-200/70 dark:border-slate-700/70 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                  <Link2 size={11} />
+                  <span>Link minh chứng GitHub (PR / Commit):</span>
+                </span>
+                {task.submissionUrl && (
+                  <a
+                    href={task.submissionUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline font-semibold inline-flex items-center gap-1"
+                  >
+                    <span>Mở link</span>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+              </div>
+
+              {role === "student" && !isSprintLocked && !isVerified ? (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="url"
+                      value={submissionUrlDraft}
+                      onChange={(e) => {
+                        setSubmissionUrlDraft(e.target.value);
+                        if (submissionUrlError) setSubmissionUrlError(null);
+                        if (submissionUrlSuccess) setSubmissionUrlSuccess(null);
+                      }}
+                      placeholder={`https://github.com/${projectGitRepo?.repoSlug || "owner/repo"}/pull/1`}
+                      className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[11px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSavingUrl}
+                      onClick={() => void handleSaveLink()}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-bold text-[11px] shrink-0 transition cursor-pointer disabled:opacity-60"
+                    >
+                      {isSavingUrl ? "Đang lưu..." : "Lưu link"}
+                    </button>
+                  </div>
+                  {submissionUrlError && (
+                    <p className="text-[10.5px] font-medium text-rose-600 dark:text-rose-400">
+                      {submissionUrlError}
+                    </p>
+                  )}
+                  {submissionUrlSuccess && (
+                    <p className="text-[10.5px] font-medium text-emerald-600 dark:text-emerald-400">
+                      {submissionUrlSuccess}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="px-2.5 py-1.5 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-800 font-mono text-[10.5px] text-slate-600 dark:text-slate-300 truncate">
+                  {task.submissionUrl || "Chưa gắn link minh chứng trực tiếp"}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* 6. USER STORY (SCRUM SPEC) */}
           {task.userStory && (

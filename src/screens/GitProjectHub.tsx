@@ -2,6 +2,11 @@ import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
+import {
+  isProjectFrozen,
+  setProjectFrozen,
+  subscribeProjectLockChanges,
+} from "../utils/projectFreeze";
 import OdometerNumber from "../components/OdometerNumber";
 import MarloNumber from "../components/MarloNumber";
 import {
@@ -82,6 +87,7 @@ import {
   Lock,
   Unlock,
   X,
+  FolderKanban,
 } from "lucide-react";
 
 // ─── Staggered Animation Timing Delays (Simulating organic branch tree growth) ──
@@ -1309,21 +1315,9 @@ function AnimatedNumber({
 interface GitProjectHubProps {
   role?: SessionRole;
   initialProjectId?: string;
+  initialViewMode?: "topology" | "prs" | "gitdiagram" | "analytics" | "gitflow";
   onSelectProject?: (projectId: string) => void;
   onNavigate?: (screen: any) => void;
-}
-
-function readProjectFrozenState(projectId: string): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return (
-      window.localStorage.getItem(`codemind_git_repo_locked_${projectId}`) === "1" ||
-      window.localStorage.getItem(`codemind_kanban_sprint_locked_${projectId}`) === "1" ||
-      window.localStorage.getItem("codemind_projects_submission_locked") === "1"
-    );
-  } catch {
-    return false;
-  }
 }
 
 const TOPO_SVG_STYLES = `
@@ -1739,6 +1733,7 @@ const GitRepoConfigModal = memo(function GitRepoConfigModal({
 export default function GitProjectHub({
   role = "student",
   initialProjectId = "prj-codemind",
+  initialViewMode,
   onSelectProject,
   onNavigate,
 }: GitProjectHubProps = {}) {
@@ -1747,7 +1742,14 @@ export default function GitProjectHub({
   const isAdmin = role === "admin";
 
   const gitHubRef = useRef<HTMLDivElement>(null);
-  const [viewMode, setViewMode] = useState<"topology" | "prs" | "gitdiagram" | "analytics" | "gitflow">("topology");
+  const [viewMode, setViewMode] = useState<"topology" | "prs" | "gitdiagram" | "analytics" | "gitflow">(
+    initialViewMode || "topology"
+  );
+  useEffect(() => {
+    if (initialViewMode) {
+      setViewMode(initialViewMode);
+    }
+  }, [initialViewMode]);
   const [activeProjectId, setActiveProjectId] = useState<string>(initialProjectId);
   const [projectsList, setProjectsList] = useState<GitHubProjectSummary[]>([]);
   const [repoSlug, setRepoSlug] = useState<string>("hoaba-clouch/e-learningproject");
@@ -1771,7 +1773,7 @@ export default function GitProjectHub({
     balanceStatus: "Cân bằng",
   });
   const [isRepoFrozen, setIsRepoFrozen] = useState<boolean>(() =>
-    readProjectFrozenState(initialProjectId)
+    isProjectFrozen(initialProjectId)
   );
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -1785,25 +1787,21 @@ export default function GitProjectHub({
   };
 
   useEffect(() => {
-    setIsRepoFrozen(readProjectFrozenState(activeProjectId));
+    setIsRepoFrozen(isProjectFrozen(activeProjectId));
+    return subscribeProjectLockChanges(() => {
+      setIsRepoFrozen(isProjectFrozen(activeProjectId));
+    });
   }, [activeProjectId]);
 
   const handleToggleRepoFreeze = () => {
     if (!isAdmin) return;
     const nextLocked = !isRepoFrozen;
-    try {
-      window.localStorage.setItem(
-        `codemind_git_repo_locked_${activeProjectId}`,
-        nextLocked ? "1" : "0"
-      );
-    } catch {
-      // Ignore storage errors
-    }
+    setProjectFrozen(activeProjectId, nextLocked);
     setIsRepoFrozen(nextLocked);
     showToast(
       nextLocked
-        ? `Đã đóng băng Repository của dự án ${activeProjectId} — Sinh viên không thể Commit / PR / Merge.`
-        : `Đã mở khóa Repository dự án ${activeProjectId} — Sinh viên có thể tiếp tục nộp bài.`
+        ? `Đã đóng băng Repository & khóa Sprint Kanban của dự án ${activeProjectId} — Sinh viên không thể Commit / PR / Merge.`
+        : `Đã mở khóa Repository & Sprint Kanban dự án ${activeProjectId} — Sinh viên có thể tiếp tục nộp bài.`
     );
   };
 
@@ -2144,10 +2142,13 @@ export default function GitProjectHub({
       await loadGitWorkspace(activeProjectId, selectedPr?.id);
       setSelectedCommit(res.commit as GitCommitItem);
       setTopoAnimKey((k) => k + 1);
+      const taskHint = res.linkedTaskUpdated
+        ? ` · Tự động chuyển Task #${res.linkedTaskUpdated} sang Đang làm trên Kanban`
+        : "";
       showToast(
         `Đã ghi nhận commit ${res.commit.sha}${
           (res.xp_awarded || 0) > 0 ? ` (+${res.xp_awarded} XP)` : ""
-        }`
+        }${taskHint}`
       );
     }
   };
@@ -2169,7 +2170,10 @@ export default function GitProjectHub({
     if (res.pullRequest) {
       await loadGitWorkspace(activeProjectId, res.pullRequest.id);
       setViewMode("prs");
-      showToast(`Đã tạo PR #${String(res.pullRequest.prNumber).padStart(2, "0")} & chạy AST Scanner`);
+      const taskHint = res.linkedTaskUpdated
+        ? ` · Tự động chuyển Task #${res.linkedTaskUpdated} sang Đang làm trên Kanban`
+        : "";
+      showToast(`Đã tạo PR #${String(res.pullRequest.prNumber).padStart(2, "0")} & chạy AST Scanner${taskHint}`);
     }
   };
 
@@ -2669,6 +2673,28 @@ export default function GitProjectHub({
                 </option>
               ))}
             </select>
+          )}
+          {onNavigate && (
+            <>
+              <button
+                type="button"
+                onClick={() => onNavigate("project-detail")}
+                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+                title="Xem trang Chi tiết Đồ án hiện tại"
+              >
+                <FileText size={14} className="text-slate-600 dark:text-slate-300 shrink-0" />
+                <span>Chi tiết Dự án</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate("kanban")}
+                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+                title="Chuyển sang Bảng Kanban của dự án"
+              >
+                <FolderKanban size={14} className="text-amber-500 shrink-0" />
+                <span>Bảng Kanban</span>
+              </button>
+            </>
           )}
           <a
             href={repoUrl}

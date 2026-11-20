@@ -38,7 +38,7 @@ def _require_roles(user: dict[str, Any], allowed: tuple[str, ...], action_label:
     return role
 
 _IGNORED_TASK_TOKENS = {"MERGE", "README", "HOTFIX", "DOCKER", "OAUTH", "HTTPS", "FIXUP", "SQLITE"}
-_TASK_CODE_PATTERN = re.compile(r"\b([A-Z]{2,6}-?[A-Z0-9]{2,6})\b")
+_TASK_CODE_PATTERN = re.compile(r"\b([A-Z]{2,6}(?:-[A-Z0-9]{1,6}){1,2}|[A-Z]{2,6}-?[A-Z0-9]{2,6})\b")
 _CONVENTIONAL_PREFIX = re.compile(r"^(feat|fix|refactor|test|docs|chore|hotfix|release)(\([^)]+\))?:", re.IGNORECASE)
 
 _MEMBER_THEME_PALETTE = [
@@ -553,6 +553,58 @@ def update_project_repo(
     return {"repository": _serialize_repo(updated)}
 
 
+def _auto_advance_task_on_git_activity(
+    conn: Any,
+    project_id: str,
+    task_code: str | None,
+    actor_label: str,
+    submission_url: str | None = None,
+) -> str | None:
+    """Tự động chuyển Task Kanban từ backlog/ready/fail sang in-progress & gắn link minh chứng khi có Commit/PR mới."""
+    if not task_code or not str(task_code).strip():
+        return None
+    clean_code = str(task_code).strip().lstrip("#").upper()
+    task_row = conn.execute(
+        "SELECT * FROM engineering_tasks WHERE project_id=? AND upper(code)=upper(?)",
+        (project_id, clean_code),
+    ).fetchone()
+    if not task_row:
+        return None
+
+    cur_col = str(task_row["column_id"] or "ready")
+    next_col = "in-progress" if cur_col in ("backlog", "ready", "fail") else cur_col
+    next_url = task_row["submission_url"] or submission_url
+    col_changed = next_col != cur_col
+    url_changed = bool(next_url and next_url != task_row["submission_url"])
+
+    if not col_changed and not url_changed:
+        return None
+
+    logs = json.loads(task_row["audit_logs_json"] or "[]")
+    if col_changed:
+        logs.append(
+            {
+                "user": actor_label,
+                "fromColumn": cur_col,
+                "toColumn": "Đang làm" if next_col == "in-progress" else next_col,
+                "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            }
+        )
+    conn.execute(
+        """UPDATE engineering_tasks
+           SET column_id=?, submission_url=?, audit_logs_json=?, updated_at=?
+           WHERE id=?""",
+        (
+            next_col,
+            next_url,
+            json.dumps(logs, ensure_ascii=False),
+            now_utc(),
+            task_row["id"],
+        ),
+    )
+    return str(task_row["code"]) if col_changed else None
+
+
 @router.post("/projects/{project_id}/commits", status_code=status.HTTP_201_CREATED)
 def push_git_commit(
     project_id: str,
@@ -568,7 +620,7 @@ def push_git_commit(
     files = payload.files_changed if payload.files_changed else [f"src/{payload.branch.replace('/', '_')}.ts", "tests/unit.spec.ts"]
 
     with db() as conn:
-        proj, _ = _ensure_project_and_repo(conn, project_id)
+        proj, repo = _ensure_project_and_repo(conn, project_id)
         pid = proj["id"]
         stats_row = conn.execute(
             "SELECT COALESCE(MAX(cx), 70) AS max_cx, COALESCE(MAX(position_order), -1) AS max_pos FROM git_commits WHERE project_id=?",
@@ -610,11 +662,23 @@ def push_git_commit(
                 now,
             ),
         )
+        repo_base = str(repo["repo_url"] or "https://github.com/Hoaba-clouch/E-learningProject").rstrip("/")
+        linked_task_updated = _auto_advance_task_on_git_activity(
+            conn,
+            pid,
+            task_code,
+            f"Git Commit {short_sha}",
+            submission_url=f"{repo_base}/commit/{short_sha}",
+        )
         qualified = bool(task_code) or bool(_CONVENTIONAL_PREFIX.match(clean_msg))
         xp_awarded = _award_git_xp(conn, user, 10 if qualified else 0)
         created_row = conn.execute("SELECT * FROM git_commits WHERE id=?", (commit_id,)).fetchone()
 
-    return {"commit": _serialize_commit(created_row), "xp_awarded": xp_awarded}
+    return {
+        "commit": _serialize_commit(created_row),
+        "xp_awarded": xp_awarded,
+        "linkedTaskUpdated": linked_task_updated,
+    }
 
 
 @router.post("/projects/{project_id}/pull-requests", status_code=status.HTTP_201_CREATED)
@@ -637,7 +701,7 @@ def create_pull_request(
     task_code = _extract_task_code(payload.task_code, clean_title)
 
     with db() as conn:
-        proj, _ = _ensure_project_and_repo(conn, project_id)
+        proj, repo = _ensure_project_and_repo(conn, project_id)
         pid = proj["id"]
         num_row = conn.execute(
             "SELECT COALESCE(MAX(pr_number), 0) AS max_num FROM git_pull_requests WHERE project_id=?",
@@ -701,9 +765,17 @@ def create_pull_request(
                    output_tokens = output_tokens + 310
                WHERE id = 'svc-aigc'"""
         )
+        repo_base = str(repo["repo_url"] or "https://github.com/Hoaba-clouch/E-learningProject").rstrip("/")
+        linked_task_updated = _auto_advance_task_on_git_activity(
+            conn,
+            pid,
+            task_code,
+            f"Git PR #{next_num:02d}",
+            submission_url=f"{repo_base}/pull/{next_num}",
+        )
         row = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
 
-    return {"pullRequest": _serialize_pr(row)}
+    return {"pullRequest": _serialize_pr(row), "linkedTaskUpdated": linked_task_updated}
 
 
 @router.post("/pull-requests/{pr_id}/ai-fix")
@@ -1261,8 +1333,16 @@ def _generate_synthetic_commits_for_repo(slug: str, repo_url: str) -> list[dict[
     return synth
 
 
-def _generate_synthetic_prs_for_repo(slug: str, project_id: str) -> list[dict[str, Any]]:
+def _generate_synthetic_prs_for_repo(
+    slug: str,
+    project_id: str,
+    task_codes: list[str] | None = None,
+) -> list[dict[str, Any]]:
     owner, repo_name = slug.split("/", 1) if "/" in slug else ("dev", slug)
+    codes = task_codes or []
+    code_1 = codes[0] if len(codes) > 0 else "TE101A0"
+    code_2 = codes[1] if len(codes) > 1 else "TE202A1"
+    code_3 = codes[2] if len(codes) > 2 else "TE303A2"
     return [
         {
             "id": f"pr-{project_id}-01",
@@ -1271,7 +1351,7 @@ def _generate_synthetic_prs_for_repo(slug: str, project_id: str) -> list[dict[st
             "description": f"Initial architectural implementation for {repo_name} with unit testing and CI setup.",
             "source_branch": f"feature/{repo_name[:12]}",
             "target_branch": "main",
-            "task_code": "TE101A0",
+            "task_code": code_1,
             "author_name": owner.title(),
             "status": "merged",
         },
@@ -1282,7 +1362,7 @@ def _generate_synthetic_prs_for_repo(slug: str, project_id: str) -> list[dict[st
             "description": "Patches input boundary checks, adds Bcrypt hashing and verifies access tokens.",
             "source_branch": "fix/patch-runner",
             "target_branch": "main",
-            "task_code": "TE202A1",
+            "task_code": code_2,
             "author_name": f"{owner.title()} Lead",
             "status": "merged",
         },
@@ -1293,7 +1373,7 @@ def _generate_synthetic_prs_for_repo(slug: str, project_id: str) -> list[dict[st
             "description": "Decouples controller from storage tier and implements Redis caching layer.",
             "source_branch": "refactor/arch-modernization",
             "target_branch": "main",
-            "task_code": "TE303A2",
+            "task_code": code_3,
             "author_name": "Core Architect",
             "status": "open",
         },
@@ -1401,6 +1481,21 @@ def sync_github_live(
             )
 
         commits_synced = 0
+        task_code_rows = conn.execute(
+            "SELECT code, column_id FROM engineering_tasks WHERE project_id = ? ORDER BY position_order ASC",
+            (project_id,),
+        ).fetchall()
+        active_task_codes = [
+            str(r["code"]).strip().lstrip("#").upper()
+            for r in task_code_rows
+            if r["code"] and str(r["column_id"] or "") in ("verified", "done", "in-progress")
+        ]
+        all_task_codes = [
+            str(r["code"]).strip().lstrip("#").upper()
+            for r in task_code_rows
+            if r["code"]
+        ]
+        project_task_codes = active_task_codes or all_task_codes
         raw_commits = remote_res.get("commits", [])
         # Nếu remote rỗng (rate limit hoặc repo ngoại tuyến) -> tạo commits mô phỏng chính xác theo repo!
         if not raw_commits:
@@ -1447,7 +1542,10 @@ def sync_github_live(
                         author_avatar = raw_login[:2].upper()
                         author_color = _MEMBER_THEME_PALETTE[idx % len(_MEMBER_THEME_PALETTE)][0]
 
-                    task_code = _extract_task_code(None, raw_msg) or f"TE{((idx * 17 + 101) % 899 + 100):03d}A{(idx % 9)}"
+                    task_code = (
+                        _extract_task_code(None, raw_msg)
+                        or (project_task_codes[idx % len(project_task_codes)] if project_task_codes else f"TE{((idx * 17 + 101) % 899 + 100):03d}A{(idx % 9)}")
+                    )
 
                     # Phân giải làn Metro nhánh gốc
                     if "te9ca7a" in msg_low or "jwt" in msg_low or "auth" in msg_low or "login" in msg_low or "user" in msg_low:
@@ -1493,7 +1591,10 @@ def sync_github_live(
                     author_avatar = (raw_login[:2] if len(raw_login) >= 2 else raw_author_name[:2]).upper()
                     author_color = _MEMBER_THEME_PALETTE[idx % len(_MEMBER_THEME_PALETTE)][0]
 
-                    task_code = _extract_task_code(None, raw_msg) or f"TASK-{(idx + 1):03d}"
+                    task_code = (
+                        _extract_task_code(None, raw_msg)
+                        or (project_task_codes[idx % len(project_task_codes)] if project_task_codes else f"TASK-{(idx + 1):03d}")
+                    )
                     repo_tag = slug.split("/")[1][:10] if "/" in slug else "core"
 
                     if any(k in msg_low for k in ["merge", "release", "version", "bump", "tag", "main"]):
@@ -1596,7 +1697,7 @@ def sync_github_live(
         ).fetchone()
         existing_pr_cnt = int(existing_pr_cnt_row["cnt"] or 0) if existing_pr_cnt_row else 0
         if not raw_prs and (not is_default_codemind or existing_pr_cnt == 0):
-            raw_prs = _generate_synthetic_prs_for_repo(slug, project_id)
+            raw_prs = _generate_synthetic_prs_for_repo(slug, project_id, project_task_codes)
 
         if raw_prs:
             conn.execute("DELETE FROM git_pull_requests WHERE project_id = ?", (project_id,))
@@ -1618,7 +1719,11 @@ def sync_github_live(
 
                 source_b = pr.get("source_branch") or (pr.get("head") or {}).get("ref") or "feature/remote"
                 target_b = pr.get("target_branch") or (pr.get("base") or {}).get("ref") or "main"
-                pr_task = pr.get("task_code") or _extract_task_code(None, pr_title) or f"TSK-PR{pr_num:02d}"
+                pr_task = (
+                    pr.get("task_code")
+                    or _extract_task_code(None, pr_title)
+                    or (project_task_codes[(max(1, pr_num) - 1) % len(project_task_codes)] if project_task_codes else f"TSK-PR{pr_num:02d}")
+                )
 
                 score, scanned_status, blast_radius, summary, findings, diff_preview, questions = _run_ai_ast_scanner(
                     pr_title, pr_desc, source_b, pr_task, ""

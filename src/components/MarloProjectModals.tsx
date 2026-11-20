@@ -13,6 +13,7 @@ import {
   Calendar,
   BookOpen,
   ChevronDown,
+  FolderGit2,
 } from "lucide-react";
 import gsap from "gsap";
 import type { Project } from "../data/kanbanProjects";
@@ -385,6 +386,7 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
   const [kind, setKind] = useState("AI / Agent System");
   const [budget, setBudget] = useState("600");
   const [deliveryDate, setDeliveryDate] = useState("15/12/2026");
+  const [repoUrl, setRepoUrl] = useState("");
   const [selectedTeam, setSelectedTeam] = useState<string[]>(["Nguyễn Bá Hòa", "Võ Nhật Huy"]);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -470,9 +472,11 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
       budgetStr: `${spNum.toLocaleString()} SP`,
       storyPoints: spNum,
       teamMembers: finalTeam,
+      repoUrl: repoUrl.trim() || undefined,
     });
     setName("");
     setClient("");
+    setRepoUrl("");
     handleAnimatedClose();
   };
 
@@ -583,23 +587,47 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
             </div>
           </div>
 
-          {/* Row 3: Delivery date */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Hạn nộp & Bảo vệ dự kiến (DD/MM/YYYY)
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={deliveryDate}
-                onChange={(e) => setDeliveryDate(e.target.value)}
-                placeholder="15/12/2026"
-                className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-sm font-normal text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs pr-10"
-              />
-              <Calendar
-                size={16}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 pointer-events-none"
-              />
+          {/* Row 3: Delivery date + Optional GitHub Repo URL */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Hạn nộp & Bảo vệ dự kiến (DD/MM/YYYY)
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={deliveryDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  placeholder="15/12/2026"
+                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-sm font-normal text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs pr-10"
+                />
+                <Calendar
+                  size={16}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 pointer-events-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Đường dẫn GitHub Repository (tùy chọn)
+              </label>
+              <div className="relative">
+                <input
+                  type="url"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/nhom-ban/ten-du-an"
+                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs pl-9"
+                />
+                <FolderGit2
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                />
+              </div>
+              <p className="text-[10.5px] text-slate-400 dark:text-slate-500 mt-1">
+                Tự động đồng bộ sang Git Hub & kiểm chứng link nộp bài Kanban.
+              </p>
             </div>
           </div>
 

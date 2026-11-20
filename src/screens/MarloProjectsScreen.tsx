@@ -1,4 +1,4 @@
-import React, { useState, useRef, useLayoutEffect, useEffect } from "react";
+import React, { useState, useRef, useLayoutEffect, useEffect, useMemo } from "react";
 import gsap from "gsap";
 import {
   Plus,
@@ -18,6 +18,8 @@ import {
   ShieldAlert,
   Sparkles,
   FolderGit2,
+  GitFork,
+  FolderKanban,
   Crown,
 } from "lucide-react";
 import ProjectGradingModal from "../components/ProjectGradingModal";
@@ -30,9 +32,16 @@ import {
   animateMarloCards,
 } from "../utils/marloAnimations";
 import {
+  isGlobalSubmissionLocked,
+  isProjectFrozen,
+  setGlobalSubmissionLocked,
+  subscribeProjectLockChanges,
+} from "../utils/projectFreeze";
+import {
   fetchKanbanWorkspace,
   createWorkspaceProjectApi,
   updateWorkspaceProjectApi,
+  type ProjectGitRepoSummary,
 } from "../api";
 
 export interface CNTTMember {
@@ -85,6 +94,7 @@ export interface CNTTProjectItem {
   tlStart: number; // percentage (0 to 100)
   tlWidth: number; // percentage (0 to 100)
   tlColor?: "amber" | "dark" | "done";
+  gitRepo?: ProjectGitRepoSummary | null;
 }
 
 // 8 Real Software Engineering Capstone Projects (Synced with Kanban Board)
@@ -365,12 +375,14 @@ import type { Role } from "../App";
 interface MarloProjectsScreenProps {
   onOpenProject?: (project: CNTTProjectItem) => void;
   onOpenProjectDetail?: (projectId: string) => void;
+  onOpenGitHub?: (projectId: string) => void;
   role?: Role;
 }
 
 export default function MarloProjectsScreen({
   onOpenProject,
   onOpenProjectDetail,
+  onOpenGitHub,
   role = "student",
 }: MarloProjectsScreenProps) {
   const [activeTab, setActiveTab] = useState<"slate" | "timeline">("slate");
@@ -380,13 +392,23 @@ export default function MarloProjectsScreen({
   const [projects, setProjects] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [gradingProject, setGradingProject] = useState<CNTTProjectItem | null>(null);
-  const [isSubmissionLocked, setIsSubmissionLocked] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("codemind_projects_submission_locked") === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [isSubmissionLocked, setIsSubmissionLocked] = useState<boolean>(() =>
+    isGlobalSubmissionLocked()
+  );
+  const [lockVersion, setLockVersion] = useState(0);
+
+  useEffect(() => {
+    return subscribeProjectLockChanges(() => {
+      setIsSubmissionLocked(isGlobalSubmissionLocked());
+      setLockVersion((v) => v + 1);
+    });
+  }, []);
+
+  const frozenProjectIds = useMemo(
+    () => projects.filter((p) => isProjectFrozen(p.id)).map((p) => p.id),
+    [projects, lockVersion, isSubmissionLocked]
+  );
+  const anyFrozen = isSubmissionLocked || frozenProjectIds.length > 0;
   const [assignMentorProject, setAssignMentorProject] = useState<CNTTProjectItem | null>(null);
   const [selectedMentor, setSelectedMentor] = useState("TS. Nguyễn Phước (GV Hướng dẫn)");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -430,6 +452,7 @@ export default function MarloProjectsScreen({
         tlStart: p.tlStart,
         tlWidth: p.tlWidth,
         tlColor: p.tlColor,
+        gitRepo: p.gitRepo ?? null,
       }))
     );
   };
@@ -439,18 +462,14 @@ export default function MarloProjectsScreen({
   }, []);
 
   const handleToggleSubmissionLock = () => {
-    const next = !isSubmissionLocked;
+    const next = !anyFrozen;
     setIsSubmissionLocked(next);
-    try {
-      localStorage.setItem("codemind_projects_submission_locked", String(next));
-      window.dispatchEvent(new Event("codemind-submission-lock-changed"));
-    } catch {
-      // ignore storage errors
-    }
+    setGlobalSubmissionLocked(next);
+    setLockVersion((v) => v + 1);
     setToastMsg(
       next
-        ? "🔒 Đã khóa cổng đăng ký & nộp đồ án cho toàn khóa."
-        : "🔓 Đã mở lại cổng đăng ký & nộp đồ án cho sinh viên."
+        ? "🔒 Đã khóa cổng đăng ký & đóng băng nộp bài toàn khóa (Dự án · Kanban · Git Hub)."
+        : "🔓 Đã mở lại cổng đăng ký & gỡ đóng băng cho toàn bộ đồ án (Dự án · Kanban · Git Hub)."
     );
   };
 
@@ -763,6 +782,7 @@ export default function MarloProjectsScreen({
       due_text: newP.dueDate ? `due ${newP.dueDate}` : "in 30 days",
       story_points: storyPts,
       team_members: Array.isArray(newP.teamMembers) ? newP.teamMembers : [],
+      repo_url: newP.repoUrl,
     });
 
     const created: CNTTProjectItem = saved
@@ -789,6 +809,7 @@ export default function MarloProjectsScreen({
           tlStart: saved.tlStart,
           tlWidth: saved.tlWidth,
           tlColor: saved.tlColor,
+          gitRepo: saved.gitRepo ?? null,
         }
       : {
           id: "prj-" + Date.now(),
@@ -855,10 +876,14 @@ export default function MarloProjectsScreen({
                 Học viên thực hiện
               </span>
             )}
-            {isSubmissionLocked && (
+            {anyFrozen && (
               <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-600 text-white inline-flex items-center gap-1">
                 <Lock size={11} />
-                <span>Cổng nộp đã khóa</span>
+                <span>
+                  {isSubmissionLocked
+                    ? "Cổng nộp đã khóa (FROZEN)"
+                    : `Đang đóng băng ${frozenProjectIds.length} đồ án (FROZEN)`}
+                </span>
               </span>
             )}
           </div>
@@ -878,14 +903,20 @@ export default function MarloProjectsScreen({
                 type="button"
                 onClick={handleToggleSubmissionLock}
                 className={`flex items-center gap-1.5 px-4 py-2.5 rounded-2xl font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer ${
-                  isSubmissionLocked
+                  anyFrozen
                     ? "bg-rose-600 hover:bg-rose-700 text-white"
                     : "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950"
                 }`}
-                title="Khóa cổng để đóng băng dữ liệu đăng ký và nộp đồ án của học viên"
+                title="Khóa cổng để đóng băng dữ liệu đăng ký và nộp đồ án của học viên (đồng bộ Dự án · Kanban · Git Hub)"
               >
-                {isSubmissionLocked ? <Lock size={14} /> : <Unlock size={14} />}
-                <span>{isSubmissionLocked ? "Mở Khóa Cổng Nộp" : "Khóa Cổng Nộp"}</span>
+                {anyFrozen ? <Lock size={14} /> : <Unlock size={14} />}
+                <span>
+                  {isSubmissionLocked
+                    ? "Mở Khóa Cổng Nộp"
+                    : anyFrozen
+                    ? `Mở Khóa (${frozenProjectIds.length} đóng băng)`
+                    : "Khóa Cổng Nộp"}
+                </span>
               </button>
 
               <button
@@ -1015,6 +1046,7 @@ export default function MarloProjectsScreen({
               <div className="pgrid">
                 {filteredProjects.map((p) => {
                   const isDone = p.status === "delivered";
+                  const isCardFrozen = isProjectFrozen(p.id);
                   const leadName = p.lead || p.members?.[0]?.name || "Nguyễn Bá Hòa";
                   const mentorName = p.instructor || "TS. Nguyễn Phước (GVHD)";
 
@@ -1028,7 +1060,7 @@ export default function MarloProjectsScreen({
                           onOpenProject?.(p);
                         }
                       }}
-                      className="pcard cursor-pointer group"
+                      className={`pcard cursor-pointer group ${isCardFrozen ? "ring-1 ring-rose-300 dark:ring-rose-800/70" : ""}`}
                       title="Nhấn để xem trang Chi Tiết Đồ Án"
                     >
                       {/* Top row: Kind + DoD Score / Role Quick Action + Pin Button */}
@@ -1040,6 +1072,15 @@ export default function MarloProjectsScreen({
                           {p.kind}
                         </span>
                         <div className="flex items-center gap-1.5">
+                          {isCardFrozen && (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                              title="Đồ án đang bị đóng băng (Dự án · Kanban · Git Hub)"
+                            >
+                              <Lock size={10} />
+                              <span>Đóng băng</span>
+                            </span>
+                          )}
                           {p.finalScore != null && (
                             <span
                               className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-mono"
@@ -1146,6 +1187,49 @@ export default function MarloProjectsScreen({
                           className={`pcard__progress-bar ${isDone ? "is-done" : ""}`}
                           style={{ width: `${Math.round(p.progress * 100)}%` }}
                         />
+                      </div>
+
+                      {/* Git Repo & Quick 3-Way Navigation Row */}
+                      <div className="mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">
+                        <div className="flex items-center gap-1.5 min-w-0 text-slate-500 dark:text-slate-400">
+                          <FolderGit2 size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                          <span className="font-mono truncate max-w-[140px]" title={p.gitRepo?.repoUrl || "Chưa gắn repo"}>
+                            {p.gitRepo?.repoSlug || "Chưa gắn repo"}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-slate-400 font-mono">
+                            · {p.gitRepo?.commitsCount ?? 0}c / {p.gitRepo?.totalPrsCount ?? 0} PR
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {onOpenProject && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenProject(p);
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold text-[10.5px] inline-flex items-center gap-1 transition cursor-pointer"
+                              title={`Mở Bảng Kanban cho ${p.name}`}
+                            >
+                              <FolderKanban size={10} />
+                              <span>Kanban</span>
+                            </button>
+                          )}
+                          {onOpenGitHub && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenGitHub(p.id);
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold text-[10.5px] inline-flex items-center gap-1 transition cursor-pointer"
+                              title={`Mở Git Project Hub cho ${p.name}`}
+                            >
+                              <GitFork size={10} />
+                              <span>Git Hub</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Footer: Student Team Lead + Mentor & Story Points (Never overlaps or mislabels GVHD as Lead) */}

@@ -4,6 +4,7 @@ import json
 import random
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -227,7 +228,212 @@ def _normalize_team(raw_team: list[dict[str, Any]]) -> tuple[list[dict[str, Any]
     return cntt_members, team_members
 
 
-def _serialize_task(row: Any) -> dict[str, Any]:
+def _extract_repo_slug_from_url(repo_url: str | None) -> str:
+    raw = (repo_url or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw)
+    parts = [p for p in parsed.path.split("/") if p]
+    if len(parts) >= 2:
+        return f"{parts[0].lower()}/{parts[1].removesuffix('.git').lower()}"
+    if len(parts) == 1:
+        return parts[0].removesuffix(".git").lower()
+    return ""
+
+
+def _url_matches_project_repo(url: str | None, repo_obj: Any | None) -> bool:
+    clean = (url or "").strip()
+    if not (clean.startswith("http://") or clean.startswith("https://")):
+        return False
+    low = clean.rstrip("/").lower()
+    if not repo_obj:
+        return "github.com/" in low
+    rd = dict(repo_obj)
+    slug = str(rd.get("repo_slug") or rd.get("repoSlug") or "").strip().lower()
+    repo_url = str(rd.get("repo_url") or rd.get("repoUrl") or "").strip().rstrip("/").lower()
+    if slug and f"github.com/{slug}" in low:
+        return True
+    if repo_url and low.startswith(repo_url):
+        return True
+    if not slug and not repo_url:
+        return "github.com/" in low
+    return False
+
+
+def _build_project_git_maps(
+    conn: Any,
+) -> tuple[
+    dict[str, dict[str, Any]],
+    dict[tuple[str, str], list[dict[str, Any]]],
+    dict[tuple[str, str], list[dict[str, Any]]],
+]:
+    repo_rows = conn.execute("SELECT * FROM git_repositories").fetchall()
+    commit_rows = conn.execute(
+        "SELECT * FROM git_commits ORDER BY position_order DESC, created_at DESC"
+    ).fetchall()
+    pr_rows = conn.execute(
+        "SELECT * FROM git_pull_requests ORDER BY pr_number DESC"
+    ).fetchall()
+
+    commits_count_by_proj: dict[str, int] = {}
+    commits_by_proj_code: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for cr in commit_rows:
+        pid = cr["project_id"]
+        commits_count_by_proj[pid] = commits_count_by_proj.get(pid, 0) + 1
+        code_key = str(cr["task_code"] or "").strip().lstrip("#").upper()
+        if code_key:
+            commits_by_proj_code.setdefault((pid, code_key), []).append(
+                {
+                    "id": cr["id"],
+                    "sha": cr["sha"],
+                    "branch": cr["branch"],
+                    "message": cr["message"],
+                    "authorName": cr["author_name"],
+                    "timeAgo": cr["time_ago_label"] or cr["committed_at_label"] or "",
+                }
+            )
+
+    repo_url_lookup: dict[str, str] = {}
+    for rr in repo_rows:
+        repo_url_lookup[rr["project_id"]] = str(rr["repo_url"] or "").rstrip("/")
+
+    open_prs_by_proj: dict[str, int] = {}
+    merged_prs_by_proj: dict[str, int] = {}
+    total_prs_by_proj: dict[str, int] = {}
+    prs_by_proj_code: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for pr in pr_rows:
+        pid = pr["project_id"]
+        st = str(pr["status"] or "open").lower()
+        total_prs_by_proj[pid] = total_prs_by_proj.get(pid, 0) + 1
+        if st == "merged":
+            merged_prs_by_proj[pid] = merged_prs_by_proj.get(pid, 0) + 1
+        else:
+            open_prs_by_proj[pid] = open_prs_by_proj.get(pid, 0) + 1
+        code_key = str(pr["task_code"] or "").strip().lstrip("#").upper()
+        if code_key:
+            base_url = repo_url_lookup.get(pid) or "https://github.com/Hoaba-clouch/E-learningProject"
+            prs_by_proj_code.setdefault((pid, code_key), []).append(
+                {
+                    "id": pr["id"],
+                    "prNumber": int(pr["pr_number"]),
+                    "title": pr["title"],
+                    "status": st,
+                    "sourceBranch": pr["source_branch"],
+                    "targetBranch": pr["target_branch"],
+                    "aiReviewScore": int(pr["ai_review_score"] or 90),
+                    "peerApproved": bool(pr["peer_approved"]),
+                    "prUrl": f"{base_url}/pull/{int(pr['pr_number'])}",
+                }
+            )
+
+    repo_by_proj: dict[str, dict[str, Any]] = {}
+    for rr in repo_rows:
+        pid = rr["project_id"]
+        repo_by_proj[pid] = {
+            "repoUrl": rr["repo_url"],
+            "repoSlug": rr["repo_slug"],
+            "targetBranch": rr["target_branch"] or "main",
+            "webhookActive": bool(rr["webhook_active"]),
+            "lastSyncedAt": rr["last_synced_at"] or "",
+            "commitsCount": commits_count_by_proj.get(pid, 0),
+            "openPrsCount": open_prs_by_proj.get(pid, 0),
+            "mergedPrsCount": merged_prs_by_proj.get(pid, 0),
+            "totalPrsCount": total_prs_by_proj.get(pid, 0),
+        }
+
+    return repo_by_proj, commits_by_proj_code, prs_by_proj_code
+
+
+def _build_task_git_activity(
+    submission_url: str | None,
+    repo_summary: dict[str, Any] | None,
+    commits_list: list[dict[str, Any]],
+    prs_list: list[dict[str, Any]],
+) -> dict[str, Any]:
+    latest_pr = prs_list[0] if prs_list else None
+    latest_commit = commits_list[0] if commits_list else None
+    has_proof = (
+        bool(commits_list)
+        or bool(prs_list)
+        or _url_matches_project_repo(submission_url or "", repo_summary)
+    )
+    return {
+        "commits": commits_list[:6],
+        "pullRequests": prs_list[:4],
+        "commitsCount": len(commits_list),
+        "latestCommitSha": latest_commit["sha"] if latest_commit else None,
+        "latestPrNumber": latest_pr["prNumber"] if latest_pr else None,
+        "latestPrStatus": latest_pr["status"] if latest_pr else None,
+        "latestPrUrl": latest_pr["prUrl"] if latest_pr else None,
+        "hasValidGitProof": has_proof,
+    }
+
+
+def _fetch_single_task_git_activity(conn: Any, task_row: Any) -> dict[str, Any]:
+    pid = task_row["project_id"]
+    code_key = str(task_row["code"] or "").strip().lstrip("#").upper()
+    repo_row = conn.execute("SELECT * FROM git_repositories WHERE project_id=?", (pid,)).fetchone()
+    repo_dict = (
+        {
+            "repoUrl": repo_row["repo_url"],
+            "repoSlug": repo_row["repo_slug"],
+        }
+        if repo_row
+        else None
+    )
+    commits_list: list[dict[str, Any]] = []
+    prs_list: list[dict[str, Any]] = []
+    if code_key:
+        c_rows = conn.execute(
+            """SELECT * FROM git_commits
+               WHERE project_id=? AND upper(task_code)=upper(?)
+               ORDER BY position_order DESC, created_at DESC""",
+            (pid, code_key),
+        ).fetchall()
+        commits_list = [
+            {
+                "id": cr["id"],
+                "sha": cr["sha"],
+                "branch": cr["branch"],
+                "message": cr["message"],
+                "authorName": cr["author_name"],
+                "timeAgo": cr["time_ago_label"] or cr["committed_at_label"] or "",
+            }
+            for cr in c_rows
+        ]
+        p_rows = conn.execute(
+            """SELECT * FROM git_pull_requests
+               WHERE project_id=? AND upper(task_code)=upper(?)
+               ORDER BY pr_number DESC""",
+            (pid, code_key),
+        ).fetchall()
+        base_url = (repo_dict["repoUrl"] if repo_dict else "https://github.com/Hoaba-clouch/E-learningProject").rstrip("/")
+        prs_list = [
+            {
+                "id": pr["id"],
+                "prNumber": int(pr["pr_number"]),
+                "title": pr["title"],
+                "status": str(pr["status"] or "open").lower(),
+                "sourceBranch": pr["source_branch"],
+                "targetBranch": pr["target_branch"],
+                "aiReviewScore": int(pr["ai_review_score"] or 90),
+                "peerApproved": bool(pr["peer_approved"]),
+                "prUrl": f"{base_url}/pull/{int(pr['pr_number'])}",
+            }
+            for pr in p_rows
+        ]
+    return _build_task_git_activity(
+        task_row["submission_url"],
+        repo_dict,
+        commits_list,
+        prs_list,
+    )
+
+
+def _serialize_task(
+    row: Any,
+    git_activity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     d = dict(row)
     assignee = json.loads(d.get("assignee_json") or "{}")
     if not assignee.get("name"):
@@ -281,6 +487,8 @@ def _serialize_task(row: Any) -> dict[str, Any]:
             break
     if latest_note:
         res["reviewFeedback"] = latest_note
+    if git_activity is not None:
+        res["gitActivity"] = git_activity
     return res
 
 
@@ -300,9 +508,24 @@ def _serialize_project(
     proj_row: Any,
     task_rows: list[Any],
     eval_row: Any | None = None,
+    git_repo: dict[str, Any] | None = None,
+    commits_by_code: dict[tuple[str, str], list[dict[str, Any]]] | None = None,
+    prs_by_code: dict[tuple[str, str], list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     p = dict(proj_row)
-    tasks_out = [_serialize_task(t) for t in task_rows]
+    pid = p["id"]
+    tasks_out = []
+    for t in task_rows:
+        code_key = str(t["code"] or "").strip().lstrip("#").upper()
+        c_list = commits_by_code.get((pid, code_key), []) if commits_by_code is not None and code_key else []
+        p_list = prs_by_code.get((pid, code_key), []) if prs_by_code is not None and code_key else []
+        git_act = _build_task_git_activity(
+            t["submission_url"],
+            git_repo,
+            c_list,
+            p_list,
+        )
+        tasks_out.append(_serialize_task(t, git_act))
     tasks_total = len(tasks_out)
     tasks_done = sum(1 for t in tasks_out if t["column"] in ("done", "verified"))
     progress = round(tasks_done / tasks_total, 4) if tasks_total > 0 else 0.0
@@ -359,8 +582,75 @@ def _serialize_project(
         "tlStart": float(p["tl_start"]),
         "tlWidth": float(p["tl_width"]),
         "tlColor": "done" if slate_status == "delivered" else (p.get("tl_color") or "amber"),
+        "gitRepo": git_repo,
         "tasks": tasks_out,
     }
+
+
+def _check_git_proof_for_done(
+    conn: Any,
+    user: dict[str, Any],
+    task_row: Any,
+    target_col: str,
+    candidate_submission_url: str | None = None,
+) -> None:
+    if str(user.get("role") or "").lower() != "student":
+        return
+
+    pid = task_row["project_id"]
+    repo_row = conn.execute(
+        "SELECT * FROM git_repositories WHERE project_id=?",
+        (pid,),
+    ).fetchone()
+    expected_repo = (
+        repo_row["repo_slug"] if repo_row and repo_row["repo_slug"] else "GitHub Repo dự án"
+    )
+
+    if candidate_submission_url is not None and candidate_submission_url.strip():
+        if not _url_matches_project_repo(candidate_submission_url, repo_row):
+            hint_url = (
+                f"https://github.com/{repo_row['repo_slug']}"
+                if repo_row and repo_row["repo_slug"]
+                else "https://github.com/..."
+            )
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Link minh chứng không thuộc kho lưu trữ của dự án ({expected_repo}). "
+                    f"Vui lòng dán link Commit/PR từ {hint_url}."
+                ),
+            )
+
+    if target_col == "done" and task_row["column_id"] not in ("done", "verified"):
+        code_key = str(task_row["code"] or "").strip().lstrip("#").upper()
+        commit_cnt = 0
+        pr_cnt = 0
+        if code_key:
+            c_row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM git_commits WHERE project_id=? AND upper(task_code)=upper(?)",
+                (pid, code_key),
+            ).fetchone()
+            p_row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM git_pull_requests WHERE project_id=? AND upper(task_code)=upper(?)",
+                (pid, code_key),
+            ).fetchone()
+            commit_cnt = int(c_row["cnt"] or 0) if c_row else 0
+            pr_cnt = int(p_row["cnt"] or 0) if p_row else 0
+
+        effective_url = (
+            candidate_submission_url
+            if candidate_submission_url is not None
+            else task_row["submission_url"]
+        ) or ""
+        if commit_cnt == 0 and pr_cnt == 0 and not _url_matches_project_repo(effective_url, repo_row):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Chưa có minh chứng Git cho task #{task_row['code']}: Sinh viên cần có ít nhất "
+                    f"1 Commit/PR gắn mã #{task_row['code']} trên Git Hub hoặc dán link Commit/PR hợp lệ "
+                    f"thuộc {expected_repo} trước khi chuyển sang Hoàn thành."
+                ),
+            )
 
 
 def _check_h2_constraint(conn: Any, task_row: Any, target_col: str) -> None:
@@ -501,7 +791,7 @@ def _insert_workspace_task(
 
 @router.get("/kanban/workspace")
 def get_kanban_workspace(_: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    """Lấy toàn bộ 8+ dự án kỹ thuật và 35+ task Kanban đồng bộ CSDL cho Dự án & Kanban Board."""
+    """Lấy toàn bộ 8+ dự án kỹ thuật và 35+ task Kanban đồng bộ CSDL + Git Repository cho Dự án & Kanban Board."""
     with db() as conn:
         proj_rows = conn.execute(
             "SELECT * FROM engineering_projects ORDER BY created_at DESC, rowid ASC"
@@ -512,6 +802,7 @@ def get_kanban_workspace(_: dict[str, Any] = Depends(current_user)) -> dict[str,
         eval_rows = conn.execute(
             "SELECT * FROM project_evaluations ORDER BY graded_at ASC"
         ).fetchall()
+        repo_by_proj, commits_by_proj_code, prs_by_proj_code = _build_project_git_maps(conn)
 
     tasks_by_proj: dict[str, list[Any]] = {}
     for tr in task_rows:
@@ -522,7 +813,14 @@ def get_kanban_workspace(_: dict[str, Any] = Depends(current_user)) -> dict[str,
         eval_by_proj[er["project_id"]] = er
 
     projects = [
-        _serialize_project(p, tasks_by_proj.get(p["id"], []), eval_by_proj.get(p["id"]))
+        _serialize_project(
+            p,
+            tasks_by_proj.get(p["id"], []),
+            eval_by_proj.get(p["id"]),
+            git_repo=repo_by_proj.get(p["id"]),
+            commits_by_code=commits_by_proj_code,
+            prs_by_code=prs_by_proj_code,
+        )
         for p in proj_rows
     ]
     total_tasks = sum(p["tasksTotal"] for p in projects)
@@ -543,11 +841,23 @@ def create_workspace_project(
     payload: WorkspaceProjectCreateIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Tạo mới Dự án Kỹ nghệ và tự động khởi tạo thẻ Task đầu tiên trong SQLite."""
+    """Tạo mới Dự án Kỹ nghệ, khởi tạo Task đầu tiên và liên kết Git Repository ngay trong CSDL."""
     now = now_utc()
     proj_id = payload.id.strip() if payload.id else f"prj-{uid()[:8]}"
     code = (payload.code or f"PRJ-{random.randint(100, 999)}").strip().upper()
     norm_status = _normalize_project_status(payload.status)
+
+    raw_repo_url = (payload.repo_url or "").strip()
+    if raw_repo_url and not (raw_repo_url.startswith("http://") or raw_repo_url.startswith("https://")):
+        raise HTTPException(
+            status_code=422,
+            detail="Đường dẫn GitHub Repository phải bắt đầu bằng https:// hoặc http://",
+        )
+    repo_slug = _extract_repo_slug_from_url(raw_repo_url) if raw_repo_url else f"codemind-team/{code.lower()}"
+    if not repo_slug:
+        repo_slug = f"codemind-team/{code.lower()}"
+    clean_repo_url = raw_repo_url or f"https://github.com/{repo_slug}"
+    target_branch = (payload.target_branch or "main").strip() or "main"
 
     member_names = payload.team_members or ["Nguyễn Bá Hòa", "Võ Nhật Huy"]
     team_list: list[dict[str, Any]] = []
@@ -624,20 +934,46 @@ def create_workspace_project(
             epicColor="bg-blue-50 text-blue-700 border-blue-200",
         )
         _insert_workspace_task(conn, proj_id, starter, 0, now)
+        conn.execute(
+            """INSERT INTO git_repositories(
+                   project_id, repo_url, repo_slug, target_branch, default_merge_strategy,
+                   webhook_active, cadence_variance_hours, last_synced_at, updated_at
+               ) VALUES(?,?,?,?,?,?,?,?,?)""",
+            (
+                proj_id,
+                clean_repo_url,
+                repo_slug,
+                target_branch,
+                "squash",
+                1,
+                4.8,
+                now,
+                now,
+            ),
+        )
 
         proj_row = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (proj_id,)).fetchone()
         task_rows = conn.execute("SELECT * FROM engineering_tasks WHERE project_id=? ORDER BY position_order ASC", (proj_id,)).fetchall()
+        repo_by_proj, commits_by_proj_code, prs_by_proj_code = _build_project_git_maps(conn)
 
     record_audit_log(
         user.get("full_name") or user.get("display_name") or "Thành viên",
         user["id"],
         "Tạo Dự án Kỹ nghệ mới",
-        payload.name.strip(),
+        f"{payload.name.strip()} ({repo_slug})",
         log_type="class",
         resource_type="engineering_project",
         resource_id=proj_id,
     )
-    return {"project": _serialize_project(proj_row, task_rows)}
+    return {
+        "project": _serialize_project(
+            proj_row,
+            task_rows,
+            git_repo=repo_by_proj.get(proj_id),
+            commits_by_code=commits_by_proj_code,
+            prs_by_code=prs_by_proj_code,
+        )
+    }
 
 
 @router.patch("/kanban/workspace/projects/{project_id}")
@@ -684,8 +1020,18 @@ def patch_workspace_project(
             "SELECT * FROM project_evaluations WHERE project_id=? ORDER BY graded_at DESC LIMIT 1",
             (project_id,),
         ).fetchone()
+        repo_by_proj, commits_by_proj_code, prs_by_proj_code = _build_project_git_maps(conn)
 
-    return {"project": _serialize_project(proj_row, task_rows, eval_row)}
+    return {
+        "project": _serialize_project(
+            proj_row,
+            task_rows,
+            eval_row,
+            git_repo=repo_by_proj.get(project_id),
+            commits_by_code=commits_by_proj_code,
+            prs_by_code=prs_by_proj_code,
+        )
+    }
 
 
 @router.post("/kanban/workspace/projects/{project_id}/tasks", status_code=status.HTTP_201_CREATED)
@@ -888,6 +1234,13 @@ def patch_workspace_task(
         target_col = payload.column if payload.column is not None else existing["column_id"]
         if target_col == "done" and existing["column_id"] != "done":
             _check_h2_constraint(conn, existing, target_col)
+        _check_git_proof_for_done(
+            conn,
+            user,
+            existing,
+            target_col,
+            payload.submissionUrl,
+        )
 
         existing_logs = json.loads(existing["audit_logs_json"] or "[]")
         if payload.auditLogs is not None:
@@ -935,8 +1288,9 @@ def patch_workspace_task(
         )
         xp_awarded = _award_task_done_xp(conn, user, existing, target_col)
         updated = conn.execute("SELECT * FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
+        task_git_act = _fetch_single_task_git_activity(conn, updated)
 
-    return {"task": _serialize_task(updated), "xp_awarded": xp_awarded}
+    return {"task": _serialize_task(updated, task_git_act), "xp_awarded": xp_awarded}
 
 
 @router.post("/kanban/workspace/tasks/{task_id}/move")
@@ -945,7 +1299,7 @@ def move_workspace_task(
     payload: WorkspaceTaskMoveIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Kéo thả / di chuyển Task sang cột mới với vị trí chính xác & kiểm tra Hard Constraint H2."""
+    """Kéo thả / di chuyển Task sang cột mới với vị trí chính xác, kiểm tra H2 và minh chứng Git."""
     now = now_utc()
     actor_name = user.get("full_name") or user.get("display_name") or "Thành viên"
     with db() as conn:
@@ -960,6 +1314,7 @@ def move_workspace_task(
                 detail="Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định. Sinh viên chỉ có thể chuyển sang 'Hoàn thành' để chờ nghiệm thu."
             )
         _check_h2_constraint(conn, existing, target_col)
+        _check_git_proof_for_done(conn, user, existing, target_col)
 
         existing_logs = json.loads(existing["audit_logs_json"] or "[]")
         logs_out = _append_column_audit_log(existing_logs, actor_name, existing["column_id"], target_col)
@@ -984,8 +1339,9 @@ def move_workspace_task(
 
         xp_awarded = _award_task_done_xp(conn, user, existing, target_col)
         updated = conn.execute("SELECT * FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
+        task_git_act = _fetch_single_task_git_activity(conn, updated)
 
-    return {"task": _serialize_task(updated), "xp_awarded": xp_awarded}
+    return {"task": _serialize_task(updated, task_git_act), "xp_awarded": xp_awarded}
 
 
 @router.delete("/kanban/workspace/tasks/{task_id}")

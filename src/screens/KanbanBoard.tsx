@@ -92,6 +92,14 @@ import {
 
   Folder,
 
+  GitFork,
+
+  GitCommit,
+
+  GitPullRequest,
+
+  FolderGit2,
+
 } from "lucide-react";
 
 import TaskCsvManagerModal from "../components/TaskCsvManagerModal";
@@ -127,6 +135,12 @@ import type { Role } from "../App";
 import ProjectGradingModal from "../components/ProjectGradingModal";
 
 import {
+  isProjectFrozen,
+  setProjectFrozen,
+  subscribeProjectLockChanges,
+} from "../utils/projectFreeze";
+
+import {
 
   fetchKanbanWorkspace,
 
@@ -151,6 +165,10 @@ import {
   fetchProjectEvaluationApi,
 
   evaluateProjectApi,
+
+  type ProjectGitRepoSummary,
+
+  type TaskGitActivity,
 
 } from "../api";
 
@@ -311,6 +329,8 @@ export interface KanbanTask {
   reviewFeedback?: string;
 
   auditLogs?: TaskAuditLog[];
+
+  gitActivity?: TaskGitActivity;
 
 }
 
@@ -1782,6 +1802,10 @@ export interface KanbanBoardProps {
 
   onSelectProject?: (projectId: string) => void;
 
+  onNavigate?: (screen: any) => void;
+
+  onOpenGitHub?: (projectId: string, tab?: "topology" | "prs") => void;
+
 }
 
 
@@ -1793,6 +1817,10 @@ export default function KanbanBoard({
   role = "student",
 
   onSelectProject,
+
+  onNavigate,
+
+  onOpenGitHub,
 
 }: KanbanBoardProps = {}) {
 
@@ -1908,6 +1936,8 @@ export default function KanbanBoard({
     evaluationStatus: p.evaluationStatus ?? null,
 
     evaluationFeedback: p.evaluationFeedback ?? null,
+
+    gitRepo: p.gitRepo ?? null,
 
     tasks: Array.isArray(p.tasks) ? p.tasks : [],
 
@@ -2073,6 +2103,8 @@ export default function KanbanBoard({
 
       team_members: Array.isArray(newProjData.teamMembers) ? newProjData.teamMembers : [],
 
+      repo_url: newProjData.repoUrl,
+
     });
 
 
@@ -2216,49 +2248,29 @@ export default function KanbanBoard({
     }
   }, [role, activeTab]);
 
-  const readSprintLockedForProject = (projId: string): boolean => {
-    try {
-      if (localStorage.getItem("codemind_projects_submission_locked") === "true") {
-        return true;
-      }
-      const scoped = localStorage.getItem(`codemind_kanban_sprint_locked_${projId}`);
-      if (scoped !== null) {
-        return scoped === "true";
-      }
-      return localStorage.getItem("codemind_kanban_sprint_locked") === "true";
-    } catch {
-      return false;
-    }
-  };
-
   const [isSprintLocked, setIsSprintLocked] = useState<boolean>(() =>
-    readSprintLockedForProject(initialProjectId || "prj-codemind")
+    isProjectFrozen(initialProjectId || "prj-codemind")
   );
 
   useEffect(() => {
-    setIsSprintLocked(readSprintLockedForProject(currentProjectId));
+    setIsSprintLocked(isProjectFrozen(currentProjectId));
+    return subscribeProjectLockChanges(() => {
+      setIsSprintLocked(isProjectFrozen(currentProjectId));
+    });
   }, [currentProjectId]);
 
   const toggleSprintLock = () => {
     const next = !isSprintLocked;
     setIsSprintLocked(next);
-    try {
-      localStorage.setItem(`codemind_kanban_sprint_locked_${currentProjectId}`, String(next));
-      localStorage.setItem("codemind_kanban_sprint_locked", String(next));
-      if (!next) {
-        localStorage.setItem("codemind_projects_submission_locked", "false");
-      }
-    } catch (e) {
-      console.error("Failed to persist sprint locked state", e);
-    }
+    setProjectFrozen(currentProjectId, next);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoToast({
       taskId: "sprint-lock",
       taskCode: "SPRINT",
       taskTitle: next ? "Đã khóa Sprint" : "Đã mở lại Sprint",
       customMessage: next
-        ? "🔒 Đã khóa Sprint dự án này. Sinh viên không thể di chuyển, xóa hoặc tạo task mới."
-        : "🔓 Đã mở lại Sprint. Sinh viên có thể tiếp tục cập nhật task.",
+        ? "🔒 Đã khóa Sprint & đóng băng Repo Git của dự án này. Sinh viên không thể di chuyển thẻ hay Push/Merge PR."
+        : "🔓 Đã mở lại Sprint & Repo Git. Sinh viên có thể tiếp tục cập nhật task.",
       undone: false,
     });
     undoTimerRef.current = setTimeout(() => {
@@ -3550,7 +3562,7 @@ export default function KanbanBoard({
 
 
 
-  // H2 Violation Modal
+  // H2 Violation & Git Proof Violation Modals
 
   const [h2Violation, setH2Violation] = useState<{
 
@@ -3559,6 +3571,34 @@ export default function KanbanBoard({
     blockingTask: KanbanTask;
 
   } | null>(null);
+
+  const [gitProofViolation, setGitProofViolation] = useState<{
+
+    task: KanbanTask;
+
+    reason: string;
+
+  } | null>(null);
+
+  const hasValidGitProofForTask = (
+    task: KanbanTask,
+    gitRepo?: ProjectGitRepoSummary | null
+  ): boolean => {
+    if (task.gitActivity?.hasValidGitProof) return true;
+    if ((task.gitActivity?.commitsCount || 0) > 0) return true;
+    if ((task.gitActivity?.pullRequests?.length || 0) > 0) return true;
+    const sub = (task.submissionUrl || "").trim();
+    if (!sub || !(sub.startsWith("http://") || sub.startsWith("https://"))) {
+      return false;
+    }
+    const low = sub.replace(/\/+$/, "").toLowerCase();
+    const slug = (gitRepo?.repoSlug || "").trim().toLowerCase();
+    const repoUrl = (gitRepo?.repoUrl || "").trim().replace(/\/+$/, "").toLowerCase();
+    if (slug && low.includes(`github.com/${slug}`)) return true;
+    if (repoUrl && low.startsWith(repoUrl)) return true;
+    if (!slug && !repoUrl && low.includes("github.com/")) return true;
+    return false;
+  };
 
 
 
@@ -3694,6 +3734,8 @@ export default function KanbanBoard({
 
         if (h2Violation) handleCloseH2Violation();
 
+        if (gitProofViolation) setGitProofViolation(null);
+
         if (aiModalOpen) handleCloseAiModal();
 
         if (handbookOpen) handleCloseHandbook();
@@ -3792,11 +3834,11 @@ export default function KanbanBoard({
 
   // Execute Move Task to specific index (Trello-style positional insertion)
 
-  const moveTaskToIndex = (taskId: string, targetCol: ColumnId, targetIndex?: number) => {
+  const moveTaskToIndex = (taskId: string, targetCol: ColumnId, targetIndex?: number): boolean => {
 
     const task = getTaskById(taskId);
 
-    if (!task) return;
+    if (!task) return false;
 
 
 
@@ -3807,17 +3849,17 @@ export default function KanbanBoard({
         taskId: "sprint-locked-notice",
         taskCode: "LOCKED",
         taskTitle: "Sprint đang bị khóa",
-        customMessage: "🔒 Sprint 1 hiện đang bị khóa kiểm toán. Không thể di chuyển hoặc thay đổi trạng thái thẻ.",
+        customMessage: "🔒 Sprint hiện đang bị khóa kiểm toán. Không thể di chuyển hoặc thay đổi trạng thái thẻ.",
         undone: false,
       });
       undoTimerRef.current = setTimeout(() => setUndoToast(null), 3500);
-      return;
+      return false;
     }
 
     // Restrict student from moving directly to 'verified'
     if (role === "student" && targetCol === "verified") {
       alert("Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định. Sinh viên chỉ có thể chuyển sang 'Hoàn thành' để chờ nghiệm thu.");
-      return;
+      return false;
     }
 
 
@@ -3832,10 +3874,26 @@ export default function KanbanBoard({
 
         setH2Violation({ task, blockingTask: parent });
 
-        return;
+        return false;
 
       }
 
+    }
+
+    // Git Proof Gate: Student moving to Done requires linked Commit/PR or repo-matching submissionUrl
+    if (
+      role === "student" &&
+      targetCol === "done" &&
+      task.column !== "done" &&
+      task.column !== "verified" &&
+      !hasValidGitProofForTask(task, currentProject.gitRepo)
+    ) {
+      const repoName = currentProject.gitRepo?.repoSlug || "GitHub Repo dự án";
+      setGitProofViolation({
+        task,
+        reason: `Chưa có minh chứng Git cho thẻ #${task.code}. Hãy đẩy ít nhất 1 Commit/PR gắn mã #${task.code} trên Git Hub hoặc dán link Commit/PR hợp lệ thuộc ${repoName}.`,
+      });
+      return false;
     }
 
 
@@ -3932,23 +3990,40 @@ export default function KanbanBoard({
 
 
 
-    moveWorkspaceTaskApi(taskId, targetCol, resolvedIdx).then((res) => {
+    moveWorkspaceTaskApi(taskId, targetCol, resolvedIdx, role).then((res) => {
 
       if (res.error) {
 
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        setUndoToast({
+          taskId: `move-err-${taskId}`,
+          taskCode: task.code,
+          taskTitle: "Không thể chuyển cột",
+          customMessage: `⚠️ ${res.error}`,
+          undone: false,
+        });
+        undoTimerRef.current = setTimeout(() => setUndoToast(null), 4500);
         void reloadWorkspace();
+
+      } else if (res.task) {
+
+        const serverTask = res.task as KanbanTask;
+        setTasks((prev) => prev.map((t) => (t.id === serverTask.id ? { ...t, ...serverTask } : t)));
+        setSelectedTask((prev) => (prev && prev.id === serverTask.id ? { ...prev, ...serverTask } : prev));
 
       }
 
     });
 
+    return true;
+
   };
 
 
 
-  const moveTask = (taskId: string, targetCol: ColumnId) => {
+  const moveTask = (taskId: string, targetCol: ColumnId): boolean => {
 
-    moveTaskToIndex(taskId, targetCol);
+    return moveTaskToIndex(taskId, targetCol);
 
   };
 
@@ -5109,6 +5184,34 @@ export default function KanbanBoard({
 
             </button>
 
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate("project-detail")}
+                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+                title="Xem trang Chi tiết Đồ án hiện tại"
+              >
+                <FileText size={14} className="text-slate-600 dark:text-slate-300 shrink-0" />
+                <span>Chi tiết Dự án</span>
+              </button>
+            )}
+
+            {onOpenGitHub && (
+              <button
+                type="button"
+                onClick={() => onOpenGitHub(currentProjectId)}
+                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5 text-blue-700 dark:text-blue-300 border-blue-200/90 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/30 hover:bg-blue-100/80"
+                title={
+                  currentProject.gitRepo?.repoSlug
+                    ? `Mở Git Project Hub (${currentProject.gitRepo.repoSlug})`
+                    : "Mở Git Project Hub & Liên kết Repo"
+                }
+              >
+                <GitFork size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <span>{currentProject.gitRepo ? "Git Hub" : "Liên kết Git"}</span>
+              </button>
+            )}
+
 
 
             {/* Manage Team Members Button */}
@@ -5920,11 +6023,12 @@ export default function KanbanBoard({
                           <div className="flex items-center gap-1.5 min-w-0">
 
                             {isSprintLocked ? (
-                              <Lock
-                                size={12}
-                                className="text-rose-500 shrink-0 stroke-[2.2]"
-                                title="Sprint đang khóa kiểm toán"
-                              />
+                              <span title="Sprint đang khóa kiểm toán" className="inline-flex shrink-0">
+                                <Lock
+                                  size={12}
+                                  className="text-rose-500 shrink-0 stroke-[2.2]"
+                                />
+                              </span>
                             ) : (
                               <GripVertical
                                 size={13}
@@ -6023,6 +6127,59 @@ export default function KanbanBoard({
                           {task.title}
 
                         </h3>
+
+                        {/* Live Git PR & Commit Activity Badges */}
+                        {task.gitActivity && (task.gitActivity.pullRequests.length > 0 || task.gitActivity.commitsCount > 0) && (
+                          <div className="mb-2 flex items-center gap-1.5 flex-wrap">
+                            {task.gitActivity.latestPrNumber && (() => {
+                              const stLow = (task.gitActivity.latestPrStatus || "open").toLowerCase();
+                              const badgeCls =
+                                stLow === "merged"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60"
+                                  : stLow === "approved"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60"
+                                  : stLow === "changes_requested"
+                                  ? "bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60"
+                                  : "bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60";
+                              const stText =
+                                stLow === "merged"
+                                  ? "Merged"
+                                  : stLow === "approved"
+                                  ? "Approved"
+                                  : stLow === "changes_requested"
+                                  ? "Cần sửa"
+                                  : "Open";
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenGitHub?.(currentProjectId, "prs");
+                                  }}
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-mono font-bold cursor-pointer hover:opacity-85 transition ${badgeCls}`}
+                                  title="Mở Pull Request trên Git Project Hub"
+                                >
+                                  <GitPullRequest size={10} />
+                                  <span>PR #{String(task.gitActivity.latestPrNumber).padStart(2, "0")} · {stText}</span>
+                                </button>
+                              );
+                            })()}
+                            {task.gitActivity.commitsCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenGitHub?.(currentProjectId, "topology");
+                                }}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-semibold cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
+                                title="Xem lịch sử Commit trên Cây nhánh Git"
+                              >
+                                <GitCommit size={10} />
+                                <span>{task.gitActivity.commitsCount} commits</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
 
 
 
@@ -7595,59 +7752,137 @@ export default function KanbanBoard({
 
       {/* ── HARD CONSTRAINT H2 VIOLATION ALERT MODAL ──────────────────────── */}
 
-      {h2Violation && (
-        <div onClick={handleCloseH2Violation} className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 ${isH2ViolationClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
-          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl border border-rose-200 dark:border-rose-900/50 bg-white dark:bg-[#181922] p-6 shadow-2xl ${isH2ViolationClosing ? "marlo-modal-out" : "marlo-modal"}`}>
-            <div className="mb-4 flex items-center gap-3.5">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 shadow-sm">
-                <ShieldAlert size={28} />
-              </span>
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Ràng buộc Cứng H2 Bị Vi Phạm!
-                </h3>
-                <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-                  Task Dependency Constraint Blocked
+      {h2Violation &&
+        (typeof document !== "undefined" ? (
+          createPortal(
+            <div onClick={handleCloseH2Violation} className={`fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 ${isH2ViolationClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
+              <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl border border-rose-200 dark:border-rose-900/50 bg-white dark:bg-[#181922] p-6 shadow-2xl ${isH2ViolationClosing ? "marlo-modal-out" : "marlo-modal"}`}>
+                <div className="mb-4 flex items-center gap-3.5">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 shadow-sm">
+                    <ShieldAlert size={28} />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Ràng buộc Cứng H2 Bị Vi Phạm!
+                    </h3>
+                    <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
+                      Task Dependency Constraint Blocked
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mb-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                  Hệ thống không cho phép kéo thẻ <strong className="text-slate-900 dark:text-white">"{h2Violation.task.title}"</strong> sang cột <strong className="text-slate-900 dark:text-white">Done</strong> vì thẻ tiền đề sau đây vẫn chưa hoàn thành:
                 </p>
+
+                <div className="mb-5 rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/40 p-4">
+                  <div className="flex items-center justify-between text-xs font-semibold text-rose-900 dark:text-rose-300">
+                    <span>Thẻ tiền đề: #{h2Violation.blockingTask.code}</span>
+                    <span className="rounded-md bg-white dark:bg-rose-900/70 border border-rose-100 dark:border-rose-800 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-700 dark:text-rose-200 shadow-2xs">
+                      Hiện ở: {h2Violation.blockingTask.column}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs font-bold text-rose-800 dark:text-rose-200">
+                    {h2Violation.blockingTask.title}
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                    Người phụ trách: <strong className="text-slate-800 dark:text-slate-100">{h2Violation.blockingTask.assignee.name}</strong> ({h2Violation.blockingTask.assignee.role})
+                  </p>
+                </div>
+
+                <p className="mb-5 text-[11px] text-slate-500 dark:text-slate-400 italic">
+                  * Quy tắc H2 trong đồ án đảm bảo mã nguồn và module được tích hợp tuần tự, triệt tiêu nguy cơ xung đột (merge conflicts) giữa các bạn trong nhóm.
+                </p>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleCloseH2Violation}
+                    className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-rose-600 dark:hover:bg-rose-500 py-2.5 text-xs font-semibold text-white shadow-sm transition cursor-pointer"
+                  >
+                    Đã hiểu, tôi sẽ hoàn thành task tiền đề trước
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <p className="mb-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-              Hệ thống không cho phép kéo thẻ <strong className="text-slate-900 dark:text-white">"{h2Violation.task.title}"</strong> sang cột <strong className="text-slate-900 dark:text-white">Done</strong> vì thẻ tiền đề sau đây vẫn chưa hoàn thành:
-            </p>
+            </div>,
+            document.body
+          )
+        ) : null)}
 
-            <div className="mb-5 rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/40 p-4">
-              <div className="flex items-center justify-between text-xs font-semibold text-rose-900 dark:text-rose-300">
-                <span>Thẻ tiền đề: #{h2Violation.blockingTask.code}</span>
-                <span className="rounded-md bg-white dark:bg-rose-900/70 border border-rose-100 dark:border-rose-800 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-700 dark:text-rose-200 shadow-2xs">
-                  Hiện ở: {h2Violation.blockingTask.column}
-                </span>
-              </div>
-              <p className="mt-1.5 text-xs font-bold text-rose-800 dark:text-rose-200">
-                {h2Violation.blockingTask.title}
-              </p>
-              <p className="mt-1.5 text-[11px] text-slate-600 dark:text-slate-300">
-                Người phụ trách: <strong className="text-slate-800 dark:text-slate-100">{h2Violation.blockingTask.assignee.name}</strong> ({h2Violation.blockingTask.assignee.role})
-              </p>
-            </div>
-
-            <p className="mb-5 text-[11px] text-slate-500 dark:text-slate-400 italic">
-              * Quy tắc H2 trong đồ án đảm bảo mã nguồn và module được tích hợp tuần tự, triệt tiêu nguy cơ xung đột (merge conflicts) giữa các bạn trong nhóm.
-            </p>
-
-            <div className="flex justify-end">
-              <button
-                onClick={handleCloseH2Violation}
-                className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-rose-600 dark:hover:bg-rose-500 py-2.5 text-xs font-semibold text-white shadow-sm transition cursor-pointer"
+      {/* ── GIT PROOF REQUIRED VIOLATION MODAL ──────────────────────── */}
+      {gitProofViolation &&
+        (typeof document !== "undefined" ? (
+          createPortal(
+            <div
+              onClick={() => setGitProofViolation(null)}
+              className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 marlo-scrim"
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md rounded-3xl border border-blue-200 dark:border-blue-900/50 bg-white dark:bg-[#181922] p-6 shadow-2xl marlo-modal"
               >
-                Đã hiểu, tôi sẽ hoàn thành task tiền đề trước
-              </button>
-            </div>
-          </div>
+                <div className="mb-4 flex items-center gap-3.5">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 shadow-sm">
+                    <FolderGit2 size={26} />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Cần Minh Chứng Git Trước Khi Hoàn Thành
+                    </h3>
+                    <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 font-mono">
+                      Thẻ #{gitProofViolation.task.code}
+                    </p>
+                  </div>
+                </div>
 
-        </div>
+                <p className="mb-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                  {gitProofViolation.reason}
+                </p>
 
-      )}
+                <div className="mb-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/70 p-3.5 text-[11px] space-y-1 text-slate-600 dark:text-slate-300">
+                  <div>
+                    Kho lưu trữ dự án:{" "}
+                    <strong className="font-mono text-slate-900 dark:text-white">
+                      {currentProject.gitRepo?.repoSlug || "Chưa gắn repo"}
+                    </strong>
+                  </div>
+                  <div>
+                    Bạn có thể đẩy Commit/tạo PR gắn mã <strong className="font-mono">#{gitProofViolation.task.code}</strong> bên Git Hub hoặc mở chi tiết thẻ để dán link PR/Commit trực tiếp.
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = gitProofViolation.task;
+                      setGitProofViolation(null);
+                      setSelectedTask(target);
+                    }}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                  >
+                    Mở thẻ dán Link
+                  </button>
+                  {onOpenGitHub && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGitProofViolation(null);
+                        setSelectedTask(null);
+                        onOpenGitHub(currentProjectId, "prs");
+                      }}
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-sm transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+                    >
+                      <GitFork size={13} />
+                      <span>Sang Git Hub tạo Commit / PR →</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        ) : null)}
 
 
 
@@ -8471,65 +8706,72 @@ export default function KanbanBoard({
 
         teamMembers={teamMembers}
 
+        projectGitRepo={currentProject.gitRepo}
+
         role={role}
 
         isSprintLocked={isSprintLocked}
+
+        onOpenGitHub={(tab) => onOpenGitHub?.(currentProjectId, tab)}
 
         onReviewTask={handleInstructorReview}
 
         onClose={() => setSelectedTask(null)}
 
+        onSaveSubmissionUrl={async (taskToLink, url) => {
+          const res = await updateWorkspaceTaskApi(
+            taskToLink.id,
+            { submissionUrl: url },
+            role
+          );
+          if (res.error) {
+            return res.error;
+          }
+          if (res.task) {
+            const serverTask = res.task as KanbanTask;
+            setTasks((prev) => prev.map((t) => (t.id === serverTask.id ? { ...t, ...serverTask } : t)));
+            setSelectedTask((prev) => (prev && prev.id === serverTask.id ? { ...prev, ...serverTask } : prev));
+          }
+          return null;
+        }}
+
         onUpdateTask={(updated) => {
 
           const prevTask = tasks.find((t) => t.id === updated.id);
 
-          let safeUpdated = updated;
-
-          if (
-
-            (updated.column === "done" || updated.column === "verified") &&
-
-            prevTask?.column !== "done" &&
-            prevTask?.column !== "verified" &&
-
-            updated.dependsOn
-
-          ) {
-
-            const parent = getTaskById(updated.dependsOn);
-
-            if (parent && parent.column !== "done" && parent.column !== "verified") {
-
-              safeUpdated = {
-
-                ...updated,
-
-                column: prevTask?.column || "ready",
-
-              };
-
-            }
-
-          }
+          const safeUpdated: KanbanTask = {
+            ...updated,
+            column: prevTask?.column || updated.column,
+          };
 
           setTasks((prev) => prev.map((t) => (t.id === safeUpdated.id ? safeUpdated : t)));
 
           setSelectedTask(safeUpdated);
 
-          void updateWorkspaceTaskApi(safeUpdated.id, {
-
-            checklist: safeUpdated.checklist,
-
-            definitionOfDone: safeUpdated.definitionOfDone,
-
-            assignee: safeUpdated.assignee,
-
-            title: safeUpdated.title,
-
-            description: safeUpdated.description,
-
-            priority: safeUpdated.priority,
-
+          void updateWorkspaceTaskApi(
+            safeUpdated.id,
+            {
+              checklist: safeUpdated.checklist,
+              definitionOfDone: safeUpdated.definitionOfDone,
+              assignee: safeUpdated.assignee,
+              title: safeUpdated.title,
+              description: safeUpdated.description,
+              priority: safeUpdated.priority,
+            },
+            role
+          ).then((res) => {
+            if (res.error) {
+              if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+              setUndoToast({
+                taskId: `patch-err-${safeUpdated.id}`,
+                taskCode: safeUpdated.code,
+                taskTitle: "Lỗi cập nhật thẻ",
+                customMessage: `⚠️ ${res.error}`,
+                undone: false,
+              });
+              undoTimerRef.current = setTimeout(() => setUndoToast(null), 4000);
+              void reloadWorkspace();
+            }
           });
 
         }}
@@ -8554,15 +8796,19 @@ export default function KanbanBoard({
 
               setH2Violation({ task, blockingTask: parent });
 
-              return;
+              return false;
 
             }
 
           }
 
-          moveTask(taskId, col);
+          const moved = moveTask(taskId, col);
 
-          setSelectedTask((prev) => (prev ? { ...prev, column: col } : null));
+          if (moved) {
+            setSelectedTask((prev) => (prev ? { ...prev, column: col } : null));
+          }
+
+          return moved;
 
         }}
 

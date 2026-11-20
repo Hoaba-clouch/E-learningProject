@@ -2090,13 +2090,12 @@ export async function saveStudentVideoProgressApi(payload: {
 }
 
 export async function fetchStudentLearningOverview(): Promise<StudentLearningOverview | null> {
-  const token =
-    (await ensureRoleSession("student").catch(() => null)) ||
-    getToken("student");
   try {
-    const res = await fetch(`${API_BASE}/v1/student/learning-overview`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/student/learning-overview`,
+      {},
+      "student"
+    );
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -2206,6 +2205,52 @@ export async function getWorkspaceAuthToken(preferredRole?: SessionRole): Promis
   );
 }
 
+function isOnLoginScreen(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const screen = (new URLSearchParams(window.location.search).get("screen") || "").toLowerCase();
+    return screen === "login" || screen === "auth";
+  } catch {
+    return false;
+  }
+}
+
+async function fetchWithAuthRetry(
+  url: string,
+  init: RequestInit = {},
+  preferredRole?: SessionRole
+): Promise<Response> {
+  const role: SessionRole = preferredRole || inferTabRole();
+  const buildHeaders = (tok: string | null): HeadersInit => {
+    const headers = new Headers(init.headers || {});
+    if (tok && tok !== "mock-token") {
+      headers.set("Authorization", `Bearer ${tok}`);
+    } else {
+      headers.delete("Authorization");
+    }
+    return headers;
+  };
+
+  const token = isOnLoginScreen()
+    ? getToken(role)
+    : await getWorkspaceAuthToken(role);
+  let res = await fetch(url, { ...init, headers: buildHeaders(token) });
+  if (res.status === 401 && !isOnLoginScreen()) {
+    const storedNow = getToken(role);
+    let freshToken: string | null = null;
+    if (storedNow && storedNow !== "mock-token" && storedNow !== token) {
+      freshToken = storedNow;
+    } else {
+      if (token) clearSessionTokens(role);
+      freshToken = (await ensureRoleSession(role).catch(() => null)) || getToken(role);
+    }
+    if (freshToken && freshToken !== "mock-token" && freshToken !== token) {
+      res = await fetch(url, { ...init, headers: buildHeaders(freshToken) });
+    }
+  }
+  return res;
+}
+
 export async function submitStudentChapterExercise(payload: {
   subject_id: string;
   chapter_number: number;
@@ -2287,6 +2332,50 @@ export async function claimXpQuestApi(payload: {
 // NHÁNH 2: ENGINEERING PROJECTS, TASK MANAGEMENT & KANBAN WORKSPACE API
 // ═════════════════════════════════════════════════════════════════════════════
 
+export interface ProjectGitRepoSummary {
+  repoUrl: string;
+  repoSlug: string;
+  targetBranch: string;
+  webhookActive: boolean;
+  lastSyncedAt: string;
+  commitsCount: number;
+  openPrsCount: number;
+  mergedPrsCount: number;
+  totalPrsCount: number;
+}
+
+export interface TaskGitCommitRef {
+  id: string;
+  sha: string;
+  branch: string;
+  message: string;
+  authorName: string;
+  timeAgo: string;
+}
+
+export interface TaskGitPrRef {
+  id: string;
+  prNumber: number;
+  title: string;
+  status: string;
+  sourceBranch: string;
+  targetBranch: string;
+  aiReviewScore: number;
+  peerApproved: boolean;
+  prUrl: string;
+}
+
+export interface TaskGitActivity {
+  commits: TaskGitCommitRef[];
+  pullRequests: TaskGitPrRef[];
+  commitsCount: number;
+  latestCommitSha?: string | null;
+  latestPrNumber?: number | null;
+  latestPrStatus?: string | null;
+  latestPrUrl?: string | null;
+  hasValidGitProof: boolean;
+}
+
 export interface WorkspaceProjectDto {
   id: string;
   code: string;
@@ -2319,6 +2408,7 @@ export interface WorkspaceProjectDto {
   tlStart: number;
   tlWidth: number;
   tlColor?: "amber" | "dark" | "done";
+  gitRepo?: ProjectGitRepoSummary | null;
   tasks: any[];
 }
 
@@ -2333,11 +2423,8 @@ export interface KanbanWorkspaceResponse {
 }
 
 export async function fetchKanbanWorkspace(): Promise<KanbanWorkspaceResponse | null> {
-  const token = await getWorkspaceAuthToken();
   try {
-    const res = await fetch(`${API_BASE}/v1/kanban/workspace`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/workspace`);
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -2359,15 +2446,13 @@ export async function createWorkspaceProjectApi(payload: {
   due_text?: string;
   story_points?: number;
   team_members?: string[];
+  repo_url?: string;
+  target_branch?: string;
 }): Promise<WorkspaceProjectDto | null> {
-  const token = await getWorkspaceAuthToken();
   try {
-    const res = await fetch(`${API_BASE}/v1/kanban/workspace/projects`, {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/workspace/projects`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!res.ok) return null;
@@ -2390,16 +2475,12 @@ export async function updateWorkspaceProjectApi(
     team?: any[];
   }
 ): Promise<WorkspaceProjectDto | null> {
-  const token = await getWorkspaceAuthToken();
   try {
-    const res = await fetch(
+    const res = await fetchWithAuthRetry(
       `${API_BASE}/v1/kanban/workspace/projects/${encodeURIComponent(projectId)}`,
       {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }
     );
@@ -2415,16 +2496,12 @@ export async function createWorkspaceTaskApi(
   projectId: string,
   task: Record<string, any>
 ): Promise<any | null> {
-  const token = await getWorkspaceAuthToken();
   try {
-    const res = await fetch(
+    const res = await fetchWithAuthRetry(
       `${API_BASE}/v1/kanban/workspace/projects/${encodeURIComponent(projectId)}/tasks`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(task),
       }
     );
@@ -2441,16 +2518,12 @@ export async function batchCreateWorkspaceTasksApi(
   tasks: Record<string, any>[],
   replace: boolean = false
 ): Promise<any[] | null> {
-  const token = await getWorkspaceAuthToken();
   try {
-    const res = await fetch(
+    const res = await fetchWithAuthRetry(
       `${API_BASE}/v1/kanban/workspace/projects/${encodeURIComponent(projectId)}/tasks/batch`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tasks, replace }),
       }
     );
@@ -2471,14 +2544,10 @@ export async function generateAiWbsTasksApi(payload: {
   include_h2: boolean;
   selected_members: any[];
 }): Promise<any[] | null> {
-  const token = await getWorkspaceAuthToken();
   try {
-    const res = await fetch(`${API_BASE}/v1/kanban/workspace/ai-wbs`, {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/workspace/ai-wbs`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!res.ok) return null;
@@ -2491,20 +2560,18 @@ export async function generateAiWbsTasksApi(payload: {
 
 export async function updateWorkspaceTaskApi(
   taskId: string,
-  patch: Record<string, any>
+  patch: Record<string, any>,
+  preferredRole?: SessionRole
 ): Promise<{ task?: any; xp_awarded?: number; error?: string; status?: number }> {
-  const token = await getWorkspaceAuthToken();
   try {
-    const res = await fetch(
+    const res = await fetchWithAuthRetry(
       `${API_BASE}/v1/kanban/workspace/tasks/${encodeURIComponent(taskId)}`,
       {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
-      }
+      },
+      preferredRole
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -2522,23 +2589,21 @@ export async function updateWorkspaceTaskApi(
 export async function moveWorkspaceTaskApi(
   taskId: string,
   targetColumn: string,
-  targetIndex: number = 0
+  targetIndex: number = 0,
+  preferredRole?: SessionRole
 ): Promise<{ task?: any; xp_awarded?: number; error?: string; status?: number }> {
-  const token = await getWorkspaceAuthToken();
   try {
-    const res = await fetch(
+    const res = await fetchWithAuthRetry(
       `${API_BASE}/v1/kanban/workspace/tasks/${encodeURIComponent(taskId)}/move`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           target_column: targetColumn,
           target_index: targetIndex,
         }),
-      }
+      },
+      preferredRole
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -2825,13 +2890,11 @@ export async function fetchGitHubWorkspaceApi(
   projectId: string = "prj-codemind",
   preferredRole?: SessionRole
 ): Promise<GitHubWorkspaceBundle | null> {
-  const token = await getWorkspaceAuthToken(preferredRole);
   try {
-    const res = await fetch(
+    const res = await fetchWithAuthRetry(
       `${API_BASE}/v1/git-hub/workspace?project_id=${encodeURIComponent(projectId)}`,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      }
+      {},
+      preferredRole
     );
     if (!res.ok) return null;
     return await res.json();
@@ -2845,18 +2908,15 @@ export async function updateGitHubRepoApi(
   payload: { repo_url: string; target_branch: string; default_merge_strategy: string },
   preferredRole?: SessionRole
 ): Promise<{ repository?: GitHubRepoConfig; error?: string }> {
-  const token = await getWorkspaceAuthToken(preferredRole);
   try {
-    const res = await fetch(
+    const res = await fetchWithAuthRetry(
       `${API_BASE}/v1/git-hub/projects/${encodeURIComponent(projectId)}/repo`,
       {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }
+      },
+      preferredRole
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
@@ -2878,7 +2938,7 @@ export async function pushGitCommitApi(
     deletions?: number;
   },
   preferredRole?: SessionRole
-): Promise<{ commit?: GitHubCommitRecord; xp_awarded?: number; error?: string }> {
+): Promise<{ commit?: GitHubCommitRecord; xp_awarded?: number; linkedTaskUpdated?: string | null; error?: string }> {
   const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
@@ -2914,7 +2974,7 @@ export async function createGitPullRequestApi(
     code_snippet?: string;
   },
   preferredRole?: SessionRole
-): Promise<{ pullRequest?: GitPullRequestRecord; error?: string }> {
+): Promise<{ pullRequest?: GitPullRequestRecord; linkedTaskUpdated?: string | null; error?: string }> {
   const token = await getWorkspaceAuthToken(preferredRole);
   try {
     const res = await fetch(
@@ -3380,14 +3440,7 @@ export async function fetchNotificationsApi(
   role?: SessionRole
 ): Promise<{ notifications: AppNotification[]; unread_count: number }> {
   try {
-    const targetRole = role || inferTabRole();
-    const token =
-      getToken(targetRole) ||
-      (await ensureRoleSession(targetRole).catch(() => null));
-    if (!token) return { notifications: [], unread_count: 0 };
-    const res = await fetch(`${API_BASE}/v1/notifications`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/notifications`, {}, role);
     if (!res.ok) return { notifications: [], unread_count: 0 };
     return await res.json();
   } catch {

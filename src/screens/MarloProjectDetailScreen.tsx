@@ -10,8 +10,17 @@ import {
   GraduationCap,
   Lock,
   Sparkles,
+  GitFork,
+  FolderGit2,
+  GitCommit,
+  GitPullRequest,
+  FolderKanban,
 } from "lucide-react";
 import gsap from "gsap";
+import {
+  isProjectFrozen,
+  subscribeProjectLockChanges,
+} from "../utils/projectFreeze";
 import {
   getMarloProject,
   getMarloMember,
@@ -36,6 +45,7 @@ interface Props {
   onNavigateBack: () => void;
   onNavigateToPerson: (personId: string) => void;
   onNavigateToKanban?: (projectId: string) => void;
+  onNavigateToGitHub?: (projectId: string) => void;
 }
 
 const PROJECT_BRIEFS: Record<string, string> = {
@@ -70,6 +80,7 @@ export default function MarloProjectDetailScreen({
   onNavigateBack,
   onNavigateToPerson,
   onNavigateToKanban,
+  onNavigateToGitHub,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const progressCircleRef = useRef<SVGCircleElement>(null);
@@ -80,16 +91,15 @@ export default function MarloProjectDetailScreen({
   const [wsProject, setWsProject] = useState<WorkspaceProjectDto | null>(null);
   const [currentStatus, setCurrentStatus] = useState<string>(fallbackProject.status);
 
-  const isSprintLocked = useMemo(() => {
-    try {
-      return (
-        localStorage.getItem(`codemind_kanban_sprint_locked_${targetWsId}`) === "true" ||
-        localStorage.getItem("codemind_kanban_sprint_locked") === "true" ||
-        localStorage.getItem("codemind_projects_submission_locked") === "true"
-      );
-    } catch {
-      return false;
-    }
+  const [isSprintLocked, setIsSprintLocked] = useState<boolean>(() =>
+    isProjectFrozen(targetWsId)
+  );
+
+  useEffect(() => {
+    setIsSprintLocked(isProjectFrozen(targetWsId));
+    return subscribeProjectLockChanges(() => {
+      setIsSprintLocked(isProjectFrozen(targetWsId));
+    });
   }, [targetWsId]);
 
   const loadWorkspaceProject = async () => {
@@ -396,14 +406,25 @@ export default function MarloProjectDetailScreen({
             </p>
           </div>
 
-          <div className="phead__actions flex items-center gap-2.5">
+          <div className="phead__actions flex items-center gap-2.5 flex-wrap">
             {onNavigateToKanban && (
               <button
                 type="button"
                 onClick={() => onNavigateToKanban(displayId)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer shadow-2xs"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
               >
-                Mở Bảng Kanban ({totalTasksCount})
+                <FolderKanban size={14} className="text-amber-500" />
+                <span>Mở Bảng Kanban ({totalTasksCount})</span>
+              </button>
+            )}
+            {onNavigateToGitHub && (
+              <button
+                type="button"
+                onClick={() => onNavigateToGitHub(displayId)}
+                className="px-4 py-2.5 rounded-xl border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 text-xs font-bold text-blue-700 dark:text-blue-300 transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+              >
+                <GitFork size={14} />
+                <span>Mở Git Hub</span>
               </button>
             )}
             {role === "student" && (
@@ -576,6 +597,65 @@ export default function MarloProjectDetailScreen({
             )}
           </section>
         </div>
+
+        {/* Git Repository & Code Verification Summary Banner */}
+        <section className="card mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200/70 dark:border-blue-800/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <FolderGit2 size={18} />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  Git Repository &amp; Minh chứng Mã nguồn
+                </span>
+                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 truncate max-w-[260px]">
+                  {wsProject?.gitRepo?.repoSlug || "Chưa liên kết Repo"}
+                </span>
+                {wsProject?.gitRepo?.targetBranch && (
+                  <span className="font-mono text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                    nhánh: {wsProject.gitRepo.targetBranch}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 flex-wrap text-xs text-slate-500 dark:text-slate-400">
+                <span className="inline-flex items-center gap-1 font-mono">
+                  <GitCommit size={13} className="text-blue-500" />
+                  <strong className="text-slate-800 dark:text-slate-200">{wsProject?.gitRepo?.commitsCount ?? 0}</strong> commits
+                </span>
+                <span className="inline-flex items-center gap-1 font-mono">
+                  <GitPullRequest size={13} className="text-emerald-500" />
+                  <strong className="text-slate-800 dark:text-slate-200">{wsProject?.gitRepo?.mergedPrsCount ?? 0}</strong> PR đã merge
+                  · <strong className="text-slate-800 dark:text-slate-200">{wsProject?.gitRepo?.openPrsCount ?? 0}</strong> PR đang mở
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {wsProject?.gitRepo?.repoUrl && (
+              <a
+                href={wsProject.gitRepo.repoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 transition"
+              >
+                <ExternalLink size={13} />
+                <span>Xem trên GitHub</span>
+              </a>
+            )}
+            {onNavigateToGitHub && (
+              <button
+                type="button"
+                onClick={() => onNavigateToGitHub(displayId)}
+                className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <GitFork size={13} />
+                <span>Mở Git Project Hub →</span>
+              </button>
+            )}
+          </div>
+        </section>
 
         {/* Main Grid: Left Tasks Columns vs Right Mentor & Student Team Stack */}
         <div className="pd__grid grid grid-cols-1 xl:grid-cols-[1.65fr_1fr] gap-6 items-start">
