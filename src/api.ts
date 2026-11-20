@@ -3478,10 +3478,14 @@ export async function markAllNotificationsReadApi(role?: SessionRole): Promise<v
 export interface AcademicScheduleItem {
   id: string;
   course_id: string;
-  project_id?: string;
+  project_id?: string | null;
+  project_name?: string | null;
+  project_code?: string | null;
+  project_repo_url?: string | null;
+  course_code?: string | null;
   instructor_id: string;
   instructor_name: string;
-  category: "exam" | "defense" | "office_hours";
+  category: "exam" | "defense" | "office_hours" | "review" | "lab" | string;
   title: string;
   room_or_link: string;
   schedule_date: string;
@@ -3490,13 +3494,43 @@ export interface AcademicScheduleItem {
   break_hour: number;
   max_capacity: number;
   current_booked: number;
-  is_locked: number;
+  is_locked: number | boolean;
   status: string;
   note?: string;
   created_at: string;
   updated_at: string;
   bookings?: ScheduleBookingItem[];
-  my_booking?: ScheduleBookingItem;
+  my_booking?: ScheduleBookingItem | null;
+  pending_bookings_count?: number;
+}
+
+export interface ScheduleProjectOption {
+  id: string;
+  code: string;
+  name: string;
+  course: string;
+  status: string;
+  repo_url?: string | null;
+}
+
+export interface ScheduleCourseOption {
+  id: string;
+  code: string;
+  name: string;
+  title?: string;
+}
+
+export interface ScheduleInstructorOption {
+  id: string;
+  email: string;
+  display_name: string;
+}
+
+export interface ScheduleWorkspaceBundle {
+  schedules: AcademicScheduleItem[];
+  projects: ScheduleProjectOption[];
+  courses: ScheduleCourseOption[];
+  instructors: ScheduleInstructorOption[];
 }
 
 export interface ScheduleBookingItem {
@@ -3515,59 +3549,113 @@ export interface ScheduleBookingItem {
   created_at: string;
 }
 
-export async function fetchSchedulesApi(filters?: {
-  courseId?: string;
-  category?: string;
-  date?: string;
-}): Promise<AcademicScheduleItem[]> {
+export async function fetchSchedulesBundleApi(
+  filters?: {
+    courseId?: string;
+    category?: string;
+    date?: string;
+    projectId?: string;
+    search?: string;
+  },
+  preferredRole?: SessionRole
+): Promise<ScheduleWorkspaceBundle> {
   try {
-    const token = getToken();
     const query = new URLSearchParams();
     if (filters?.courseId) query.set("course_id", filters.courseId);
     if (filters?.category) query.set("category", filters.category);
     if (filters?.date) query.set("schedule_date", filters.date);
-
-    const res = await fetch(`${API_BASE}/v1/schedules?${query.toString()}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) return [];
+    if (filters?.projectId) query.set("project_id", filters.projectId);
+    if (filters?.search) query.set("search", filters.search);
+    const qs = query.toString();
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/schedules${qs ? `?${qs}` : ""}`,
+      {},
+      preferredRole
+    );
+    if (!res.ok) {
+      return { schedules: [], projects: [], courses: [], instructors: [] };
+    }
     const data = await res.json();
-    return data.schedules || [];
+    return {
+      schedules: Array.isArray(data.schedules) ? data.schedules : [],
+      projects: Array.isArray(data.projects) ? data.projects : [],
+      courses: Array.isArray(data.courses) ? data.courses : [],
+      instructors: Array.isArray(data.instructors) ? data.instructors : [],
+    };
   } catch {
-    return [];
+    return { schedules: [], projects: [], courses: [], instructors: [] };
   }
 }
 
-export async function createScheduleApi(payload: any): Promise<{ message: string; schedule_id: string }> {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/v1/schedules`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+export async function fetchSchedulesApi(
+  filters?: {
+    courseId?: string;
+    category?: string;
+    date?: string;
+    projectId?: string;
+    search?: string;
+  },
+  preferredRole?: SessionRole
+): Promise<AcademicScheduleItem[]> {
+  const bundle = await fetchSchedulesBundleApi(filters, preferredRole);
+  return bundle.schedules;
+}
+
+export async function createScheduleApi(
+  payload: Record<string, any>,
+  preferredRole?: SessionRole
+): Promise<{ message: string; schedule_id: string; schedule?: AcademicScheduleItem }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/schedules`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    preferredRole
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Không thể tạo lịch mới");
+    throw new Error(err.detail || "Không thể tạo ca lịch mới");
+  }
+  return await res.json();
+}
+
+export async function updateScheduleApi(
+  scheduleId: string,
+  payload: Record<string, any>,
+  preferredRole?: SessionRole
+): Promise<{ message: string; schedule?: AcademicScheduleItem }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/schedules/${encodeURIComponent(scheduleId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể cập nhật ca lịch");
   }
   return await res.json();
 }
 
 export async function bookScheduleApi(
   scheduleId: string,
-  payload: { topic: string; repo_or_doc_url?: string; student_note?: string }
+  payload: { topic: string; repo_or_doc_url?: string; student_note?: string },
+  preferredRole?: SessionRole
 ): Promise<any> {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/v1/schedules/${scheduleId}/book`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/schedules/${encodeURIComponent(scheduleId)}/book`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    preferredRole
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "Không thể đăng ký ca lịch");
@@ -3577,33 +3665,58 @@ export async function bookScheduleApi(
 
 export async function updateBookingStatusApi(
   bookingId: string,
-  payload: { status: string; instructor_reply?: string }
+  payload: {
+    status: string;
+    instructor_reply?: string;
+    switch_to_online?: boolean;
+    online_link?: string;
+  },
+  preferredRole?: SessionRole
 ): Promise<any> {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/v1/schedules/bookings/${bookingId}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/schedules/bookings/${encodeURIComponent(bookingId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    preferredRole
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Không thể cập nhật trạng thái");
+    throw new Error(err.detail || "Không thể cập nhật trạng thái lịch hẹn");
   }
   return await res.json();
 }
 
-export async function deleteScheduleApi(scheduleId: string): Promise<any> {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/v1/schedules/${scheduleId}`, {
-    method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+export async function cancelScheduleBookingApi(
+  bookingId: string,
+  preferredRole?: SessionRole
+): Promise<{ message: string; booking_id: string }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/schedules/bookings/${encodeURIComponent(bookingId)}`,
+    { method: "DELETE" },
+    preferredRole
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Không thể xóa lịch");
+    throw new Error(err.detail || "Không thể hủy đăng ký lịch hẹn");
+  }
+  return await res.json();
+}
+
+export async function deleteScheduleApi(
+  scheduleId: string,
+  preferredRole?: SessionRole
+): Promise<{ message: string; schedule_id: string }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/schedules/${encodeURIComponent(scheduleId)}`,
+    { method: "DELETE" },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể xóa ca lịch");
   }
   return await res.json();
 }

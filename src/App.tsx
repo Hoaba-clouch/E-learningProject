@@ -490,7 +490,24 @@ export default function App() {
           role={role}
         />
       );
-      case "schedule": return <EngineeringScheduleRota role={role} onNavigate={setScreen} onRoleChange={setRole} />;
+      case "schedule": return (
+        <EngineeringScheduleRota
+          role={role}
+          onNavigate={setScreen}
+          onRoleChange={setRole}
+          onOpenProjectDetail={(pId) => {
+            setSelectedMarloProjectId(pId);
+            setSelectedKanbanProjectId(pId);
+            setScreen("project-detail");
+          }}
+          onOpenKanban={(pId) => {
+            setSelectedKanbanProjectId(pId);
+            setSelectedMarloProjectId(pId);
+            setScreen("kanban");
+          }}
+          onOpenGitHub={(pId) => openGitHubForProject(pId)}
+        />
+      );
       case "projects": return (
         <MarloProjectsScreen
           role={role}

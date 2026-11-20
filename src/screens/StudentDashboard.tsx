@@ -37,8 +37,10 @@ import MarloToast from "../components/MarloToast";
 import { CNTT_PROJECTS, type CNTTProjectItem } from "./MarloProjectsScreen";
 import {
   fetchKanbanWorkspace,
+  fetchSchedulesApi,
   fetchStudentLearningOverview,
   getStoredUser,
+  type AcademicScheduleItem,
   type StudentLearningOverview,
 } from "../api";
 import { MULTI_CHAPTER_SUBJECTS as SUBJECTS } from "../data/multiChapterCurriculum";
@@ -88,6 +90,7 @@ export default function StudentDashboard({
   );
   const [learningOverview, setLearningOverview] = useState<StudentLearningOverview | null>(null);
   const [projectsList, setProjectsList] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
+  const [upcomingSchedules, setUpcomingSchedules] = useState<AcademicScheduleItem[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -132,6 +135,20 @@ export default function StudentDashboard({
           tlColor: p.tlColor,
         }))
       );
+    });
+
+    fetchSchedulesApi(undefined, "student").then((items) => {
+      if (!active || !Array.isArray(items)) return;
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const sorted = [...items].sort((a, b) =>
+        a.schedule_date !== b.schedule_date
+          ? a.schedule_date.localeCompare(b.schedule_date)
+          : a.start_hour - b.start_hour
+      );
+      const upcoming = sorted.filter((s) => s.schedule_date >= todayKey && s.status !== "cancelled");
+      setUpcomingSchedules((upcoming.length > 0 ? upcoming : sorted).slice(0, 3));
     });
     return () => {
       active = false;
@@ -1476,43 +1493,57 @@ export default function StudentDashboard({
               </button>
             </div>
 
-            {/* Session 1 */}
-            <div
-              onClick={() => onNavigate("schedule")}
-              className="marlo-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition cursor-pointer space-y-1.5"
-            >
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-900 dark:text-white">CodeMind AI · Khảo thí Sprint 2</span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/80 font-semibold text-[10px]">
-                  Chờ hội đồng
-                </span>
+            {/* Live Academic Schedules & Appointments */}
+            {upcomingSchedules.length === 0 ? (
+              <div
+                onClick={() => onNavigate("schedule")}
+                className="marlo-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition cursor-pointer text-xs text-slate-500 dark:text-slate-400"
+              >
+                Chưa có ca thi hoặc lịch hẹn sắp tới. Bấm để xem toàn bộ lịch học vụ.
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
-                <Clock size={12} className="text-[#EE8420]" />
-                <span>10:15 – 15:45 (5h 30m)</span>
-                <span>·</span>
-                <span>Phòng B102</span>
-              </div>
-            </div>
+            ) : (
+              upcomingSchedules.map((sch) => {
+                const fmtH = (h: number) => {
+                  const total = Math.max(0, Math.round(h * 60));
+                  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+                };
+                const parts = (sch.schedule_date || "").split("-");
+                const dateShort = parts.length === 3 ? `${parts[2]}/${parts[1]}` : sch.schedule_date;
+                const bStatus = sch.my_booking?.booking_status;
+                const badge = bStatus === "confirmed"
+                  ? { label: "Đã xác nhận", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/60" }
+                  : bStatus === "pending"
+                  ? { label: "Chờ GV duyệt", cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/60" }
+                  : sch.is_locked
+                  ? { label: "Đã khóa", cls: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/60" }
+                  : { label: "Đang mở", cls: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200/80 dark:border-blue-800/60" };
 
-            {/* Session 2 */}
-            <div
-              onClick={() => onNavigate("schedule")}
-              className="marlo-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition cursor-pointer space-y-1.5"
-            >
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-900 dark:text-white">Review Kiến trúc Microservices</span>
-                <span className="pill pill--good font-semibold text-[10px]">
-                  Đã duyệt
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
-                <Clock size={12} className="text-[#EE8420]" />
-                <span>16:00 – 17:00 (1h)</span>
-                <span>·</span>
-                <span>Tòa Alpha P302</span>
-              </div>
-            </div>
+                return (
+                  <div
+                    key={sch.id}
+                    onClick={() => onNavigate("schedule")}
+                    className="marlo-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition cursor-pointer space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-bold text-slate-900 dark:text-white truncate">
+                        {sch.title}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full border font-semibold text-[10px] shrink-0 ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                      <Clock size={12} className="text-[#EE8420] shrink-0" />
+                      <span>
+                        {dateShort} · {fmtH(sch.start_hour)} – {fmtH(sch.end_hour)}
+                      </span>
+                      <span>·</span>
+                      <span className="truncate font-sans">{sch.room_or_link}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </aside>
       </div>
