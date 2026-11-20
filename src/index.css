@@ -3064,26 +3064,22 @@ html.dark .trello-slot-unfurl,
    MARLO SUITE PRIMITIVES (Donut, Capacity Stack, Focus Timer, Heatmap)
    ========================================================================== */
 
-/* 1. Marlo Capacity Stack Bar (scaleX from 0 to 1 stagger) */
+/* 1. Marlo Capacity Stack Bar (Silky Smooth Micro-Glide & Soft Fade) */
 @keyframes capSegGrow {
   0% {
-    transform: scaleX(0);
     opacity: 0;
-  }
-  20% {
-    opacity: 1;
+    transform: translateY(4px);
   }
   100% {
-    transform: scaleX(1);
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
 .cap__seg {
-  transform-origin: left center;
-  animation: capSegGrow 0.85s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation: capSegGrow 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   will-change: transform, opacity;
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), filter 0.22s ease, box-shadow 0.22s ease;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s ease, box-shadow 0.2s ease;
 }
 
 .cap__seg:hover {

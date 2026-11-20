@@ -1104,10 +1104,10 @@ export default function StudentDashboard({
 
                 <div className="w-20 shrink-0">
                   <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
-                    <MarloNumber key={`r1-t-${workStats.row1.total}`} value={workStats.row1.total} durationMs={800} />
+                    <MarloNumber key={`r1-t-${workStats.row1.total}`} value={workStats.row1.total} durationMs={400} />
                   </div>
                   <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
-                    <MarloNumber key={`r1-d-${workStats.row1.done}`} value={workStats.row1.done} durationMs={800} /> done
+                    <MarloNumber key={`r1-d-${workStats.row1.done}`} value={workStats.row1.done} durationMs={400} /> done
                   </div>
                 </div>
 
@@ -1115,29 +1115,29 @@ export default function StudentDashboard({
                 <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
                   {workStats.row1.done > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row1.done), animationDelay: "0.15s" }}
-                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row1.done), animationDelay: "0.04s" }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
                       title={`Done: ${workStats.row1.done}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r1-cd-${workStats.row1.done}`} value={workStats.row1.done} durationMs={700} delayMs={150} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r1-cd-${workStats.row1.done}`} value={workStats.row1.done} durationMs={400} delayMs={0} /></span>
                     </div>
                   )}
                   {workStats.row1.moving > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row1.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.25s" }}
-                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row1.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.04s" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
                       title={`Moving: ${workStats.row1.moving}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r1-cm-${workStats.row1.moving}`} value={workStats.row1.moving} durationMs={700} delayMs={250} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r1-cm-${workStats.row1.moving}`} value={workStats.row1.moving} durationMs={400} delayMs={0} /></span>
                     </div>
                   )}
                   {workStats.row1.waiting > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row1.waiting), animationDelay: "0.35s" }}
-                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row1.waiting), animationDelay: "0.04s" }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-300"
                       title={`Waiting: ${workStats.row1.waiting}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r1-cw-${workStats.row1.waiting}`} value={workStats.row1.waiting} durationMs={700} delayMs={350} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r1-cw-${workStats.row1.waiting}`} value={workStats.row1.waiting} durationMs={400} delayMs={0} /></span>
                     </div>
                   )}
                 </div>
@@ -1167,10 +1167,10 @@ export default function StudentDashboard({
 
                 <div className="w-20 shrink-0">
                   <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
-                    <MarloNumber key={`r2-t-${workStats.row2.total}`} value={workStats.row2.total} durationMs={800} />
+                    <MarloNumber key={`r2-t-${workStats.row2.total}`} value={workStats.row2.total} durationMs={400} delayMs={40} />
                   </div>
                   <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
-                    <MarloNumber key={`r2-d-${workStats.row2.done}`} value={workStats.row2.done} durationMs={800} /> done
+                    <MarloNumber key={`r2-d-${workStats.row2.done}`} value={workStats.row2.done} durationMs={400} delayMs={40} /> done
                   </div>
                 </div>
 
@@ -1178,29 +1178,29 @@ export default function StudentDashboard({
                 <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
                   {workStats.row2.done > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row2.done), animationDelay: "0.22s" }}
-                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row2.done), animationDelay: "0.08s" }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
                       title={`Done: ${workStats.row2.done}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r2-cd-${workStats.row2.done}`} value={workStats.row2.done} durationMs={700} delayMs={220} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r2-cd-${workStats.row2.done}`} value={workStats.row2.done} durationMs={400} delayMs={40} /></span>
                     </div>
                   )}
                   {workStats.row2.moving > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row2.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.32s" }}
-                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row2.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.08s" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
                       title={`Moving: ${workStats.row2.moving}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r2-cm-${workStats.row2.moving}`} value={workStats.row2.moving} durationMs={700} delayMs={320} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r2-cm-${workStats.row2.moving}`} value={workStats.row2.moving} durationMs={400} delayMs={40} /></span>
                     </div>
                   )}
                   {workStats.row2.waiting > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row2.waiting), animationDelay: "0.42s" }}
-                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row2.waiting), animationDelay: "0.08s" }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-300"
                       title={`Waiting: ${workStats.row2.waiting}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r2-cw-${workStats.row2.waiting}`} value={workStats.row2.waiting} durationMs={700} delayMs={420} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r2-cw-${workStats.row2.waiting}`} value={workStats.row2.waiting} durationMs={400} delayMs={40} /></span>
                     </div>
                   )}
                 </div>
@@ -1226,10 +1226,10 @@ export default function StudentDashboard({
 
                 <div className="w-20 shrink-0">
                   <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
-                    <MarloNumber key={`r3-t-${workStats.row3.total}`} value={workStats.row3.total} durationMs={800} />
+                    <MarloNumber key={`r3-t-${workStats.row3.total}`} value={workStats.row3.total} durationMs={400} delayMs={80} />
                   </div>
                   <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
-                    <MarloNumber key={`r3-d-${workStats.row3.done}`} value={workStats.row3.done} durationMs={800} /> done
+                    <MarloNumber key={`r3-d-${workStats.row3.done}`} value={workStats.row3.done} durationMs={400} delayMs={80} /> done
                   </div>
                 </div>
 
@@ -1237,29 +1237,29 @@ export default function StudentDashboard({
                 <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
                   {workStats.row3.done > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row3.done), animationDelay: "0.30s" }}
-                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row3.done), animationDelay: "0.12s" }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
                       title={`Done: ${workStats.row3.done}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r3-cd-${workStats.row3.done}`} value={workStats.row3.done} durationMs={700} delayMs={300} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r3-cd-${workStats.row3.done}`} value={workStats.row3.done} durationMs={400} delayMs={80} /></span>
                     </div>
                   )}
                   {workStats.row3.moving > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row3.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.40s" }}
-                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row3.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.12s" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
                       title={`Moving: ${workStats.row3.moving}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r3-cm-${workStats.row3.moving}`} value={workStats.row3.moving} durationMs={700} delayMs={400} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r3-cm-${workStats.row3.moving}`} value={workStats.row3.moving} durationMs={400} delayMs={80} /></span>
                     </div>
                   )}
                   {workStats.row3.waiting > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row3.waiting), animationDelay: "0.50s" }}
-                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-500"
+                      style={{ flex: Math.max(1, workStats.row3.waiting), animationDelay: "0.12s" }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-300"
                       title={`Waiting: ${workStats.row3.waiting}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r3-cw-${workStats.row3.waiting}`} value={workStats.row3.waiting} durationMs={700} delayMs={500} /></span>
+                      <span className="tabular-nums"><MarloNumber key={`r3-cw-${workStats.row3.waiting}`} value={workStats.row3.waiting} durationMs={400} delayMs={80} /></span>
                     </div>
                   )}
                 </div>
