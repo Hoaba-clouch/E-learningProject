@@ -15,6 +15,7 @@ from app.api.v1.notifications import router as notifications_router
 from app.api.v1.schedules import router as schedules_router
 from app.api.v1.student_learning import router as student_learning_router
 from app.api.v1.submissions import router as submissions_router
+from app.mcp.router import router as mcp_router
 
 api_v1_router = APIRouter()
 
@@ -31,3 +32,4 @@ api_v1_router.include_router(kanban_router)
 api_v1_router.include_router(git_hub_router)
 api_v1_router.include_router(notifications_router)
 api_v1_router.include_router(schedules_router)
+api_v1_router.include_router(mcp_router)

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "codemind": {
+      "command": "python",
+      "args": [
+        "-m",
+        "app.mcp.server"
+      ],
+      "cwd": "d:/C++/ul/backend",
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}
