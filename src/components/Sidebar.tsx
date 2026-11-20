@@ -99,7 +99,7 @@ const navGroups: NavGroup[] = [
       { id: "instructor-mindmap", label: "Master Map", icon: <Compass size={18} strokeWidth={1.85} />, roles: ["instructor"] },
       { id: "intro", label: "Roadmap", icon: <Compass size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "Intro" },
       { id: "defense-room", label: "AI Defense", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
-      { id: "github", label: "Git", icon: <GitFork size={18} strokeWidth={1.85} />, roles: ["student"] },
+      { id: "github", label: "Git", icon: <GitFork size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
       { id: "xp-shop", label: "Shop", icon: <ShoppingBag size={18} strokeWidth={1.85} />, roles: ["student"] },
     ],
   },
