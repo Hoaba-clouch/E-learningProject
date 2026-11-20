@@ -5,7 +5,7 @@ import random
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import current_user, get_optional_current_user, record_audit_log
@@ -493,6 +493,48 @@ def _serialize_task(
     return res
 
 
+
+def is_user_in_project(user: dict[str, Any] | None, proj_row: Any) -> bool:
+    if not user:
+        return True
+    u_role = str(user.get("role") or "").lower()
+    if u_role in ("admin", "org_admin"):
+        return True
+
+    uid_val = str(user.get("id") or "").strip()
+    u_email = str(user.get("email") or "").strip().lower()
+    u_name = str(user.get("full_name") or user.get("display_name") or "").strip().lower()
+
+    p_dict = dict(proj_row)
+    leader_id = str(p_dict.get("leader_user_id") or "").strip()
+    if leader_id and leader_id == uid_val:
+        return True
+
+    inst_id = str(p_dict.get("instructor_id") or "").strip()
+    if inst_id and inst_id == uid_val:
+        return True
+
+    try:
+        raw_team = p_dict.get("team_json") or "[]"
+        team_list = json.loads(raw_team) if isinstance(raw_team, str) else (raw_team or [])
+    except Exception:
+        team_list = []
+
+    for tm in team_list:
+        if not isinstance(tm, dict):
+            continue
+        tm_id = str(tm.get("id") or "").strip()
+        tm_email = str(tm.get("email") or "").strip().lower()
+        tm_name = str(tm.get("name") or "").strip().lower()
+        if tm_id and (tm_id == uid_val or tm_id == f"usr-{uid_val}"):
+            return True
+        if tm_email and tm_email == u_email:
+            return True
+        if tm_name and (tm_name == u_name or (len(u_name) >= 3 and u_name in tm_name) or (len(tm_name) >= 3 and tm_name in u_name)):
+            return True
+
+    return False
+
 DEFAULT_PROJECT_MENTORS: dict[str, str] = {
     "prj-codemind": "TS. Nguyễn Phước (GV Hướng dẫn)",
     "prj-compiler": "ThS. Trần Minh Quân (GV Hướng dẫn)",
@@ -512,6 +554,7 @@ def _serialize_project(
     git_repo: dict[str, Any] | None = None,
     commits_by_code: dict[tuple[str, str], list[dict[str, Any]]] | None = None,
     prs_by_code: dict[tuple[str, str], list[dict[str, Any]]] | None = None,
+    user: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     p = dict(proj_row)
     pid = p["id"]
@@ -585,6 +628,9 @@ def _serialize_project(
         "tlColor": "done" if slate_status == "delivered" else (p.get("tl_color") or "amber"),
         "gitRepo": git_repo,
         "tasks": tasks_out,
+        "isMyProject": is_user_in_project(user, proj_row),
+        "isLead": (str(p.get("leader_user_id") or "") == str(user.get("id") or "")) if user else False,
+        "leaderUserId": p.get("leader_user_id"),
     }
 
 
@@ -791,8 +837,11 @@ def _insert_workspace_task(
 
 
 @router.get("/kanban/workspace")
-def get_kanban_workspace(_: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    """Lấy toàn bộ 8+ dự án kỹ thuật và 35+ task Kanban đồng bộ CSDL + Git Repository cho Dự án & Kanban Board."""
+def get_kanban_workspace(
+    scope: str = Query(default="auto", description="'auto', 'my', or 'all'"),
+    user: dict[str, Any] = Depends(current_user)
+) -> dict[str, Any]:
+    """Lấy danh sách dự án kỹ thuật theo phân quyền người dùng (Học viên chỉ thấy dự án mình tham gia; GV/Admin thấy toàn bộ)."""
     with db() as conn:
         proj_rows = conn.execute(
             "SELECT * FROM engineering_projects ORDER BY created_at DESC, rowid ASC"
@@ -813,7 +862,7 @@ def get_kanban_workspace(_: dict[str, Any] = Depends(current_user)) -> dict[str,
     for er in eval_rows:
         eval_by_proj[er["project_id"]] = er
 
-    projects = [
+    all_projects = [
         _serialize_project(
             p,
             tasks_by_proj.get(p["id"], []),
@@ -821,13 +870,34 @@ def get_kanban_workspace(_: dict[str, Any] = Depends(current_user)) -> dict[str,
             git_repo=repo_by_proj.get(p["id"]),
             commits_by_code=commits_by_proj_code,
             prs_by_code=prs_by_proj_code,
+            user=user,
         )
         for p in proj_rows
     ]
+
+    u_role = str(user.get("role") or "").lower()
+    my_projects = [p for p in all_projects if p.get("isMyProject")]
+
+    # Phân quyền: Học viên xem 'auto' hoặc 'my' -> chỉ trả về dự án mình tham gia
+    if scope == "my" or (scope == "auto" and u_role == "student"):
+        projects = my_projects if len(my_projects) > 0 else all_projects
+    elif scope == "my" and u_role in ("instructor", "admin"):
+        projects = my_projects
+    else:
+        projects = all_projects
+
     total_tasks = sum(p["tasksTotal"] for p in projects)
     total_done = sum(p["tasksDone"] for p in projects)
     return {
         "projects": projects,
+        "all_projects_count": len(all_projects),
+        "my_projects_count": len(my_projects),
+        "current_user": {
+            "id": user.get("id"),
+            "name": user.get("full_name") or user.get("display_name"),
+            "email": user.get("email"),
+            "role": u_role,
+        },
         "summary": {
             "total_projects": len(projects),
             "active_projects": sum(1 for p in projects if p["status"] != "delivered"),

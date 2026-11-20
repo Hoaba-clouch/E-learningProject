@@ -19,6 +19,9 @@ export interface Project {
   gitRepo?: ProjectGitRepoSummary | null;
   tasks: KanbanTask[];
   team: TeamMember[];
+  isMyProject?: boolean;
+  isLead?: boolean;
+  leaderUserId?: string | null;
 }
 
 export const defaultDoD = (isDone = false) => [
@@ -298,9 +301,11 @@ export const initialProjectsData: Project[] = [
     status: "delivered",
     fav: true,
     dueDate: "20/12/2026",
+    lead: "Nguyễn Văn A",
+    leaderUserId: "usr-sv-02",
     team: [
+      { id: "usr-sv-02", name: "Nguyễn Văn A", avatar: "A", role: "Leader & Compiler Architect", color: "bg-emerald-600 dark:bg-emerald-500" },
       { id: "m3", name: "Phan Đình Nghị", avatar: "N", role: "Compiler Engineer", color: "bg-slate-600 dark:bg-slate-500" },
-      { id: "m1", name: "Nguyễn Bá Hòa", avatar: "H", role: "Systems Lead", color: "bg-[#14161a] dark:bg-slate-700" },
     ],
     tasks: [
       {

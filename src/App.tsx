@@ -21,7 +21,7 @@ import SecurityDevicesScreen from "./screens/SecurityDevicesScreen";
 import MarloProjectDetailScreen from "./screens/MarloProjectDetailScreen";
 import MarloTeamScreen from "./screens/MarloTeamScreen";
 import MarloPersonDetailScreen from "./screens/MarloPersonDetailScreen";
-import { fetchCurrentUser, logoutUser, setTabSessionRole, updateUserPreferencesApi } from "./api";
+import { fetchCurrentUser, getStoredUser, logoutUser, setTabSessionRole, updateUserPreferencesApi } from "./api";
 
 export type Screen =
   | "login"
@@ -95,8 +95,20 @@ export default function App() {
     if (!subjectId && !lessonId && !tab && !openTutor) return null;
     return { subjectId, lessonId, tab, openTutor, nonce: Date.now() };
   });
-  const [selectedKanbanProjectId, setSelectedKanbanProjectId] = useState<string>("prj-codemind");
-  const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>("codemind");
+  const [selectedKanbanProjectId, setSelectedKanbanProjectId] = useState<string>(() => {
+    const user = getStoredUser();
+    if (user?.email === "hasib@gmail.com" || user?.id === "usr-sv-02" || String(user?.full_name || "").includes("Nguyễn Văn A")) {
+      return "prj-compiler";
+    }
+    return "prj-codemind";
+  });
+  const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>(() => {
+    const user = getStoredUser();
+    if (user?.email === "hasib@gmail.com" || user?.id === "usr-sv-02" || String(user?.full_name || "").includes("Nguyễn Văn A")) {
+      return "prj-compiler";
+    }
+    return "codemind";
+  });
   const [selectedMarloPersonId, setSelectedMarloPersonId] = useState<string>("hoa");
   const [gitHubInitialTab, setGitHubInitialTab] = useState<
     "topology" | "prs" | "gitdiagram" | "analytics" | "gitflow" | undefined
@@ -192,6 +204,14 @@ export default function App() {
       window.localStorage.setItem("code-mind-role", nextRole);
     }
   };
+
+  useEffect(() => {
+    const user = getStoredUser(role);
+    if (user?.email === "hasib@gmail.com" || user?.id === "usr-sv-02" || String(user?.full_name || "").includes("Nguyễn Văn A")) {
+      setSelectedKanbanProjectId("prj-compiler");
+      setSelectedMarloProjectId("prj-compiler");
+    }
+  }, [role]);
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("code-mind-theme") as Theme | null) ?? "light";

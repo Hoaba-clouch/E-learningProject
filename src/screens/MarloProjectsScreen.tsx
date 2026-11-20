@@ -21,6 +21,8 @@ import {
   GitFork,
   FolderKanban,
   Crown,
+  User,
+  Layers,
 } from "lucide-react";
 import ProjectGradingModal from "../components/ProjectGradingModal";
 import MarloTitle from "../components/MarloTitle";
@@ -41,6 +43,7 @@ import {
   fetchKanbanWorkspace,
   createWorkspaceProjectApi,
   updateWorkspaceProjectApi,
+  getStoredUser,
   type ProjectGitRepoSummary,
 } from "../api";
 
@@ -54,6 +57,7 @@ export interface CNTTMember {
 }
 
 export const CNTT_MEMBERS: Record<string, CNTTMember> = {
+  hasib: { id: "usr-sv-02", name: "Nguyễn Văn A", initials: "NA", role: "Leader & Compiler Architect", bg: "#10b981", textColor: "#064e3b" },
   bhoa: { id: "bhoa", name: "Nguyễn Bá Hòa", initials: "BH", role: "Leader & Systems Architect", bg: "#C7D2FE", textColor: "#312E81" },
   vhuy: { id: "vhuy", name: "Võ Nhật Huy", initials: "VH", role: "Fullstack & AI Dev", bg: "#FCD34D", textColor: "#78350F" },
   dnghi: { id: "dnghi", name: "Phan Đình Nghị", initials: "PN", role: "Backend & Database", bg: "#FED7AA", textColor: "#7C2D12" },
@@ -95,6 +99,9 @@ export interface CNTTProjectItem {
   tlWidth: number; // percentage (0 to 100)
   tlColor?: "amber" | "dark" | "done";
   gitRepo?: ProjectGitRepoSummary | null;
+  isMyProject?: boolean;
+  isLead?: boolean;
+  leaderUserId?: string | null;
 }
 
 // 8 Real Software Engineering Capstone Projects (Synced with Kanban Board)
@@ -186,14 +193,18 @@ export const CNTT_PROJECTS: CNTTProjectItem[] = [
     totalXp: 750,
     pointsBurned: 750,
     budgetStr: "750 SP",
-    instructor: "Phan Đình Nghị (Lead)",
-    instructorAvatar: "PN",
-    members: [CNTT_MEMBERS.dnghi, CNTT_MEMBERS.bhoa],
+    lead: "Nguyễn Văn A",
+    leaderUserId: "usr-sv-02",
+    instructor: "Nguyễn Văn A (Lead)",
+    instructorAvatar: "NA",
+    members: [CNTT_MEMBERS.hasib, CNTT_MEMBERS.dnghi],
     fav: true,
     colorHex: "#10b981",
     tlStart: 5.0,
     tlWidth: 48.0,
     tlColor: "done",
+    isMyProject: true,
+    isLead: true,
   },
   {
     id: "prj-pintos",
@@ -379,17 +390,50 @@ interface MarloProjectsScreenProps {
   role?: Role;
 }
 
+export function computeIsMyProject(project: CNTTProjectItem, user: any): boolean {
+  if (!user) return true;
+  const role = String(user.role || "").toLowerCase();
+  if (role === "admin" || role === "instructor") return true;
+  const uid = String(user.id || "").trim();
+  const email = String(user.email || "").trim().toLowerCase();
+  const name = String(user.full_name || user.display_name || user.name || "").trim().toLowerCase();
+
+  if (project.leaderUserId && (project.leaderUserId === uid || project.leaderUserId === `usr-${uid}`)) return true;
+  if (project.lead && name && (project.lead.toLowerCase().includes(name) || name.includes(project.lead.toLowerCase()))) return true;
+
+  if (Array.isArray(project.members)) {
+    for (const m of project.members) {
+      const mId = String(m.id || "").trim();
+      const mEmail = String((m as any).email || "").trim().toLowerCase();
+      const mName = String(m.name || "").trim().toLowerCase();
+      if (mId && (mId === uid || mId === `usr-${uid}`)) return true;
+      if (mEmail && mEmail === email) return true;
+      if (mName && name && (mName.includes(name) || name.includes(mName))) return true;
+    }
+  }
+  return false;
+}
+
 export default function MarloProjectsScreen({
   onOpenProject,
   onOpenProjectDetail,
   onOpenGitHub,
   role = "student",
 }: MarloProjectsScreenProps) {
+  const currentUser = useMemo(() => getStoredUser(role), [role]);
+  const isStudent = role === "student";
+  const [projectScope, setProjectScope] = useState<"my" | "all">(() => (isStudent ? "my" : "all"));
+
   const [activeTab, setActiveTab] = useState<"slate" | "timeline">("slate");
   const [displayedTab, setDisplayedTab] = useState<"slate" | "timeline">("slate");
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [projects, setProjects] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
+  const [projects, setProjects] = useState<CNTTProjectItem[]>(() =>
+    CNTT_PROJECTS.map((p) => ({
+      ...p,
+      isMyProject: computeIsMyProject(p, currentUser),
+    }))
+  );
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [gradingProject, setGradingProject] = useState<CNTTProjectItem | null>(null);
   const [isSubmissionLocked, setIsSubmissionLocked] = useState<boolean>(() =>
@@ -420,7 +464,7 @@ export default function MarloProjectsScreen({
   const isFirstTabRender = useRef(true);
 
   const loadProjectsFromApi = async () => {
-    const res = await fetchKanbanWorkspace();
+    const res = await fetchKanbanWorkspace("all");
     if (!res?.projects?.length) return;
     setProjects(
       res.projects.map((p) => ({
@@ -453,6 +497,9 @@ export default function MarloProjectsScreen({
         tlWidth: p.tlWidth,
         tlColor: p.tlColor,
         gitRepo: p.gitRepo ?? null,
+        isMyProject: p.isMyProject ?? computeIsMyProject(p as any, currentUser),
+        isLead: p.isLead,
+        leaderUserId: p.leaderUserId,
       }))
     );
   };
@@ -535,19 +582,28 @@ export default function MarloProjectsScreen({
     );
   };
 
+  // Scoped projects based on user participation
+  const scopedProjects = useMemo(() => {
+    if (projectScope === "all") return projects;
+    const enrolled = projects.filter((p) => p.isMyProject ?? computeIsMyProject(p, currentUser));
+    return enrolled.length > 0 ? enrolled : projects;
+  }, [projects, projectScope, currentUser]);
+
   // Filtered projects for Slate view
-  const filteredProjects = projects.filter((p) => {
-    if (filterStatus === "all") return true;
-    if (filterStatus === "planning") return p.status === "planning";
-    if (filterStatus === "active") return p.status === "active";
-    if (filterStatus === "review") return p.status === "review";
-    if (filterStatus === "delivered") return p.status === "delivered";
-    return true;
-  });
+  const filteredProjects = useMemo(() => {
+    return scopedProjects.filter((p) => {
+      if (filterStatus === "all") return true;
+      if (filterStatus === "planning") return p.status === "planning";
+      if (filterStatus === "active") return p.status === "active";
+      if (filterStatus === "review") return p.status === "review";
+      if (filterStatus === "delivered") return p.status === "delivered";
+      return true;
+    });
+  }, [scopedProjects, filterStatus]);
 
   // Dynamic stats
-  const activeJobs = projects.filter((p) => p.status !== "delivered").length;
-  const totalStoryPoints = projects.reduce((acc, p) => acc + p.storyPoints, 0);
+  const activeJobs = scopedProjects.filter((p) => p.status !== "delivered").length;
+  const totalStoryPoints = scopedProjects.reduce((acc, p) => acc + p.storyPoints, 0);
 
   // Toggle favorite / pin
   const handleToggleFav = (id: string, e: React.MouseEvent) => {
@@ -988,29 +1044,65 @@ export default function MarloProjectsScreen({
         </div>
       </div>
 
-      {/* ─── AUTHENTIC MARLO SUB-NAV TABS (Lưới Đồ Án vs Lộ Trình Học Kỳ) ─── */}
-      <nav
-        ref={tabsNavRef}
-        className="tabs notranslate"
-        translate="no"
-        aria-label="Sections"
-      >
-        <button
-          type="button"
-          aria-current={activeTab === "slate" ? "page" : undefined}
-          onClick={() => switchTab("slate")}
+      {/* ─── AUTHENTIC MARLO SUB-NAV TABS & SCOPE TOGGLE ─── */}
+      <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+        <nav
+          ref={tabsNavRef}
+          className="tabs notranslate mb-0"
+          translate="no"
+          aria-label="Sections"
         >
-          Lưới Đồ Án ({filteredProjects.length})
-        </button>
-        <button
-          type="button"
-          aria-current={activeTab === "timeline" ? "page" : undefined}
-          onClick={() => switchTab("timeline")}
-        >
-          Lộ Trình Học Kỳ (16 Tuần)
-        </button>
-        <span ref={tabLineRef} className="tabs__line" />
-      </nav>
+          <button
+            type="button"
+            aria-current={activeTab === "slate" ? "page" : undefined}
+            onClick={() => switchTab("slate")}
+          >
+            Lưới Đồ Án ({filteredProjects.length})
+          </button>
+          <button
+            type="button"
+            aria-current={activeTab === "timeline" ? "page" : undefined}
+            onClick={() => switchTab("timeline")}
+          >
+            Lộ Trình Học Kỳ ({scopedProjects.length} Đồ Án)
+          </button>
+          <span ref={tabLineRef} className="tabs__line" />
+        </nav>
+
+        {/* User Scope Toggle: Đồ án của tôi vs Tất cả đề tài */}
+        <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setProjectScope("my")}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              projectScope === "my"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"
+            }`}
+          >
+            <User size={13} />
+            <span>Đồ án của tôi</span>
+            <span className="ml-0.5 px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 rounded-full text-[10px] font-bold">
+              {projects.filter((p) => p.isMyProject ?? computeIsMyProject(p, currentUser)).length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setProjectScope("all")}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              projectScope === "all"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"
+            }`}
+          >
+            <Layers size={13} />
+            <span>Tất cả đề tài</span>
+            <span className="ml-0.5 px-1.5 py-0.2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-[10px] font-bold">
+              {projects.length}
+            </span>
+          </button>
+        </div>
+      </div>
 
       {/* ─── STAGE CONTAINER: ANIMATES ON VIEW SWITCH ─── */}
       <div ref={stageRef} className="w-full">
@@ -1022,11 +1114,11 @@ export default function MarloProjectsScreen({
               <MarloSegmentedControl
                 value={filterStatus}
                 options={[
-                  { id: "all", label: "Tất cả", badge: projects.length },
-                  { id: "planning", label: "Lên kế hoạch", badge: projects.filter((p) => p.status === "planning").length },
-                  { id: "active", label: "Đang phát triển", badge: projects.filter((p) => p.status === "active").length },
-                  { id: "review", label: "Chờ nghiệm thu", badge: projects.filter((p) => p.status === "review").length },
-                  { id: "delivered", label: "Đã hoàn thành", badge: projects.filter((p) => p.status === "delivered").length },
+                  { id: "all", label: "Tất cả", badge: scopedProjects.length },
+                  { id: "planning", label: "Lên kế hoạch", badge: scopedProjects.filter((p) => p.status === "planning").length },
+                  { id: "active", label: "Đang phát triển", badge: scopedProjects.filter((p) => p.status === "active").length },
+                  { id: "review", label: "Chờ nghiệm thu", badge: scopedProjects.filter((p) => p.status === "review").length },
+                  { id: "delivered", label: "Đã hoàn thành", badge: scopedProjects.filter((p) => p.status === "delivered").length },
                 ]}
                 onChange={(val) => setFilterStatus(val)}
                 tone="dark"
@@ -1072,6 +1164,15 @@ export default function MarloProjectsScreen({
                           {p.kind}
                         </span>
                         <div className="flex items-center gap-1.5">
+                          {p.isMyProject && (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                              title="Đồ án bạn đang trực tiếp tham gia"
+                            >
+                              <UserCheck size={10} />
+                              <span>{p.isLead ? "Trưởng nhóm" : "Của bạn"}</span>
+                            </span>
+                          )}
                           {isCardFrozen && (
                             <span
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"

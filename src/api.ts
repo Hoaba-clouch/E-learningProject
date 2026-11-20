@@ -2629,10 +2629,21 @@ export interface WorkspaceProjectDto {
   tlColor?: "amber" | "dark" | "done";
   gitRepo?: ProjectGitRepoSummary | null;
   tasks: any[];
+  isMyProject?: boolean;
+  isLead?: boolean;
+  leaderUserId?: string | null;
 }
 
 export interface KanbanWorkspaceResponse {
   projects: WorkspaceProjectDto[];
+  all_projects_count?: number;
+  my_projects_count?: number;
+  current_user?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+  };
   summary: {
     total_projects: number;
     active_projects: number;
@@ -2641,9 +2652,10 @@ export interface KanbanWorkspaceResponse {
   };
 }
 
-export async function fetchKanbanWorkspace(): Promise<KanbanWorkspaceResponse | null> {
+export async function fetchKanbanWorkspace(scope?: "auto" | "my" | "all"): Promise<KanbanWorkspaceResponse | null> {
   try {
-    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/workspace`);
+    const qs = scope ? `?scope=${encodeURIComponent(scope)}` : "";
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/kanban/workspace${qs}`);
     if (!res.ok) return null;
     return await res.json();
   } catch {

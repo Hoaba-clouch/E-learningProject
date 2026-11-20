@@ -171,6 +171,8 @@ import {
 
   type TaskGitActivity,
 
+  getStoredUser,
+
 } from "../api";
 
 
@@ -1901,7 +1903,14 @@ export default function KanbanBoard({
 
   });
 
-  const [currentProjectId, setCurrentProjectId] = useState<string>(() => initialProjectId || "prj-codemind");
+  const [currentProjectId, setCurrentProjectId] = useState<string>(() => {
+    if (initialProjectId) return initialProjectId;
+    const stored = getStoredUser(role);
+    if (stored?.email === "hasib@gmail.com" || stored?.id === "usr-sv-02" || String(stored?.full_name || "").includes("Nguyễn Văn A")) {
+      return "prj-compiler";
+    }
+    return "prj-codemind";
+  });
 
   const selectProject = (nextProjId: string) => {
     setCurrentProjectId(nextProjId);
@@ -1944,17 +1953,35 @@ export default function KanbanBoard({
 
     team: Array.isArray(p.team) ? p.team : [],
 
+    isMyProject: p.isMyProject,
+
+    isLead: p.isLead,
+
+    leaderUserId: p.leaderUserId,
+
   });
 
 
 
   const reloadWorkspace = async () => {
 
-    const ws = await fetchKanbanWorkspace();
+    const ws = await fetchKanbanWorkspace("all");
 
     if (ws?.projects?.length) {
 
-      setProjects(ws.projects.map(normalizeWorkspaceProject));
+      const normalized = ws.projects.map(normalizeWorkspaceProject);
+
+      setProjects(normalized);
+
+      setCurrentProjectId((prev) => {
+
+        if (normalized.some((p) => p.id === prev)) return prev;
+
+        const myProj = normalized.find((p: any) => p.isMyProject);
+
+        return myProj ? myProj.id : normalized[0].id;
+
+      });
 
     }
 
@@ -1966,11 +1993,37 @@ export default function KanbanBoard({
 
     let active = true;
 
-    fetchKanbanWorkspace().then((ws) => {
+    fetchKanbanWorkspace("all").then((ws) => {
 
       if (!active || !ws?.projects?.length) return;
 
-      setProjects(ws.projects.map(normalizeWorkspaceProject));
+      const normalized = ws.projects.map(normalizeWorkspaceProject);
+
+      setProjects(normalized);
+
+      setCurrentProjectId((prev) => {
+
+        if (initialProjectId && normalized.some((p) => p.id === initialProjectId)) return initialProjectId;
+
+        if (role === "student") {
+
+          const myProj = normalized.find((p: any) => p.isMyProject);
+
+          if (myProj && (!prev || !normalized.find((p) => p.id === prev)?.isMyProject)) {
+
+            return myProj.id;
+
+          }
+
+        }
+
+        if (prev && normalized.some((p) => p.id === prev)) return prev;
+
+        const myProj = normalized.find((p: any) => p.isMyProject);
+
+        return myProj ? myProj.id : normalized[0].id;
+
+      });
 
     });
 
@@ -1980,7 +2033,7 @@ export default function KanbanBoard({
 
     };
 
-  }, []);
+  }, [initialProjectId, role]);
 
 
 
@@ -5084,7 +5137,21 @@ export default function KanbanBoard({
 
                           <div className="min-w-0 flex-1 pr-2">
 
-                            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{proj.name}</div>
+                            <div className="flex items-center gap-1.5">
+
+                              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{proj.name}</span>
+
+                              {proj.isMyProject && (
+
+                                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+
+                                  {proj.isLead ? "Trưởng nhóm" : "Của bạn"}
+
+                                </span>
+
+                              )}
+
+                            </div>
 
                             <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{proj.course}</div>
 
