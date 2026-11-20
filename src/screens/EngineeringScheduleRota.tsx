@@ -288,14 +288,34 @@ export default function EngineeringScheduleRota({
   const rotaRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
 
-  useMarloPageEntrance(
-    rotaRef,
-    (el) => {
-      const cards = el.querySelectorAll(".marlo-card");
-      if (cards.length > 0) animateMarloCards(cards, { stagger: 0.045, y: 18 });
-    },
-    []
-  );
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
+  useLayoutEffect(() => {
+    const el = rotaRef.current;
+    if (!el) return;
+
+    const ctx = gsap.context(() => {
+      // 1. Stage container slides in smoothly with expo.out (identical to MarloProjectsScreen)
+      gsap.fromTo(
+        el,
+        { y: 16, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.65,
+          ease: "expo.out",
+          clearProps: "transform,opacity",
+        }
+      );
+
+      // 2. Cascade header, filters, and schedule cards
+      const cards = el.querySelectorAll(".marlo-card, .agenda__day, [data-schedule-card]");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
+      }
+    }, el);
+
+    return () => ctx.revert();
+  }, [role]);
 
   useLayoutEffect(() => {
     if (!tabsNavRef.current || !tabLineRef.current) return;
@@ -346,12 +366,12 @@ export default function EngineeringScheduleRota({
     gsap.killTweensOf(stage);
     gsap.fromTo(
       stage,
-      { opacity: 0, y: 8 },
-      { opacity: 1, y: 0, duration: 0.28, ease: "power2.out", clearProps: "all" }
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.65, ease: "expo.out", clearProps: "transform,opacity" }
     );
     const dayCards = stage.querySelectorAll<HTMLElement>(".agenda__day");
-    if (displayedTab === "agenda" && dayCards.length > 0) {
-      animateMarloCards(dayCards, { y: 14, stagger: 0.03, duration: 0.4 });
+    if (dayCards.length > 0) {
+      animateMarloCards(dayCards, { y: 22, stagger: 0.035, duration: 0.75 });
     }
   }, [displayedTab]);
 

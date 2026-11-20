@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { ChevronLeft, Plus, RefreshCw, Mail, Check, ExternalLink, X, CheckCircle2, Crown, GitCommit } from "lucide-react";
 import gsap from "gsap";
+import { animateMarloCards } from "../utils/marloAnimations";
 import {
   MARLO_MEMBER_STATUS_LABEL,
   MARLO_MEMBER_STATUS_TONE,
@@ -135,16 +136,33 @@ export default function MarloPersonDetailScreen({
     setIsAssignModalOpen(false);
   };
 
-  useEffect(() => {
-    if (!containerRef.current || !member) return;
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el || !member) return;
     const ctx = gsap.context(() => {
-      gsap.fromTo(".backlink", { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" });
+      // 1. Stage container slides in smoothly with expo.out
       gsap.fromTo(
-        ".prof__head",
-        { opacity: 0, y: 18, scale: 0.98 },
-        { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: "back.out(1.2)", clearProps: "transform,opacity" }
+        el,
+        { y: 16, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.65,
+          ease: "expo.out",
+          clearProps: "transform,opacity",
+        }
       );
-    }, containerRef);
+
+      // 2. Cascade backlink
+      gsap.fromTo(".backlink", { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out", clearProps: "transform,opacity" });
+
+      // 3. Stagger member cards with Marlo card physics
+      const cards = el.querySelectorAll(".card, .prof__head");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
+      }
+    }, el);
     return () => ctx.revert();
   }, [member?.id]);
 

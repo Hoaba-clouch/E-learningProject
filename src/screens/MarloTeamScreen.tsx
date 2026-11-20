@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { Search, Check, Folder, Users, Crown, GitCommit } from "lucide-react";
 import gsap from "gsap";
+import { animateMarloCards } from "../utils/marloAnimations";
 import {
   MARLO_MEMBER_STATUS_LABEL,
   MARLO_MEMBER_STATUS_TONE,
@@ -57,31 +58,34 @@ export default function MarloTeamScreen({ role = "student", onSelectPerson }: Pr
     );
   });
 
-  useEffect(() => {
-    if (!containerRef.current || loading) return;
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el || loading) return;
+
     const ctx = gsap.context(() => {
+      // 1. Stage container slides in smoothly with expo.out (identical to MarloProjectsScreen)
       gsap.fromTo(
-        ".phead, .toolbar",
-        { opacity: 0, y: -12 },
-        { opacity: 1, y: 0, duration: 0.4, ease: "power2.out", stagger: 0.05 }
-      );
-      gsap.fromTo(
-        ".people .person",
-        { opacity: 0, y: 20, scale: 0.97 },
+        el,
+        { y: 16, opacity: 0 },
         {
-          opacity: 1,
           y: 0,
-          scale: 1,
-          duration: 0.45,
-          ease: "back.out(1.2)",
-          stagger: 0.04,
-          delay: 0.08,
+          opacity: 1,
+          duration: 0.65,
+          ease: "expo.out",
           clearProps: "transform,opacity",
         }
       );
-    }, containerRef);
+
+      // 2. Stagger member cards with Marlo authentic card physics
+      const personCards = el.querySelectorAll(".people .person");
+      if (personCards.length > 0) {
+        animateMarloCards(personCards, { y: 22, stagger: 0.035, duration: 0.75 });
+      }
+    }, el);
+
     return () => ctx.revert();
-  }, [activeTab, searchQuery, members.length, loading]);
+  }, [activeTab, members.length, loading]);
 
   return (
     <div

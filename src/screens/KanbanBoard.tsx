@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
+import gsap from "gsap";
 
 import { initialProjectsData, type Project } from "../data/kanbanProjects";
 
@@ -4861,31 +4862,42 @@ export default function KanbanBoard({
 
 
 
-  useMarloPageEntrance(
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
+  useLayoutEffect(() => {
+    const el = kanbanRef.current;
+    if (!el) return;
 
-    kanbanRef,
+    const ctx = gsap.context(() => {
+      // 1. Stage container slides in smoothly with expo.out (identical to MarloProjectsScreen)
+      gsap.fromTo(
+        el,
+        { y: 16, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.65,
+          ease: "expo.out",
+          clearProps: "transform,opacity",
+        }
+      );
 
-    (el) => {
-
-      const cards = el.querySelectorAll(".marlo-card, [data-column-id], .kanban-col, .mine__summary-card");
-
+      // 2. Cascade board columns or summary cards
+      const cards = el.querySelectorAll(
+        ".kanban-col, [data-column-id], .mine__summary-card, .marlo-card"
+      );
       if (cards.length > 0) {
-
-        animateMarloCards(cards, { stagger: 0.06, y: 26 });
-
+        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
       }
 
-      const rows = el.querySelectorAll("[data-task-card-id], .marlo-row, .mine__row, .feed__row, .tcard");
-
+      // 3. Stagger task rows if in list, mine or activity view
+      const rows = el.querySelectorAll(".mine__row, .feed__row, [data-task-card-id]");
       if (rows.length > 0) {
-
-        animateMarloRows(rows, { y: 14, stagger: 0.025, delay: 0.22 });
-
+        animateMarloRows(rows, { y: 14, stagger: 0.02, delay: 0.15 });
       }
+    }, el);
 
-    },
-
-    []);
+    return () => ctx.revert();
+  }, [currentProjectId, viewMode]);
 
 
 

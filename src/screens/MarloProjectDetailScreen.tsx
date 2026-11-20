@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import {
   ChevronLeft,
   Plus,
@@ -17,6 +17,7 @@ import {
   FolderKanban,
 } from "lucide-react";
 import gsap from "gsap";
+import { animateMarloCards } from "../utils/marloAnimations";
 import {
   isProjectFrozen,
   subscribeProjectLockChanges,
@@ -327,29 +328,37 @@ export default function MarloProjectDetailScreen({
     showToast(`✓ Đã đồng bộ trạng thái đồ án thành "${MARLO_PROJECT_STATUS[newStatus] || newStatus}"`);
   };
 
-  // ─── AUTHENTIC MARLO GSAP ENTRANCE ANIMATION ───
-  useEffect(() => {
-    if (!containerRef.current) return;
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
     const ctx = gsap.context(() => {
+      // 1. Stage container slides in smoothly with expo.out
       gsap.fromTo(
-        ".backlink, .phead",
-        { opacity: 0, y: -10 },
-        { opacity: 1, y: 0, duration: 0.4, ease: "power2.out", stagger: 0.06, clearProps: "transform,opacity" }
-      );
-      gsap.fromTo(
-        ".pd__stat",
-        { opacity: 0, y: 16 },
+        el,
+        { y: 16, opacity: 0 },
         {
-          opacity: 1,
           y: 0,
-          duration: 0.45,
-          ease: "power2.out",
-          stagger: 0.05,
-          delay: 0.08,
+          opacity: 1,
+          duration: 0.65,
+          ease: "expo.out",
           clearProps: "transform,opacity",
         }
       );
-    }, containerRef);
+
+      // 2. Cascade backlink and header
+      gsap.fromTo(
+        ".backlink, .phead",
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "expo.out", stagger: 0.04, clearProps: "transform,opacity" }
+      );
+
+      // 3. Stagger all detail cards with Marlo card physics
+      const cards = el.querySelectorAll(".card, .pd__stat");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
+      }
+    }, el);
 
     return () => ctx.revert();
   }, [displayId]);

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import gsap from "gsap";
+import { animateMarloCards } from "../utils/marloAnimations";
 import {
   AlertTriangle,
   ArrowRight,
@@ -363,19 +364,36 @@ export default function AIDefenseRoomScreen({
     return () => window.removeEventListener("keydown", onKey);
   }, [certificateData]);
 
-  // Entrance reveal (no 3D flip overflow)
-  useEffect(() => {
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
+  useLayoutEffect(() => {
     const el = screenRef.current;
     if (!el) return;
+
     const ctx = gsap.context(() => {
+      // 1. Stage container slides in smoothly with expo.out (identical to MarloProjectsScreen)
       gsap.fromTo(
-        ".defense-stage-header",
-        { opacity: 0, y: -12 },
-        { opacity: 1, y: 0, duration: 0.38, ease: "power2.out", clearProps: "all" }
+        el,
+        { y: 16, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.65,
+          ease: "expo.out",
+          clearProps: "transform,opacity",
+        }
       );
-    }, screenRef);
+
+      // 2. Cascade header, council cards, debate stage and rubrics
+      const cards = el.querySelectorAll(
+        ".defense-stage-header, .rounded-3xl, .rounded-\\[28px\\]"
+      );
+      if (cards.length > 0) {
+        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
+      }
+    }, el);
+
     return () => ctx.revert();
-  }, [role]);
+  }, [role, selectedProjId]);
 
   const resetLocalDefenseState = (discardServerDraft: boolean = true) => {
     const draftToDiscard =
