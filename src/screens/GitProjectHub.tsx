@@ -1528,7 +1528,6 @@ export default function GitProjectHub({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [archDrawerOpen, showRepoModal, isArchDrawerClosing, isRepoModalClosing]);
   const [repoUrl, setRepoUrl] = useState<string>("https://github.com/Hoaba-clouch/E-learningProject");
-  const [repoInputUrl, setRepoInputUrl] = useState<string>("https://github.com/Hoaba-clouch/E-learningProject");
   const [targetBranch, setTargetBranch] = useState<string>("main");
   const [topoAnimKey, setTopoAnimKey] = useState<number>(0);
   const [statAnimKey, setStatAnimKey] = useState<number>(0);
@@ -1552,7 +1551,6 @@ export default function GitProjectHub({
     if (!data) return;
     setProjectsList(data.projects || []);
     setRepoUrl(data.repository.repoUrl);
-    setRepoInputUrl(data.repository.repoUrl);
     setRepoSlug(data.repository.repoSlug);
     setTargetBranch(data.repository.targetBranch);
     setMergeStrategy(data.repository.defaultMergeStrategy || "squash");
@@ -1593,7 +1591,6 @@ export default function GitProjectHub({
     setActionError(null);
     try {
       setRepoUrl(cleanUrl);
-      setRepoInputUrl(cleanUrl);
       const res = await syncGitHubLiveApi(activeProjectId, cleanUrl, role);
       if (res.error) {
         showToast(res.error);
@@ -1612,10 +1609,6 @@ export default function GitProjectHub({
     } finally {
       setIsSyncingLive(false);
     }
-  };
-
-  const handleSyncGitHubLive = async () => {
-    await handleApplyRepoUrl(repoUrl);
   };
 
   const handleSaveArchitecture = async () => {
@@ -2201,6 +2194,18 @@ export default function GitProjectHub({
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium font-mono">
               {repoSlug} ({targetBranch})
             </span>
+            <span
+              className={`pill pill--plain font-mono text-[10.5px] font-bold flex items-center gap-1 ${
+                webhookActive ? "pill--good" : "pill--warn"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  webhookActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+                }`}
+              />
+              {webhookActive ? "Webhook Tự động" : "Webhook Tạm dừng"}
+            </span>
             {isRepoFrozen && (
               <span className="pill pill--bad pill--plain font-mono text-[10.5px] font-bold flex items-center gap-1">
                 <Lock size={11} />
@@ -2248,11 +2253,11 @@ export default function GitProjectHub({
             <button
               onClick={() => setShowRepoModal(true)}
               disabled={isStudent && isRepoFrozen}
-              title={isStudent && isRepoFrozen ? "Repository đang bị đóng băng (Freeze)" : "Cấu hình URL Repo & Chiến lược Merge"}
+              title={isStudent && isRepoFrozen ? "Repository đang bị đóng băng (Freeze)" : "Liên kết URL Repo, chọn nhánh chính & chiến lược Merge"}
               className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <GitFork size={15} className="text-[#1c1304] shrink-0" />
-              <span>Cấu hình Repo</span>
+              <span>Liên Kết & Đồng Bộ Repo</span>
             </button>
           )}
         </div>
@@ -2345,66 +2350,6 @@ export default function GitProjectHub({
           </span>
         </section>
       )}
-
-      {/* Repository Connection & Status Bar */}
-      <section className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-4 shadow-sm backdrop-blur-xs space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xs shrink-0">
-              <FolderGit2 size={18} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Kho Lưu Trữ Git & Trạng Thái Đồng Bộ
-                </h3>
-                <span className={`pill pill--plain text-[10.5px] font-mono font-bold flex items-center gap-1 ${webhookActive ? "pill--good" : "pill--warn"}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${webhookActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
-                  {webhookActive ? "Webhook Tự động Bật" : "Webhook Tạm dừng"}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                  {repoSlug || "hoaba-clouch/e-learningproject"}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Nhánh đích: <strong className="font-mono text-slate-700 dark:text-slate-200">{targetBranch}</strong> • Chiến lược gộp mặc định: <strong className="font-mono text-slate-700 dark:text-slate-200">{mergeStrategy}</strong>
-                {lastSyncedAt ? ` • Đồng bộ gần nhất: ${lastSyncedAt}` : ""}
-              </p>
-            </div>
-          </div>
-
-          {(isStudent || isAdmin) && (
-            <div className="flex items-center gap-2 flex-1 max-w-2xl">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={repoInputUrl}
-                  onChange={(e) => setRepoInputUrl(e.target.value)}
-                  disabled={isStudent && isRepoFrozen}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !(isStudent && isRepoFrozen)) {
-                      handleApplyRepoUrl(repoInputUrl);
-                    }
-                  }}
-                  placeholder="URL GitHub repository (https://github.com/owner/repo)..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs disabled:opacity-50"
-                />
-                <GitBranch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleApplyRepoUrl(repoInputUrl)}
-                disabled={isSyncingLive || (isStudent && isRepoFrozen)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-              >
-                <RotateCw size={14} className={isSyncingLive ? "animate-spin" : ""} />
-                <span>{isSyncingLive ? "Đang đồng bộ..." : "Đồng bộ Git"}</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* 4 Metric Summary Cards with Staggered Cascade & Animated Numbers */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
@@ -3861,7 +3806,7 @@ export default function GitProjectHub({
                   <div>
                     <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <GitFork size={18} className="text-blue-600 dark:text-blue-400" />
-                      Cấu hình & Đồng Bộ Repo GitHub
+                      Liên Kết & Đồng Bộ Repo GitHub
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       Quản lý kho mã nguồn, nhánh nộp bài chính và chiến lược Merge mặc định của dự án.
@@ -3962,9 +3907,16 @@ export default function GitProjectHub({
                   </div>
 
                   <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/60 rounded-lg text-blue-900 dark:text-blue-200 space-y-1.5 text-xs">
-                    <div className="font-bold flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
-                      <ShieldCheck size={14} />
-                      Trạng thái liên kết tự động:
+                    <div className="font-bold flex items-center justify-between gap-1.5 text-blue-800 dark:text-blue-300">
+                      <span className="flex items-center gap-1.5">
+                        <ShieldCheck size={14} />
+                        Trạng thái liên kết tự động:
+                      </span>
+                      {lastSyncedAt && (
+                        <span className="text-[10.5px] font-mono font-normal text-blue-700 dark:text-blue-400">
+                          Đồng bộ: {lastSyncedAt}
+                        </span>
+                      )}
                     </div>
                     <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800 dark:text-blue-300">
                       <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG</strong>.</li>
@@ -3987,15 +3939,18 @@ export default function GitProjectHub({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={handleCloseRepoModal}
-                      className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                      disabled={isSyncingLive}
+                      className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer disabled:opacity-50"
                     >
                       Đóng
                     </button>
                     <button
                       onClick={handleSaveRepoSync}
-                      className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer"
+                      disabled={isSyncingLive}
+                      className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Lưu & Đồng Bộ Ngay
+                      <RotateCw size={13} className={isSyncingLive ? "animate-spin" : ""} />
+                      <span>{isSyncingLive ? "Đang đồng bộ..." : "Lưu & Đồng Bộ Ngay"}</span>
                     </button>
                   </div>
                 </div>
