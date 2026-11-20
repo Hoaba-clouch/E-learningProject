@@ -194,10 +194,12 @@ export default function MarloNewTaskModal({
         </div>
 
         {/* Modal Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-3 space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-xs">
           {/* Task Name */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-slate-700 dark:text-slate-300">Tên hạng mục công việc *</label>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+              Tên hạng mục công việc *
+            </label>
             <input
               type="text"
               autoFocus
@@ -205,20 +207,22 @@ export default function MarloNewTaskModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="VD: Thiết kế API xác thực JWT & bộ kiểm thử tự động"
-              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#f59e0b] focus:bg-white dark:focus:bg-[#1c2230] transition shadow-2xs"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 focus:bg-white dark:focus:bg-[#1c2230] transition shadow-2xs"
             />
           </div>
 
           {/* Project & Assignee (2 columns) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Project */}
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Đồ án</label>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Đồ án
+              </label>
               <div className="relative">
                 <select
                   value={project}
                   onChange={(e) => setProject(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f59e0b] transition cursor-pointer"
+                  className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition cursor-pointer"
                 >
                   {projects.length > 0 ? (
                     projects.map((p) => (
@@ -237,13 +241,15 @@ export default function MarloNewTaskModal({
             </div>
 
             {/* Assignee */}
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Thành viên phụ trách</label>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Thành viên phụ trách
+              </label>
               <div className="relative">
                 <select
                   value={assigneeId}
                   onChange={(e) => setAssigneeId(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f59e0b] transition cursor-pointer"
+                  className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition cursor-pointer"
                 >
                   {activeProjectMembers.map((m) => (
                     <option key={m.id} value={m.id} className="dark:bg-[#181d28]">
@@ -259,21 +265,25 @@ export default function MarloNewTaskModal({
           {/* Due & Estimate (hours) (2 columns) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Due */}
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Hạn hoàn thành</label>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Hạn hoàn thành
+              </label>
               <div className="relative">
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f59e0b] transition"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition"
                 />
               </div>
             </div>
 
             {/* Estimate (hours) */}
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Thời lượng ước tính (giờ)</label>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Thời lượng ước tính (giờ)
+              </label>
               <div className="relative">
                 <input
                   type="number"
@@ -281,20 +291,22 @@ export default function MarloNewTaskModal({
                   max="100"
                   value={estimateHours}
                   onChange={(e) => setEstimateHours(Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f59e0b] transition"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition"
                 />
               </div>
             </div>
           </div>
 
           {/* Priority */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-slate-700 dark:text-slate-300">Mức độ ưu tiên</label>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Mức độ ưu tiên
+            </label>
             <div className="relative">
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f59e0b] transition cursor-pointer"
+                className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition cursor-pointer"
               >
                 <option value="low" className="dark:bg-[#181d28]">Thấp (P2)</option>
                 <option value="medium" className="dark:bg-[#181d28]">Trung bình (P1)</option>
@@ -327,7 +339,7 @@ export default function MarloNewTaskModal({
                   }
                 }}
                 placeholder="Thêm mục việc cần làm (nhấn Enter)..."
-                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#f59e0b] transition"
+                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition"
               />
               <button
                 type="button"
