@@ -1888,7 +1888,7 @@ export default function EngineeringScheduleRota({
             {/* Main Timeline Table */}
             <div key={`${displayedTab}_${selectedDate}`} className="marlo-card bg-white dark:bg-slate-900/90 rounded-xl border border-[#EBE8E2] dark:border-slate-800 p-5 shadow-xs">
               <div className="overflow-x-auto pt-4">
-                <div className="min-w-[840px]">
+                <div className="min-w-[980px]">
                   {/* Table Header: Hours */}
                   <div className="grid grid-cols-12 gap-0 text-center border-b border-[#EBE8E2] dark:border-slate-800 pb-2.5 text-xs font-semibold text-[#9E9B94] dark:text-slate-400 relative">
                     <div className="col-span-3 text-left pl-3 text-[#62656b] dark:text-[#a0a3a9] font-bold uppercase tracking-wider text-[11px]">
@@ -2066,7 +2066,7 @@ export default function EngineeringScheduleRota({
                                         </div>
                                       </div>
 
-                                      <div className="col-span-9 h-12 relative rounded-lg bg-[#FAF9F6]/50 dark:bg-slate-900/50 border border-dashed border-[#EBE8E2] dark:border-slate-800">
+                                      <div className="col-span-9 h-[54px] relative rounded-lg bg-[#FAF9F6]/50 dark:bg-slate-900/50 border border-dashed border-[#EBE8E2] dark:border-slate-800">
                                         <div
                                           style={{
                                             left: getLeftPct(activeStart),
@@ -2081,7 +2081,7 @@ export default function EngineeringScheduleRota({
                                             setDrawerScheduleId(sch.id);
                                           }}
                                           onPointerDown={(e) => handleBarPointerDown(e, sch, "move")}
-                                          className={`absolute top-0.5 bottom-0.5 rounded-xl px-3 flex items-center justify-between text-xs transition-all touch-none group/bar ${
+                                          className={`absolute top-1 bottom-1 rounded-xl px-2.5 flex items-center overflow-hidden text-xs transition-all touch-none group/bar ${
                                             isDraggingThis
                                               ? "!animate-none z-40 shadow-2xl ring-2 ring-[#EE8420] cursor-grabbing brightness-95 scale-[1.01]"
                                               : isStaff && !isLocked
@@ -2095,31 +2095,38 @@ export default function EngineeringScheduleRota({
                                               onPointerDown={(e) =>
                                                 handleBarPointerDown(e, sch, "resize-left")
                                               }
-                                              className="absolute -left-1 top-0 bottom-0 w-2.5 cursor-ew-resize z-30"
+                                              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-30 hover:bg-black/10 dark:hover:bg-white/10"
                                               title="Kéo chỉnh giờ bắt đầu"
                                             />
                                           )}
 
                                           <div
-                                            className="flex flex-col justify-center min-w-0 pr-2 pointer-events-none animate-timeline-text"
+                                            className="flex flex-col justify-center min-w-0 flex-1 overflow-hidden pointer-events-none animate-timeline-text"
                                             style={{ animationDelay: `${groupIdx * 80 + itemIdx * 45 + 130}ms` }}
                                           >
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="font-bold text-[10.5px] font-mono leading-none">
-                                                {formatScheduleHour(activeStart)} –{" "}
-                                                {formatScheduleHour(activeEnd)}
+                                            {/* Line 1: Time, Capacity, and Status Chip (never wrap!) */}
+                                            <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap leading-none overflow-hidden">
+                                              <span className="font-bold text-[10px] font-mono leading-none whitespace-nowrap shrink-0">
+                                                {formatScheduleHour(activeStart)}–{formatScheduleHour(activeEnd)}
                                               </span>
-                                              <span className="text-[10px] font-mono opacity-80">
+                                              <span className="text-[9.5px] font-mono opacity-80 whitespace-nowrap shrink-0">
                                                 ({sch.current_booked}/{sch.max_capacity})
                                               </span>
-                                              {isLocked && <Lock size={10} className="text-rose-600 dark:text-rose-400" />}
+                                              {isLocked && (
+                                                <Lock size={10} className="text-rose-600 dark:text-rose-400 shrink-0" />
+                                              )}
                                               {myStatus && (
-                                                <span className="px-1.5 py-0.2 rounded bg-white/80 dark:bg-black/40 text-[9.5px] font-bold">
+                                                <span
+                                                  className="px-1.5 py-0.5 rounded bg-white/85 dark:bg-black/50 text-[9px] font-bold whitespace-nowrap shrink-0 truncate max-w-[90px] leading-tight"
+                                                  title={getBookingStatusChip(myStatus).label}
+                                                >
                                                   {getBookingStatusChip(myStatus).label}
                                                 </span>
                                               )}
                                             </div>
-                                            <span className="text-[11px] font-semibold truncate leading-tight mt-0.5">
+
+                                            {/* Line 2: Title (always single line, never overflows vertically!) */}
+                                            <span className="text-[11px] font-semibold truncate whitespace-nowrap block leading-tight mt-1 text-ellipsis overflow-hidden">
                                               {sch.title}
                                             </span>
                                           </div>
@@ -2129,7 +2136,7 @@ export default function EngineeringScheduleRota({
                                               onPointerDown={(e) =>
                                                 handleBarPointerDown(e, sch, "resize-right")
                                               }
-                                              className="absolute -right-1 top-0 bottom-0 w-2.5 cursor-ew-resize z-30"
+                                              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-30 hover:bg-black/10 dark:hover:bg-white/10"
                                               title="Kéo chỉnh giờ kết thúc"
                                             />
                                           )}
