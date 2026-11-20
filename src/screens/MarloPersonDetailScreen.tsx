@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { ChevronLeft, Plus, RefreshCw, Mail, Check, ExternalLink, X, CheckCircle2, Crown, GitCommit } from "lucide-react";
 import gsap from "gsap";
-import { animateMarloCards } from "../utils/marloAnimations";
+import {
+  animateMarloCards,
+  animateMarloRows,
+  initMarloMagnetic,
+} from "../utils/marloAnimations";
 import {
   MARLO_MEMBER_STATUS_LABEL,
   MARLO_MEMBER_STATUS_TONE,
@@ -15,6 +19,7 @@ import {
   updateTeamMemberStatusApi,
   type TeamMemberRecord,
 } from "../api";
+import { DEFAULT_TEAM_MEMBER_RECORDS } from "../data/defaultTeamMembers";
 import "../marlo-engine/marloStyles.css";
 
 interface Props {
@@ -31,8 +36,7 @@ export default function MarloPersonDetailScreen({
   onNavigateToProject,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [members, setMembers] = useState<TeamMemberRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<TeamMemberRecord[]>(DEFAULT_TEAM_MEMBER_RECORDS);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignTitle, setAssignTitle] = useState("");
   const [assignProjectId, setAssignProjectId] = useState("prj-codemind");
@@ -46,20 +50,25 @@ export default function MarloPersonDetailScreen({
   };
 
   const loadMembers = async () => {
-    const bundle = await fetchTeamMembersApi(role);
-    if (bundle?.members) {
-      setMembers(bundle.members);
-    }
-    setLoading(false);
+    try {
+      const bundle = await fetchTeamMembersApi(role);
+      if (bundle?.members && bundle.members.length > 0) {
+        setMembers(bundle.members);
+      }
+    } catch {}
   };
 
+  // Background non-blocking sync
   useEffect(() => {
     let active = true;
-    fetchTeamMembersApi(role).then((bundle) => {
-      if (!active) return;
-      if (bundle?.members) setMembers(bundle.members);
-      setLoading(false);
-    });
+    fetchTeamMembersApi(role)
+      .then((bundle) => {
+        if (!active || !bundle) return;
+        if (bundle.members && bundle.members.length > 0) {
+          setMembers(bundle.members);
+        }
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -71,7 +80,10 @@ export default function MarloPersonDetailScreen({
         m.id === personId ||
         m.email.toLowerCase() === personId.toLowerCase() ||
         m.name.toLowerCase().includes(personId.toLowerCase())
-    ) || members[0];
+    ) ||
+    DEFAULT_TEAM_MEMBER_RECORDS.find((m) => m.id === personId) ||
+    members[0] ||
+    DEFAULT_TEAM_MEMBER_RECORDS[0];
 
   useEffect(() => {
     if (member?.projects?.[0]?.id) {
@@ -141,7 +153,7 @@ export default function MarloPersonDetailScreen({
     const el = containerRef.current;
     if (!el || !member) return;
     const ctx = gsap.context(() => {
-      // 1. Stage container slides in smoothly with expo.out
+      // 1. Stage container slides in smoothly with expo.out (identical to MarloProjectsScreen)
       gsap.fromTo(
         el,
         { y: 16, opacity: 0 },
@@ -155,24 +167,28 @@ export default function MarloPersonDetailScreen({
       );
 
       // 2. Cascade backlink
-      gsap.fromTo(".backlink", { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out", clearProps: "transform,opacity" });
+      gsap.fromTo(
+        ".backlink",
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "expo.out", clearProps: "transform,opacity" }
+      );
 
       // 3. Stagger member cards with Marlo card physics
       const cards = el.querySelectorAll(".card, .prof__head");
       if (cards.length > 0) {
-        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
+        animateMarloCards(cards, { y: 22, stagger: 0.04, duration: 0.75 });
       }
+
+      // 4. Stagger task rows and project rows with Marlo row physics (identical to kit.jsx function co / projects.jsx)
+      const rows = el.querySelectorAll(".prow");
+      if (rows.length > 0) {
+        animateMarloRows(rows, { y: 10, stagger: 0.03, delay: 0.25, duration: 0.55 });
+      }
+
+      initMarloMagnetic(el);
     }, el);
     return () => ctx.revert();
   }, [member?.id]);
-
-  if (loading || !member) {
-    return (
-      <div className="p-8 text-center text-xs text-slate-500">
-        {loading ? "Đang tải hồ sơ thành viên từ MySQL..." : "Chưa có dữ liệu thành viên."}
-      </div>
-    );
-  }
 
   const hue = MARLO_HUES[member.hue] || { bg: "#f7d593", text: "#633806" };
 
@@ -315,6 +331,7 @@ export default function MarloPersonDetailScreen({
                     <div
                       key={t.id}
                       onClick={() => onNavigateToProject(t.projectId)}
+                      data-lift={true}
                       className="prow py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl px-2 transition cursor-pointer"
                     >
                       <div className="cell__text min-w-0 flex-1">
@@ -367,6 +384,7 @@ export default function MarloPersonDetailScreen({
                     <div
                       key={job.id}
                       onClick={() => onNavigateToProject(job.id)}
+                      data-lift={true}
                       className="prow py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl px-2 transition cursor-pointer"
                       title={`Mở chi tiết đồ án ${job.name}`}
                     >
@@ -423,64 +441,69 @@ export default function MarloPersonDetailScreen({
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Thuộc đồ án nào
+                  Đề án trực thuộc
                 </label>
                 <select
                   value={assignProjectId}
                   onChange={(e) => setAssignProjectId(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
                 >
-                  {(member.projects.length > 0 ? member.projects : [{ id: "prj-codemind", name: "CodeMind AI", code: "PRJ-CODEMIND", status: "active", course: "", dueText: "" }]).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code} · {p.name}
-                    </option>
-                  ))}
+                  {member.projects.length > 0 ? (
+                    member.projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} — {p.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="prj-codemind">PRJ-CODEMIND — CodeMind AI</option>
+                  )}
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Thời lượng ước tính (giờ)
+                    Thời lượng ước tính (h)
                   </label>
                   <input
                     type="number"
-                    min={1}
-                    max={40}
+                    min="1"
+                    max="80"
                     value={assignEst}
                     onChange={(e) => setAssignEst(Number(e.target.value))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
                   />
                 </div>
+
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Mức độ ưu tiên
+                    Độ ưu tiên
                   </label>
                   <select
                     value={assignPriority}
                     onChange={(e) => setAssignPriority(e.target.value as any)}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none"
                   >
-                    <option value="high">Ưu tiên cao</option>
-                    <option value="medium">Bình thường</option>
-                    <option value="low">Thấp</option>
+                    <option value="high">Cao (P1 - Block)</option>
+                    <option value="medium">Trung bình (P2)</option>
+                    <option value="low">Thấp (P3 - Nice to have)</option>
                   </select>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAssignModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-[#f29b23] hover:bg-[#d48419] text-white rounded-xl shadow-xs transition cursor-pointer"
+                  className="btn btn--primary text-xs font-bold px-4 py-2 cursor-pointer"
                 >
-                  Giao Task Ngay
+                  Xác nhận giao việc
                 </button>
               </div>
             </form>
