@@ -2419,6 +2419,159 @@ export default function GitProjectHub({
     return Math.max(1420, maxCx + 110);
   }, [commits]);
 
+  // ─── Mouse Drag-to-Scroll (Pan) for Visual Git Branch Graph (Matches Kanban feel) ───
+  const gitGraphScrollRef = useRef<HTMLDivElement>(null);
+  const [isGraphPanning, setIsGraphPanning] = useState(false);
+  const panTrackerRef = useRef<{
+    isPanning: boolean;
+    startX: number;
+    startY: number;
+    startScrollLeft: number;
+    hasDragged: boolean;
+    lastX: number;
+    lastTime: number;
+    velocity: number;
+  }>({
+    isPanning: false,
+    startX: 0,
+    startY: 0,
+    startScrollLeft: 0,
+    hasDragged: false,
+    lastX: 0,
+    lastTime: 0,
+    velocity: 0,
+  });
+  const hasJustPannedRef = useRef(false);
+  const panMomentumIdRef = useRef<number | null>(null);
+
+  const handleGraphPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Support Left Click (0) and Middle Click (1)
+    if (e.button !== 0 && e.button !== 1) return;
+
+    // Ignore interactive targets (buttons, links, inputs, popovers)
+    const target = e.target as HTMLElement;
+    if (
+      target.closest("button") ||
+      target.closest("a") ||
+      target.closest("input") ||
+      target.closest("[data-no-pan]")
+    ) {
+      return;
+    }
+
+    const scrollEl = gitGraphScrollRef.current;
+    if (!scrollEl) return;
+
+    // Stop ongoing momentum if any
+    if (panMomentumIdRef.current) {
+      cancelAnimationFrame(panMomentumIdRef.current);
+      panMomentumIdRef.current = null;
+    }
+
+    panTrackerRef.current = {
+      isPanning: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startScrollLeft: scrollEl.scrollLeft,
+      hasDragged: false,
+      lastX: e.clientX,
+      lastTime: performance.now(),
+      velocity: 0,
+    };
+  };
+
+  useEffect(() => {
+    const handleCaptureClick = (e: MouseEvent) => {
+      if (hasJustPannedRef.current) {
+        e.stopPropagation();
+        e.preventDefault();
+        hasJustPannedRef.current = false;
+      }
+    };
+    window.addEventListener("click", handleCaptureClick, true);
+    return () => window.removeEventListener("click", handleCaptureClick, true);
+  }, []);
+
+  useEffect(() => {
+    const handleWindowPointerMove = (e: PointerEvent) => {
+      const tracker = panTrackerRef.current;
+      if (!tracker.isPanning) return;
+
+      const scrollEl = gitGraphScrollRef.current;
+      if (!scrollEl) return;
+
+      const deltaX = e.clientX - tracker.startX;
+      const deltaY = e.clientY - tracker.startY;
+
+      // Threshold to distinguish click from drag (5px)
+      if (!tracker.hasDragged && Math.hypot(deltaX, deltaY) > 5) {
+        tracker.hasDragged = true;
+        setIsGraphPanning(true);
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "grabbing";
+      }
+
+      if (tracker.hasDragged) {
+        scrollEl.scrollLeft = tracker.startScrollLeft - deltaX;
+
+        // Calculate velocity for smooth momentum release
+        const now = performance.now();
+        const dt = now - tracker.lastTime;
+        if (dt > 8) {
+          tracker.velocity = (e.clientX - tracker.lastX) / dt;
+          tracker.lastX = e.clientX;
+          tracker.lastTime = now;
+        }
+      }
+    };
+
+    const handleWindowPointerUp = () => {
+      const tracker = panTrackerRef.current;
+      if (!tracker.isPanning) return;
+
+      tracker.isPanning = false;
+      if (tracker.hasDragged) {
+        setIsGraphPanning(false);
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+
+        hasJustPannedRef.current = true;
+        setTimeout(() => {
+          hasJustPannedRef.current = false;
+        }, 80);
+
+        // Apply silky smooth momentum glide
+        const scrollEl = gitGraphScrollRef.current;
+        if (scrollEl && Math.abs(tracker.velocity) > 0.15) {
+          let vel = tracker.velocity * 16;
+          const momentumStep = () => {
+            if (Math.abs(vel) < 0.4) {
+              panMomentumIdRef.current = null;
+              return;
+            }
+            if (gitGraphScrollRef.current) {
+              gitGraphScrollRef.current.scrollLeft -= vel;
+              vel *= 0.92; // smooth friction
+              panMomentumIdRef.current = requestAnimationFrame(momentumStep);
+            }
+          };
+          panMomentumIdRef.current = requestAnimationFrame(momentumStep);
+        }
+      } else {
+        setIsGraphPanning(false);
+      }
+    };
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerUp);
+    window.addEventListener("pointercancel", handleWindowPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", handleWindowPointerUp);
+    };
+  }, []);
+
   const currentFlow = useMemo(() => {
     return dynamicFlows.find((f) => f.id === activeArchFlow) || dynamicFlows[0] || ARCH_FLOWS[0];
   }, [dynamicFlows, activeArchFlow]);
@@ -3267,9 +3420,15 @@ export default function GitProjectHub({
                 <GitBranch size={18} className="text-blue-600 dark:text-blue-400" />
                 Cây Phân Nhánh Git & Giám Sát Commit Trực Quan (GitKraken / Git Graph)
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Hệ thống tự động ghi nhận commit từ git push &amp; Webhook và liên kết mã Task Kanban. Rê chuột (hover) vào từng điểm commit để xem chi tiết.
-              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Hệ thống tự động ghi nhận commit từ git push &amp; Webhook và liên kết mã Task Kanban. Rê chuột vào từng điểm commit để xem chi tiết.
+                </p>
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700/80">
+                  <span className="text-xs">✋</span>
+                  <span>Kéo chuột ngang để lướt cây nhánh (như Kanban)</span>
+                </span>
+              </div>
             </div>
 
             {/* Member & Branch Filter Controls + Push Commit + Replay Animation */}
@@ -3375,7 +3534,13 @@ export default function GitProjectHub({
           </div>
 
           {/* Interactive SVG Visual Git Graph with Floating Popover */}
-          <div className="relative overflow-x-auto p-4 bg-slate-50/70 dark:bg-slate-950/80 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div
+            ref={gitGraphScrollRef}
+            onPointerDown={handleGraphPointerDown}
+            className={`relative overflow-x-auto p-4 bg-slate-50/70 dark:bg-slate-950/80 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors select-none ${
+              isGraphPanning ? "cursor-grabbing" : "cursor-grab"
+            }`}
+          >
             <svg style={{ width: `${svgWidth}px`, height: "390px" }} viewBox={`0 0 ${svgWidth} 390`}>
               <style>{TOPO_SVG_STYLES}</style>
 
@@ -3452,9 +3617,14 @@ export default function GitProjectHub({
                       transformOrigin: `${c.cx}px ${c.cy}px`,
                       animation: `topoPopNode 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.05 + Math.min(idx * 0.04, 1.2)}s both`,
                     }}
-                    onMouseEnter={() => setHoveredCommit(c)}
+                    onMouseEnter={() => {
+                      if (!isGraphPanning) setHoveredCommit(c);
+                    }}
                     onMouseLeave={() => setHoveredCommit(null)}
-                    onClick={() => setSelectedCommit(c)}
+                    onClick={() => {
+                      if (hasJustPannedRef.current) return;
+                      setSelectedCommit(c);
+                    }}
                   >
                     {/* Invisible generous hit-box for ultra-smooth hover */}
                     <circle
@@ -3526,7 +3696,7 @@ export default function GitProjectHub({
             </svg>
 
             {/* Interactive Floating Hover Popover Tooltip */}
-            {hoveredCommit && (() => {
+            {hoveredCommit && !isGraphPanning && (() => {
               const popoverWidth = 320;
               const popoverLeft = Math.max(12, Math.min(hoveredCommit.cx - popoverWidth / 2, svgWidth - popoverWidth - 16));
               const isAbove = hoveredCommit.cy > 180;
