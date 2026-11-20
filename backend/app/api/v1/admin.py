@@ -759,61 +759,67 @@ def get_admin_analytics_overview(_: dict[str, Any] = Depends(require_admin)) -> 
         prj_cnt = conn.execute("SELECT COUNT(*) as c FROM engineering_projects").fetchone()["c"]
         kb_tasks = conn.execute("SELECT COUNT(*) as c, COALESCE(SUM(points), 0) as sp FROM engineering_tasks WHERE column_id IN ('done', 'verified')").fetchone()
 
-        # 4. Thống kê nộp bài & CI/CD
-        sub_stats = conn.execute("SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN status='passed' THEN 1 ELSE 0 END), 0) as passed FROM submissions").fetchone()
-        total_subs = sub_stats["total"] or 1
-        passed_subs = sub_stats["passed"] or 0
-        ci_pass_rate = round((passed_subs / total_subs) * 100, 1) if total_subs > 0 else 92.4
+        # 4. Thống kê nộp bài & CI/CD thực tế từ submissions + student_chapter_submissions
+        sub_stats = conn.execute(
+            "SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN status='passed' THEN 1 ELSE 0 END), 0) as passed FROM submissions"
+        ).fetchone()
+        ch_stats = conn.execute(
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(tests_passed), 0) as passed_tc, COALESCE(SUM(tests_total), 0) as total_tc FROM student_chapter_submissions"
+        ).fetchone()
+        total_subs = int(sub_stats["total"] or 0) + int(ch_stats["cnt"] or 0)
+        total_cases = int(sub_stats["total"] or 0) + int(ch_stats["total_tc"] or 0)
+        passed_cases = int(sub_stats["passed"] or 0) + int(ch_stats["passed_tc"] or 0)
+        ci_pass_rate = round((passed_cases / total_cases) * 100, 1) if total_cases > 0 else 0.0
 
-        # 5. Phản biện AI Defense
-        def_stats = conn.execute("SELECT COUNT(*) as total, AVG(defense_score) as avg_score FROM dual_submissions").fetchone()
-        def_avg = round(float(def_stats["avg_score"] or 86.5), 1)
+        # 5. Phản biện AI Defense thực tế
+        def_stats = conn.execute(
+            "SELECT COUNT(*) as total, AVG(defense_score) as avg_score FROM dual_submissions WHERE defense_score > 0"
+        ).fetchone()
+        def_avg = round(float(def_stats["avg_score"]), 1) if def_stats and def_stats["avg_score"] is not None else 0.0
 
         # 6. Dịch vụ AI & Token
-        ai_units = conn.execute("SELECT id, name, requests, input_tokens, output_tokens, estimated_cost FROM ai_service_units").fetchall()
+        ai_units = conn.execute(
+            "SELECT id, name, requests, input_tokens, output_tokens, estimated_cost, active FROM ai_service_units"
+        ).fetchall()
         total_tokens = sum((u["input_tokens"] or 0) + (u["output_tokens"] or 0) for u in ai_units)
         total_cost = round(sum(float(u["estimated_cost"] or 0.0) for u in ai_units), 2)
+        active_ai_units = sum(1 for u in ai_units if int(u["active"] or 0) == 1)
 
         # 7. Phiên bảo mật JWT
         jwt_cnt = conn.execute("SELECT COUNT(*) as c FROM jwt_sessions WHERE revoked=0").fetchone()["c"]
 
-        # 8. 5 Chặng lộ trình đào tạo
+        # 8. Lộ trình đào tạo tổng hợp trực tiếp từ bảng courses trong MySQL
+        stage_rows = conn.execute(
+            "SELECT stage_number, stage_title, code, name, avg_progress_pct FROM courses ORDER BY stage_number ASC, code ASC"
+        ).fetchall()
+        stage_map: dict[int, dict[str, Any]] = {}
+        for cr in stage_rows:
+            st_num = int(cr["stage_number"] or 1)
+            entry = stage_map.setdefault(
+                st_num,
+                {
+                    "stage": st_num,
+                    "title": cr["stage_title"] or f"Chặng {st_num}",
+                    "codes": [],
+                    "desc_items": [],
+                    "progress_vals": [],
+                },
+            )
+            entry["codes"].append(cr["code"])
+            entry["desc_items"].append(cr["name"])
+            entry["progress_vals"].append(float(cr["avg_progress_pct"] or 0.0))
+
         curriculum_stages = [
             {
-                "stage": 1,
-                "title": "Chặng 1: Nền tảng Kỹ thuật Phần mềm",
-                "codes": ["CS101", "CS201", "CS202"],
-                "desc": "Nhập môn Lập trình, OOP C++20 & Cấu trúc Dữ liệu",
-                "progress_pct": 88,
-            },
-            {
-                "stage": 2,
-                "title": "Chặng 2: Kiến trúc Hệ thống & Mạng",
-                "codes": ["CS301", "CS302", "CS304"],
-                "desc": "Lập trình Socket, Mạng máy tính & Linux Kernel",
-                "progress_pct": 74,
-            },
-            {
-                "stage": 3,
-                "title": "Chặng 3: Cơ sở Dữ liệu & Đám mây",
-                "codes": ["CS305", "CS310", "CS312"],
-                "desc": "CSDL Quan hệ MySQL, NoSQL & DevOps Docker/K8s",
-                "progress_pct": 69,
-            },
-            {
-                "stage": 4,
-                "title": "Chặng 4: Trí tuệ Nhân tạo & An toàn",
-                "codes": ["CS401", "CS402", "CS405", "CS408"],
-                "desc": "Machine Learning, LLM RAG, An toàn Mạng & Mật mã",
-                "progress_pct": 58,
-            },
-            {
-                "stage": 5,
-                "title": "Chặng 5: Khóa luận Tốt nghiệp & Capstone",
-                "codes": ["CS490", "CS495", "CS499"],
-                "desc": "Thực tập Doanh nghiệp & Đồ án Tốt nghiệp Kỹ sư",
-                "progress_pct": 42,
-            },
+                "stage": st_num,
+                "title": info["title"],
+                "codes": info["codes"],
+                "desc": ", ".join(info["desc_items"][:3]) + ("..." if len(info["desc_items"]) > 3 else ""),
+                "progress_pct": round(sum(info["progress_vals"]) / len(info["progress_vals"]))
+                if info["progress_vals"]
+                else 0,
+            }
+            for st_num, info in sorted(stage_map.items())
         ]
 
     return {
@@ -831,6 +837,8 @@ def get_admin_analytics_overview(_: dict[str, Any] = Depends(require_admin)) -> 
             "total_ai_tokens": total_tokens,
             "total_ai_cost": total_cost,
             "active_jwt_sessions": jwt_cnt,
+            "active_ai_units": active_ai_units,
+            "total_ai_units": len(ai_units),
         },
         "curriculum_stages": curriculum_stages,
         "ai_units": [dict(u) for u in ai_units],

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import gsap from "gsap";
 import type { Project } from "../data/kanbanProjects";
+import { fetchTeamMembersApi } from "../api";
 
 interface SlateModalProps {
   isOpen: boolean;
@@ -353,15 +354,10 @@ export function MarloProjectSlateModal({
 }
 
 // ── CREATE NEW PROJECT MODAL (LOCALIZED ACADEMIC SOFTWARE ENGINEERING CAPSTONE) ──
-const DEFAULT_TEAM_MEMBERS = [
+const FALLBACK_TEAM_MEMBERS = [
   "Nguyễn Bá Hòa",
   "Võ Nhật Huy",
   "Phan Đình Nghị",
-  "Lê Thị Hà",
-  "Hoàng Trọng Nam",
-  "Đỗ Mỹ Linh",
-  "Trần Minh Tuấn",
-  "Lê Quốc Bảo",
 ];
 
 const KIND_OPTIONS = [
@@ -387,11 +383,31 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
   const [budget, setBudget] = useState("600");
   const [deliveryDate, setDeliveryDate] = useState("15/12/2026");
   const [repoUrl, setRepoUrl] = useState("");
+  const [teamOptions, setTeamOptions] = useState<string[]>(FALLBACK_TEAM_MEMBERS);
   const [selectedTeam, setSelectedTeam] = useState<string[]>(["Nguyễn Bá Hòa", "Võ Nhật Huy"]);
   const [isClosing, setIsClosing] = useState(false);
 
   const backdropRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    fetchTeamMembersApi().then((bundle) => {
+      if (!active || !bundle?.members) return;
+      const students = bundle.members.filter((m) => !m.isAdvisor).map((m) => m.name);
+      if (students.length > 0) {
+        setTeamOptions(students);
+        setSelectedTeam((prev) => {
+          const valid = prev.filter((p) => students.includes(p));
+          return valid.length > 0 ? valid : students.slice(0, 2);
+        });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isOpen]);
 
   // Entrance spring animation with GSAP
   useEffect(() => {
@@ -642,7 +658,7 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {DEFAULT_TEAM_MEMBERS.map((member) => {
+              {teamOptions.map((member) => {
                 const isSelected = selectedTeam.includes(member);
                 const isFirst = selectedTeam[0] === member;
                 return (

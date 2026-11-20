@@ -193,7 +193,7 @@ export default function MarloCommandPalette({
     {
       id: "nav-admin-overview",
       title: "Trung tâm Điều hành Admin",
-      subtitle: "Tổng quan học viện, xét duyệt lớp & giám sát hạ tầng SLA 99.98%",
+      subtitle: "Tổng quan học viện, xét duyệt lớp & giám sát hạ tầng AI & Docker Sandbox",
       category: "Điều hướng",
       icon: <LayoutDashboard size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("admin"); onClose(); },

@@ -1,11 +1,20 @@
 import { useState, useMemo } from "react";
 
+export interface HeatmapCellInput {
+  date: string;
+  weekIndex: number;
+  dayIndex: number;
+  commits: number;
+  activities: number;
+  level: 0 | 1 | 2 | 3 | 4;
+}
+
 interface HeatmapDay {
   dayIndex: number; // 0 = Mon, 6 = Sun
   weekIndex: number; // 0 to 15 (16 weeks)
   level: 0 | 1 | 2 | 3 | 4;
   commits: number;
-  studyHours: number;
+  activities: number;
   dateStr: string;
 }
 
@@ -13,61 +22,53 @@ interface Props {
   title?: string;
   subtitle?: string;
   className?: string;
+  cells?: HeatmapCellInput[];
 }
 
 export default function MarloActivityHeatmap({
-  title = "Bảng Nhiệt Hoạt Động & Đóng Góp (Study & Commit Heatmap)",
-  subtitle = "16 tuần học kỳ • 148 commits • 216 giờ thực hành code",
+  title = "Bảng Nhiệt Hoạt Động & Đóng Góp (16 Tuần)",
+  subtitle,
   className = "",
+  cells,
 }: Props) {
   const [hoveredCell, setHoveredCell] = useState<HeatmapDay | null>(null);
 
   const daysLabel = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
   const weeksCount = 16;
 
-  // Generate realistic semester activity data with organic patterns
+  // Build exact 7x16 matrix exclusively from real API / database cells (zero fake seeded math)
   const matrix: HeatmapDay[][] = useMemo(() => {
+    const byCoord: Record<string, HeatmapCellInput> = {};
+    if (Array.isArray(cells)) {
+      for (const c of cells) {
+        byCoord[`${c.dayIndex}-${c.weekIndex}`] = c;
+      }
+    }
+
     const result: HeatmapDay[][] = [];
     for (let day = 0; day < 7; day++) {
       const row: HeatmapDay[] = [];
       for (let week = 0; week < weeksCount; week++) {
-        // Pseudo-random deterministic activity
-        const seed = (day * 13 + week * 19 + 7) % 100;
-        let level: 0 | 1 | 2 | 3 | 4 = 0;
-        let commits = 0;
-        let studyHours = 0;
-
-        if (seed > 75) {
-          level = 4;
-          commits = 5 + (seed % 4);
-          studyHours = 4.5;
-        } else if (seed > 50) {
-          level = 3;
-          commits = 3 + (seed % 3);
-          studyHours = 3.0;
-        } else if (seed > 30) {
-          level = 2;
-          commits = 1 + (seed % 2);
-          studyHours = 1.5;
-        } else if (seed > 15) {
-          level = 1;
-          commits = 1;
-          studyHours = 0.8;
-        }
-
+        const hit = byCoord[`${day}-${week}`];
         row.push({
           dayIndex: day,
           weekIndex: week,
-          level,
-          commits,
-          studyHours,
-          dateStr: `Thứ ${day === 6 ? "CN" : day + 2}, Tuần ${week + 1}`,
+          level: hit ? hit.level : 0,
+          commits: hit ? hit.commits : 0,
+          activities: hit ? hit.activities : 0,
+          dateStr: hit ? hit.date : `Thứ ${day === 6 ? "CN" : day + 2}, Tuần ${week + 1}`,
         });
       }
       result.push(row);
     }
     return result;
-  }, []);
+  }, [cells]);
+
+  const resolvedSubtitle =
+    subtitle ||
+    (Array.isArray(cells) && cells.length > 0
+      ? `16 tuần học kỳ • ${cells.reduce((acc, c) => acc + c.commits, 0)} commits • ${cells.reduce((acc, c) => acc + c.activities, 0)} hoạt động thực tế`
+      : "Chưa ghi nhận hoạt động trong 16 tuần qua");
 
   // Marlo warm amber / signature color shades
   const levelColors = [
@@ -86,8 +87,8 @@ export default function MarloActivityHeatmap({
           <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <span>{title}</span>
           </h4>
-          {subtitle && (
-            <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>
+          {resolvedSubtitle && (
+            <p className="text-[11px] text-slate-400 mt-0.5">{resolvedSubtitle}</p>
           )}
         </div>
 
@@ -158,14 +159,14 @@ export default function MarloActivityHeatmap({
               {hoveredCell.commits} commits
             </span>
             <span>•</span>
-            <span>{hoveredCell.studyHours} giờ học tập</span>
+            <span>{hoveredCell.activities} hoạt động học tập</span>
           </div>
         ) : (
           <span className="text-slate-400 text-[10.5px]">
-            Di chuột vào từng ô vuông để xem chi tiết thời lượng & số commit
+            Di chuột vào từng ô vuông để xem chi tiết số commit & hoạt động
           </span>
         )}
-        <span className="text-[10px] text-slate-400">Marlo Heatmap v2.0</span>
+        <span className="text-[10px] text-slate-400">MySQL Activity Sync</span>
       </div>
     </div>
   );

@@ -33,6 +33,7 @@ from app.schemas.auth import (
     SimulateDeviceIn,
     TokenResponse,
     UserLoginIn,
+    UserPreferencesPatchIn,
     UserRegisterIn,
     Verify2FaIn,
 )
@@ -63,6 +64,24 @@ def _mask_email(email: str) -> str:
     if len(local) <= 2:
         return f"{local[:1]}***@{domain}"
     return f"{local[:2]}***{local[-1:]}@{domain}"
+
+
+VALID_BG_THEMES = {"diagonal", "blueprint", "matrix", "sunrise", "graphite"}
+VALID_COLOR_MODES = {"light", "dark"}
+
+
+def _parse_theme_preference(raw: str | None) -> tuple[str, str]:
+    clean = (raw or "").strip().lower()
+    if ":" in clean:
+        mode_part, bg_part = clean.split(":", 1)
+        cm = mode_part if mode_part in VALID_COLOR_MODES else "light"
+        bg = bg_part if bg_part in VALID_BG_THEMES else "diagonal"
+        return cm, bg
+    if clean in VALID_BG_THEMES:
+        return "light", clean
+    if clean in VALID_COLOR_MODES:
+        return clean, "diagonal"
+    return "light", "diagonal"
 
 
 def _parse_device_info(request: Request | None, explicit_name: str | None = None) -> dict[str, str]:
@@ -787,13 +806,103 @@ def refresh_token_endpoint(payload: RefreshTokenIn) -> dict[str, Any]:
 def get_me(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
     """Xem thông tin hồ sơ của tài khoản đang đăng nhập."""
     with db() as conn:
+        user_row = conn.execute("SELECT theme_preference FROM users WHERE id = ?", (user["id"],)).fetchone()
         profile = conn.execute("SELECT * FROM student_profiles WHERE user_id = ?", (user["id"],)).fetchone()
 
     result = dict(user)
     result.pop("password_hash", None)
+    raw_pref = (user_row["theme_preference"] if user_row else None) or result.get("theme_preference")
+    color_mode, background_theme = _parse_theme_preference(raw_pref)
+    result["color_mode"] = color_mode
+    result["background_theme"] = background_theme
     if profile:
         result["profile"] = row_dict(profile)
     return result
+
+
+@router.patch("/auth/preferences")
+def update_user_preferences(
+    payload: UserPreferencesPatchIn,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Lưu giao diện nền miễn phí và chế độ sáng/tối cho tài khoản đang đăng nhập (cả 3 role)."""
+    if payload.background_theme is not None and payload.background_theme not in VALID_BG_THEMES:
+        raise HTTPException(status_code=422, detail="Mã giao diện nền không hợp lệ")
+    if payload.color_mode is not None and payload.color_mode not in VALID_COLOR_MODES:
+        raise HTTPException(status_code=422, detail="Chế độ hiển thị phải là light hoặc dark")
+
+    with db() as conn:
+        u_row = conn.execute("SELECT theme_preference FROM users WHERE id=?", (user["id"],)).fetchone()
+        cur_mode, cur_bg = _parse_theme_preference(u_row["theme_preference"] if u_row else None)
+        next_mode = payload.color_mode or cur_mode
+        next_bg = payload.background_theme or cur_bg
+        saved = f"{next_mode}:{next_bg}"
+        conn.execute(
+            "UPDATE users SET theme_preference=?, updated_at=? WHERE id=?",
+            (saved, now_utc(), user["id"]),
+        )
+        conn.commit()
+    return {
+        "background_theme": next_bg,
+        "color_mode": next_mode,
+        "theme_preference": saved,
+    }
+
+
+@router.get("/navigation/counts")
+def get_navigation_counts(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, int]:
+    """Đếm số lượng thực tế từ MySQL để hiển thị badge điều hướng không dùng số cứng."""
+    with db() as conn:
+        users_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"] or 0)
+        courses_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM courses").fetchone()["c"] or 0)
+        ai_active = int(conn.execute("SELECT COUNT(*) AS c FROM ai_service_units WHERE active = 1").fetchone()["c"] or 0)
+        ai_total = int(conn.execute("SELECT COUNT(*) AS c FROM ai_service_units").fetchone()["c"] or 0)
+        projects_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM engineering_projects").fetchone()["c"] or 0)
+        team_cnt = int(
+            conn.execute(
+                """SELECT COUNT(*) AS c FROM users
+                   WHERE role IN ('student', 'instructor')
+                     AND status != 'suspended'
+                     AND id NOT IN ('student-demo', 'instructor-demo', 'admin-demo')"""
+            ).fetchone()["c"]
+            or 0
+        )
+        kanban_total = int(conn.execute("SELECT COUNT(*) AS c FROM engineering_tasks").fetchone()["c"] or 0)
+        kanban_open = int(
+            conn.execute(
+                "SELECT COUNT(*) AS c FROM engineering_tasks WHERE column_id NOT IN ('done', 'verified')"
+            ).fetchone()["c"]
+            or 0
+        )
+        schedules_cnt = int(
+            conn.execute("SELECT COUNT(*) AS c FROM academic_schedules WHERE status != 'cancelled'").fetchone()["c"] or 0
+        )
+        pending_dual = int(
+            conn.execute(
+                "SELECT COUNT(*) AS c FROM dual_submissions WHERE status IN ('pending', 'flagged')"
+            ).fetchone()["c"]
+            or 0
+        )
+        completed_lessons = int(
+            conn.execute(
+                "SELECT COUNT(*) AS c FROM student_lesson_progress WHERE user_id = ?",
+                (user["id"],),
+            ).fetchone()["c"]
+            or 0
+        )
+    return {
+        "users": users_cnt,
+        "courses": courses_cnt,
+        "ai_services": ai_active,
+        "ai_services_total": ai_total,
+        "projects": projects_cnt,
+        "team_members": team_cnt,
+        "kanban_tasks": kanban_total,
+        "kanban_open_tasks": kanban_open,
+        "schedules": schedules_cnt,
+        "pending_dual_reviews": pending_dual,
+        "completed_lessons": completed_lessons,
+    }
 
 
 @router.get("/auth/security-overview")

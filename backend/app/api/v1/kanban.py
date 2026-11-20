@@ -1608,3 +1608,194 @@ def evaluate_project(
         "eval_id": eval_id,
         "final_score": final_score,
     }
+
+
+class TeamStatusPatchIn(BaseModel):
+    status: str = Field(pattern="^(in|remote|off)$")
+
+
+@router.get("/team/members")
+def list_team_members(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    """Lấy danh sách thành viên đội ngũ & cố vấn thực tế từ MySQL (users, projects, tasks, git_commits)."""
+    with db() as conn:
+        user_rows = conn.execute(
+            """SELECT id, user_code, email, full_name, display_name, role, status, last_active_label
+               FROM users
+               WHERE role IN ('student', 'instructor')
+                 AND status != 'suspended'
+                 AND id NOT IN ('student-demo', 'instructor-demo', 'admin-demo')
+               ORDER BY CASE WHEN role='instructor' THEN 0 ELSE 1 END, full_name ASC"""
+        ).fetchall()
+        proj_rows = conn.execute("SELECT * FROM engineering_projects ORDER BY id ASC").fetchall()
+        task_rows = conn.execute("SELECT * FROM engineering_tasks ORDER BY position_order ASC").fetchall()
+        commit_rows = conn.execute("SELECT project_id, author_name FROM git_commits").fetchall()
+        status_row = conn.execute(
+            "SELECT value_json FROM system_settings WHERE key='team_member_statuses'"
+        ).fetchone()
+
+    try:
+        saved_statuses: dict[str, str] = json.loads(status_row["value_json"]) if status_row else {}
+    except Exception:
+        saved_statuses = {}
+
+    projects_by_id = {p["id"]: p for p in proj_rows}
+    commit_count_by_name: dict[str, int] = {}
+    for c in commit_rows:
+        nm = (c["author_name"] or "").strip().lower()
+        if nm:
+            commit_count_by_name[nm] = commit_count_by_name.get(nm, 0) + 1
+
+    members_out: list[dict[str, Any]] = []
+    for idx, u in enumerate(user_rows):
+        uid_val = u["id"]
+        full_name = (u["full_name"] or u["display_name"] or "Thành viên").strip()
+        name_low = full_name.lower()
+        u_role = (u["role"] or "student").lower()
+        is_advisor = u_role in ("instructor", "admin", "org_admin")
+
+        member_projects: list[dict[str, Any]] = []
+        is_lead = False
+        derived_role = "Giảng viên / Cố vấn Hội đồng" if is_advisor else "Kỹ sư Thực tập"
+
+        for p in proj_rows:
+            try:
+                team_list = json.loads(p["team_json"] or "[]")
+            except Exception:
+                team_list = []
+
+            in_team = False
+            if p["leader_user_id"] == uid_val:
+                in_team = True
+                is_lead = True
+            if is_advisor and p["instructor_id"] == uid_val:
+                in_team = True
+
+            for t_idx, tm in enumerate(team_list):
+                tm_name = str(tm.get("name") or "").strip()
+                if tm_name.lower() == name_low or tm.get("id") == uid_val:
+                    in_team = True
+                    if t_idx == 0 and not is_advisor:
+                        is_lead = True
+                    if tm.get("role") and not is_advisor:
+                        derived_role = str(tm["role"])
+
+            if in_team:
+                member_projects.append(
+                    {
+                        "id": p["id"],
+                        "code": p["code"],
+                        "name": p["name"],
+                        "status": p["status"] or "active",
+                        "course": p["course"] or "",
+                        "dueText": p["due_text"] or p["due_date"] or "",
+                    }
+                )
+
+        open_tasks: list[dict[str, Any]] = []
+        done_tasks_count = 0
+        total_est_hours = 0.0
+        for tk in task_rows:
+            try:
+                assignee_obj = json.loads(tk["assignee_json"] or "{}")
+            except Exception:
+                assignee_obj = {}
+            assignee_name = str(assignee_obj.get("name") or "").strip().lower()
+            matches_user = tk["assignee_user_id"] == uid_val or (assignee_name and assignee_name == name_low)
+            if not matches_user:
+                continue
+
+            col_id = (tk["column_id"] or "backlog").lower()
+            if col_id in ("done", "verified"):
+                done_tasks_count += 1
+            else:
+                est = float(tk["estimate_hours"] or 0.0)
+                total_est_hours += est
+                p_ref = projects_by_id.get(tk["project_id"])
+                open_tasks.append(
+                    {
+                        "id": tk["id"],
+                        "code": tk["code"] or "",
+                        "title": tk["title"],
+                        "projectId": tk["project_id"],
+                        "projectName": p_ref["name"] if p_ref else tk["project_id"],
+                        "column": tk["column_id"],
+                        "priority": tk["priority"] or "medium",
+                        "points": int(tk["points"] or 0),
+                        "estimateHours": est,
+                        "dueDate": tk["due_date"] or "",
+                    }
+                )
+
+        default_status = "remote" if (u["status"] or "") == "pending" else "in"
+        cur_status = saved_statuses.get(uid_val, default_status)
+        if cur_status not in ("in", "remote", "off"):
+            cur_status = "in"
+
+        parts = [w for w in full_name.split() if w]
+        initials = (
+            f"{parts[0][0]}{parts[-1][0]}".upper()
+            if len(parts) >= 2
+            else (full_name[:2].upper() or "CM")
+        )
+        members_out.append(
+            {
+                "id": uid_val,
+                "name": full_name,
+                "email": u["email"],
+                "code": u["user_code"] or "—",
+                "userRole": u_role,
+                "role": derived_role,
+                "initials": initials,
+                "hue": (idx % 6) + 1,
+                "status": cur_status,
+                "isAdvisor": is_advisor,
+                "isLead": is_lead,
+                "projects": member_projects,
+                "openTasks": open_tasks,
+                "doneTasksCount": done_tasks_count,
+                "commitsCount": commit_count_by_name.get(name_low, 0),
+                "totalEstimateHours": round(total_est_hours, 1),
+                "lastActive": u["last_active_label"] or "Vừa xong",
+            }
+        )
+
+    return {
+        "members": members_out,
+        "total": len(members_out),
+        "inLabCount": sum(1 for m in members_out if m["status"] == "in"),
+    }
+
+
+@router.patch("/team/members/{member_id}/status")
+def update_team_member_status(
+    member_id: str,
+    payload: TeamStatusPatchIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Lưu trạng thái hiện diện (Tại Lab / Từ xa / Nghỉ phép) vào MySQL."""
+    with db() as conn:
+        target = conn.execute("SELECT id, role FROM users WHERE id=?", (member_id,)).fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="Không tìm thấy thành viên.")
+        caller_role = (user.get("role") or "student").lower()
+        target_role = (target["role"] or "student").lower()
+        if caller_role == "student" and target_role in ("instructor", "admin", "org_admin"):
+            raise HTTPException(
+                status_code=403,
+                detail="Học viên không thể thay đổi trạng thái công tác của Giảng viên / Quản trị viên.",
+            )
+
+        status_row = conn.execute(
+            "SELECT value_json FROM system_settings WHERE key='team_member_statuses'"
+        ).fetchone()
+        try:
+            saved = json.loads(status_row["value_json"]) if status_row else {}
+        except Exception:
+            saved = {}
+        saved[member_id] = payload.status
+        conn.execute(
+            "INSERT OR REPLACE INTO system_settings(key, value_json, updated_at) VALUES('team_member_statuses', ?, ?)",
+            (json.dumps(saved, ensure_ascii=False), now_utc()),
+        )
+        conn.commit()
+    return {"member_id": member_id, "status": payload.status}

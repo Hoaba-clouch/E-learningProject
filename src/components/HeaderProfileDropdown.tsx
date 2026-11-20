@@ -12,12 +12,15 @@ import {
   ShieldCheck,
   HelpCircle,
   LayoutGrid,
+  Palette,
 } from "lucide-react";
-import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
+import type { AvatarStyle, BackgroundTheme, BadgeFrame, Role, Screen, Theme } from "../App";
 
 export interface HeaderProfileDropdownProps {
   theme: Theme;
   onToggleTheme: (trigger?: any) => void;
+  backgroundTheme?: BackgroundTheme;
+  onApplyBackgroundTheme?: (bg: BackgroundTheme) => void;
   role?: Role;
   avatarStyle?: AvatarStyle;
   badgeFrame?: BadgeFrame;
@@ -25,6 +28,14 @@ export interface HeaderProfileDropdownProps {
   onLogout?: () => void;
   onOpenCommandPalette?: () => void;
 }
+
+const BACKGROUND_OPTIONS: { id: BackgroundTheme; label: string; dotCls: string }[] = [
+  { id: "diagonal", label: "Sáng chuẩn", dotCls: "bg-stone-200 border-stone-400" },
+  { id: "blueprint", label: "Blueprint", dotCls: "bg-sky-200 border-sky-500" },
+  { id: "matrix", label: "Matrix", dotCls: "bg-emerald-200 border-emerald-600" },
+  { id: "sunrise", label: "Sunrise", dotCls: "bg-orange-200 border-orange-500" },
+  { id: "graphite", label: "Graphite", dotCls: "bg-indigo-200 border-indigo-600" },
+];
 
 const roleLabel: Record<Role, string> = {
   student: "Học viên",
@@ -35,6 +46,8 @@ const roleLabel: Record<Role, string> = {
 export function HeaderProfileDropdown({
   theme,
   onToggleTheme,
+  backgroundTheme = "diagonal",
+  onApplyBackgroundTheme,
   role = "student",
   onNavigate,
   onLogout,
@@ -261,6 +274,43 @@ export function HeaderProfileDropdown({
             <Monitor size={16} className="text-slate-400 dark:text-slate-400 shrink-0" />
             <span>Match system</span>
           </button>
+
+          {onApplyBackgroundTheme && (
+            <>
+              <div className="h-px bg-slate-100 dark:bg-white/5 my-1 mx-1.5" />
+              <div className="px-3 py-1.5">
+                <div className="flex items-center justify-between text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
+                  <span className="inline-flex items-center gap-1">
+                    <Palette size={11} />
+                    Giao diện nền
+                  </span>
+                  <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-semibold normal-case">
+                    Miễn phí
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {BACKGROUND_OPTIONS.map((opt) => {
+                    const isSelected = backgroundTheme === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => onApplyBackgroundTheme(opt.id)}
+                        title={`Chọn nền ${opt.label}`}
+                        className={`h-7 rounded-lg border-2 flex items-center justify-center transition cursor-pointer ${opt.dotCls} ${
+                          isSelected
+                            ? "ring-2 ring-[#EE8420] ring-offset-1 dark:ring-offset-[#18191c] scale-105"
+                            : "opacity-80 hover:opacity-100"
+                        }`}
+                      >
+                        {isSelected && <Check size={12} className="text-slate-900 stroke-[3]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Divider */}
           <div className="h-px bg-slate-100 dark:bg-white/5 my-1 mx-1.5" />

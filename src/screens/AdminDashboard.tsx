@@ -1206,15 +1206,7 @@ export default function AdminDashboard({
 
     } else {
 
-      setPendingApprovals(INITIAL_PENDING_APPROVALS);
-
-      setJwtSessions(INITIAL_JWT_SESSIONS);
-
-      setClassesList(INITIAL_ADMIN_CLASSES);
-
-      setAiServices(INITIAL_ADMIN_SERVICES);
-
-      setUsers(FALLBACK_ADMIN_USERS);
+      await loadBackendUsers(false);
 
     }
 
@@ -1345,7 +1337,7 @@ export default function AdminDashboard({
 
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
 
-              99.98% SLA · ${stats.totalEstimatedCost.toFixed(0)} / ${budgetCap}
+              {aiServices.filter((s) => s.active).length}/{aiServices.length} dịch vụ AI · ${stats.totalEstimatedCost.toFixed(0)} / ${budgetCap}
 
             </span>
 
@@ -1497,7 +1489,7 @@ export default function AdminDashboard({
 
                     { id: "sandbox", label: "Sandbox CI/CD Active", value: stats.sandboxReadyCount * 6, count: stats.sandboxReadyCount, color: "#f97316" },
 
-                    { id: "prog", label: "Tiến độ đào tạo TB", value: stats.avgClassProgress, count: stats.totalStudentsEnrolled, color: "#1e293b" },
+                    { id: "prog", label: "Tổng SV đăng ký học", value: stats.avgClassProgress, count: stats.totalStudentsEnrolled, color: "#1e293b" },
 
                   ]}
 

@@ -31,10 +31,10 @@ GITHUB_REPO_RE = re.compile(
 
 SHOP_ITEM_COSTS: dict[tuple[str, str], int] = {
     ("theme", "diagonal"): 0,
-    ("theme", "blueprint"): 420,
-    ("theme", "matrix"): 640,
-    ("theme", "sunrise"): 520,
-    ("theme", "graphite"): 780,
+    ("theme", "blueprint"): 0,
+    ("theme", "matrix"): 0,
+    ("theme", "sunrise"): 0,
+    ("theme", "graphite"): 0,
     ("avatar", "initials"): 0,
     ("avatar", "pixel"): 220,
     ("avatar", "coder"): 260,
@@ -64,6 +64,8 @@ SHOP_ITEM_COSTS: dict[tuple[str, str], int] = {
     ("badge", "explorer"): 320,
 }
 
+ALL_THEME_IDS: list[str] = ["diagonal", "blueprint", "matrix", "sunrise", "graphite"]
+
 QUEST_REWARDS: dict[str, int] = {
     "q1": 300,
     "q2": 500,
@@ -91,7 +93,7 @@ SUBJECT_TO_CLASS_ID = {
 }
 
 DEFAULT_OWNED_ITEMS: dict[str, list[str]] = {
-    "theme": ["diagonal"],
+    "theme": ["diagonal", "blueprint", "matrix", "sunrise", "graphite"],
     "avatar": ["initials"],
     "mentor": ["mino"],
     "chat": ["classic"],
@@ -111,6 +113,7 @@ def _parse_owned_items(raw: str | None) -> dict[str, list[str]]:
         for k, v in data.items():
             if isinstance(v, list):
                 merged[k] = list(dict.fromkeys([*merged.get(k, []), *[str(x) for x in v]]))
+        merged["theme"] = list(ALL_THEME_IDS)
         return merged
     except Exception:
         return {k: list(v) for k, v in DEFAULT_OWNED_ITEMS.items()}
@@ -118,12 +121,12 @@ def _parse_owned_items(raw: str | None) -> dict[str, list[str]]:
 
 def _parse_claimed_quests(raw: str | None) -> list[str]:
     if not raw or raw.strip() == "":
-        return ["q3"]
+        return []
     try:
         arr = json.loads(raw)
-        return [str(x) for x in arr] if isinstance(arr, list) else ["q3"]
+        return [str(x) for x in arr] if isinstance(arr, list) else []
     except Exception:
-        return ["q3"]
+        return []
 
 
 def _ensure_profile(conn: Any, user_id: str) -> Any:
@@ -134,7 +137,7 @@ def _ensure_profile(conn: Any, user_id: str) -> Any:
                    id, user_id, current_streak, longest_streak, exp_points, selected_title,
                    radar_algorithm, radar_debugging, radar_cleancode, radar_teamwork, radar_defense,
                    owned_items_json, claimed_quests_json
-               ) VALUES(?, ?, 1, 1, 500, 'CodeMind Learner', 75.0, 68.0, 78.0, 72.0, 80.0, ?, '["q3"]')""",
+               ) VALUES(?, ?, 1, 1, 500, 'CodeMind Learner', 75.0, 68.0, 78.0, 72.0, 80.0, ?, '[]')""",
             (uid(), user_id, json.dumps(DEFAULT_OWNED_ITEMS)),
         )
         prof = conn.execute("SELECT * FROM student_profiles WHERE user_id=?", (user_id,)).fetchone()
@@ -326,12 +329,39 @@ def _serialize_chapter_submission(row: Any) -> dict[str, Any]:
     }
 
 
+def _extract_date_key(raw: str | None) -> str | None:
+    """Chuẩn hóa timestamp ISO hoặc DD/MM/YYYY về YYYY-MM-DD (UTC+7)."""
+    if not raw:
+        return None
+    s = str(raw).strip()
+    m_dmy = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})", s)
+    if m_dmy:
+        dd, mm, yyyy = int(m_dmy.group(1)), int(m_dmy.group(2)), int(m_dmy.group(3))
+        if 1 <= mm <= 12 and 1 <= dd <= 31:
+            return f"{yyyy:04d}-{mm:02d}-{dd:02d}"
+    m_iso = re.match(r"^(\d{4}-\d{2}-\d{2})", s)
+    if m_iso:
+        return m_iso.group(1)
+    return None
+
+
 @router.get("/student/learning-overview")
 def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    """Lấy toàn bộ dữ liệu Nhánh 1 đồng bộ MySQL 8.0 cho Học viên: Profile/XP/Radar, Bài đã học, Video progress, Bài nộp chương & Courses."""
+    """Lấy toàn bộ dữ liệu đồng bộ MySQL 8.0 cho Học viên (Profile, XP, Quests, Achievements, Heatmap, Courses)."""
     user_id = user["id"]
+    student_name = (user.get("full_name") or user.get("display_name") or "Học viên").strip()
+    vn_today = datetime.now(timezone(timedelta(hours=7))).date()
+
     with db() as conn:
         prof = _ensure_profile(conn, user_id)
+        u_row = conn.execute("SELECT theme_preference, user_code, email FROM users WHERE id=?", (user_id,)).fetchone()
+        raw_pref = (u_row["theme_preference"] if u_row else None) or "light:diagonal"
+        bg_theme = "diagonal"
+        if ":" in raw_pref:
+            bg_cand = raw_pref.split(":", 1)[1].strip().lower()
+            if bg_cand in ALL_THEME_IDS:
+                bg_theme = bg_cand
+
         progress_rows = conn.execute(
             """SELECT subject_id, chapter_id, lesson_id, status, quiz_score, quiz_total, xp_earned, completed_at
                FROM student_lesson_progress WHERE user_id=? ORDER BY completed_at ASC""",
@@ -348,17 +378,224 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
             (user_id,),
         ).fetchall()
         course_rows = conn.execute("SELECT * FROM courses ORDER BY code ASC").fetchall()
+        defense_rows = conn.execute(
+            "SELECT id, project_id, status, final_defense_score, created_at FROM defense_sessions WHERE user_id=?",
+            (user_id,),
+        ).fetchall()
+        dual_rows = conn.execute(
+            "SELECT id, repo_url, commit_count, similarity_pct, updated_at FROM dual_submissions WHERE user_id=? ORDER BY updated_at DESC",
+            (user_id,),
+        ).fetchall()
+        proj_rows = conn.execute(
+            "SELECT id FROM engineering_projects WHERE leader_user_id=? OR team_json LIKE ?",
+            (user_id, f"%{student_name}%"),
+        ).fetchall()
+
+        user_project_ids = list(
+            dict.fromkeys(
+                [r["id"] for r in proj_rows]
+                + [r["project_id"] for r in defense_rows if r["project_id"]]
+            )
+        )
+        if user_project_ids:
+            placeholders = ",".join("?" for _ in user_project_ids)
+            commits_rows = conn.execute(
+                f"""SELECT id, project_id, sha, author_name, message, committed_at_label, created_at
+                    FROM git_commits
+                    WHERE LOWER(author_name) = LOWER(?) OR project_id IN ({placeholders})
+                    ORDER BY position_order DESC, created_at DESC""",
+                (student_name, *user_project_ids),
+            ).fetchall()
+            repo_row = conn.execute(
+                f"SELECT repo_url FROM git_repositories WHERE project_id IN ({placeholders}) AND repo_url != '' LIMIT 1",
+                tuple(user_project_ids),
+            ).fetchone()
+        else:
+            commits_rows = conn.execute(
+                """SELECT id, project_id, sha, author_name, message, committed_at_label, created_at
+                   FROM git_commits WHERE LOWER(author_name) = LOWER(?)
+                   ORDER BY position_order DESC, created_at DESC""",
+                (student_name,),
+            ).fetchall()
+            repo_row = None
+
+    commits_count = len(commits_rows)
+    if sub_rows:
+        clean_code_pct = round(
+            sum(float(r["anti_plagiarism_score"] or 90.0) for r in sub_rows) / len(sub_rows)
+        )
+        plagiarism_flags = sum(1 for r in sub_rows if float(r["anti_plagiarism_score"] or 100.0) < 70.0)
+    else:
+        clean_code_pct = round(float(prof["radar_cleancode"] or 85.0))
+        plagiarism_flags = 0
+
+    resolved_repo_url = (
+        (sub_rows[0]["repo_url"] if sub_rows and sub_rows[0]["repo_url"] else None)
+        or (dual_rows[0]["repo_url"] if dual_rows and dual_rows[0]["repo_url"] else None)
+        or (repo_row["repo_url"] if repo_row else None)
+        or ""
+    )
+    defense_completed_count = sum(
+        1 for d in defense_rows if (d["status"] or "") in ("completed", "flagged")
+    )
+
+    current_streak = int(prof["current_streak"] or 0)
+    claimed_list = _parse_claimed_quests(prof["claimed_quests_json"])
+    claimed_set = set(claimed_list)
+    good_subs_count = sum(1 for s in sub_rows if float(s["score"] or 0.0) >= 8.0)
+    done_lessons_count = len(progress_rows)
+
+    quests = [
+        {
+            "id": "q1",
+            "title": "Học tập liên tục (Chuỗi Streak)",
+            "desc": "Duy trì chuỗi học tập tối thiểu 3 ngày liên tiếp trong học kỳ.",
+            "xpReward": QUEST_REWARDS["q1"],
+            "status": "claimed" if "q1" in claimed_set else ("claimable" if current_streak >= 3 else "available"),
+            "progress": f"{min(current_streak, 3)}/3 ngày",
+        },
+        {
+            "id": "q2",
+            "title": "Thực hành Lab & Phản biện AI",
+            "desc": "Hoàn thành ít nhất 1 bài tập thực hành đạt từ 8.0/10 hoặc 1 phiên Phản biện AI.",
+            "xpReward": QUEST_REWARDS["q2"],
+            "status": "claimed"
+            if "q2" in claimed_set
+            else ("claimable" if (good_subs_count + defense_completed_count) >= 1 else "available"),
+            "progress": f"{good_subs_count + defense_completed_count}/1 bài",
+        },
+        {
+            "id": "q3",
+            "title": "GitHub Pioneer (Commit thực chiến)",
+            "desc": "Có ít nhất 1 commit hợp lệ gắn với đồ án kỹ nghệ trong kho lưu trữ Git.",
+            "xpReward": QUEST_REWARDS["q3"],
+            "status": "claimed" if "q3" in claimed_set else ("claimable" if commits_count >= 1 else "available"),
+            "progress": f"{commits_count} commits",
+        },
+        {
+            "id": "q4",
+            "title": "Học tập thần tốc (Chinh phục bài giảng)",
+            "desc": "Đọc lý thuyết và hoàn thành quiz của 5 bài học trên hệ thống.",
+            "xpReward": QUEST_REWARDS["q4"],
+            "status": "claimed" if "q4" in claimed_set else ("claimable" if done_lessons_count >= 5 else "available"),
+            "progress": f"{done_lessons_count}/5 bài học",
+        },
+    ]
+
+    achievements = [
+        {
+            "id": "ach-1",
+            "name": "Giữ nhịp học đều",
+            "desc": "Duy trì chuỗi học tập liên tiếp từ 3 ngày trở lên.",
+            "unlocked": current_streak >= 3,
+            "xpReward": 100,
+        },
+        {
+            "id": "ach-2",
+            "name": "Chinh phục bài giảng",
+            "desc": "Hoàn thành ít nhất 1 bài học và vượt qua câu hỏi kiểm tra.",
+            "unlocked": done_lessons_count >= 1,
+            "xpReward": 200,
+        },
+        {
+            "id": "ach-3",
+            "name": "Kỹ sư Code sạch",
+            "desc": "Duy trì chỉ số chính trực & chất lượng code từ 85% trở lên.",
+            "unlocked": clean_code_pct >= 85,
+            "xpReward": 300,
+        },
+        {
+            "id": "ach-4",
+            "name": "Đóng góp GitHub thực chiến",
+            "desc": "Ghi nhận commit thực tế trên kho mã nguồn đồ án.",
+            "unlocked": commits_count >= 1,
+            "xpReward": 200,
+        },
+        {
+            "id": "ach-5",
+            "name": "Bản lĩnh Phản biện AI",
+            "desc": "Hoàn tất tối thiểu 1 phiên bảo vệ đồ án cùng Hội đồng AI.",
+            "unlocked": defense_completed_count >= 1,
+            "xpReward": 500,
+        },
+        {
+            "id": "ach-6",
+            "name": "Thực hành đa học phần",
+            "desc": "Hoàn thành bài nộp thực hành hoặc tối thiểu 5 bài giảng chuyên ngành.",
+            "unlocked": len(sub_rows) >= 1 or done_lessons_count >= 5,
+            "xpReward": 250,
+        },
+    ]
+
+    # Build 16-week (112-day) real activity heatmap anchored to current week
+    end_of_week = vn_today + timedelta(days=(6 - vn_today.weekday()))
+    start_date = end_of_week - timedelta(days=111)
+    commit_by_date: dict[str, int] = {}
+    activity_by_date: dict[str, int] = {}
+
+    for c in commits_rows:
+        dk = _extract_date_key(c["committed_at_label"]) or _extract_date_key(c["created_at"])
+        if dk:
+            commit_by_date[dk] = commit_by_date.get(dk, 0) + 1
+            activity_by_date[dk] = activity_by_date.get(dk, 0) + 1
+    for pr in progress_rows:
+        dk = _extract_date_key(pr["completed_at"])
+        if dk:
+            activity_by_date[dk] = activity_by_date.get(dk, 0) + 1
+    for sr in sub_rows:
+        dk = _extract_date_key(sr["submitted_at"])
+        if dk:
+            activity_by_date[dk] = activity_by_date.get(dk, 0) + 1
+    for dr in defense_rows:
+        dk = _extract_date_key(dr["created_at"])
+        if dk:
+            activity_by_date[dk] = activity_by_date.get(dk, 0) + 1
+
+    heatmap_cells: list[dict[str, Any]] = []
+    total_heatmap_commits = 0
+    total_heatmap_activities = 0
+    for offset in range(112):
+        d_obj = start_date + timedelta(days=offset)
+        dk = d_obj.isoformat()
+        w_idx = offset // 7
+        d_idx = d_obj.weekday()
+        c_cnt = commit_by_date.get(dk, 0) if d_obj <= vn_today else 0
+        a_cnt = activity_by_date.get(dk, 0) if d_obj <= vn_today else 0
+        total_heatmap_commits += c_cnt
+        total_heatmap_activities += a_cnt
+        if a_cnt >= 6:
+            lvl = 4
+        elif a_cnt >= 4:
+            lvl = 3
+        elif a_cnt >= 2:
+            lvl = 2
+        elif a_cnt >= 1:
+            lvl = 1
+        else:
+            lvl = 0
+        heatmap_cells.append(
+            {
+                "date": dk,
+                "weekIndex": w_idx,
+                "dayIndex": d_idx,
+                "commits": c_cnt,
+                "activities": a_cnt,
+                "level": lvl,
+            }
+        )
 
     return {
         "user": {
             "id": user["id"],
-            "name": user.get("full_name") or user.get("display_name") or "Học viên",
-            "email": user.get("email"),
-            "code": user.get("user_code") or "2210842",
+            "name": student_name,
+            "email": (u_row["email"] if u_row else None) or user.get("email"),
+            "code": (u_row["user_code"] if u_row else None) or user.get("user_code") or "—",
+            "role": user.get("role") or "student",
+            "background_theme": bg_theme,
         },
         "profile": {
             "exp_points": int(prof["exp_points"] or 0),
-            "current_streak": int(prof["current_streak"] or 0),
+            "current_streak": current_streak,
             "longest_streak": int(prof["longest_streak"] or 0),
             "selected_title": prof["selected_title"] or "Clean Code Builder",
             "radar": {
@@ -369,7 +606,23 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
                 "defense": float(prof["radar_defense"] or 90.0),
             },
             "owned_items": _parse_owned_items(prof["owned_items_json"]),
-            "claimed_quests": _parse_claimed_quests(prof["claimed_quests_json"]),
+            "claimed_quests": claimed_list,
+        },
+        "quests": quests,
+        "achievements": achievements,
+        "github_summary": {
+            "repo_url": resolved_repo_url,
+            "commits_count": commits_count,
+            "clean_code_pct": clean_code_pct,
+            "plagiarism_flags": plagiarism_flags,
+            "enrolled_courses_count": len(course_rows),
+            "defense_completed_count": defense_completed_count,
+        },
+        "activity_heatmap": {
+            "weeks": 16,
+            "total_commits": total_heatmap_commits,
+            "total_activities": total_heatmap_activities,
+            "cells": heatmap_cells,
         },
         "completed_lessons": [dict(r) for r in progress_rows],
         "video_progress": [
@@ -926,10 +1179,13 @@ def purchase_xp_shop_item(
     payload: XpShopPurchaseIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Mua hoặc kích hoạt vật phẩm trong XP Shop và lưu vào MySQL 8.0 (giá kiểm chứng server-side)."""
+    """Mua hoặc kích hoạt vật phẩm trong XP Shop và lưu vào MySQL 8.0 (Giao diện nền luôn 0 XP)."""
     user_id = user["id"]
+    is_free_theme = payload.category == "theme"
     item_key = (payload.category, payload.item_id)
-    if item_key in SHOP_ITEM_COSTS:
+    if is_free_theme:
+        actual_cost = 0
+    elif item_key in SHOP_ITEM_COSTS:
         actual_cost = SHOP_ITEM_COSTS[item_key]
     else:
         actual_cost = max(200, min(payload.cost, 20000))
@@ -940,7 +1196,17 @@ def purchase_xp_shop_item(
         cat_list = owned.setdefault(payload.category, [])
         xp = int(prof["exp_points"] or 0)
 
-        if payload.item_id not in cat_list:
+        if is_free_theme:
+            owned["theme"] = list(dict.fromkeys([*ALL_THEME_IDS, payload.item_id]))
+            if payload.item_id in ALL_THEME_IDS:
+                u_row = conn.execute("SELECT theme_preference FROM users WHERE id=?", (user_id,)).fetchone()
+                raw_pref = (u_row["theme_preference"] if u_row else "") or ""
+                mode_part = raw_pref.split(":", 1)[0] if ":" in raw_pref and raw_pref.split(":", 1)[0] in ("light", "dark") else "light"
+                conn.execute(
+                    "UPDATE users SET theme_preference=?, updated_at=? WHERE id=?",
+                    (f"{mode_part}:{payload.item_id}", now_utc(), user_id),
+                )
+        elif payload.item_id not in cat_list:
             if xp < actual_cost:
                 raise HTTPException(status_code=400, detail="Không đủ XP để mở khóa vật phẩm này")
             xp -= actual_cost

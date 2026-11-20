@@ -70,6 +70,12 @@ class SecuritySettingsPatchIn(BaseModel):
     two_factor_enabled: bool
 
 
+class UserPreferencesPatchIn(BaseModel):
+    """Cập nhật giao diện nền (miễn phí cho cả 3 role) và chế độ sáng/tối."""
+    background_theme: str | None = Field(default=None, max_length=40)
+    color_mode: str | None = Field(default=None, max_length=20)
+
+
 class DeviceTrustPatchIn(BaseModel):
     """Đánh dấu thiết bị là tin cậy hoặc đáng ngờ."""
     trusted: bool

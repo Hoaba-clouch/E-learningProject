@@ -161,11 +161,11 @@ button:disabled {
   --theme-primary-rgb: 16, 185, 129;
   --theme-accent: #22c55e;
   --theme-accent-rgb: 34, 197, 94;
-  background-color: #07130d;
+  background-color: #ecfdf5;
   background-image:
-    linear-gradient(to right, rgba(16, 185, 129, 0.12) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(16, 185, 129, 0.1) 1px, transparent 1px),
-    radial-gradient(circle 700px at 80% 18%, rgba(16, 185, 129, 0.2), transparent 48%);
+    linear-gradient(to right, rgba(16, 185, 129, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 185, 129, 0.11) 1px, transparent 1px),
+    radial-gradient(circle 700px at 80% 18%, rgba(16, 185, 129, 0.16), transparent 48%);
   background-size: 36px 36px, 36px 36px, 100% 100%;
 }
 
@@ -182,40 +182,14 @@ button:disabled {
 }
 
 .bg-theme-graphite.pc-app-bg {
-  --theme-primary: #818cf8;
-  --theme-primary-rgb: 129, 140, 248;
-  --theme-accent: #94a3b8;
-  --theme-accent-rgb: 148, 163, 184;
-  background-color: #111827;
+  --theme-primary: #6366f1;
+  --theme-primary-rgb: 99, 102, 241;
+  --theme-accent: #64748b;
+  --theme-accent-rgb: 100, 116, 139;
+  background-color: #f1f5f9;
   background-image:
-    repeating-linear-gradient(22.5deg, transparent, transparent 2px, rgba(148, 163, 184, 0.13) 2px, rgba(148, 163, 184, 0.13) 3px, transparent 3px, transparent 10px),
-    radial-gradient(circle 720px at 84% 12%, rgba(99, 102, 241, 0.18), transparent 48%);
-}
-
-/* Ensure text contrast for dark backgrounds (Matrix & Graphite) */
-.bg-theme-matrix.pc-app-bg header h1,
-.bg-theme-matrix.pc-app-bg header p,
-.bg-theme-matrix.pc-app-bg header div,
-.bg-theme-matrix.pc-app-bg span.text-slate-500,
-.bg-theme-matrix.pc-app-bg p.text-slate-500,
-.bg-theme-matrix.pc-app-bg div.text-slate-500,
-.bg-theme-graphite.pc-app-bg header h1,
-.bg-theme-graphite.pc-app-bg header p,
-.bg-theme-graphite.pc-app-bg header div,
-.bg-theme-graphite.pc-app-bg span.text-slate-500,
-.bg-theme-graphite.pc-app-bg p.text-slate-500,
-.bg-theme-graphite.pc-app-bg div.text-slate-500 {
-  color: #f8fafc !important;
-}
-
-.bg-theme-matrix.pc-app-bg header h1,
-.bg-theme-graphite.pc-app-bg header h1 {
-  color: #ffffff !important;
-}
-
-.bg-theme-matrix.pc-app-bg header p,
-.bg-theme-graphite.pc-app-bg header p {
-  color: #94a3b8 !important;
+    repeating-linear-gradient(22.5deg, transparent, transparent 2px, rgba(100, 116, 139, 0.1) 2px, rgba(100, 116, 139, 0.1) 3px, transparent 3px, transparent 10px),
+    radial-gradient(circle 720px at 84% 12%, rgba(99, 102, 241, 0.12), transparent 48%);
 }
 
 

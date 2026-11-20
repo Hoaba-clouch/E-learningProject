@@ -2215,6 +2215,8 @@ export interface StudentLearningOverview {
     name: string;
     email: string;
     code: string;
+    role?: string;
+    background_theme?: string;
   };
   profile: {
     exp_points: number;
@@ -2230,6 +2232,42 @@ export interface StudentLearningOverview {
     };
     owned_items: Record<string, string[]>;
     claimed_quests: string[];
+  };
+  quests?: {
+    id: string;
+    title: string;
+    desc: string;
+    xpReward: number;
+    status: "available" | "claimable" | "claimed";
+    progress: string;
+  }[];
+  achievements?: {
+    id: string;
+    name: string;
+    desc: string;
+    unlocked: boolean;
+    xpReward: number;
+  }[];
+  github_summary?: {
+    repo_url: string;
+    commits_count: number;
+    clean_code_pct: number;
+    plagiarism_flags: number;
+    enrolled_courses_count: number;
+    defense_completed_count: number;
+  };
+  activity_heatmap?: {
+    weeks: number;
+    total_commits: number;
+    total_activities: number;
+    cells: {
+      date: string;
+      weekIndex: number;
+      dayIndex: number;
+      commits: number;
+      activities: number;
+      level: 0 | 1 | 2 | 3 | 4;
+    }[];
   };
   completed_lessons: StudentCompletedLessonDto[];
   video_progress?: StudentVideoProgressDto[];
@@ -4107,6 +4145,130 @@ export async function gradeInstructorChapterSubmission(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "Không thể lưu điểm chấm bài tập chương");
+  }
+  return await res.json();
+}
+
+export interface NavigationCounts {
+  users: number;
+  courses: number;
+  ai_services: number;
+  ai_services_total: number;
+  projects: number;
+  team_members: number;
+  kanban_tasks: number;
+  kanban_open_tasks: number;
+  schedules: number;
+  pending_dual_reviews: number;
+  completed_lessons: number;
+}
+
+export async function fetchNavigationCountsApi(role?: SessionRole): Promise<NavigationCounts | null> {
+  try {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/navigation/counts`, {}, role);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateUserPreferencesApi(
+  payload: { background_theme?: string; color_mode?: string },
+  role?: SessionRole
+): Promise<{ background_theme: string; color_mode: string; theme_preference: string } | null> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/auth/preferences`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      role
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export interface TeamMemberProjectRef {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  course: string;
+  dueText: string;
+}
+
+export interface TeamMemberTaskRef {
+  id: string;
+  code: string;
+  title: string;
+  projectId: string;
+  projectName: string;
+  column: string;
+  priority: string;
+  points: number;
+  estimateHours: number;
+  dueDate: string;
+}
+
+export interface TeamMemberRecord {
+  id: string;
+  name: string;
+  email: string;
+  code: string;
+  userRole: "student" | "instructor" | "admin";
+  role: string;
+  initials: string;
+  hue: number;
+  status: "in" | "remote" | "off";
+  isAdvisor: boolean;
+  isLead: boolean;
+  projects: TeamMemberProjectRef[];
+  openTasks: TeamMemberTaskRef[];
+  doneTasksCount: number;
+  commitsCount: number;
+  totalEstimateHours: number;
+  lastActive: string;
+}
+
+export interface TeamWorkspaceBundle {
+  members: TeamMemberRecord[];
+  total: number;
+  inLabCount: number;
+}
+
+export async function fetchTeamMembersApi(role?: SessionRole): Promise<TeamWorkspaceBundle | null> {
+  try {
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/team/members`, {}, role);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateTeamMemberStatusApi(
+  memberId: string,
+  status: "in" | "remote" | "off",
+  role?: SessionRole
+): Promise<{ member_id: string; status: "in" | "remote" | "off" }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/team/members/${encodeURIComponent(memberId)}/status`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    },
+    role
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể cập nhật trạng thái thành viên.");
   }
   return await res.json();
 }

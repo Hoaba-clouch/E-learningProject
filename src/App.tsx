@@ -21,7 +21,7 @@ import SecurityDevicesScreen from "./screens/SecurityDevicesScreen";
 import MarloProjectDetailScreen from "./screens/MarloProjectDetailScreen";
 import MarloTeamScreen from "./screens/MarloTeamScreen";
 import MarloPersonDetailScreen from "./screens/MarloPersonDetailScreen";
-import { logoutUser, setTabSessionRole } from "./api";
+import { fetchCurrentUser, logoutUser, setTabSessionRole, updateUserPreferencesApi } from "./api";
 
 export type Screen =
   | "login"
@@ -253,6 +253,26 @@ export default function App() {
   }, [backgroundTheme]);
 
   useEffect(() => {
+    if (screen === "login" || screen === "intro") return;
+    let active = true;
+    fetchCurrentUser(role).then((u) => {
+      if (!active || !u?.background_theme) return;
+      const valid = ["diagonal", "blueprint", "matrix", "sunrise", "graphite"];
+      if (valid.includes(u.background_theme)) {
+        setBackgroundTheme(u.background_theme as BackgroundTheme);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [role, screen]);
+
+  const handleApplyBackgroundTheme = (nextBg: BackgroundTheme) => {
+    setBackgroundTheme(nextBg);
+    void updateUserPreferencesApi({ background_theme: nextBg, color_mode: theme }, role);
+  };
+
+  useEffect(() => {
     window.localStorage.setItem("code-mind-avatar", avatarStyle);
   }, [avatarStyle]);
 
@@ -418,6 +438,8 @@ export default function App() {
           <StudentProfile
             avatarStyle={avatarStyle}
             badgeFrame={badgeFrame}
+            backgroundTheme={backgroundTheme}
+            onApplyBackgroundTheme={handleApplyBackgroundTheme}
             onApplyAvatar={setAvatarStyle}
             onApplyBadge={setBadgeFrame}
             onOpenSecurity={() => setScreen("security")}
@@ -446,7 +468,7 @@ export default function App() {
           activeChatSkin={chatSkin}
           activeMapSkin={skillMapSkin}
           activeBadge={badgeFrame}
-          onApplyTheme={setBackgroundTheme}
+          onApplyTheme={handleApplyBackgroundTheme}
           onApplyAvatar={setAvatarStyle}
           onApplyMentor={setMentorMascot}
           onApplyChatSkin={setChatSkin}
@@ -621,6 +643,8 @@ export default function App() {
           screen={screen}
           theme={theme}
           onToggleTheme={toggleTheme}
+          backgroundTheme={backgroundTheme}
+          onApplyBackgroundTheme={handleApplyBackgroundTheme}
           role={role}
           avatarStyle={avatarStyle}
           badgeFrame={badgeFrame}

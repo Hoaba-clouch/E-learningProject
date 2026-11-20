@@ -28,6 +28,7 @@ import {
 import React, { useEffect, useLayoutEffect, useRef, useState, startTransition } from "react";
 import gsap from "gsap";
 import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
+import { fetchNavigationCountsApi, type NavigationCounts } from "../api";
 import MarloFocusTimer from "./MarloFocusTimer";
 import MarloThemeSwitch from "./MarloThemeSwitch";
 import { animateMarloPill } from "../utils/marloAnimations";
@@ -64,14 +65,14 @@ const navGroups: NavGroup[] = [
     label: "Management",
     items: [
       { id: "admin", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["admin"] },
-      { id: "admin-users", label: "Users & RBAC", icon: <Users size={18} strokeWidth={1.85} />, roles: ["admin"], badge: "9" },
-      { id: "admin-classes", label: "Classes", icon: <GraduationCap size={18} strokeWidth={1.85} />, roles: ["admin"], badge: "6" },
+      { id: "admin-users", label: "Users & RBAC", icon: <Users size={18} strokeWidth={1.85} />, roles: ["admin"] },
+      { id: "admin-classes", label: "Classes", icon: <GraduationCap size={18} strokeWidth={1.85} />, roles: ["admin"] },
     ],
   },
   {
     label: "System",
     items: [
-      { id: "admin-ai", label: "AI & Sandbox", icon: <Bot size={18} strokeWidth={1.85} />, roles: ["admin"], badge: "4" },
+      { id: "admin-ai", label: "AI & Sandbox", icon: <Bot size={18} strokeWidth={1.85} />, roles: ["admin"] },
       { id: "admin-sessions", label: "Security & JWT", icon: <ServerCog size={18} strokeWidth={1.85} />, roles: ["admin"] },
       { id: "admin-audit", label: "Audit Logs", icon: <History size={18} strokeWidth={1.85} />, roles: ["admin"] },
     ],
@@ -83,14 +84,14 @@ const navGroups: NavGroup[] = [
     items: [
       { id: "student-dashboard", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["student"] },
       { id: "instructor", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["instructor"] },
-      { id: "workspace", label: "Tasks", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["student"], badge: "7" },
-      { id: "instructor-courses", label: "Courses", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["instructor"], badge: "16" },
-      { id: "instructor-grading", label: "Grading & AI", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["instructor"], badgeDot: true },
+      { id: "workspace", label: "Tasks", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["student"] },
+      { id: "instructor-courses", label: "Courses", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["instructor"] },
+      { id: "instructor-grading", label: "Grading & AI", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["instructor"] },
       { id: "instructor-students", label: "Students", icon: <Users size={18} strokeWidth={1.85} />, roles: ["instructor"] },
       { id: "projects", label: "Projects", icon: <FolderKanban size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
-      { id: "team", label: "Team", icon: <Users size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"], badge: "8" },
-      { id: "kanban", label: "Kanban", icon: <Columns3 size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"], badge: "9" },
-      { id: "schedule", label: "Calendar", icon: <CalendarDays size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"], badge: "4" },
+      { id: "team", label: "Team", icon: <Users size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
+      { id: "kanban", label: "Kanban", icon: <Columns3 size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
+      { id: "schedule", label: "Calendar", icon: <CalendarDays size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
     ],
   },
   {
@@ -123,10 +124,61 @@ export default function Sidebar({
   onLogout,
   onOpenCommandPalette,
 }: Props) {
+  const [navCounts, setNavCounts] = useState<NavigationCounts | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadCounts = () => {
+      fetchNavigationCountsApi(role).then((c) => {
+        if (active && c) setNavCounts(c);
+      });
+    };
+    loadCounts();
+    window.addEventListener("codemind-courses-updated", loadCounts);
+    window.addEventListener("codemind-instructor-updated", loadCounts);
+    window.addEventListener("codemind-xp-updated", loadCounts);
+    window.addEventListener("codemind-nav-updated", loadCounts);
+    return () => {
+      active = false;
+      window.removeEventListener("codemind-courses-updated", loadCounts);
+      window.removeEventListener("codemind-instructor-updated", loadCounts);
+      window.removeEventListener("codemind-xp-updated", loadCounts);
+      window.removeEventListener("codemind-nav-updated", loadCounts);
+    };
+  }, [role]);
+
+  const resolveBadge = (item: NavItem): { badge?: string; badgeDot?: boolean } => {
+    if (item.badge) return { badge: item.badge, badgeDot: item.badgeDot };
+    if (!navCounts) return {};
+    switch (item.id) {
+      case "admin-users":
+        return navCounts.users > 0 ? { badge: String(navCounts.users) } : {};
+      case "admin-classes":
+      case "instructor-courses":
+        return navCounts.courses > 0 ? { badge: String(navCounts.courses) } : {};
+      case "admin-ai":
+        return navCounts.ai_services > 0 ? { badge: String(navCounts.ai_services) } : {};
+      case "instructor-grading":
+        return { badgeDot: navCounts.pending_dual_reviews > 0 };
+      case "workspace":
+        return navCounts.courses > 0 ? { badge: String(navCounts.courses) } : {};
+      case "team":
+        return navCounts.team_members > 0 ? { badge: String(navCounts.team_members) } : {};
+      case "kanban":
+        return navCounts.kanban_open_tasks > 0 ? { badge: String(navCounts.kanban_open_tasks) } : {};
+      case "schedule":
+        return navCounts.schedules > 0 ? { badge: String(navCounts.schedules) } : {};
+      default:
+        return {};
+    }
+  };
+
   const visibleGroups = navGroups
     .map((g) => ({
       ...g,
-      items: g.items.filter((item) => item.roles.includes(role)),
+      items: g.items
+        .filter((item) => item.roles.includes(role))
+        .map((item) => ({ ...item, ...resolveBadge(item) })),
     }))
     .filter((g) => g.items.length > 0);
   const visible = visibleGroups.flatMap((g) => g.items);

@@ -6525,6 +6525,8 @@ export default function KanbanBoard({
 
         <KanbanActivityStreamView
 
+          projectId={currentProjectId}
+
           tasks={filteredTasks}
 
           teamMembers={teamMembers}

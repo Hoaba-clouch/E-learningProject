@@ -148,13 +148,17 @@ def get_student_profile(user: dict[str, Any] = Depends(current_user)) -> dict[st
         notes = conn.execute("SELECT * FROM student_notes WHERE user_id=? ORDER BY created_at DESC LIMIT 20", (user["id"],)).fetchall()
     prof_dict = row_dict(profile) or {"current_streak": 0, "longest_streak": 0, "exp_points": 0, "selected_title": "Novice Developer"}
     try:
-        prof_dict["owned_items"] = json.loads(prof_dict.get("owned_items_json") or "{}")
+        owned_raw = json.loads(prof_dict.get("owned_items_json") or "{}")
     except Exception:
-        prof_dict["owned_items"] = {}
+        owned_raw = {}
+    if not isinstance(owned_raw, dict):
+        owned_raw = {}
+    owned_raw["theme"] = ["diagonal", "blueprint", "matrix", "sunrise", "graphite"]
+    prof_dict["owned_items"] = owned_raw
     try:
-        prof_dict["claimed_quests"] = json.loads(prof_dict.get("claimed_quests_json") or '["q3"]')
+        prof_dict["claimed_quests"] = json.loads(prof_dict.get("claimed_quests_json") or "[]")
     except Exception:
-        prof_dict["claimed_quests"] = ["q3"]
+        prof_dict["claimed_quests"] = []
     return {
         "user": {
             "id": user["id"],

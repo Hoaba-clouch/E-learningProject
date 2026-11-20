@@ -49,10 +49,10 @@ type ShopItem = {
 
 const shopItems: ShopItem[] = [
   { id: "diagonal", category: "theme", name: "Diagonal Light", desc: "Nền sáng lưới chéo nhẹ, mặc định cho dashboard.", cost: 0, tag: "Default", preview: "shop-preview-diagonal", levelReq: 1 },
-  { id: "blueprint", category: "theme", name: "Blueprint Lab", desc: "Bản vẽ kỹ thuật cho mindmap và code lab.", cost: 420, tag: "Study", preview: "shop-preview-blueprint", levelReq: 2 },
-  { id: "matrix", category: "theme", name: "Matrix Focus", desc: "Tông xanh tối cho phiên học tập trung.", cost: 640, tag: "Dark", preview: "shop-preview-matrix", levelReq: 3 },
-  { id: "sunrise", category: "theme", name: "Sunrise Notes", desc: "Tông ấm cho đọc lý thuyết và ghi chú.", cost: 520, tag: "Warm", preview: "shop-preview-sunrise", levelReq: 2 },
-  { id: "graphite", category: "theme", name: "Graphite Pro", desc: "Crosshatch tối, mạnh và kỹ thuật.", cost: 780, tag: "Pro", preview: "shop-preview-graphite", levelReq: 4 },
+  { id: "blueprint", category: "theme", name: "Blueprint Lab", desc: "Bản vẽ kỹ thuật cho mindmap và code lab.", cost: 0, tag: "Study", preview: "shop-preview-blueprint", levelReq: 1 },
+  { id: "matrix", category: "theme", name: "Matrix Focus", desc: "Lưới xanh kỹ thuật cho phiên học tập trung.", cost: 0, tag: "Focus", preview: "shop-preview-matrix", levelReq: 1 },
+  { id: "sunrise", category: "theme", name: "Sunrise Notes", desc: "Tông ấm dịu nhẹ cho đọc lý thuyết và ghi chú.", cost: 0, tag: "Warm", preview: "shop-preview-sunrise", levelReq: 1 },
+  { id: "graphite", category: "theme", name: "Graphite Pro", desc: "Đường chéo tinh gọn, tối giản chuẩn kỹ thuật.", cost: 0, tag: "Pro", preview: "shop-preview-graphite", levelReq: 1 },
 
   { id: "initials", category: "avatar", name: "Initial A", desc: "Avatar chữ cái gọn gàng.", cost: 0, tag: "Basic", preview: "shop-avatar-initials", levelReq: 1 },
   { id: "pixel", category: "avatar", name: "Pixel Learner", desc: "Avatar pixel cho cảm giác game.", cost: 220, tag: "Pixel", preview: "shop-avatar-pixel", levelReq: 2 },
@@ -119,14 +119,13 @@ export default function XPShop({
   onApplyMapSkin,
   onApplyBadge,
 }: Props) {
-  const [xp, setXp] = useState(3240);
+  const [xp, setXp] = useState(0);
   const shopRef = useRef<HTMLDivElement>(null);
-
 
   const [category, setCategory] = useState<ShopCategory>("theme");
   const [subTab, setSubTab] = useState<"store" | "quests">("store");
   const [owned, setOwned] = useState<Record<ShopCategory, string[]>>({
-    theme: ["diagonal"],
+    theme: ["diagonal", "blueprint", "matrix", "sunrise", "graphite"],
     avatar: ["initials"],
     mentor: ["mino"],
     chat: ["classic"],
@@ -134,12 +133,7 @@ export default function XPShop({
     badge: ["streak"],
   });
 
-  const [quests, setQuests] = useState<Quest[]>([
-    { id: "q1", title: "🔥 Học tập liên tục (Daily Coding Streak)", desc: "Duy trì streak 14 ngày làm bài học hoặc quiz.", xpReward: 300, status: "claimable", progress: "14/14" },
-    { id: "q2", title: "🧠 Master Mindmap (Sơ đồ tri thức)", desc: "Hoàn thành sơ đồ tư duy OOP chương 1 đạt độ chính xác >90%.", xpReward: 500, status: "claimable", progress: "94% khớp" },
-    { id: "q3", title: "💻 GitHub Pioneer (Commit đầu tay)", desc: "Thực hiện thành công commit bài tập lớn OOP lên GitHub.", xpReward: 400, status: "claimed", progress: "Đã hoàn thành" },
-    { id: "q4", title: "⚡ Học tập thần tốc (Fast Learner)", desc: "Đọc lý thuyết và hoàn thành quiz của 5 bài học trong tuần.", xpReward: 200, status: "available", progress: "3/5 bài học" }
-  ]);
+  const [quests, setQuests] = useState<Quest[]>([]);
 
   const activeByCategory: Record<ShopCategory, string> = {
     theme: activeTheme,
@@ -161,15 +155,11 @@ export default function XPShop({
         setOwned((prev) => ({
           ...prev,
           ...(data.profile.owned_items as Partial<Record<ShopCategory, string[]>>),
+          theme: ["diagonal", "blueprint", "matrix", "sunrise", "graphite"],
         }));
       }
-      if (Array.isArray(data.profile.claimed_quests)) {
-        const claimedSet = new Set(data.profile.claimed_quests);
-        setQuests((prev) =>
-          prev.map((q) =>
-            claimedSet.has(q.id) ? { ...q, status: "claimed", progress: "Đã nhận" } : q
-          )
-        );
+      if (Array.isArray(data.quests) && data.quests.length > 0) {
+        setQuests(data.quests);
       }
     });
     return () => {
@@ -178,6 +168,11 @@ export default function XPShop({
   }, []);
 
   const apply = async (item: ShopItem) => {
+    if (item.category === "theme") {
+      onApplyTheme(item.id as BackgroundTheme);
+      return;
+    }
+
     if (!owned[item.category].includes(item.id)) {
       if (xp < item.cost) return;
       const res = await purchaseXpShopItem({
@@ -195,13 +190,14 @@ export default function XPShop({
         setOwned((prev) => ({
           ...prev,
           ...(res.owned_items as Partial<Record<ShopCategory, string[]>>),
+          theme: ["diagonal", "blueprint", "matrix", "sunrise", "graphite"],
         }));
       } else {
         setOwned((value) => ({ ...value, [item.category]: [...value[item.category], item.id] }));
       }
+      window.dispatchEvent(new Event("codemind-xp-updated"));
     }
 
-    if (item.category === "theme") onApplyTheme(item.id as BackgroundTheme);
     if (item.category === "avatar") onApplyAvatar(item.id as AvatarStyle);
     if (item.category === "mentor") onApplyMentor(item.id as MentorMascot);
     if (item.category === "chat") onApplyChatSkin(item.id as ChatSkin);
@@ -220,6 +216,7 @@ export default function XPShop({
     setQuests((prev) =>
       prev.map((q) => (q.id === questId ? { ...q, status: "claimed", progress: "Đã nhận" } : q))
     );
+    window.dispatchEvent(new Event("codemind-xp-updated"));
   };
 
   const activeItems = shopItems.filter((item) => item.category === category);
@@ -245,7 +242,7 @@ export default function XPShop({
   return (
     <div ref={shopRef} className="min-h-full p-5 space-y-6">
       {/* HEADER HERO AREA */}
-      <header className="rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 p-5 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <header className="rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-900 to-purple-900 p-5 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         {/* Glow vector backgrounds */}
         <div className="absolute right-0 top-0 w-80 h-80 bg-blue-500/20 rounded-full filter blur-3xl pointer-events-none -mr-20 -mt-20" />
         <div className="absolute left-1/3 bottom-0 w-60 h-60 bg-purple-500/10 rounded-full filter blur-3xl pointer-events-none -ml-20 -mb-20" />
@@ -291,7 +288,7 @@ export default function XPShop({
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
             subTab === "store"
               ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
-              : "text-slate-500 hover:text-slate-850 dark:hover:text-slate-200"
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           }`}
         >
           <ShoppingBag size={14} />
@@ -302,7 +299,7 @@ export default function XPShop({
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
             subTab === "quests"
               ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
-              : "text-slate-500 hover:text-slate-855 dark:hover:text-slate-200"
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           }`}
         >
           <Zap size={14} />
@@ -343,7 +340,7 @@ export default function XPShop({
                 <div className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-0.5">{equipped?.name}</div>
               </div>
             </div>
-            <span className="rounded-full bg-emerald-50 dark:bg-emerald-955/30 border border-emerald-100 dark:border-emerald-900/30 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-450">
+            <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/40 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">
               Đang áp dụng
             </span>
           </div>
@@ -351,10 +348,11 @@ export default function XPShop({
           {/* GRID OF STORE ITEMS */}
           <div key={`store-grid-${category}`} className="animate-screen-enter grid grid-cols-1 sm:grid-cols-2 gap-4">
             {activeItems.map((item, itemIdx) => {
-              const isOwned = owned[item.category].includes(item.id);
+              const isFreeTheme = item.category === "theme";
+              const isOwned = isFreeTheme || owned[item.category].includes(item.id);
               const isActive = activeByCategory[item.category] === item.id;
-              const isLevelLocked = userLevel < (item.levelReq || 1);
-              const canAfford = xp >= item.cost;
+              const isLevelLocked = !isFreeTheme && userLevel < (item.levelReq || 1);
+              const canAfford = isFreeTheme || xp >= item.cost;
 
               return (
                 <div
@@ -399,18 +397,24 @@ export default function XPShop({
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                      <div className="flex items-center gap-1.5 text-yellow-600 dark:text-yellow-400">
-                        <Star size={14} className="fill-current" />
-                        <span className="font-bold font-mono text-sm">{item.cost}</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider">XP</span>
-                      </div>
+                      {isFreeTheme ? (
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+                          Miễn phí · Chọn tự do
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-yellow-600 dark:text-yellow-400">
+                          <Star size={14} className="fill-current" />
+                          <span className="font-bold font-mono text-sm">{item.cost}</span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider">XP</span>
+                        </div>
+                      )}
 
                       {isLevelLocked ? (
                         <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
                           Đã khóa
                         </span>
                       ) : isActive ? (
-                        <span className="flex items-center gap-1 rounded-lg bg-emerald-50 dark:bg-emerald-955/20 border border-emerald-100 dark:border-emerald-900/30 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-450">
+                        <span className="flex items-center gap-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
                           <Check size={13} />
                           Đang dùng
                         </span>
@@ -426,8 +430,8 @@ export default function XPShop({
                               : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed"
                           }`}
                         >
-                          <ShoppingBag size={13} />
-                          {isOwned ? "Áp dụng" : "Mua & dùng"}
+                          {isFreeTheme ? <Palette size={13} /> : <ShoppingBag size={13} />}
+                          {isFreeTheme ? "Chọn giao diện" : isOwned ? "Áp dụng" : "Mua & dùng"}
                         </button>
                       )}
                     </div>
@@ -447,19 +451,24 @@ export default function XPShop({
               <TrendingUp size={16} className="text-blue-500" />
               Nhiệm vụ tuần này
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-450 mt-1 leading-5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-5">
               Tích cực tham gia vẽ mindmap và nộp bài lab để tích lũy XP. Điểm XP giúp nâng cấp độ học viên và mua skin hiếm.
             </p>
           </div>
 
           <div className="space-y-3">
-            {quests.map((quest, qIdx) => (
+            {quests.length === 0 ? (
+              <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center text-xs text-slate-500 dark:text-slate-400">
+                Đang đồng bộ danh sách nhiệm vụ từ MySQL...
+              </div>
+            ) : (
+              quests.map((quest, qIdx) => (
               <div
                 key={quest.id}
                 style={{ animationDelay: `${150 + qIdx * 40}ms` }}
                 className={`marlo-row rounded-2xl border p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all ${
                   quest.status === "claimable"
-                    ? "border-blue-300 dark:border-blue-900 bg-blue-50/10 dark:bg-blue-955/10 scale-[1.01]"
+                    ? "border-blue-300 dark:border-blue-900 bg-blue-50/10 dark:bg-blue-950/20 scale-[1.01]"
                     : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                 }`}
               >
@@ -483,7 +492,7 @@ export default function XPShop({
                   </div>
 
                   {quest.status === "claimed" ? (
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-505 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-lg">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-lg">
                       Đã nhận
                     </span>
                   ) : quest.status === "claimable" ? (
@@ -495,13 +504,14 @@ export default function XPShop({
                       Nhận thưởng
                     </button>
                   ) : (
-                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border border-slate-202 dark:border-slate-800 px-3 py-2 rounded-lg">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-3 py-2 rounded-lg">
                       Đang thực hiện
                     </span>
                   )}
                 </div>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </div>
       )}

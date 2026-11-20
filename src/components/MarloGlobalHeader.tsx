@@ -18,7 +18,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import type { AvatarStyle, BadgeFrame, Role, Screen, Theme } from "../App";
+import type { AvatarStyle, BackgroundTheme, BadgeFrame, Role, Screen, Theme } from "../App";
 import { HeaderProfileDropdown } from "./HeaderProfileDropdown";
 import MarloThemeSwitch from "./MarloThemeSwitch";
 import {
@@ -28,6 +28,7 @@ import {
   markAllNotificationsReadApi,
   fetchInstructorCourses,
   fetchInstructorChapterSubmissions,
+  fetchNavigationCountsApi,
   type AppNotification,
 } from "../api";
 
@@ -35,6 +36,8 @@ export interface MarloGlobalHeaderProps {
   screen: Screen;
   theme: Theme;
   onToggleTheme: (trigger?: any) => void;
+  backgroundTheme?: BackgroundTheme;
+  onApplyBackgroundTheme?: (bg: BackgroundTheme) => void;
   role: Role;
   avatarStyle?: AvatarStyle;
   badgeFrame?: BadgeFrame;
@@ -47,6 +50,8 @@ export default function MarloGlobalHeader({
   screen,
   theme,
   onToggleTheme,
+  backgroundTheme = "diagonal",
+  onApplyBackgroundTheme,
   role = "student",
   avatarStyle = "initials",
   badgeFrame = "streak",
@@ -59,8 +64,10 @@ export default function MarloGlobalHeader({
   const [unreadCount, setUnreadCount] = useState(0);
   const [streakDays, setStreakDays] = useState<number>(0);
   const [xpPoints, setXpPoints] = useState<number>(0);
-  const [instructorCoursesCount, setInstructorCoursesCount] = useState<number>(16);
+  const [instructorCoursesCount, setInstructorCoursesCount] = useState<number>(0);
   const [instructorPendingCount, setInstructorPendingCount] = useState<number>(0);
+  const [adminAiActive, setAdminAiActive] = useState<number>(0);
+  const [adminAiTotal, setAdminAiTotal] = useState<number>(0);
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -146,6 +153,25 @@ export default function MarloGlobalHeader({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isNotifOpen]);
 
+  // Live Admin AI service status from MySQL
+  useEffect(() => {
+    if (role !== "admin" && !screen.startsWith("admin")) return;
+    let active = true;
+    const loadAdminCounts = () => {
+      fetchNavigationCountsApi("admin").then((c) => {
+        if (!active || !c) return;
+        setAdminAiActive(c.ai_services);
+        setAdminAiTotal(c.ai_services_total);
+      });
+    };
+    loadAdminCounts();
+    window.addEventListener("codemind-nav-updated", loadAdminCounts);
+    return () => {
+      active = false;
+      window.removeEventListener("codemind-nav-updated", loadAdminCounts);
+    };
+  }, [role, screen]);
+
   // Current formatted date in Vietnamese / Marlo style
   const todayFormatted = React.useMemo(() => {
     try {
@@ -156,33 +182,9 @@ export default function MarloGlobalHeader({
       const monthNum = now.getMonth() + 1;
       return `${dayName}, ${dayNum}/${monthNum}`;
     } catch {
-      return "Thứ Tư, 11/11";
+      return "Hôm nay";
     }
   }, []);
-
-  const notifications = [
-    {
-      id: "n1",
-      title: "Sprint 1 đã chính thức khởi động",
-      desc: "Nhóm 3 thành viên • Ràng buộc H2 và WBS 8 bảng",
-      time: "10m trước",
-      type: "sprint",
-    },
-    {
-      id: "n2",
-      title: "AI Mentor Socratic đã duyệt code Bài 1.2",
-      desc: "+90 XP đã được cộng vào tài khoản của bạn",
-      time: "1h trước",
-      type: "xp",
-    },
-    {
-      id: "n3",
-      title: "Hạn nộp PR #TE35D77 sắp tới",
-      desc: "Docker Image Sandbox cô lập (H2) cần nộp trước 08/11",
-      time: "3h trước",
-      type: "task",
-    },
-  ];
 
   return (
     <header className="w-full flex items-center justify-between gap-3 py-3 px-4 sm:px-6 bg-transparent border-0 transition-all shrink-0 relative z-30">
@@ -274,10 +276,12 @@ export default function MarloGlobalHeader({
               type="button"
               onClick={() => onNavigate("admin-ai")}
               className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-700 dark:border-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
-              title="Giám sát SLA, Token Guardrails & Docker Sandbox"
+              title="Giám sát Dịch vụ AI, Token Guardrails & Docker Sandbox"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-              <span className="whitespace-nowrap">99.98% SLA</span>
+              <span className="whitespace-nowrap">
+                {adminAiTotal > 0 ? `${adminAiActive}/${adminAiTotal} AI Services` : "AI Services"}
+              </span>
             </button>
             <button
               type="button"
@@ -405,6 +409,8 @@ export default function MarloGlobalHeader({
         <HeaderProfileDropdown
           theme={theme}
           onToggleTheme={onToggleTheme}
+          backgroundTheme={backgroundTheme}
+          onApplyBackgroundTheme={onApplyBackgroundTheme}
           role={role}
           avatarStyle={avatarStyle}
           badgeFrame={badgeFrame}
