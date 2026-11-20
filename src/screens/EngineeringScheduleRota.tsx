@@ -373,6 +373,10 @@ export default function EngineeringScheduleRota({
     if (dayCards.length > 0) {
       animateMarloCards(dayCards, { y: 22, stagger: 0.035, duration: 0.75 });
     }
+    const agendaRows = stage.querySelectorAll<HTMLElement>(".agenda__row");
+    if (agendaRows.length > 0) {
+      animateMarloRows(agendaRows, { y: 10, stagger: 0.025, delay: 0.2, duration: 0.5 });
+    }
   }, [displayedTab]);
 
   // ESC key closes Student Booking Modal
@@ -1882,7 +1886,7 @@ export default function EngineeringScheduleRota({
             </div>
 
             {/* Main Timeline Table */}
-            <div className="marlo-card bg-white dark:bg-slate-900/90 rounded-xl border border-[#EBE8E2] dark:border-slate-800 p-5 shadow-xs">
+            <div key={`${displayedTab}_${selectedDate}`} className="marlo-card bg-white dark:bg-slate-900/90 rounded-xl border border-[#EBE8E2] dark:border-slate-800 p-5 shadow-xs">
               <div className="overflow-x-auto pt-4">
                 <div className="min-w-[840px]">
                   {/* Table Header: Hours */}
@@ -1928,7 +1932,7 @@ export default function EngineeringScheduleRota({
                         />
                       )}
 
-                    {timelineGroups.map((group) => {
+                    {timelineGroups.map((group, groupIdx) => {
                       const isExpanded = expandedGroups[group.id] ?? true;
 
                       return (
@@ -2031,7 +2035,7 @@ export default function EngineeringScheduleRota({
                                   )}
                                 </div>
                               ) : (
-                                group.items.map((sch) => {
+                                group.items.map((sch, itemIdx) => {
                                   const isDraggingThis = dragging?.itemId === sch.id;
                                   const activeStart = isDraggingThis
                                     ? dragging.currentStart
@@ -2067,6 +2071,7 @@ export default function EngineeringScheduleRota({
                                           style={{
                                             left: getLeftPct(activeStart),
                                             width: getWidthPct(activeStart, activeEnd),
+                                            animationDelay: `${groupIdx * 80 + itemIdx * 45 + 50}ms`,
                                           }}
                                           onClick={() => {
                                             if (didDragMoveRef.current) {
@@ -2078,10 +2083,10 @@ export default function EngineeringScheduleRota({
                                           onPointerDown={(e) => handleBarPointerDown(e, sch, "move")}
                                           className={`absolute top-0.5 bottom-0.5 rounded-xl px-3 flex items-center justify-between text-xs transition-all touch-none group/bar ${
                                             isDraggingThis
-                                              ? "z-40 shadow-2xl ring-2 ring-[#EE8420] cursor-grabbing"
+                                              ? "!animate-none z-40 shadow-2xl ring-2 ring-[#EE8420] cursor-grabbing brightness-95 scale-[1.01]"
                                               : isStaff && !isLocked
-                                              ? "cursor-grab hover:shadow-md hover:z-20"
-                                              : "cursor-pointer hover:shadow-md hover:z-20"
+                                              ? "animate-timeline-bar cursor-grab hover:shadow-lg hover:-translate-y-0.5 hover:scale-[1.012] hover:z-20 transition-transform duration-150"
+                                              : "animate-timeline-bar cursor-pointer hover:shadow-lg hover:-translate-y-0.5 hover:scale-[1.012] hover:z-20 transition-transform duration-150"
                                           } ${getCategoryBarStyle(sch.category, isLocked)}`}
                                         >
                                           {/* Resize left handle */}
@@ -2095,7 +2100,10 @@ export default function EngineeringScheduleRota({
                                             />
                                           )}
 
-                                          <div className="flex flex-col justify-center min-w-0 pr-2 pointer-events-none">
+                                          <div
+                                            className="flex flex-col justify-center min-w-0 pr-2 pointer-events-none animate-timeline-text"
+                                            style={{ animationDelay: `${groupIdx * 80 + itemIdx * 45 + 130}ms` }}
+                                          >
                                             <div className="flex items-center gap-1.5">
                                               <span className="font-bold text-[10.5px] font-mono leading-none">
                                                 {formatScheduleHour(activeStart)} –{" "}
