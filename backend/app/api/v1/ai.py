@@ -11,6 +11,7 @@ from app.core.timezone import now_utc
 from app.schemas.submission import AIInteractionIn, SocraticChatIn
 from app.services.ai_tutor import ask_socratic_with_policy
 from app.services.analytics import track_event
+from app.services.gemini_client import record_ai_usage
 
 router = APIRouter(tags=["AI Tutor"])
 
@@ -20,7 +21,7 @@ def socratic_chat(
     payload: SocraticChatIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Chat hỏi đáp Socratic AI Tutor trực tiếp trên LearningWorkspace, áp dụng Guardrail của Admin."""
+    """Chat hỏi đáp Socratic AI Tutor trực tiếp trên LearningWorkspace, áp dụng Guardrail của Admin và Gemini API."""
     strict_refuse = True
     with db() as conn:
         svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-socratic'").fetchone()
@@ -36,11 +37,21 @@ def socratic_chat(
                 strict_refuse = bool(pol_data.get("guardrailRefuseAnswer", True))
             except Exception:
                 strict_refuse = True
-        conn.execute(
-            "UPDATE ai_service_units SET requests = requests + 1, input_tokens = input_tokens + 680, output_tokens = output_tokens + 320 WHERE id='svc-socratic'"
-        )
+
     res = ask_socratic_with_policy(payload.message, payload.code_context, strict_refuse=strict_refuse)
-    track_event(user["id"], payload.session_id, "socratic_chat", {"policy_decision": res["policy_decision"]})
+
+    in_tok = int(res.pop("input_tokens", 0) or 0)
+    out_tok = int(res.pop("output_tokens", 0) or 0)
+    with db() as conn:
+        record_ai_usage(conn, "svc-socratic", in_tok or 420, out_tok or 180)
+        conn.commit()
+
+    track_event(
+        user["id"],
+        payload.session_id,
+        "socratic_chat",
+        {"policy_decision": res["policy_decision"], "model": res.get("model_id")},
+    )
     return res
 
 

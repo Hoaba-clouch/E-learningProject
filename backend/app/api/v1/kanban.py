@@ -23,6 +23,7 @@ from app.schemas.kanban import (
     WorkspaceTaskMoveIn,
     WorkspaceTaskPatchIn,
 )
+from app.services.gemini_client import generate_json, record_ai_usage
 
 router = APIRouter(tags=["Engineering Kanban & Projects"])
 
@@ -1186,35 +1187,116 @@ def generate_ai_wbs(
 
     count = max(2, min(payload.granularity, len(specs)))
     generated: list[dict[str, Any]] = []
-    for item in specs[:count]:
-        tid, code, title, desc, prio, moscow, pts, assignee, est, due, e_col, dep, chk = item
-        generated.append(
-            {
-                "id": tid,
-                "code": code,
-                "title": title,
-                "description": desc,
-                "column": "backlog",
-                "priority": prio,
-                "moscow": moscow,
-                "points": pts,
-                "assignee": assignee,
-                "estimateHours": est,
-                "dueDate": due,
-                "epic": feature,
-                "epicColor": e_col,
-                **({"dependsOn": dep} if dep else {}),
-                "checklist": chk,
-                "definitionOfDone": _default_dod(False),
-                "commentsCount": 0,
-                "attachmentsCount": 0,
-            }
-        )
+    ai_in_tok = 0
+    ai_out_tok = 0
+
+    # Thử sinh danh sách công việc WBS sát đặc tả bằng Google Gemini LLM trước
+    members_desc = ", ".join(f"{m.get('name', 'Thành viên')} ({m.get('role', 'Dev')})" for m in pool)
+    llm_res = generate_json(
+        prompt=(
+            f"Tính năng cần chia việc: {feature}\n"
+            f"Công nghệ sử dụng: {tech_label}\n"
+            f"Mô tả chi tiết: {(payload.description or '').strip() or 'Xây dựng hoàn chỉnh từ kiến trúc tới kiểm thử.'}\n"
+            f"Số lượng task cần sinh: {count}\n"
+            f"Thành viên tham gia: {members_desc}\n\n"
+            f"Hãy trả về đúng JSON array gồm {count} phần tử có cấu trúc:\n"
+            '[{"code": "ARC-01", "title": "...", "description": "...", "priority": "high"|"medium"|"low", "moscow": "must"|"should"|"could", "points": 5, "estimateHours": 4, "checklist": ["Bước 1...", "Bước 2..."]}]'
+        ),
+        system_instruction="Bạn là AI Scrum Master trên CodeMind. Chia tính năng thành các task thực tế theo thứ tự kiến trúc -> backend -> frontend/integration -> kiểm thử bằng tiếng Việt chuẩn Kỹ nghệ Phần mềm.",
+        temperature=0.35,
+        max_output_tokens=900,
+    )
+    epic_colors = [
+        "bg-blue-50 text-blue-700 border-blue-200",
+        "bg-amber-50 text-amber-700 border-amber-200",
+        "bg-teal-50 text-teal-700 border-teal-200",
+        "bg-indigo-50 text-indigo-700 border-indigo-200",
+        "bg-purple-50 text-purple-700 border-purple-200",
+        "bg-emerald-50 text-emerald-700 border-emerald-200",
+    ]
+    if llm_res:
+        parsed_wbs, meta = llm_res
+        ai_in_tok = int(meta.get("input_tokens") or 0)
+        ai_out_tok = int(meta.get("output_tokens") or 0)
+        if isinstance(parsed_wbs, list):
+            valid_items = [x for x in parsed_wbs if isinstance(x, dict) and str(x.get("title") or "").strip()]
+            if len(valid_items) >= 2:
+                for idx, w in enumerate(valid_items[:count]):
+                    tid = f"task-ai-{stamp}-{idx + 1}"
+                    raw_prio = str(w.get("priority") or "medium").lower()
+                    prio = raw_prio if raw_prio in ("high", "medium", "low") else "medium"
+                    raw_moscow = str(w.get("moscow") or "should").lower()
+                    moscow = raw_moscow if raw_moscow in ("must", "should", "could") else "should"
+                    pts = max(1, min(13, int(w.get("points") or 3)))
+                    est = max(1.0, min(24.0, float(w.get("estimateHours") or pts)))
+                    raw_chk = w.get("checklist")
+                    chk_list = (
+                        [
+                            {"id": f"ai-c-{stamp}-{idx}-{c_idx}", "text": str(txt).strip(), "done": False}
+                            for c_idx, txt in enumerate(raw_chk[:4])
+                            if str(txt).strip()
+                        ]
+                        if isinstance(raw_chk, list)
+                        else []
+                    )
+                    if not chk_list:
+                        chk_list = [{"id": f"ai-c-{stamp}-{idx}-0", "text": "Hoàn thành implementation & unit test", "done": False}]
+                    due_val = specs[min(idx, len(specs) - 1)][9]
+                    prev_id = f"task-ai-{stamp}-{idx}" if (payload.include_h2 and idx > 0) else None
+                    generated.append(
+                        {
+                            "id": tid,
+                            "code": str(w.get("code") or f"AI-{random.randint(10, 99)}")[:12],
+                            "title": str(w["title"]).strip()[:140],
+                            "description": str(w.get("description") or feature).strip(),
+                            "column": "backlog",
+                            "priority": prio,
+                            "moscow": moscow,
+                            "points": pts,
+                            "assignee": _assignee(idx),
+                            "estimateHours": est,
+                            "dueDate": due_val,
+                            "epic": feature,
+                            "epicColor": epic_colors[idx % len(epic_colors)],
+                            **({"dependsOn": prev_id} if prev_id else {}),
+                            "checklist": chk_list,
+                            "definitionOfDone": _default_dod(False),
+                            "commentsCount": 0,
+                            "attachmentsCount": 0,
+                        }
+                    )
+
+    if not generated:
+        for item in specs[:count]:
+            tid, code, title, desc, prio, moscow, pts, assignee, est, due, e_col, dep, chk = item
+            generated.append(
+                {
+                    "id": tid,
+                    "code": code,
+                    "title": title,
+                    "description": desc,
+                    "column": "backlog",
+                    "priority": prio,
+                    "moscow": moscow,
+                    "points": pts,
+                    "assignee": assignee,
+                    "estimateHours": est,
+                    "dueDate": due,
+                    "epic": feature,
+                    "epicColor": e_col,
+                    **({"dependsOn": dep} if dep else {}),
+                    "checklist": chk,
+                    "definitionOfDone": _default_dod(False),
+                    "commentsCount": 0,
+                    "attachmentsCount": 0,
+                }
+            )
 
     with db() as conn:
-        conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id='svc-aigc'")
+        record_ai_usage(conn, "svc-aigc", ai_in_tok or 450, ai_out_tok or 320)
+        conn.commit()
 
-    return {"tasks": generated}
+    return {"tasks": generated, "aiModel": "google-gemini" if ai_in_tok > 0 else "local-wbs-fallback"}
 
 
 @router.patch("/kanban/workspace/tasks/{task_id}")

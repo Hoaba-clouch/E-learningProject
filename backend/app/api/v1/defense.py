@@ -17,6 +17,7 @@ from app.schemas.defense import (
     ToggleCourseDefenseIn,
 )
 from app.services.analytics import track_event
+from app.services.gemini_client import generate_json, record_ai_usage
 
 router = APIRouter(tags=["AI 3D Defense & Dual Grading"])
 
@@ -159,6 +160,76 @@ def _evaluate_oral_response(
     else:
         feedback = "Luận điểm rõ ràng, giải thích tốt cơ chế triển khai và kiểm soát rủi ro hệ thống."
     return score, feedback, matched_keywords
+
+
+def _evaluate_oral_with_gemini(
+    question_text: str,
+    speaker_label: str,
+    argument_text: str,
+    expected_keywords: list[str],
+    service_active: bool = True,
+) -> tuple[int, str, list[str], str, int, int]:
+    """Chấm điểm tự luận Phản biện qua Google Gemini LLM, tự động fallback về bộ chấm điểm từ khóa nếu lỗi."""
+    base_score, base_feedback, base_matched = _evaluate_oral_response(argument_text, expected_keywords)
+    raw_tokens = TOKEN_RE.findall((argument_text or "").strip().lower())
+    word_count = len(raw_tokens)
+
+    # Chặn spam/quá ngắn bằng fast-path trước để bảo toàn tốc độ và hạn mức API
+    if not service_active or base_score <= 42 or word_count < 6:
+        return base_score, base_feedback, base_matched, "local-guard", 0, 0
+
+    kw_str = ", ".join(k.strip() for k in (expected_keywords or []) if k and k.strip()) or "Kiến trúc, Thuật toán, Vận hành"
+    llm_res = generate_json(
+        prompt=(
+            f"Giám khảo hỏi: {speaker_label}\n"
+            f"Câu hỏi bảo vệ: {question_text}\n"
+            f"Từ khóa kỹ thuật kỳ vọng: {kw_str}\n"
+            f"Câu trả lời của sinh viên: {argument_text.strip()}\n\n"
+            "Hãy chấm điểm câu trả lời trên thang 0-100 và trả về JSON đúng cấu trúc:\n"
+            '{"score": 85, "feedback": "Nhận xét kỹ thuật 2 câu ngắn gọn bằng tiếng Việt (nêu điểm mạnh và 1 điểm cần làm rõ).", "matched_keywords": ["..."]}'
+        ),
+        system_instruction=(
+            "Bạn là Giám khảo Hội đồng Bảo vệ Đồ án Kỹ thuật Phần mềm. "
+            "Chấm khách quan: nếu câu trả lời hời hợt hoặc thiếu căn cứ kỹ thuật chỉ chấm 45-62; "
+            "nếu nêu đúng kiến trúc/trade-off/từ khóa kỹ thuật chấm 80-96. Luôn trả JSON thuần."
+        ),
+        temperature=0.25,
+        max_output_tokens=320,
+    )
+    if not llm_res:
+        return base_score, base_feedback, base_matched, "local-heuristic", 0, 0
+
+    parsed, meta = llm_res
+    if not isinstance(parsed, dict):
+        return base_score, base_feedback, base_matched, "local-heuristic", 0, 0
+
+    try:
+        llm_score = int(parsed.get("score") or base_score)
+    except Exception:
+        llm_score = base_score
+
+    if word_count < 8:
+        llm_score = min(58, max(35, llm_score))
+    else:
+        llm_score = max(40, min(98, llm_score))
+
+    # Nếu sinh viên đã trả lời dài >= 18 từ & khớp >= 2 từ khóa, đảm bảo công bằng tối thiểu
+    if word_count >= 18 and len(base_matched) >= 2:
+        llm_score = max(llm_score, 80)
+
+    llm_feedback = str(parsed.get("feedback") or "").strip() or base_feedback
+    raw_llm_kw = parsed.get("matched_keywords")
+    valid_llm_kw = [str(x).strip() for x in raw_llm_kw if str(x).strip()] if isinstance(raw_llm_kw, list) else []
+    merged_kw = list(dict.fromkeys([*base_matched, *valid_llm_kw]))[:8]
+
+    return (
+        llm_score,
+        llm_feedback,
+        merged_kw,
+        str(meta.get("model") or "gemini"),
+        int(meta.get("input_tokens") or 0),
+        int(meta.get("output_tokens") or 0),
+    )
 
 
 def _serialize_session(r: Any) -> dict[str, Any]:
@@ -447,38 +518,63 @@ def respond_defense_round(
             raise HTTPException(status_code=403, detail="Không có quyền truy cập phiên bảo vệ này")
         if sess["status"] in ("completed", "flagged"):
             raise HTTPException(status_code=400, detail="Phiên bảo vệ này đã chốt điểm hoàn tất.")
+        svc_row = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-defense'").fetchone()
+        defense_ai_active = bool(svc_row["active"]) if svc_row else True
+        sess_snapshot = row_dict(sess) or {}
 
-        transcript = json.loads(sess["transcript_json"] or "[]")
+    speaker_label = (payload.speaker_label or "").strip() or (
+        "ThS. Lê Hoàng Yến · Phản biện Thuật toán"
+        if phase == "rebuttal"
+        else "TS. Trần Anh Tuấn · Chủ tịch Hội đồng"
+    )
+    question_text = (payload.question_text or "").strip() or (
+        f"[Vòng {payload.round_number} · {phase}] Câu hỏi kiểm tra chuyên môn từ Hội đồng."
+    )
+
+    matched_keywords: list[str] = []
+    ai_model = "local-rebuttal"
+    in_tok = 0
+    out_tok = 0
+
+    if phase == "rebuttal":
+        opt_score = (
+            payload.rebuttal_option_score
+            if payload.rebuttal_option_score is not None
+            else payload.rebuttal_score
+        )
+        if opt_score is not None:
+            round_score = max(35, min(100, int(opt_score)))
+            eval_text = (
+                "Phản biện sắc bén trước câu hỏi xoáy sâu của Hội đồng."
+                if round_score >= 85
+                else "Phản biện tạm chấp nhận được, cần củng cố tính an toàn khi tải cao."
+                if round_score >= 65
+                else "Lập luận chưa thuyết phục trước tình huống thực tế của Hội đồng."
+            )
+        else:
+            round_score, eval_text, matched_keywords, ai_model, in_tok, out_tok = _evaluate_oral_with_gemini(
+                question_text,
+                speaker_label,
+                payload.argument_text,
+                payload.expected_keywords,
+                service_active=defense_ai_active,
+            )
+    else:
+        round_score, eval_text, matched_keywords, ai_model, in_tok, out_tok = _evaluate_oral_with_gemini(
+            question_text,
+            speaker_label,
+            payload.argument_text,
+            payload.expected_keywords,
+            service_active=defense_ai_active,
+        )
+
+    with db() as conn:
+        transcript = json.loads(sess_snapshot.get("transcript_json") or "[]")
         student_name = user.get("full_name") or user.get("display_name") or "Học viên"
 
-        matched_keywords: list[str] = []
-        if phase == "rebuttal":
-            opt_score = (
-                payload.rebuttal_option_score
-                if payload.rebuttal_option_score is not None
-                else payload.rebuttal_score
-            )
-            if opt_score is not None:
-                round_score = max(35, min(100, int(opt_score)))
-                eval_text = (
-                    "Phản biện sắc bén trước câu hỏi xoáy sâu của Hội đồng."
-                    if round_score >= 85
-                    else "Phản biện tạm chấp nhận được, cần củng cố tính an toàn khi tải cao."
-                    if round_score >= 65
-                    else "Lập luận chưa thuyết phục trước tình huống thực tế của Hội đồng."
-                )
-            else:
-                round_score, eval_text, matched_keywords = _evaluate_oral_response(
-                    payload.argument_text, payload.expected_keywords
-                )
-        else:
-            round_score, eval_text, matched_keywords = _evaluate_oral_response(
-                payload.argument_text, payload.expected_keywords
-            )
-
-        prev_arch = int(sess["architecture_score"] or 0)
-        prev_algo = int(sess["algorithm_score"] or 0)
-        prev_prod = int(sess["production_score"] or 0)
+        prev_arch = int(sess_snapshot.get("architecture_score") or 0)
+        prev_algo = int(sess_snapshot.get("algorithm_score") or 0)
+        prev_prod = int(sess_snapshot.get("production_score") or 0)
 
         arch_target = max(35, min(100, round_score + (2 if payload.round_number == 1 else 0)))
         algo_target = max(35, min(100, round_score + (2 if payload.round_number == 2 else -1)))
@@ -487,15 +583,6 @@ def respond_defense_round(
         arch_score = arch_target if prev_arch <= 0 else round(prev_arch * 0.45 + arch_target * 0.55)
         algo_score = algo_target if prev_algo <= 0 else round(prev_algo * 0.45 + algo_target * 0.55)
         prod_score = prod_target if prev_prod <= 0 else round(prev_prod * 0.45 + prod_target * 0.55)
-
-        speaker_label = (payload.speaker_label or "").strip() or (
-            "ThS. Lê Hoàng Yến · Phản biện Thuật toán"
-            if phase == "rebuttal"
-            else "TS. Trần Anh Tuấn · Chủ tịch Hội đồng"
-        )
-        question_text = (payload.question_text or "").strip() or (
-            f"[Vòng {payload.round_number} · {phase}] Câu hỏi kiểm tra chuyên môn từ Hội đồng."
-        )
 
         transcript.append(
             {
@@ -516,7 +603,7 @@ def respond_defense_round(
             }
         )
 
-        next_round = min(5, max(int(sess["round_number"] or 1), payload.round_number + (1 if phase == "rebuttal" else 0)))
+        next_round = min(5, max(int(sess_snapshot.get("round_number") or 1), payload.round_number + (1 if phase == "rebuttal" else 0)))
         conn.execute(
             """UPDATE defense_sessions
                SET round_number=?, architecture_score=?, algorithm_score=?, production_score=?, transcript_json=?, updated_at=?
@@ -531,9 +618,7 @@ def respond_defense_round(
                 defense_id,
             ),
         )
-        conn.execute(
-            "UPDATE ai_service_units SET requests = requests + 1, input_tokens = input_tokens + 1800, output_tokens = output_tokens + 720 WHERE id='svc-defense'"
-        )
+        record_ai_usage(conn, "svc-defense", in_tok or 680, out_tok or 280)
         conn.commit()
 
     return {
@@ -543,6 +628,7 @@ def respond_defense_round(
         "round_score": round_score,
         "evaluation": eval_text,
         "matched_keywords": matched_keywords,
+        "ai_model": ai_model,
         "scores": {
             "architecture": arch_score,
             "algorithm": algo_score,

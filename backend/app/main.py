@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_v1_router
-from app.core.config import CORS_ORIGIN_REGEX, CORS_ORIGINS
+from app.core.config import CORS_ORIGIN_REGEX, CORS_ORIGINS, GEMINI_API_KEYS, GEMINI_MODEL
 from app.core.database import db, init_db
 
 
@@ -45,6 +45,11 @@ def health_ready() -> dict[str, Any]:
         "database": "ready",
         "service": "codemind-api",
         "version": app.version,
+        "ai_engine": {
+            "provider": "google-gemini" if GEMINI_API_KEYS else "local-heuristic",
+            "model": GEMINI_MODEL,
+            "keys_pool_size": len(GEMINI_API_KEYS),
+        },
     }
 
 

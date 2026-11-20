@@ -23,6 +23,7 @@ from app.schemas.git_hub import (
     GitRepoUpdateIn,
 )
 from app.services.architecture_templates import get_default_architecture_for_project
+from app.services.gemini_client import generate_json, record_ai_usage
 from app.services.seed_git_hub import resolve_branch_lane
 
 router = APIRouter(prefix="/git-hub", tags=["Git Project Hub & AI PR Review"])
@@ -204,7 +205,15 @@ def _ensure_project_and_repo(conn: Any, project_id: str) -> tuple[Any, Any]:
     return proj, repo
 
 
-def _run_ai_ast_scanner(title: str, description: str, source_branch: str, task_code: str | None, code_snippet: str) -> tuple[int, str, str, str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+def _run_ai_ast_scanner(
+    title: str,
+    description: str,
+    source_branch: str,
+    task_code: str | None,
+    code_snippet: str,
+    use_llm: bool = False,
+    usage_meta: dict[str, int] | None = None,
+) -> tuple[int, str, str, str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     combined = f"{title}\n{description}\n{code_snippet}"
     findings: list[dict[str, Any]] = []
     score = 94
@@ -283,6 +292,54 @@ def _run_ai_ast_scanner(title: str, description: str, source_branch: str, task_c
         {"id": f"dq-{uid()[:5]}", "persona": "Cô Giải thuật", "question": f"Độ phức tạp thuật toán và chiến lược xử lý lỗi biên của PR '{title[:48]}' là gì?"},
         {"id": f"dq-{uid()[:5]}", "persona": "Thư ký Hội đồng", "question": f"Bạn đã viết unit test gì để chứng minh không phát sinh regression khi merge vào nhánh chính?"},
     ]
+
+    if use_llm:
+        llm_res = generate_json(
+            prompt=(
+                f"Tiêu đề PR: {title}\nNhánh: {source_branch} (Task: {task_code or 'Chưa gắn'})\n"
+                f"Mô tả: {(description or '')[:500]}\n"
+                f"Code Snippet:\n{(code_snippet or '')[:1500]}\n\n"
+                "Trả JSON đúng dạng:\n"
+                '{"summary": "<1-2 câu nhận xét kiến trúc/bảo mật bằng tiếng Việt>", "extra_finding": {"severity": "info"|"warning", "rule": "LLM-ARCH-001", "message": "...", "suggestion": "..."} | null, "defense_questions": [{"persona": "Thầy Kiến trúc", "question": "..."}, {"persona": "Cô Giải thuật", "question": "..."}, {"persona": "Thư ký Hội đồng", "question": "..."}]}'
+            ),
+            system_instruction="Bạn là Senior Code Reviewer trên CodeMind AI. Hãy phân tích PR ngắn gọn, sắc bén bằng tiếng Việt và tạo 3 câu hỏi vấn đáp sát với code/mô tả PR.",
+            temperature=0.3,
+            max_output_tokens=560,
+        )
+        if llm_res:
+            parsed, meta = llm_res
+            if usage_meta is not None:
+                usage_meta["input_tokens"] = int(meta.get("input_tokens") or 0)
+                usage_meta["output_tokens"] = int(meta.get("output_tokens") or 0)
+            if isinstance(parsed, dict):
+                if isinstance(parsed.get("summary"), str) and parsed["summary"].strip():
+                    summary = parsed["summary"].strip()
+                ef = parsed.get("extra_finding")
+                if isinstance(ef, dict) and str(ef.get("message") or "").strip():
+                    findings.append({
+                        "id": f"ast-{uid()[:6]}",
+                        "severity": ef.get("severity") if ef.get("severity") in ("info", "warning", "critical") else "info",
+                        "rule": str(ef.get("rule") or "LLM-REVIEW-001"),
+                        "file": f"src/{source_branch.replace('/', '_')}.py",
+                        "line": 1,
+                        "message": str(ef["message"]).strip(),
+                        "suggestion": str(ef.get("suggestion") or "Rà soát thêm test biên trước khi merge.").strip(),
+                        "resolved": False,
+                    })
+                dqs = parsed.get("defense_questions")
+                if isinstance(dqs, list):
+                    llm_qs = [
+                        {
+                            "id": f"dq-{uid()[:5]}",
+                            "persona": str(q.get("persona") or "Hội đồng AI"),
+                            "question": str(q["question"]).strip(),
+                        }
+                        for q in dqs
+                        if isinstance(q, dict) and str(q.get("question") or "").strip()
+                    ]
+                    if len(llm_qs) >= 2:
+                        questions = llm_qs[:3]
+
     return score, status_val, f"Low ({max(2, len(diff_preview))} files)", summary, findings, diff_preview, questions
 
 
@@ -709,13 +766,18 @@ def create_pull_request(
         ).fetchone()
         next_num = int(num_row["max_num"] or 0) + 1
         author = _resolve_author_meta(conn, pid, payload.author_name, user)
+        usage_meta: dict[str, int] = {}
         score, pr_status, blast_radius, summary, findings, diff_preview, questions = _run_ai_ast_scanner(
             clean_title,
             payload.description,
             payload.source_branch,
             task_code,
             payload.code_snippet,
+            use_llm=True,
+            usage_meta=usage_meta,
         )
+        if usage_meta.get("input_tokens") or usage_meta.get("output_tokens"):
+            record_ai_usage(conn, "svc-aigc", usage_meta.get("input_tokens", 0), usage_meta.get("output_tokens", 0))
         pr_id = f"pr-{uid()[:8]}"
         conn.execute(
             """INSERT INTO git_pull_requests(

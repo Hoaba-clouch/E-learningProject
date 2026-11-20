@@ -12,3 +12,11 @@ marlo-app/
 # Dist build files
 dist/
 dist/*
+
+# Local environment secrets (NEVER commit API keys)
+.env
+.env.*
+backend/.env
+backend/.env.*
+!.env.example
+!backend/.env.example

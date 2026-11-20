@@ -17,6 +17,7 @@ from app.schemas.courses import (
     SessionActionIn,
 )
 from app.services.ai_tutor import generate_copilot_suggestion
+from app.services.gemini_client import record_ai_usage
 
 router = APIRouter(tags=["Instructor Workbench"])
 
@@ -298,18 +299,33 @@ def ask_instructor_copilot(
     payload: CopilotPromptIn,
     _: dict[str, Any] = Depends(require_instructor),
 ) -> dict[str, Any]:
-    """Trợ giảng AI Co-Pilot hỗ trợ giảng viên thiết kế Docker Test Cases & Rubric."""
+    """Trợ giảng AI Co-Pilot hỗ trợ giảng viên thiết kế Docker Test Cases & Rubric qua Gemini."""
     course_code = "CS201"
+    course_name = ""
     with db() as conn:
+        svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-aigc'").fetchone()
+        if svc and not svc["active"]:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Dịch vụ AI Co-Pilot / AIGC hiện đang tạm dừng bởi Quản trị viên.",
+            )
         if payload.class_id:
-            row = conn.execute("SELECT code FROM courses WHERE id=?", (payload.class_id,)).fetchone()
+            row = conn.execute("SELECT code, name FROM courses WHERE id=?", (payload.class_id,)).fetchone()
             if row:
                 course_code = row["code"]
-        conn.execute(
-            "UPDATE ai_service_units SET requests = requests + 1, input_tokens = input_tokens + 520, output_tokens = output_tokens + 290 WHERE id='svc-socratic'"
+                course_name = row["name"] or ""
+
+    res = generate_copilot_suggestion(payload.prompt, course_code, course_name)
+
+    with db() as conn:
+        record_ai_usage(
+            conn,
+            "svc-aigc",
+            int(res.get("input_tokens") or 380),
+            int(res.get("output_tokens") or 220),
         )
-    reply = generate_copilot_suggestion(payload.prompt, course_code)
-    return {"reply": reply, "courseCode": course_code}
+        conn.commit()
+    return {"reply": res["reply"], "courseCode": course_code, "model": res["model"]}
 
 
 class StudentRemindIn(BaseModel):
