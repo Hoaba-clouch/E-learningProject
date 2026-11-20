@@ -239,10 +239,10 @@ export default function StudentDashboard({
           duration: ls.duration || baseLesson?.duration || "~20 phút",
           xp: resolvedXp,
           lead:
-            ls.content?.lead ||
             ls.content?.objective ||
-            baseLesson?.lead ||
             baseLesson?.objective ||
+            ls.content?.lead ||
+            baseLesson?.lead ||
             fallbackSubject.description,
           chapterNumber: chIdx + 1,
           chapterTitle: ch.title || `Chương ${chIdx + 1}`,
@@ -741,7 +741,7 @@ export default function StudentDashboard({
                   <h2 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-2.5 leading-snug tracking-tight">
                     {focusLearning.resumeLesson.cleanTitle}
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed max-w-2xl">
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed max-w-xl line-clamp-2">
                     {focusLearning.resumeLesson.lead}
                   </p>
 
