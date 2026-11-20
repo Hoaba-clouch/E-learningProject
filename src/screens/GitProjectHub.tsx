@@ -74,6 +74,7 @@ import {
   Code2,
   CheckCheck,
   Search,
+  Filter,
   RotateCw,
   AlertTriangle,
   ArrowRight,
@@ -2572,6 +2573,60 @@ export default function GitProjectHub({
     };
   }, []);
 
+  const handleSelectMemberFilter = (authorName: string) => {
+    if (authorName === "all" || authorName === memberFilter) {
+      setMemberFilter("all");
+      showToast(`Đã hiển thị toàn bộ commit (${commits.length} commits)`);
+      return;
+    }
+    setMemberFilter(authorName);
+    const authorCommits = commits.filter((c) => c.author.name === authorName);
+    if (authorCommits.length > 0) {
+      const latest = authorCommits[authorCommits.length - 1];
+      setSelectedCommit(latest);
+      if (gitGraphScrollRef.current && typeof latest.cx === "number") {
+        const containerWidth = gitGraphScrollRef.current.clientWidth || 900;
+        const targetScroll = Math.max(0, latest.cx - containerWidth / 2);
+        gitGraphScrollRef.current.scrollTo({ left: targetScroll, behavior: "smooth" });
+      }
+      showToast(`Đang lọc ${authorCommits.length} commit của ${authorName}`);
+    } else {
+      showToast(`Không tìm thấy commit nào của ${authorName}`);
+    }
+  };
+
+  const handleSelectBranchFilter = (branchName: string) => {
+    if (branchName === "all" || branchName === branchFilter) {
+      setBranchFilter("all");
+      showToast(`Đã hiển thị toàn bộ các nhánh (${commits.length} commits)`);
+      return;
+    }
+    setBranchFilter(branchName);
+    const bLow = branchName.toLowerCase();
+    const branchCommits = commits.filter((c) => {
+      const cb = (c.branch || "").toLowerCase();
+      return (
+        cb === bLow ||
+        (bLow === "pipeline" && (cb.includes("pipeline") || cb.includes("ci-cd"))) ||
+        (bLow === "jwt" && (cb.includes("jwt") || cb.includes("auth"))) ||
+        (bLow === "te9ca74" && (cb.includes("te9ca74") || cb.includes("ai-core"))) ||
+        (bLow === "te9ca79" && (cb.includes("te9ca79") || cb.includes("sandbox"))) ||
+        (bLow === "huy" && (cb.includes("huy") || cb.includes("client-portal"))) ||
+        cb.includes(bLow)
+      );
+    });
+    if (branchCommits.length > 0) {
+      const latest = branchCommits[branchCommits.length - 1];
+      setSelectedCommit(latest);
+      if (gitGraphScrollRef.current && typeof latest.cx === "number") {
+        const containerWidth = gitGraphScrollRef.current.clientWidth || 900;
+        const targetScroll = Math.max(0, latest.cx - containerWidth / 2);
+        gitGraphScrollRef.current.scrollTo({ left: targetScroll, behavior: "smooth" });
+      }
+      showToast(`Đang lọc ${branchCommits.length} commit nhánh ${branchName}`);
+    }
+  };
+
   const currentFlow = useMemo(() => {
     return dynamicFlows.find((f) => f.id === activeArchFlow) || dynamicFlows[0] || ARCH_FLOWS[0];
   }, [dynamicFlows, activeArchFlow]);
@@ -3460,7 +3515,7 @@ export default function GitProjectHub({
                   Thành viên:
                 </span>
                 <button
-                  onClick={() => setMemberFilter("all")}
+                  onClick={() => handleSelectMemberFilter("all")}
                   className={`px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer ${
                     memberFilter === "all"
                       ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
@@ -3479,7 +3534,7 @@ export default function GitProjectHub({
                   return (
                     <button
                       key={au.name}
-                      onClick={() => setMemberFilter(au.name)}
+                      onClick={() => handleSelectMemberFilter(au.name)}
                       className={`px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer ${
                         memberFilter === au.name
                           ? activeCls
@@ -3498,7 +3553,7 @@ export default function GitProjectHub({
                   Nhánh:
                 </span>
                 <button
-                  onClick={() => setBranchFilter("all")}
+                  onClick={() => handleSelectBranchFilter("all")}
                   className={`px-2 py-1 rounded-md transition text-xs font-semibold cursor-pointer ${
                     branchFilter === "all"
                       ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold shadow-xs"
@@ -3512,7 +3567,7 @@ export default function GitProjectHub({
                   return (
                     <button
                       key={b.name}
-                      onClick={() => setBranchFilter(b.name)}
+                      onClick={() => handleSelectBranchFilter(b.name)}
                       className={`px-2 py-1 rounded-md transition text-xs font-semibold cursor-pointer flex items-center gap-1.5 ${
                         isActive
                           ? "bg-white dark:bg-slate-900 shadow-xs font-bold"
@@ -3532,6 +3587,45 @@ export default function GitProjectHub({
               </div>
             </div>
           </div>
+
+          {/* Active Filter Feedback Banner */}
+          {(memberFilter !== "all" || branchFilter !== "all") && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/70 text-xs text-blue-950 dark:text-blue-100 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <span className="p-1 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400">
+                  <Filter size={13} />
+                </span>
+                <span className="font-medium">
+                  Đang lọc:{" "}
+                  {memberFilter !== "all" && (
+                    <span className="font-bold text-blue-700 dark:text-blue-300">
+                      Thành viên {memberFilter}
+                    </span>
+                  )}
+                  {memberFilter !== "all" && branchFilter !== "all" && " • "}
+                  {branchFilter !== "all" && (
+                    <span className="font-bold text-blue-700 dark:text-blue-300">
+                      Nhánh {branchFilter}
+                    </span>
+                  )}
+                  <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
+                    (Hiển thị {filteredCommits.length} / {commits.length} commits)
+                  </span>
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setMemberFilter("all");
+                  setBranchFilter("all");
+                  showToast(`Đã xóa bộ lọc, hiển thị toàn bộ ${commits.length} commit`);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700 shadow-2xs transition cursor-pointer"
+              >
+                <X size={12} />
+                Bỏ lọc ({commits.length} commits)
+              </button>
+            </div>
+          )}
 
           {/* Interactive SVG Visual Git Graph with Floating Popover */}
           <div
@@ -3598,12 +3692,13 @@ export default function GitProjectHub({
                   stroke={edge.color}
                   strokeWidth={edge.width || 2.8}
                   strokeDasharray={edge.dashed ? "5 3" : undefined}
-                  opacity={0.88}
+                  opacity={(memberFilter !== "all" || branchFilter !== "all") ? 0.35 : 0.88}
                 />
               ))}
 
               {/* Interactive Commit Dots */}
               {commits.map((c, idx) => {
+                const isAnyFilterActive = memberFilter !== "all" || branchFilter !== "all";
                 const isFiltered = filteredCommitIds.has(c.id);
                 const isSelected = selectedCommit?.id === c.id;
                 const isHovered = hoveredCommit?.id === c.id;
@@ -3612,7 +3707,7 @@ export default function GitProjectHub({
                   <g
                     key={c.id}
                     className="cursor-pointer transition-all duration-150"
-                    opacity={isFiltered ? 1 : 0.2}
+                    opacity={isFiltered ? 1 : 0.12}
                     style={{
                       transformOrigin: `${c.cx}px ${c.cy}px`,
                       animation: `topoPopNode 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.05 + Math.min(idx * 0.04, 1.2)}s both`,
@@ -3636,6 +3731,20 @@ export default function GitProjectHub({
                       pointerEvents="all"
                     />
 
+                    {/* Outer glowing halo when member or branch filter matches */}
+                    {isAnyFilterActive && isFiltered && !isSelected && (
+                      <circle
+                        cx={c.cx}
+                        cy={c.cy}
+                        r={13}
+                        fill="none"
+                        stroke={c.branchColor}
+                        strokeWidth={2}
+                        opacity={0.65}
+                        strokeDasharray="3 2"
+                      />
+                    )}
+
                     {/* Pulsing ring on hover or selected */}
                     {(isSelected || isHovered) && (
                       <circle
@@ -3645,7 +3754,7 @@ export default function GitProjectHub({
                         fill="none"
                         stroke={c.branchColor}
                         strokeWidth={2.5}
-                        opacity={0.4}
+                        opacity={0.6}
                         className="animate-pulse"
                       />
                     )}
@@ -3654,7 +3763,7 @@ export default function GitProjectHub({
                     <circle
                       cx={c.cx}
                       cy={c.cy}
-                      r={isSelected ? 9.5 : isHovered ? 9 : 7.5}
+                      r={isSelected ? 9.5 : isHovered ? 9 : (isAnyFilterActive && isFiltered ? 8.5 : 7.5)}
                       fill={c.branchColor}
                       stroke="#ffffff"
                       strokeWidth={2.5}
@@ -3663,33 +3772,37 @@ export default function GitProjectHub({
                     {/* Inner core dot */}
                     <circle cx={c.cx} cy={c.cy} r={2.5} fill="#ffffff" />
 
-                    {/* Crisp Short SHA Pill / Halo so curved rail lines never cut through the text */}
-                    <rect
-                      x={c.cx - 24}
-                      y={idx % 2 === 0 ? c.cy - 24 : c.cy + 12}
-                      width={48}
-                      height={15}
-                      rx={4}
-                      fill="#ffffff"
-                      opacity={0.94}
-                      className="dark:fill-slate-900 pointer-events-none"
-                    />
-                    <text
-                      x={c.cx}
-                      y={idx % 2 === 0 ? c.cy - 13 : c.cy + 23}
-                      textAnchor="middle"
-                      fontSize={10}
-                      fontFamily="monospace"
-                      fontWeight={isSelected ? "bold" : "600"}
-                      fill={isSelected ? "#0f172a" : "#475569"}
-                      className="dark:fill-slate-200 dark:stroke-slate-900 pointer-events-none select-none"
-                      paintOrder="stroke"
-                      stroke="#ffffff"
-                      strokeWidth={2}
-                      strokeLinejoin="round"
-                    >
-                      {c.sha}
-                    </text>
+                    {/* Crisp Short SHA Pill / Halo - hidden on non-matching commits when filtered so matching commits pop */}
+                    {(!isAnyFilterActive || isFiltered) && (
+                      <>
+                        <rect
+                          x={c.cx - 24}
+                          y={idx % 2 === 0 ? c.cy - 24 : c.cy + 12}
+                          width={48}
+                          height={15}
+                          rx={4}
+                          fill="#ffffff"
+                          opacity={0.94}
+                          className="dark:fill-slate-900 pointer-events-none"
+                        />
+                        <text
+                          x={c.cx}
+                          y={idx % 2 === 0 ? c.cy - 13 : c.cy + 23}
+                          textAnchor="middle"
+                          fontSize={10}
+                          fontFamily="monospace"
+                          fontWeight={isSelected ? "bold" : "600"}
+                          fill={isSelected ? "#0f172a" : "#475569"}
+                          className="dark:fill-slate-200 dark:stroke-slate-900 pointer-events-none select-none"
+                          paintOrder="stroke"
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          strokeLinejoin="round"
+                        >
+                          {c.sha}
+                        </text>
+                      </>
+                    )}
                   </g>
                 );
               })}
@@ -3831,9 +3944,35 @@ export default function GitProjectHub({
 
           {/* Commit History Timeline Table */}
           <div className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Clock size={16} className="text-slate-600 dark:text-slate-400" />
-              Nhật Ký Commit Theo Dòng Thời Gian (Nhấp chuột để xem vị trí trên cây)
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Clock size={16} className="text-slate-600 dark:text-slate-400" />
+                {memberFilter !== "all" ? (
+                  <span>
+                    Nhật Ký Commit của <span className="text-blue-600 dark:text-blue-400 font-bold">{memberFilter}</span>{" "}
+                    <span className="text-xs font-normal text-slate-500">({filteredCommits.length} commits)</span>
+                  </span>
+                ) : branchFilter !== "all" ? (
+                  <span>
+                    Nhật Ký Commit nhánh <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">{branchFilter}</span>{" "}
+                    <span className="text-xs font-normal text-slate-500">({filteredCommits.length} commits)</span>
+                  </span>
+                ) : (
+                  <span>Nhật Ký Commit Theo Dòng Thời Gian ({commits.length} commits)</span>
+                )}
+              </div>
+              {(memberFilter !== "all" || branchFilter !== "all") && (
+                <button
+                  onClick={() => {
+                    setMemberFilter("all");
+                    setBranchFilter("all");
+                    showToast(`Đã xóa bộ lọc, hiển thị toàn bộ ${commits.length} commit`);
+                  }}
+                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                >
+                  Xem tất cả ({commits.length})
+                </button>
+              )}
             </h3>
             <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden text-xs">
               {filteredCommits.map((c, cIdx) => {
@@ -3842,7 +3981,14 @@ export default function GitProjectHub({
                   <div
                     key={c.id}
                     style={{ animationDelay: `${0.05 + Math.min(cIdx, 8) * 0.04}s` }}
-                    onClick={() => setSelectedCommit(c)}
+                    onClick={() => {
+                      setSelectedCommit(c);
+                      if (gitGraphScrollRef.current && typeof c.cx === "number") {
+                        const containerWidth = gitGraphScrollRef.current.clientWidth || 900;
+                        const targetScroll = Math.max(0, c.cx - containerWidth / 2);
+                        gitGraphScrollRef.current.scrollTo({ left: targetScroll, behavior: "smooth" });
+                      }
+                    }}
                     className={`animate-cascade-item p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition cursor-pointer ${
                       isSelected
                         ? "bg-blue-50/70 dark:bg-blue-950/35 border-l-4 border-l-blue-600 dark:border-l-blue-400"
