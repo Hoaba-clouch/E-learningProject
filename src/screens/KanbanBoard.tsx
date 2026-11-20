@@ -1865,7 +1865,16 @@ export default function KanbanBoard({
 
     } else {
 
-      alert(res.error || "Lỗi thẩm định task");
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoToast({
+        taskId: `review-err-${Date.now()}`,
+        taskCode: "ERR",
+        taskTitle: "Lỗi thẩm định",
+        toastType: "error",
+        customMessage: res.error || "Lỗi thẩm định task",
+        undone: false,
+      });
+      undoTimerRef.current = setTimeout(() => setUndoToast(null), 4000);
 
     }
 
@@ -2385,6 +2394,8 @@ export default function KanbanBoard({
     deletedIndex?: number;
 
     customMessage?: string;
+
+    toastType?: "success" | "warning" | "error" | "info";
 
     undone?: boolean;
 
@@ -3912,7 +3923,16 @@ export default function KanbanBoard({
 
     // Restrict student from moving directly to 'verified'
     if (role === "student" && targetCol === "verified") {
-      alert("Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định. Sinh viên chỉ có thể chuyển sang 'Hoàn thành' để chờ nghiệm thu.");
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoToast({
+        taskId: "role-verified-restricted",
+        taskCode: "ROLE",
+        taskTitle: "Quyền hạn học viên",
+        toastType: "warning",
+        customMessage: "Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định. Sinh viên chỉ có thể chuyển sang 'Hoàn thành' để chờ nghiệm thu.",
+        undone: false,
+      });
+      undoTimerRef.current = setTimeout(() => setUndoToast(null), 5000);
       return false;
     }
 
@@ -9837,9 +9857,13 @@ export default function KanbanBoard({
 
         <MarloToast
 
+          type={undoToast.toastType || (undoToast.customMessage?.startsWith("🔒") || undoToast.customMessage?.startsWith("⚠️") ? "warning" : "success")}
+
           showUndo={!undoToast.undone && !undoToast.customMessage}
 
           onUndo={handleUndo}
+
+          onClose={() => setUndoToast(null)}
 
           message={
 

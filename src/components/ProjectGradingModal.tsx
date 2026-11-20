@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { fetchProjectEvaluationApi, evaluateProjectApi } from "../api";
+import MarloToast from "./MarloToast";
 
 export interface ProjectGradingModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export default function ProjectGradingModal({
   const [isGraded, setIsGraded] = useState(false);
   const [metrics, setMetrics] = useState<any[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Rubric Scores (0 - 10)
   const [archScore, setArchScore] = useState<number>(8.5);
@@ -145,7 +147,7 @@ export default function ProjectGradingModal({
       onGradingSuccess?.(res.final_score || groupScore);
       onClose();
     } else {
-      alert(res.error);
+      setToastMsg(`⚠️ ${res.error || "Lỗi khi lưu điểm đánh giá"}`);
     }
   };
 
@@ -445,6 +447,14 @@ export default function ProjectGradingModal({
           </div>
         </div>
       </div>
+      {toastMsg && (
+        <MarloToast
+          message={toastMsg}
+          type="error"
+          onClose={() => setToastMsg(null)}
+          showUndo={false}
+        />
+      )}
     </div>
   );
 }
