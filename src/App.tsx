@@ -573,8 +573,21 @@ export default function App() {
       );
       case "defense-room": return (
         <AIDefenseRoomScreen
+          role={role}
           onNavigate={setScreen}
           initialProjectId={selectedKanbanProjectId}
+          onOpenProjectDetail={(pId) => {
+            setSelectedMarloProjectId(pId);
+            setSelectedKanbanProjectId(pId);
+            setScreen("project-detail");
+          }}
+          onOpenKanban={(pId) => {
+            setSelectedKanbanProjectId(pId);
+            setSelectedMarloProjectId(pId);
+            setScreen("kanban");
+          }}
+          onOpenGitHub={(pId) => openGitHubForProject(pId)}
+          onOpenSchedule={() => setScreen("schedule")}
         />
       );
       default: return <StudentDashboard avatarStyle={avatarStyle} skillMapSkin={skillMapSkin} badgeFrame={badgeFrame} onNavigate={setScreen} />;

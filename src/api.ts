@@ -1514,31 +1514,41 @@ export async function decideDualSubmission(
     action: "approve" | "redefense";
     final_score?: number;
     instructor_feedback?: string;
-  }
+  },
+  preferredRole: SessionRole = "instructor",
+  throwOnError: boolean = false
 ) {
-  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
   try {
-    const res = await fetch(`${API_BASE}/v1/instructor/dual-submissions/${subId}/decision`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/instructor/dual-submissions/${encodeURIComponent(subId)}/decision`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) return null;
+      preferredRole
+    );
+    if (!res.ok) {
+      if (throwOnError) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Không thể phê duyệt biên bản Chấm Kép.");
+      }
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    if (throwOnError) throw err;
     return null;
   }
 }
 
-export async function fetchDefenseRubric(): Promise<DefenseRubricConfig | null> {
-  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+export async function fetchDefenseRubric(
+  preferredRole?: SessionRole
+): Promise<DefenseRubricConfig | null> {
+  const role: SessionRole = preferredRole || inferTabRole();
+  const path = role === "student" ? "/v1/defense/rubric" : "/v1/instructor/rubric";
   try {
-    const res = await fetch(`${API_BASE}/v1/instructor/rubric`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const res = await fetchWithAuthRetry(`${API_BASE}${path}`, {}, role);
     if (!res.ok) return null;
     return (await res.json()) as DefenseRubricConfig;
   } catch {
@@ -1546,20 +1556,31 @@ export async function fetchDefenseRubric(): Promise<DefenseRubricConfig | null> 
   }
 }
 
-export async function saveDefenseRubric(rubric: DefenseRubricConfig) {
-  const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
+export async function saveDefenseRubric(
+  rubric: DefenseRubricConfig,
+  preferredRole: SessionRole = "instructor",
+  throwOnError: boolean = false
+) {
   try {
-    const res = await fetch(`${API_BASE}/v1/instructor/rubric`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/instructor/rubric`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rubric),
       },
-      body: JSON.stringify(rubric),
-    });
-    if (!res.ok) return null;
+      preferredRole
+    );
+    if (!res.ok) {
+      if (throwOnError) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Không thể lưu cấu hình Rubric.");
+      }
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    if (throwOnError) throw err;
     return null;
   }
 }
@@ -1609,80 +1630,240 @@ export async function askInstructorCopilot(prompt: string, class_id?: string): P
 // AI 3D DEFENSE ROOM API CLIENTS
 // ============================================================================
 
-export async function startDefenseSession(
-  project_id: string = "prj-codemind",
-  class_id: string = "class-oop"
-): Promise<{ defense_id: string } | null> {
-  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
+export interface DefenseProjectOption {
+  id: string;
+  code: string;
+  name: string;
+  course: string;
+  status: string;
+  classId: string;
+  courseCode: string;
+  aiDefenseEnabled: boolean;
+  repoUrl: string;
+  commitsCount: number;
+  prsCount: number;
+  doneTasksCount: number;
+  totalTasksCount: number;
+}
+
+export interface DefenseCourseToggleItem {
+  id: string;
+  code: string;
+  name: string;
+  teacherName: string;
+  studentCount: number;
+  pendingDualReviews: number;
+  aiDefenseEnabled: boolean;
+  sandboxEnabled: boolean;
+}
+
+export interface DefenseTranscriptEntry {
+  id: string;
+  speaker: string;
+  speakerLabel: string;
+  text: string;
+  evaluation?: string;
+  score?: number;
+}
+
+export interface DefenseSessionRecord {
+  id: string;
+  userId: string;
+  studentName: string;
+  studentCode: string;
+  projectId: string;
+  projectName: string;
+  projectCode: string;
+  classId: string;
+  courseCode: string;
+  roundNumber: number;
+  status: "in_progress" | "completed" | "flagged" | string;
+  architectureScore: number;
+  algorithmScore: number;
+  productionScore: number;
+  finalDefenseScore: number | null;
+  transcript: DefenseTranscriptEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DefenseDualSubmissionItem = DualSubmissionRecord & {
+  userId?: string | null;
+  transcript?: DefenseTranscriptEntry[];
+  updatedAt?: string;
+};
+
+export interface DefenseWorkspaceBundle {
+  user: {
+    id: string;
+    name: string;
+    role: string;
+    studentCode: string;
+  };
+  projects: DefenseProjectOption[];
+  courses: DefenseCourseToggleItem[];
+  rubric: DefenseRubricConfig;
+  sessions: DefenseSessionRecord[];
+  dualSubmissions: DefenseDualSubmissionItem[];
+  stats: {
+    totalSessions: number;
+    completedSessions: number;
+    avgDefenseScore: number;
+    flaggedCount: number;
+    pendingReviewsCount: number;
+    enabledCoursesCount: number;
+    totalCoursesCount: number;
+  };
+}
+
+export async function fetchDefenseWorkspaceApi(
+  preferredRole?: SessionRole
+): Promise<DefenseWorkspaceBundle | null> {
   try {
-    const res = await fetch(`${API_BASE}/v1/defense/sessions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ project_id, class_id }),
-    });
+    const res = await fetchWithAuthRetry(`${API_BASE}/v1/defense/workspace`, {}, preferredRole);
     if (!res.ok) return null;
-    return await res.json();
+    return (await res.json()) as DefenseWorkspaceBundle;
   } catch {
     return null;
   }
 }
 
+export async function startDefenseSession(
+  project_id: string = "prj-codemind",
+  class_id?: string,
+  preferredRole: SessionRole = "student"
+): Promise<{
+  defense_id: string;
+  project_id: string;
+  class_id: string;
+  course_code: string;
+  status: string;
+}> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/defense/sessions`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id, ...(class_id ? { class_id } : {}) }),
+    },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể khởi tạo phiên phản biện AI.");
+  }
+  return await res.json();
+}
+
 export async function respondDefenseRound(
   defenseId: string,
-  round_number: number,
-  argument_text: string,
-  argument_type: string = "optimal",
-  rebuttal_score: number = 90
-) {
-  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
-  try {
-    const res = await fetch(`${API_BASE}/v1/defense/sessions/${defenseId}/respond`, {
+  payload: {
+    round_number: number;
+    phase: "oral" | "rebuttal";
+    question_text: string;
+    speaker_label?: string;
+    argument_text: string;
+    expected_keywords?: string[];
+    rebuttal_option_score?: number;
+  },
+  preferredRole: SessionRole = "student"
+): Promise<{
+  defense_id: string;
+  round_number: number;
+  phase: "oral" | "rebuttal";
+  round_score: number;
+  evaluation: string;
+  matched_keywords: string[];
+  scores: { architecture: number; algorithm: number; production: number };
+  transcript: DefenseTranscriptEntry[];
+}> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/defense/sessions/${encodeURIComponent(defenseId)}/respond`,
+    {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        round_number,
-        argument_text,
-        argument_type,
-        rebuttal_score,
-      }),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể chấm điểm luận điểm phản biện.");
   }
+  return await res.json();
 }
 
 export async function completeDefenseSession(
   defenseId: string,
   payload: {
-    chapter_title: string;
+    chapter_title?: string;
     repo_url?: string;
     passed_tests?: number;
     total_tests?: number;
-  }
-) {
-  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
-  try {
-    const res = await fetch(`${API_BASE}/v1/defense/sessions/${defenseId}/complete`, {
+  } = {},
+  preferredRole: SessionRole = "student"
+): Promise<{
+  defense_id: string;
+  submission_id: string;
+  final_defense_score: number;
+  cicd_pct: number;
+  weighted_score: number;
+  status: string;
+  discrepancy: boolean;
+  coherence_summary: string;
+  commit_count: number;
+}> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/defense/sessions/${encodeURIComponent(defenseId)}/complete`,
+    {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+    },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể hoàn tất phiên bảo vệ đồ án.");
   }
+  return await res.json();
+}
+
+export async function deleteDefenseSessionApi(
+  defenseId: string,
+  preferredRole?: SessionRole
+): Promise<{ message: string; defense_id: string }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/defense/sessions/${encodeURIComponent(defenseId)}`,
+    { method: "DELETE" },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể xóa phiên bảo vệ.");
+  }
+  return await res.json();
+}
+
+export async function toggleCourseDefenseApi(
+  classId: string,
+  ai_defense_enabled: boolean,
+  preferredRole: SessionRole = "admin"
+): Promise<{ classId: string; code: string; name: string; aiDefenseEnabled: boolean }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/defense/courses/${encodeURIComponent(classId)}/toggle`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ai_defense_enabled }),
+    },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể cập nhật trạng thái Phòng Phản Biện AI.");
+  }
+  return await res.json();
 }
 
 // ============================================================================
