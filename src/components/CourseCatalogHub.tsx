@@ -3,7 +3,6 @@ import MarloSegmentedControl from "./MarloSegmentedControl";
 import MarloTitle from "./MarloTitle";
 import { SpotlightCard } from "./SpotlightCard";
 import {
-  Play,
   Search,
   Milestone,
   LayoutGrid,
@@ -573,16 +572,6 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
             {/* Bottom Subtle Syntax Line */}
             <div className="text-[10px] text-slate-400/90 font-mono truncate text-center z-10 px-1 opacity-80 group-hover:opacity-100 transition-opacity">
               {theme.syntax}
-            </div>
-
-            {/* 🌟 Hover Overlay Glowing Play Beacon */}
-            <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none z-20 backdrop-blur-[2px]">
-              <div className="relative flex items-center justify-center">
-                <span className="absolute w-14 h-14 rounded-full bg-gradient-to-r from-[#F8BD57]/40 to-[#EE8420]/40 animate-ping" />
-                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#F8BD57] via-[#F29B23] to-[#EE8420] text-[#1C1304] flex items-center justify-center shadow-[0_0_28px_rgba(242,155,35,0.85)] border-2 border-white/60 transform group-hover:scale-115 transition-transform duration-300">
-                  <Play size={18} fill="#1C1304" className="ml-0.5 text-[#1C1304] drop-shadow-sm" />
-                </div>
-              </div>
             </div>
           </div>
 
