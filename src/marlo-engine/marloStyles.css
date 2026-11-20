@@ -688,3 +688,86 @@
   background: 0 0 !important;
   padding: 0 !important;
 }
+
+/* =====================================================================
+   MARLO AUTHENTIC CHAT & MESSAGING THREAD (1:1 with Marlo App)
+   Ported directly from D:\C++\quản lí dự án\marlo-app
+   ===================================================================== */
+.marlo-scope .thread__msgs, .thread__msgs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 14px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.marlo-scope .msg, .msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 84%;
+  animation: marloMsgIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transform-origin: 0% 100%;
+}
+
+.marlo-scope .msg.is-mine, .msg.is-mine {
+  flex-direction: row-reverse;
+  align-self: flex-end;
+  transform-origin: 100% 100%;
+}
+
+.marlo-scope .msg__bubble, .msg__bubble {
+  background: var(--card-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: 18px 18px 18px 6px;
+  padding: 10px 14px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.marlo-scope .msg.is-mine .msg__bubble, .msg.is-mine .msg__bubble {
+  background: var(--thumb);
+  color: var(--on-thumb);
+  box-shadow: none;
+  border-radius: 18px 18px 6px 18px;
+}
+
+.marlo-scope .msg__who, .msg__who {
+  font-size: var(--fs-2xs);
+  opacity: 0.7;
+  margin-bottom: 3px;
+  font-weight: 600;
+  display: block;
+}
+
+.marlo-scope .msg__bubble p, .msg__bubble p {
+  line-height: 1.5;
+  margin: 0;
+}
+
+.marlo-scope .thread__reply, .thread__reply {
+  border-top: 1px solid var(--line);
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  display: flex;
+  background: var(--card);
+}
+
+@keyframes marloMsgIn {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

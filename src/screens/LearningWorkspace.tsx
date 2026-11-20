@@ -50,7 +50,6 @@ import {
   MessageSquareText,
 } from "lucide-react";
 import {
-  askSocraticTutor,
   fetchStudentLearningOverview,
   completeStudentLessonApi,
   saveStudentVideoProgressApi,
@@ -73,6 +72,7 @@ import { LessonVideoStudio } from "../components/LessonVideoStudio";
 import { CourseCatalogHub } from "../components/CourseCatalogHub";
 import { MultiChapterSidebar } from "../components/MultiChapterSidebar";
 import LiquidCardConnector from "../components/LiquidCardConnector";
+import MarloAiChatDrawer from "../components/MarloAiChatDrawer";
 import { triggerMarloConfetti } from "../utils/confetti";
 import {
   getLessonDisplayCode,
@@ -391,16 +391,6 @@ export default function LearningWorkspace({
       window.removeEventListener("storage", handleStorageSync);
     };
   }, []);
-
-  // AI Mentor Chat State
-  const [chatInput, setChatInput] = useState<string>("");
-  const [isAskingAi, setIsAskingAi] = useState<boolean>(false);
-  const [messages, setMessages] = useState<Array<{ from: "mentor" | "user"; text: string }>>([
-    {
-      from: "mentor",
-      text: "Chào bạn! Mình là trợ lý AI Socratic. Mình sẽ cùng bạn phản biện bản chất kỹ thuật của môn học này, gợi mở tư duy chứ tuyệt đối không mớm sẵn lời giải nhé!",
-    },
-  ]);
 
   // Helper trích xuất mã YouTube Video từ URL hoặc ID
   const extractYoutubeId = (url?: string): string | undefined => {
@@ -974,34 +964,6 @@ export default function LearningWorkspace({
       setQuizIndex((i) => i + 1);
       setSelectedOption(null);
       setQuizSubmitted(false);
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!chatInput.trim()) return;
-    const userMsg = chatInput.trim();
-    setChatInput("");
-    setMessages((prev) => [...prev, { from: "user", text: userMsg }]);
-    setIsAskingAi(true);
-
-    try {
-      const response = await askSocraticTutor({
-        subjectId: selectedSubjectId,
-        question: userMsg,
-        currentTopic: activeMultiLesson.title,
-        chatSkin,
-      });
-      setMessages((prev) => [...prev, { from: "mentor", text: response.answer }]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          from: "mentor",
-          text: `Câu hỏi rất hay! Trong môn ${currentMultiSubject.name}, theo bạn yếu tố nào đóng vai trò then chốt trong bài "${activeMultiLesson.title}"?`,
-        },
-      ]);
-    } finally {
-      setIsAskingAi(false);
     }
   };
 
@@ -1920,7 +1882,7 @@ export default function LearningWorkspace({
         </main>
       </div>
 
-      {/* ── NÚT MỞ AI SOCRATIC MENTOR & DRAWER TƯƠNG TÁC TRỰC TIẾP ── */}
+      {/* ── NÚT MỞ AI SOCRATIC MENTOR & MARLO CHAT DRAWER TƯƠNG TÁC TRỰC TIẾP ── */}
       {!tutorOpen && (
         <button
           type="button"
@@ -1934,86 +1896,16 @@ export default function LearningWorkspace({
         </button>
       )}
 
-      {tutorOpen && (
-        <aside className="fixed bottom-4 right-4 z-50 w-[340px] sm:w-[390px] max-h-[75vh] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className={`w-8 h-8 rounded-xl ${mentor.color} text-white flex items-center justify-center text-xs font-black shrink-0`}>
-                {mentor.emoji}
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                  {mentor.name} · AI Socratic Mentor
-                </div>
-                <div className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
-                  Chủ đề: {activeMultiLesson.title}
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setTutorOpen(false)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 cursor-pointer"
-              title="Đóng AI Tutor"
-            >
-              <X size={15} />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 text-xs">
-            {messages.map((m, idx) => (
-              <div
-                key={idx}
-                className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed ${
-                    m.from === "user"
-                      ? "bg-[#141619] dark:bg-amber-500 text-white dark:text-slate-950 font-medium"
-                      : chatSkin === "terminal"
-                      ? "bg-slate-950 text-emerald-300 font-mono border border-slate-800"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                  }`}
-                >
-                  {m.text}
-                </div>
-              </div>
-            ))}
-            {isAskingAi && (
-              <div className="flex justify-start">
-                <div className="px-3.5 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs flex items-center gap-1.5">
-                  <Loader2 size={13} className="animate-spin" />
-                  <span>{mentor.name} đang phân tích Socratic...</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex items-center gap-2">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !isAskingAi) {
-                  void handleSendMessage();
-                }
-              }}
-              placeholder="Đặt câu hỏi gợi mở tư duy..."
-              className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500"
-            />
-            <button
-              type="button"
-              disabled={!chatInput.trim() || isAskingAi}
-              onClick={() => void handleSendMessage()}
-              className="p-2 rounded-xl bg-[#141619] dark:bg-white text-white dark:text-[#141619] hover:opacity-90 disabled:opacity-40 transition cursor-pointer shrink-0"
-              title="Gửi câu hỏi"
-            >
-              <Send size={14} />
-            </button>
-          </div>
-        </aside>
-      )}
+      {/* Marlo Authentic Chat Drawer - 1:1 replica từ D:\C++\quản lí dự án\marlo-app */}
+      <MarloAiChatDrawer
+        isOpen={tutorOpen}
+        onClose={() => setTutorOpen(false)}
+        mentor={mentor}
+        activeTopic={activeMultiLesson.title}
+        subjectId={selectedSubjectId}
+        subjectName={currentMultiSubject?.name}
+        currentUserName={learningOverview?.user?.name || "Minh Anh"}
+      />
 
       {toastMessage && (
         <MarloToast
