@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
@@ -1326,6 +1326,416 @@ function readProjectFrozenState(projectId: string): boolean {
   }
 }
 
+const TOPO_SVG_STYLES = `
+  @keyframes topoDrawPath {
+    0% { stroke-dashoffset: 1600; opacity: 0.3; }
+    20% { opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 1; }
+  }
+  @keyframes topoPopNode {
+    0% { transform: scale(0); opacity: 0; }
+    65% { transform: scale(1.28); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes topoFadeIn {
+    0% { opacity: 0; transform: translateY(-4px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .topo-path-main {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  .topo-path-develop1 {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: topoDrawPath 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;
+  }
+  .topo-path-develop2 {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.75s forwards;
+  }
+  .topo-path-auth {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
+  }
+  .topo-path-evaluator {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.4s forwards;
+  }
+  .topo-path-hotfix {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.6s forwards;
+  }
+  .topo-path-hotfix-dev {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.7s forwards;
+  }
+  .topo-path-release {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.8s forwards;
+  }
+`;
+
+/** Formats raw ISO timestamps into a compact single-line local string (HH:mm · dd/MM/yyyy). */
+function formatSyncTimestamp(raw: string): string {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return "";
+  const dt = new Date(trimmed);
+  if (Number.isNaN(dt.getTime())) return trimmed;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(dt.getHours())}:${pad(dt.getMinutes())} · ${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+}
+
+interface GitRepoConfigModalProps {
+  isOpen: boolean;
+  isClosing: boolean;
+  initialRepoUrl: string;
+  initialTargetBranch: string;
+  initialMergeStrategy: string;
+  lastSyncedAt: string;
+  isSyncingLive: boolean;
+  onClose: () => void;
+  onSave: (
+    nextRepoUrl: string,
+    nextTargetBranch: string,
+    nextMergeStrategy: string
+  ) => Promise<void> | void;
+}
+
+const PRESET_TARGET_BRANCHES = [
+  { value: "main", label: "main (Production Release)" },
+  { value: "develop", label: "develop (Integration Branch)" },
+  { value: "feature/erd", label: "feature/erd (Database Design)" },
+  { value: "feature/auth", label: "feature/auth (Authentication)" },
+  { value: "feature/sandbox", label: "feature/sandbox (Docker Runner)" },
+];
+
+/** Isolated modal holding draft form state so keystrokes never re-render the heavy SVG/ReactFlow graph. */
+const GitRepoConfigModal = memo(function GitRepoConfigModal({
+  isOpen,
+  isClosing,
+  initialRepoUrl,
+  initialTargetBranch,
+  initialMergeStrategy,
+  lastSyncedAt,
+  isSyncingLive,
+  onClose,
+  onSave,
+}: GitRepoConfigModalProps) {
+  const [draftRepoUrl, setDraftRepoUrl] = useState(initialRepoUrl);
+  const [draftTargetBranch, setDraftTargetBranch] = useState(initialTargetBranch);
+  const [draftMergeStrategy, setDraftMergeStrategy] = useState(initialMergeStrategy);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setDraftRepoUrl(initialRepoUrl);
+      setDraftTargetBranch(initialTargetBranch);
+      setDraftMergeStrategy(initialMergeStrategy);
+      setValidationError(null);
+    }
+  }, [isOpen, initialRepoUrl, initialTargetBranch, initialMergeStrategy]);
+
+  const formattedSyncedAt = useMemo(
+    () => formatSyncTimestamp(lastSyncedAt),
+    [lastSyncedAt]
+  );
+
+  if (!isOpen || typeof document === "undefined") return null;
+
+  const cleanDraft = draftRepoUrl.trim();
+  const cleanInitial = initialRepoUrl.trim();
+  const isConnectedExact = cleanDraft.length > 0 && cleanDraft === cleanInitial;
+  const validPreviewUrl = /^https?:\/\//i.test(cleanDraft)
+    ? cleanDraft
+    : /^https?:\/\//i.test(cleanInitial)
+    ? cleanInitial
+    : "";
+
+  const hasCustomBranch =
+    Boolean(draftTargetBranch) &&
+    !PRESET_TARGET_BRANCHES.some((opt) => opt.value === draftTargetBranch);
+
+  const handleSubmit = async () => {
+    if (!cleanDraft || !/^https?:\/\//i.test(cleanDraft)) {
+      setValidationError("Vui lòng nhập URL GitHub hợp lệ bắt đầu bằng https:// hoặc http://");
+      inputRef.current?.focus();
+      return;
+    }
+    setValidationError(null);
+    try {
+      await onSave(cleanDraft, draftTargetBranch, draftMergeStrategy);
+    } catch (err: any) {
+      setValidationError(err?.message || "Không thể lưu cấu hình Repo, vui lòng thử lại.");
+    }
+  };
+
+  return createPortal(
+    <div
+      onClick={() => {
+        if (!isSyncingLive) onClose();
+      }}
+      className={`fixed inset-0 z-[9998] bg-slate-950/60 flex items-center justify-center p-4 ${
+        isClosing ? "marlo-scrim-out" : "marlo-scrim"
+      }`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 space-y-4 ${
+          isClosing ? "marlo-modal-out" : "marlo-modal"
+        }`}
+      >
+        <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <GitFork size={18} className="text-blue-600 dark:text-blue-400" />
+              Liên Kết & Đồng Bộ Repo GitHub
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Quản lý kho mã nguồn, nhánh nộp bài chính và chiến lược Merge mặc định của dự án.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSyncingLive}
+            aria-label="Đóng hộp thoại"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold p-1 cursor-pointer disabled:opacity-40"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-3.5 text-xs">
+          <div>
+            <label
+              htmlFor="git-repo-url-input"
+              className="font-semibold text-slate-700 dark:text-slate-300 block mb-1"
+            >
+              Đường dẫn Kho lưu trữ (GitHub Repository URL):
+            </label>
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg transition-colors ${
+                validationError
+                  ? "border-rose-400 dark:border-rose-500 focus-within:ring-2 focus-within:ring-rose-500/20 focus-within:border-rose-500"
+                  : "border-slate-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500"
+              }`}
+            >
+              <input
+                id="git-repo-url-input"
+                ref={inputRef}
+                type="text"
+                value={draftRepoUrl}
+                onChange={(e) => {
+                  setDraftRepoUrl(e.target.value);
+                  if (validationError) setValidationError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !isSyncingLive) {
+                    e.preventDefault();
+                    void handleSubmit();
+                  }
+                }}
+                placeholder="https://github.com/owner/repository"
+                className="flex-1 min-w-0 bg-transparent font-mono text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none py-0.5"
+              />
+              {draftRepoUrl.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftRepoUrl("");
+                    setValidationError(null);
+                    inputRef.current?.focus();
+                  }}
+                  aria-label="Xóa đường dẫn URL"
+                  title="Xóa nhanh URL"
+                  className="shrink-0 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700/70 transition cursor-pointer"
+                >
+                  <X size={13} />
+                </button>
+              )}
+              {cleanDraft.length > 0 &&
+                (isConnectedExact ? (
+                  <span className="shrink-0 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-2 py-0.5 rounded whitespace-nowrap">
+                    Đã Kết Nối
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 px-2 py-0.5 rounded whitespace-nowrap">
+                    Chưa lưu
+                  </span>
+                ))}
+            </div>
+            {validationError && (
+              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                {validationError}
+              </p>
+            )}
+
+            <details className="mt-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-2.5 py-1.5">
+              <summary className="text-[11px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                Thử nghiệm nhanh với Repo mẫu công khai (tùy chọn)
+              </summary>
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftRepoUrl("https://github.com/Hoaba-clouch/E-learningProject");
+                    setValidationError(null);
+                  }}
+                  className="px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[11px] font-semibold hover:bg-purple-100 cursor-pointer"
+                >
+                  CodeMind Gốc
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftRepoUrl("https://github.com/facebook/react");
+                    setValidationError(null);
+                  }}
+                  className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[11px] font-semibold hover:bg-blue-100 cursor-pointer"
+                >
+                  React
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftRepoUrl("https://github.com/fastapi/fastapi");
+                    setValidationError(null);
+                  }}
+                  className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-100 cursor-pointer"
+                >
+                  FastAPI
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftRepoUrl("https://github.com/torvalds/linux");
+                    setValidationError(null);
+                  }}
+                  className="px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[11px] font-semibold hover:bg-amber-100 cursor-pointer"
+                >
+                  Linux
+                </button>
+              </div>
+            </details>
+          </div>
+
+          <div>
+            <label
+              htmlFor="git-target-branch-select"
+              className="font-semibold text-slate-700 dark:text-slate-300 block mb-1"
+            >
+              Nhánh nộp bài & đồng bộ chính (Target Branch):
+            </label>
+            <select
+              id="git-target-branch-select"
+              value={draftTargetBranch}
+              onChange={(e) => setDraftTargetBranch(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              {hasCustomBranch && (
+                <option value={draftTargetBranch}>
+                  {draftTargetBranch} (Nhánh hiện tại của Repo)
+                </option>
+              )}
+              {PRESET_TARGET_BRANCHES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="git-merge-strategy-select"
+              className="font-semibold text-slate-700 dark:text-slate-300 block mb-1"
+            >
+              Chiến lược Merge mặc định (Default Merge Strategy):
+            </label>
+            <select
+              id="git-merge-strategy-select"
+              value={draftMergeStrategy}
+              onChange={(e) => setDraftMergeStrategy(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="squash">squash (Squash and Merge — Chuẩn Sprint)</option>
+              <option value="rebase">rebase (Rebase and Merge — Tuyến tính)</option>
+              <option value="merge">merge (Merge Commit --no-ff)</option>
+            </select>
+          </div>
+
+          <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/60 rounded-lg text-blue-900 dark:text-blue-200 space-y-1.5 text-xs">
+            <div className="font-bold flex items-center justify-between gap-2 text-blue-800 dark:text-blue-300">
+              <span className="flex items-center gap-1.5 shrink-0">
+                <ShieldCheck size={14} />
+                Trạng thái liên kết tự động:
+              </span>
+              {formattedSyncedAt && (
+                <span className="text-[10.5px] font-mono font-normal text-blue-700 dark:text-blue-400 whitespace-nowrap shrink-0">
+                  Đồng bộ: {formattedSyncedAt}
+                </span>
+              )}
+            </div>
+            <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800 dark:text-blue-300">
+              <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG</strong>.</li>
+              <li>Tự động quét Pull Request qua <strong>CodeMind AI AST Reviewer</strong>.</li>
+              <li>Kiểm định liêm chính AI và phân bổ đóng góp giữa các thành viên nhóm.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+          {validPreviewUrl ? (
+            <a
+              href={validPreviewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
+            >
+              <FolderGit2 size={13} />
+              Xem trên GitHub
+            </a>
+          ) : (
+            <span className="text-xs text-slate-400 dark:text-slate-500 font-semibold flex items-center gap-1 cursor-not-allowed">
+              <FolderGit2 size={13} />
+              Xem trên GitHub
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSyncingLive}
+              className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer disabled:opacity-50"
+            >
+              Đóng
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isSyncingLive}
+              className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <RotateCw size={13} className={isSyncingLive ? "animate-spin" : ""} />
+              <span>{isSyncingLive ? "Đang đồng bộ..." : "Lưu & Đồng Bộ Ngay"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+});
+
 export default function GitProjectHub({
   role = "student",
   initialProjectId = "prj-codemind",
@@ -1508,25 +1918,25 @@ export default function GitProjectHub({
     }, 280);
   };
 
-  const handleCloseRepoModal = () => {
+  const handleCloseRepoModal = useCallback(() => {
     if (isRepoModalClosing) return;
     setIsRepoModalClosing(true);
     setTimeout(() => {
       setShowRepoModal(false);
       setIsRepoModalClosing(false);
     }, 220);
-  };
+  }, [isRepoModalClosing]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (archDrawerOpen) handleCloseArchDrawer();
-        if (showRepoModal) handleCloseRepoModal();
+        if (showRepoModal && !isSyncingLive) handleCloseRepoModal();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [archDrawerOpen, showRepoModal, isArchDrawerClosing, isRepoModalClosing]);
+  }, [archDrawerOpen, showRepoModal, isArchDrawerClosing, isRepoModalClosing, isSyncingLive, handleCloseRepoModal]);
   const [repoUrl, setRepoUrl] = useState<string>("https://github.com/Hoaba-clouch/E-learningProject");
   const [targetBranch, setTargetBranch] = useState<string>("main");
   const [topoAnimKey, setTopoAnimKey] = useState<number>(0);
@@ -1678,27 +2088,42 @@ export default function GitProjectHub({
     void loadGitWorkspace(activeProjectId);
   }, [activeProjectId, loadGitWorkspace]);
 
-  const handleSaveRepoSync = async () => {
+  const handleSaveRepoSync = async (
+    nextRepoUrl: string,
+    nextTargetBranch: string,
+    nextMergeStrategy: string
+  ) => {
+    const cleanUrl = nextRepoUrl.trim();
+    if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
+      showToast("Vui lòng nhập URL GitHub hợp lệ (https://...)");
+      return;
+    }
     const res = await updateGitHubRepoApi(
       activeProjectId,
       {
-        repo_url: repoUrl,
-        target_branch: targetBranch,
-        default_merge_strategy: mergeStrategy,
+        repo_url: cleanUrl,
+        target_branch: nextTargetBranch,
+        default_merge_strategy: nextMergeStrategy,
       },
       role
     );
     if (res.error) {
       setActionError(res.error);
-      return;
+      showToast(res.error);
+      throw new Error(res.error);
     }
     if (res.repository) {
-      setRepoUrl(res.repository.repoUrl);
+      setRepoUrl(res.repository.repoUrl || cleanUrl);
       setRepoSlug(res.repository.repoSlug);
-      setTargetBranch(res.repository.targetBranch);
+      setTargetBranch(res.repository.targetBranch || nextTargetBranch);
+      setMergeStrategy(res.repository.defaultMergeStrategy || nextMergeStrategy);
+    } else {
+      setRepoUrl(cleanUrl);
+      setTargetBranch(nextTargetBranch);
+      setMergeStrategy(nextMergeStrategy);
     }
     handleCloseRepoModal();
-    await handleApplyRepoUrl(repoUrl);
+    await handleApplyRepoUrl(cleanUrl);
   };
 
   const handlePushNewCommit = async (payload: {
@@ -1979,6 +2404,11 @@ export default function GitProjectHub({
       return matchMember && matchBranch;
     });
   }, [commits, memberFilter, branchFilter]);
+
+  const filteredCommitIds = useMemo(
+    () => new Set(filteredCommits.map((c) => c.id)),
+    [filteredCommits]
+  );
 
   const svgWidth = useMemo(() => {
     const maxCx = commits.reduce((acc, c) => Math.max(acc, c.cx || 70), 1300);
@@ -2937,72 +3367,7 @@ export default function GitProjectHub({
           {/* Interactive SVG Visual Git Graph with Floating Popover */}
           <div className="relative overflow-x-auto p-4 bg-slate-50/70 dark:bg-slate-950/80 rounded-xl border border-slate-200 dark:border-slate-800">
             <svg style={{ width: `${svgWidth}px`, height: "390px" }} viewBox={`0 0 ${svgWidth} 390`}>
-              <defs>
-                <filter id="topoGlow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-
-              <style>{`
-                @keyframes topoDrawPath {
-                  0% { stroke-dashoffset: 1600; opacity: 0.3; }
-                  20% { opacity: 1; }
-                  100% { stroke-dashoffset: 0; opacity: 1; }
-                }
-                @keyframes topoPopNode {
-                  0% { transform: scale(0); opacity: 0; }
-                  65% { transform: scale(1.28); opacity: 1; }
-                  100% { transform: scale(1); opacity: 1; }
-                }
-                @keyframes topoFadeIn {
-                  0% { opacity: 0; transform: translateY(-4px); }
-                  100% { opacity: 1; transform: translateY(0); }
-                }
-                .topo-path-main {
-                  stroke-dasharray: 1600;
-                  stroke-dashoffset: 1600;
-                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-                }
-                .topo-path-develop1 {
-                  stroke-dasharray: 1600;
-                  stroke-dashoffset: 1600;
-                  animation: topoDrawPath 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;
-                }
-                .topo-path-develop2 {
-                  stroke-dasharray: 1600;
-                  stroke-dashoffset: 1600;
-                  animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.75s forwards;
-                }
-                .topo-path-auth {
-                  stroke-dasharray: 1600;
-                  stroke-dashoffset: 1600;
-                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
-                }
-                .topo-path-evaluator {
-                  stroke-dasharray: 1600;
-                  stroke-dashoffset: 1600;
-                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.4s forwards;
-                }
-                .topo-path-hotfix {
-                  stroke-dasharray: 1600;
-                  stroke-dashoffset: 1600;
-                  animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.6s forwards;
-                }
-                .topo-path-hotfix-dev {
-                  stroke-dasharray: 1600;
-                  stroke-dashoffset: 1600;
-                  animation: topoDrawPath 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.7s forwards;
-                }
-                .topo-path-release {
-                  stroke-dasharray: 1600;
-                  stroke-dashoffset: 1600;
-                  animation: topoDrawPath 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.8s forwards;
-                }
-              `}</style>
+              <style>{TOPO_SVG_STYLES}</style>
 
               {/* Dynamic Lane Guides & Branch Labels - Khớp 100% với Nhánh Thật của Repository */}
               {uniqueBranches.map((b) => (
@@ -3038,9 +3403,16 @@ export default function GitProjectHub({
                 stroke="#2563eb"
                 strokeWidth="3"
               />
-              <circle r="5" fill="#38bdf8" filter="url(#topoGlow)">
-                <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="4.2s" repeatCount="indefinite" begin="0.3s" />
-              </circle>
+              {!showRepoModal && !showNewCommitModal && !showNewPrModal && !archDrawerOpen && (
+                <g>
+                  <circle r="8" fill="#38bdf8" opacity="0.28">
+                    <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="4.2s" repeatCount="indefinite" begin="0.3s" />
+                  </circle>
+                  <circle r="4.5" fill="#38bdf8">
+                    <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="4.2s" repeatCount="indefinite" begin="0.3s" />
+                  </circle>
+                </g>
+              )}
 
               {/* Dynamic DAG Branch Split, Intra-Branch & Merge Curves */}
               {dynamicTopoEdges.map((edge) => (
@@ -3057,7 +3429,7 @@ export default function GitProjectHub({
 
               {/* Interactive Commit Dots */}
               {commits.map((c, idx) => {
-                const isFiltered = filteredCommits.some((fc) => fc.id === c.id);
+                const isFiltered = filteredCommitIds.has(c.id);
                 const isSelected = selectedCommit?.id === c.id;
                 const isHovered = hoveredCommit?.id === c.id;
 
@@ -3796,170 +4168,18 @@ export default function GitProjectHub({
         </div>
       )}
 
-      {/* Modal Cấu hình & Đồng Bộ GitHub Repo */}
-      {showRepoModal && (
-        typeof document !== "undefined" ? (
-          createPortal(
-            <div onClick={handleCloseRepoModal} className={`fixed inset-0 z-[9998] bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-4 ${isRepoModalClosing ? "marlo-scrim-out" : "marlo-scrim"}`}>
-              <div onClick={(e) => e.stopPropagation()} className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 space-y-4 ${isRepoModalClosing ? "marlo-modal-out" : "marlo-modal"}`}>
-                <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <GitFork size={18} className="text-blue-600 dark:text-blue-400" />
-                      Liên Kết & Đồng Bộ Repo GitHub
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Quản lý kho mã nguồn, nhánh nộp bài chính và chiến lược Merge mặc định của dự án.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleCloseRepoModal}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold p-1 cursor-pointer"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                <div className="space-y-3.5 text-xs">
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                      Đường dẫn Kho lưu trữ (GitHub Repository URL):
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={repoUrl}
-                        onChange={(e) => setRepoUrl(e.target.value)}
-                        className="w-full px-3 py-2 pr-24 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-2 py-0.5 rounded">
-                        Đã Kết Nối
-                      </span>
-                    </div>
-
-                    <details className="mt-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-2.5 py-1.5">
-                      <summary className="text-[11px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
-                        Thử nghiệm nhanh với Repo mẫu công khai (tùy chọn)
-                      </summary>
-                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => setRepoUrl("https://github.com/Hoaba-clouch/E-learningProject")}
-                          className="px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[11px] font-semibold hover:bg-purple-100 cursor-pointer"
-                        >
-                          CodeMind Gốc
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRepoUrl("https://github.com/facebook/react")}
-                          className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[11px] font-semibold hover:bg-blue-100 cursor-pointer"
-                        >
-                          React
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRepoUrl("https://github.com/fastapi/fastapi")}
-                          className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-100 cursor-pointer"
-                        >
-                          FastAPI
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRepoUrl("https://github.com/torvalds/linux")}
-                          className="px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[11px] font-semibold hover:bg-amber-100 cursor-pointer"
-                        >
-                          Linux
-                        </button>
-                      </div>
-                    </details>
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                      Nhánh nộp bài & đồng bộ chính (Target Branch):
-                    </label>
-                    <select
-                      value={targetBranch}
-                      onChange={(e) => setTargetBranch(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      <option value="main">main (Production Release)</option>
-                      <option value="develop">develop (Integration Branch)</option>
-                      <option value="feature/erd">feature/erd (Database Design)</option>
-                      <option value="feature/auth">feature/auth (Authentication)</option>
-                      <option value="feature/sandbox">feature/sandbox (Docker Runner)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                      Chiến lược Merge mặc định (Default Merge Strategy):
-                    </label>
-                    <select
-                      value={mergeStrategy}
-                      onChange={(e) => setMergeStrategy(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      <option value="squash">squash (Squash and Merge — Chuẩn Sprint)</option>
-                      <option value="rebase">rebase (Rebase and Merge — Tuyến tính)</option>
-                      <option value="merge">merge (Merge Commit --no-ff)</option>
-                    </select>
-                  </div>
-
-                  <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/60 rounded-lg text-blue-900 dark:text-blue-200 space-y-1.5 text-xs">
-                    <div className="font-bold flex items-center justify-between gap-1.5 text-blue-800 dark:text-blue-300">
-                      <span className="flex items-center gap-1.5">
-                        <ShieldCheck size={14} />
-                        Trạng thái liên kết tự động:
-                      </span>
-                      {lastSyncedAt && (
-                        <span className="text-[10.5px] font-mono font-normal text-blue-700 dark:text-blue-400">
-                          Đồng bộ: {lastSyncedAt}
-                        </span>
-                      )}
-                    </div>
-                    <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800 dark:text-blue-300">
-                      <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG</strong>.</li>
-                      <li>Tự động quét Pull Request qua <strong>CodeMind AI AST Reviewer</strong>.</li>
-                      <li>Kiểm định liêm chính AI và phân bổ đóng góp giữa các thành viên nhóm.</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <a
-                    href={repoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
-                  >
-                    <FolderGit2 size={13} />
-                    Xem trên GitHub
-                  </a>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleCloseRepoModal}
-                      disabled={isSyncingLive}
-                      className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer disabled:opacity-50"
-                    >
-                      Đóng
-                    </button>
-                    <button
-                      onClick={handleSaveRepoSync}
-                      disabled={isSyncingLive}
-                      className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <RotateCw size={13} className={isSyncingLive ? "animate-spin" : ""} />
-                      <span>{isSyncingLive ? "Đang đồng bộ..." : "Lưu & Đồng Bộ Ngay"}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        ) : null
-      )}
+      {/* Modal Cấu hình & Đồng Bộ GitHub Repo (Isolated Draft State) */}
+      <GitRepoConfigModal
+        isOpen={showRepoModal}
+        isClosing={isRepoModalClosing}
+        initialRepoUrl={repoUrl}
+        initialTargetBranch={targetBranch}
+        initialMergeStrategy={mergeStrategy}
+        lastSyncedAt={lastSyncedAt}
+        isSyncingLive={isSyncingLive}
+        onClose={handleCloseRepoModal}
+        onSave={handleSaveRepoSync}
+      />
 
       <GitNewCommitModal
         isOpen={showNewCommitModal}
