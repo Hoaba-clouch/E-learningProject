@@ -364,7 +364,7 @@ export function InstructorChapterGradingView({
                         onClick={() => setActiveSubId(sub.id)}
                         className={`cursor-pointer transition-colors ${
                           isSelected
-                            ? "bg-emerald-50/90 dark:bg-slate-800/90 border-l-4 border-emerald-500"
+                            ? "bg-slate-100/90 dark:bg-slate-800/90 border-l-4 border-slate-900 dark:border-white"
                             : "hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
                         }`}
                       >
@@ -396,11 +396,7 @@ export function InstructorChapterGradingView({
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-1.5">
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10.5px] font-mono font-bold ${
-                                isPassAll
-                                  ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
-                                  : "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300"
-                              }`}
+                              className="px-2 py-0.5 rounded-full text-[10.5px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                             >
                               {sub.testsPassed}/{sub.testsTotal}
                             </span>
@@ -414,7 +410,7 @@ export function InstructorChapterGradingView({
                           <div className="font-mono font-bold text-xs">
                             <span className="text-slate-600 dark:text-slate-300 font-bold">{sub.score.toFixed(1)}</span>
                             <span className="text-slate-400 dark:text-slate-500 mx-1">/</span>
-                            <span className={sub.instructorGrade !== null && sub.instructorGrade !== undefined ? "text-emerald-600 dark:text-emerald-400 font-extrabold" : "text-amber-500 font-normal"}>
+                            <span className={sub.instructorGrade !== null && sub.instructorGrade !== undefined ? "text-slate-900 dark:text-white font-extrabold" : "text-slate-400 font-normal"}>
                               {sub.instructorGrade !== null && sub.instructorGrade !== undefined ? sub.instructorGrade.toFixed(1) : "—"}
                             </span>
                           </div>
@@ -422,23 +418,23 @@ export function InstructorChapterGradingView({
 
                         <td className="px-3 py-3 text-center">
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                               sub.status === "graded"
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
                                 : sub.status === "revision_requested"
-                                ? "bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 font-semibold"
                                 : sub.status === "flagged"
-                                ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                                : "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600 font-bold"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 font-semibold"
                             }`}
                           >
                             {sub.status === "graded"
-                              ? "✓ Đã chấm"
+                              ? "Đã chấm"
                               : sub.status === "revision_requested"
-                              ? "↺ Sửa lại"
+                              ? "Sửa lại"
                               : sub.status === "flagged"
-                              ? "⚠ Cảnh báo"
-                              : "● Chờ duyệt"}
+                              ? "Cảnh báo"
+                              : "Chờ duyệt"}
                           </span>
                         </td>
                       </tr>

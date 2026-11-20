@@ -136,22 +136,22 @@ function getBookingStatusChip(status: string): { label: string; cls: string } {
     case "pending":
       return {
         label: "Chờ GV duyệt",
-        cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+        cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700",
       };
     case "confirmed":
       return {
         label: "Đã xác nhận",
-        cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
+        cls: "bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent font-bold",
       };
     case "rejected":
       return {
         label: "Đã từ chối",
-        cls: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-800",
+        cls: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700",
       };
     case "completed":
       return {
         label: "Đã hoàn thành",
-        cls: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800",
+        cls: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 font-bold",
       };
     default:
       return {
@@ -1568,11 +1568,11 @@ export default function EngineeringScheduleRota({
             </div>
           ) : (
             <div className="w-full space-y-6">
-              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl">
-                <b className="text-sm font-bold text-amber-900 dark:text-amber-200 block">
+              <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 p-4 rounded-2xl">
+                <b className="text-sm font-bold text-slate-900 dark:text-white block">
                   Lịch Đăng Ký & Cố Vấn 1-1 Của Bạn ({myStudentBookedSchedules.length})
                 </b>
-                <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Chỉ hiển thị các ca thi, hội đồng và lịch hẹn cố vấn do chính tài khoản của bạn đăng ký trong hệ thống.
                 </p>
               </div>
@@ -1715,7 +1715,7 @@ export default function EngineeringScheduleRota({
                         <button
                           type="button"
                           onClick={() => openStudentBookingModal(slot)}
-                          className="w-full py-2 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 text-xs font-bold cursor-pointer transition"
+                          className="w-full py-2.5 rounded-xl bg-[#141619] dark:bg-white text-white dark:text-[#141619] hover:opacity-90 text-xs font-bold cursor-pointer transition shadow-2xs"
                         >
                           Đăng ký ca này
                         </button>
