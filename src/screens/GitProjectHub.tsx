@@ -2812,13 +2812,13 @@ export default function GitProjectHub({
         <div key="metric-git-score" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Điểm Văn hóa Git</span>
-            <ShieldCheck size={16} className="text-blue-600 dark:text-blue-400" />
+            <ShieldCheck size={16} className="text-slate-400 dark:text-slate-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
               <AnimatedNumber value={metricsState.gitCultureScore} decimals={1} key={`score-${statAnimKey}-${activeProjectId}`} />
             </span>
-            <span className="pill pill--info pill--plain text-[10.5px] font-bold">
+            <span className="pill pill--plain text-[10.5px] font-bold">
               {metricsState.gitCultureScore >= 90 ? "Hạng A+ (Chuẩn)" : "Đạt chuẩn"}
             </span>
           </div>
@@ -2830,29 +2830,13 @@ export default function GitProjectHub({
         <div key="metric-ai-integrity" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Kiểm định Liêm chính AI</span>
-            <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <CheckCircle2 size={16} className="text-slate-400 dark:text-slate-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span
-              className={`text-2xl font-bold font-mono ${
-                metricsState.aiIntegrityPct >= 90
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : metricsState.aiIntegrityPct >= 75
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-rose-600 dark:text-rose-400"
-              }`}
-            >
+            <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
               <AnimatedNumber value={metricsState.aiIntegrityPct} suffix="%" key={`integ-${statAnimKey}-${activeProjectId}`} />
             </span>
-            <span
-              className={`pill pill--plain text-[10.5px] font-bold ${
-                metricsState.aiIntegrityPct >= 90
-                  ? "pill--good"
-                  : metricsState.aiIntegrityPct >= 75
-                  ? "pill--warn"
-                  : "pill--bad"
-              }`}
-            >
+            <span className="pill pill--plain text-[10.5px] font-bold">
               {metricsState.aiIntegrityPct >= 90
                 ? "Liêm chính cao"
                 : metricsState.aiIntegrityPct >= 75
@@ -2868,10 +2852,10 @@ export default function GitProjectHub({
         <div key="metric-team-split" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Phân bổ Nhóm ({memberAnalytics.length || 3} người)</span>
-            <UserCheck size={16} className="text-purple-600 dark:text-purple-400" />
+            <UserCheck size={16} className="text-slate-400 dark:text-slate-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-purple-600 dark:text-purple-400 font-mono">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
               {(metricsState.memberShares.length > 0 ? metricsState.memberShares : [36, 34, 30]).join(" : ")}
             </span>
             <span className="pill pill--plain text-[10.5px] font-bold">
@@ -2888,13 +2872,13 @@ export default function GitProjectHub({
         <div key="metric-diagram" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Pull Requests & AST</span>
-            <Boxes size={16} className="text-amber-600 dark:text-amber-400" />
+            <Boxes size={16} className="text-slate-400 dark:text-slate-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
               <AnimatedNumber value={pullRequests.length} key={`prs-${statAnimKey}-${activeProjectId}`} />
             </span>
-            <span className="pill pill--warn pill--plain text-[10.5px] font-bold">
+            <span className="pill pill--plain text-[10.5px] font-bold">
               {metricsState.mergedPrsCount} Merged · {metricsState.openPrsCount} Mở
             </span>
           </div>
