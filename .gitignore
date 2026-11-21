@@ -6,8 +6,8 @@ node_modules/gsap/
 scratch/
 marlo-app/
 
-# Temp Excel locks
-~$*.xlsx
+# Temp Office locks
+~$*
 
 # Dist build files
 dist/

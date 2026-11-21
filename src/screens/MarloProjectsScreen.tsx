@@ -39,6 +39,7 @@ import {
   isGlobalSubmissionLocked,
   isProjectFrozen,
   setGlobalSubmissionLocked,
+  setProjectFrozen,
   subscribeProjectLockChanges,
 } from "../utils/projectFreeze";
 import {
@@ -434,12 +435,8 @@ export default function MarloProjectsScreen({
   const [displayedTab, setDisplayedTab] = useState<"slate" | "timeline">("slate");
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [projects, setProjects] = useState<CNTTProjectItem[]>(() =>
-    CNTT_PROJECTS.map((p) => ({
-      ...p,
-      isMyProject: computeIsMyProject(p, currentUser),
-    }))
-  );
+  const [projects, setProjects] = useState<CNTTProjectItem[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState<boolean>(true);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [gradingProject, setGradingProject] = useState<CNTTProjectItem | null>(null);
   const [isSubmissionLocked, setIsSubmissionLocked] = useState<boolean>(() =>
@@ -509,44 +506,54 @@ export default function MarloProjectsScreen({
   };
 
   const loadProjectsFromApi = async () => {
-    const res = await fetchKanbanWorkspace(isStudent ? "my" : "all");
-    if (res?.projects) {
-      setProjects(
-        res.projects.map((p) => ({
-          id: p.id,
-          name: p.name,
-          client: p.client,
-          course: p.course,
-          kind: p.kind,
-          status: p.status,
-          progress: p.progress,
-          tasksDone: p.tasksDone,
-          tasksTotal: p.tasksTotal,
-          dueText:
-            p.status === "delivered"
-              ? "Đã hoàn thành"
-              : (p.dueText || "").replace(/^in (\d+) days$/i, "Còn $1 ngày").replace(/^Delivered$/i, "Đã hoàn thành") ||
-                `Hạn ${p.dueDate}`,
-          storyPoints: p.storyPoints,
-          pointsBurned: p.pointsBurned,
-          budgetStr: p.budgetStr,
-          lead: p.lead || p.members?.[0]?.name || "Nguyễn Bá Hòa",
-          instructor: p.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)",
-          instructorAvatar: p.instructorAvatar,
-          finalScore: p.finalScore ?? null,
-          totalXp: p.totalXp,
-          members: p.members || [],
-          fav: p.fav,
-          colorHex: p.colorHex,
-          tlStart: p.tlStart,
-          tlWidth: p.tlWidth,
-          tlColor: p.tlColor,
-          gitRepo: p.gitRepo ?? null,
-          isMyProject: p.isMyProject ?? computeIsMyProject(p as any, currentUser),
-          isLead: p.isLead,
-          leaderUserId: p.leaderUserId,
-        }))
-      );
+    setLoadingProjects(true);
+    try {
+      const res = await fetchKanbanWorkspace(isStudent ? "my" : "all");
+      if (res?.projects) {
+        res.projects.forEach((p) => {
+          if (typeof p.isFrozen === "boolean") {
+            setProjectFrozen(p.id, p.isFrozen);
+          }
+        });
+        setProjects(
+          res.projects.map((p) => ({
+            id: p.id,
+            name: p.name,
+            client: p.client,
+            course: p.course,
+            kind: p.kind,
+            status: p.status,
+            progress: p.progress,
+            tasksDone: p.tasksDone,
+            tasksTotal: p.tasksTotal,
+            dueText:
+              p.status === "delivered"
+                ? "Đã hoàn thành"
+                : (p.dueText || "").replace(/^in (\d+) days$/i, "Còn $1 ngày").replace(/^Delivered$/i, "Đã hoàn thành") ||
+                  `Hạn ${p.dueDate}`,
+            storyPoints: p.storyPoints,
+            pointsBurned: p.pointsBurned,
+            budgetStr: p.budgetStr,
+            lead: p.lead || p.members?.[0]?.name || "Nhóm trưởng",
+            instructor: p.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)",
+            instructorAvatar: p.instructorAvatar,
+            finalScore: p.finalScore ?? null,
+            totalXp: p.totalXp,
+            members: p.members || [],
+            fav: p.fav,
+            colorHex: p.colorHex,
+            tlStart: p.tlStart,
+            tlWidth: p.tlWidth,
+            tlColor: p.tlColor,
+            gitRepo: p.gitRepo ?? null,
+            isMyProject: p.isMyProject ?? computeIsMyProject(p as any, currentUser),
+            isLead: p.isLead,
+            leaderUserId: p.leaderUserId,
+          }))
+        );
+      }
+    } finally {
+      setLoadingProjects(false);
     }
   };
 
@@ -554,15 +561,18 @@ export default function MarloProjectsScreen({
     void loadProjectsFromApi();
   }, [isStudent]);
 
-  const handleToggleSubmissionLock = () => {
+  const handleToggleSubmissionLock = async () => {
     const next = !anyFrozen;
     setIsSubmissionLocked(next);
     setGlobalSubmissionLocked(next);
     setLockVersion((v) => v + 1);
+    await Promise.all(
+      projects.map((p) => updateWorkspaceProjectApi(p.id, { is_frozen: next }))
+    );
     setToastMsg(
       next
-        ? "🔒 Đã khóa cổng đăng ký & đóng băng nộp bài toàn khóa (Dự án · Kanban · Git Hub)."
-        : "🔓 Đã mở lại cổng đăng ký & gỡ đóng băng cho toàn bộ đồ án (Dự án · Kanban · Git Hub)."
+        ? "🔒 Đã khóa cổng đăng ký & đóng băng nộp bài toàn khóa (đồng bộ MySQL · Dự án · Kanban · Git Hub)."
+        : "🔓 Đã mở lại cổng đăng ký & gỡ đóng băng cho toàn bộ đồ án (đồng bộ MySQL · Dự án · Kanban · Git Hub)."
     );
   };
 
@@ -1240,13 +1250,36 @@ export default function MarloProjectsScreen({
             </div>
 
             {/* Cards Grid: 3 columns on desktop matching Marlo pgrid */}
-            {filteredProjects.length === 0 ? (
+            {loadingProjects ? (
               <div className="py-20 text-center flex flex-col items-center justify-center">
+                <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mb-3" />
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Đang tải danh sách đồ án thực tế từ hệ thống...
+                </p>
+              </div>
+            ) : filteredProjects.length === 0 ? (
+              <div className="py-20 text-center flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/30">
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center text-slate-400 mb-3 border border-slate-200 dark:border-slate-700">
-                  <Check size={20} />
+                  <FolderKanban size={20} />
                 </div>
-                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">Không có đồ án nào trong mục này</h3>
-                <p className="text-xs text-slate-400 mt-1">Chọn bộ lọc khác hoặc nhấn "Đăng Ký Đồ Án" để thêm đề tài mới</p>
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  {projects.length === 0 ? "Bạn chưa tham gia đồ án nào" : "Không có đồ án nào trong mục này"}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-md">
+                  {projects.length === 0
+                    ? "Hãy nhấn \"Đăng Ký Đồ Án\" để khởi tạo đề tài mới với vai trò Nhóm trưởng, hoặc kiểm tra lời mời tham gia ở trên."
+                    : "Chọn bộ lọc khác hoặc nhấn \"Đăng Ký Đồ Án\" để thêm đề tài mới."}
+                </p>
+                {role === "student" && (
+                  <button
+                    type="button"
+                    onClick={() => setIsNewProjectModalOpen(true)}
+                    className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 font-bold text-xs transition cursor-pointer"
+                  >
+                    <Plus size={14} />
+                    <span>Đăng Ký Đồ Án Mới</span>
+                  </button>
+                )}
               </div>
             ) : (
               <div className="pgrid">

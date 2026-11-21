@@ -803,6 +803,7 @@ CREATE TABLE IF NOT EXISTS engineering_projects (
     kind VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
     fav INT NOT NULL DEFAULT 0,
+    is_frozen INT NOT NULL DEFAULT 0,
     due_date VARCHAR(64) NOT NULL,
     due_text VARCHAR(64) NOT NULL DEFAULT 'in 14 days',
     story_points_budget INT NOT NULL DEFAULT 600,
@@ -1041,6 +1042,7 @@ def _run_safe_migrations(conn: MySQLConnectionWrapper) -> None:
         "ALTER TABLE engineering_projects ADD COLUMN instructor_id VARCHAR(64) DEFAULT 'instructor-demo'",
         "ALTER TABLE engineering_projects ADD COLUMN instructor_name VARCHAR(191) DEFAULT 'Cô Trần Thị B'",
         "ALTER TABLE engineering_projects ADD COLUMN course_id VARCHAR(64) DEFAULT 'oop'",
+        "ALTER TABLE engineering_projects ADD COLUMN is_frozen INT NOT NULL DEFAULT 0",
         """CREATE TABLE IF NOT EXISTS project_invitations (
             id VARCHAR(64) PRIMARY KEY,
             project_id VARCHAR(64) NOT NULL,

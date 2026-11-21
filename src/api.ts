@@ -943,7 +943,7 @@ export async function fetchInstructorSessions(): Promise<InstructorSessionEviden
     if (!res.ok) throw new Error("Failed to fetch instructor sessions");
     const data = await res.json();
     const rows = Array.isArray(data?.sessions) ? data.sessions : [];
-    if (rows.length === 0) return FALLBACK_INSTRUCTOR_SESSIONS;
+    if (rows.length === 0) return [];
 
     return rows.map((r: any, idx: number): InstructorSessionEvidence => {
       const hintCount = Number(r.hint_count ?? 0);
@@ -1007,8 +1007,9 @@ export async function fetchInstructorSessions(): Promise<InstructorSessionEviden
         step_logs: logs,
       };
     });
-  } catch {
-    return FALLBACK_INSTRUCTOR_SESSIONS;
+  } catch (err) {
+    console.warn("fetchInstructorSessions failed:", err);
+    return [];
   }
 }
 
@@ -1161,11 +1162,12 @@ export async function fetchAdminUsers(): Promise<AdminUserRecord[]> {
     if (!res.ok) throw new Error("Failed to fetch admin users");
     const data = await res.json();
     const rows = Array.isArray(data?.users) ? data.users : [];
-    if (rows.length === 0) return FALLBACK_ADMIN_USERS;
+    if (rows.length === 0) return [];
 
     return rows.map((u: any, idx: number) => mapAdminUserRow(u, idx));
-  } catch {
-    return FALLBACK_ADMIN_USERS;
+  } catch (err) {
+    console.warn("fetchAdminUsers failed:", err);
+    return [];
   }
 }
 
@@ -2606,6 +2608,7 @@ export interface WorkspaceProjectDto {
   status: "planning" | "active" | "review" | "delivered";
   kanbanStatus?: "planning" | "in-progress" | "review" | "delivered";
   fav: boolean;
+  isFrozen?: boolean;
   dueDate: string;
   dueText: string;
   progress: number;
@@ -2847,6 +2850,7 @@ export async function updateWorkspaceProjectApi(
   projectId: string,
   payload: {
     fav?: boolean;
+    is_frozen?: boolean;
     status?: string;
     name?: string;
     sprint?: string;
@@ -3118,6 +3122,8 @@ export interface GitHubProjectSummary {
   kind: string;
   status: string;
   sprint: string;
+  isFrozen?: boolean;
+  isLead?: boolean;
 }
 
 export interface GitHubRepoConfig {
@@ -3258,7 +3264,7 @@ export interface GitProjectTaskRef {
 export interface GitHubWorkspaceBundle {
   activeProjectId: string;
   projects: GitHubProjectSummary[];
-  repository: GitHubRepoConfig;
+  repository: GitHubRepoConfig | null;
   metrics: GitHubMetrics;
   commits: GitHubCommitRecord[];
   pullRequests: GitPullRequestRecord[];

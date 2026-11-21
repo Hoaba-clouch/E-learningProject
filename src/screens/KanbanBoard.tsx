@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 
-import { initialProjectsData, type Project } from "../data/kanbanProjects";
+import type { Project } from "../data/kanbanProjects";
 
 import { MarloProjectSlateModal, MarloNewProjectModal } from "../components/MarloProjectModals";
 
@@ -1880,46 +1880,11 @@ export default function KanbanBoard({
 
   };
 
-  const [projects, setProjects] = useState<Project[]>(() => {
+  const [projects, setProjects] = useState<Project[]>([]);
 
-    return initialProjectsData.map((proj) => {
+  const [workspaceLoaded, setWorkspaceLoaded] = useState<boolean>(false);
 
-      if (proj.id === "prj-codemind") {
-
-        return {
-
-          ...proj,
-
-          tasks: initialTasks,
-
-          team: initialMembers,
-
-        };
-
-      }
-
-      return {
-
-        ...proj,
-
-        tasks: Array.isArray(proj.tasks) ? proj.tasks : [],
-
-        team: Array.isArray(proj.team) ? proj.team : [],
-
-      };
-
-    });
-
-  });
-
-  const [currentProjectId, setCurrentProjectId] = useState<string>(() => {
-    if (initialProjectId) return initialProjectId;
-    const stored = getStoredUser(role);
-    if (stored?.email === "hasib@gmail.com" || stored?.id === "usr-sv-02" || String(stored?.full_name || "").includes("Nguyễn Văn A")) {
-      return "prj-compiler";
-    }
-    return "prj-codemind";
-  });
+  const [currentProjectId, setCurrentProjectId] = useState<string>(initialProjectId || "");
 
   const selectProject = (nextProjId: string) => {
     setCurrentProjectId(nextProjId);
@@ -1946,9 +1911,9 @@ export default function KanbanBoard({
 
     dueDate: p.dueDate,
 
-    lead: p.lead || p.team?.[0]?.name || "Nguyễn Bá Hòa",
+    lead: p.lead || p.team?.[0]?.name || "Chưa gán",
 
-    instructor: p.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)",
+    instructor: p.instructor || "",
 
     finalScore: p.finalScore ?? null,
 
@@ -1976,13 +1941,19 @@ export default function KanbanBoard({
 
     const ws = await fetchKanbanWorkspace("all");
 
-    if (ws?.projects?.length) {
+    if (ws && Array.isArray(ws.projects)) {
+
+      ws.projects.forEach((p: any) => {
+        setProjectFrozen(p.id, Boolean(p.isFrozen));
+      });
 
       const normalized = ws.projects.map(normalizeWorkspaceProject);
 
       setProjects(normalized);
 
       setCurrentProjectId((prev) => {
+
+        if (normalized.length === 0) return "";
 
         if (normalized.some((p) => p.id === prev)) return prev;
 
@@ -1991,6 +1962,8 @@ export default function KanbanBoard({
         return myProj ? myProj.id : normalized[0].id;
 
       });
+
+      setWorkspaceLoaded(true);
 
     }
 
@@ -2002,39 +1975,55 @@ export default function KanbanBoard({
 
     let active = true;
 
-    fetchKanbanWorkspace("all").then((ws) => {
+    fetchKanbanWorkspace("all")
+      .then((ws) => {
 
-      if (!active || !ws?.projects?.length) return;
+        if (!active) return;
 
-      const normalized = ws.projects.map(normalizeWorkspaceProject);
+        if (ws && Array.isArray(ws.projects)) {
 
-      setProjects(normalized);
+          ws.projects.forEach((p: any) => {
+            setProjectFrozen(p.id, Boolean(p.isFrozen));
+          });
 
-      setCurrentProjectId((prev) => {
+          const normalized = ws.projects.map(normalizeWorkspaceProject);
 
-        if (initialProjectId && normalized.some((p) => p.id === initialProjectId)) return initialProjectId;
+          setProjects(normalized);
 
-        if (role === "student") {
+          setCurrentProjectId((prev) => {
 
-          const myProj = normalized.find((p: any) => p.isMyProject);
+            if (normalized.length === 0) return "";
 
-          if (myProj && (!prev || !normalized.find((p) => p.id === prev)?.isMyProject)) {
+            if (initialProjectId && normalized.some((p) => p.id === initialProjectId)) return initialProjectId;
 
-            return myProj.id;
+            if (role === "student") {
 
-          }
+              const myProj = normalized.find((p: any) => p.isMyProject);
+
+              if (myProj && (!prev || !normalized.find((p) => p.id === prev)?.isMyProject)) {
+
+                return myProj.id;
+
+              }
+
+            }
+
+            if (prev && normalized.some((p) => p.id === prev)) return prev;
+
+            const myProj = normalized.find((p: any) => p.isMyProject);
+
+            return myProj ? myProj.id : normalized[0].id;
+
+          });
 
         }
 
-        if (prev && normalized.some((p) => p.id === prev)) return prev;
+        setWorkspaceLoaded(true);
 
-        const myProj = normalized.find((p: any) => p.isMyProject);
-
-        return myProj ? myProj.id : normalized[0].id;
-
+      })
+      .catch(() => {
+        if (active) setWorkspaceLoaded(true);
       });
-
-    });
 
     return () => {
 
@@ -2068,7 +2057,7 @@ export default function KanbanBoard({
 
 
 
-  const currentProject = useMemo(() => {
+  const currentProject = useMemo<Project | null>(() => {
 
     return (
 
@@ -2076,7 +2065,7 @@ export default function KanbanBoard({
 
       projects[0] ||
 
-      initialProjectsData[0]
+      null
 
     );
 
@@ -2311,19 +2300,37 @@ export default function KanbanBoard({
     }
   }, [role, activeTab]);
 
+  const canManageCurrentProject =
+    role === "admin" || role === "instructor" || Boolean(currentProject?.isLead);
+
   const [isSprintLocked, setIsSprintLocked] = useState<boolean>(() =>
-    isProjectFrozen(initialProjectId || "prj-codemind")
+    initialProjectId ? isProjectFrozen(initialProjectId) : false
   );
 
   useEffect(() => {
-    setIsSprintLocked(isProjectFrozen(currentProjectId));
+    setIsSprintLocked(currentProjectId ? isProjectFrozen(currentProjectId) : false);
     return subscribeProjectLockChanges(() => {
-      setIsSprintLocked(isProjectFrozen(currentProjectId));
+      setIsSprintLocked(currentProjectId ? isProjectFrozen(currentProjectId) : false);
     });
   }, [currentProjectId]);
 
-  const toggleSprintLock = () => {
+  const toggleSprintLock = async () => {
+    if (!currentProjectId || !canManageCurrentProject) return;
     const next = !isSprintLocked;
+    const res = await updateWorkspaceProjectApi(currentProjectId, { is_frozen: next });
+    if (!res) {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoToast({
+        taskId: "sprint-lock-err",
+        taskCode: "ERR",
+        taskTitle: "Không thể khóa Sprint",
+        customMessage: "⚠️ Không thể thay đổi trạng thái đóng băng Sprint (chỉ Nhóm trưởng / GVHD / Admin).",
+        toastType: "warning",
+        undone: false,
+      });
+      undoTimerRef.current = setTimeout(() => setUndoToast(null), 4000);
+      return;
+    }
     setIsSprintLocked(next);
     setProjectFrozen(currentProjectId, next);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -3960,9 +3967,9 @@ export default function KanbanBoard({
       targetCol === "done" &&
       task.column !== "done" &&
       task.column !== "verified" &&
-      !hasValidGitProofForTask(task, currentProject.gitRepo)
+      !hasValidGitProofForTask(task, currentProject?.gitRepo)
     ) {
-      const repoName = currentProject.gitRepo?.repoSlug || "GitHub Repo dự án";
+      const repoName = currentProject?.gitRepo?.repoSlug || "GitHub Repo dự án";
       setGitProofViolation({
         task,
         reason: `Chưa có minh chứng Git cho thẻ #${task.code}. Hãy đẩy ít nhất 1 Commit/PR gắn mã #${task.code} trên Git Hub hoặc dán link Commit/PR hợp lệ thuộc ${repoName}.`,
@@ -4978,6 +4985,84 @@ export default function KanbanBoard({
 
     <div ref={kanbanRef} className="flex min-h-full flex-col p-6">
 
+      {!workspaceLoaded ? (
+
+        <div className="flex-1 flex items-center justify-center p-12 text-xs font-semibold text-slate-500 dark:text-slate-400">
+
+          Đang tải bảng Kanban đồ án từ hệ thống...
+
+        </div>
+
+      ) : !currentProject ? (
+
+        <div className="marlo-card rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center space-y-3 my-4">
+
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
+
+            <FolderKanban size={24} />
+
+          </div>
+
+          <h2 className="text-base font-bold text-slate-900 dark:text-white">
+
+            Chưa có đồ án nào trên bảng Kanban
+
+          </h2>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+
+            Bạn chưa tham gia đồ án nào hoặc chưa có đồ án được tạo. Hãy tạo đồ án mới hoặc nhận lời mời từ Nhóm trưởng để quản lý công việc theo Sprint.
+
+          </p>
+
+          <div className="pt-2 flex items-center justify-center gap-2.5 flex-wrap">
+
+            {role === "student" && (
+
+              <button
+
+                type="button"
+
+                onClick={() => setIsNewProjectModalOpen(true)}
+
+                className="btn-marlo-primary btn--primary inline-flex items-center gap-1.5 text-xs cursor-pointer"
+
+              >
+
+                <Plus size={14} />
+
+                <span>Tạo đồ án mới</span>
+
+              </button>
+
+            )}
+
+            {onNavigate && (
+
+              <button
+
+                type="button"
+
+                onClick={() => onNavigate("projects")}
+
+                className="btn-marlo-secondary btn--secondary inline-flex items-center gap-1.5 text-xs cursor-pointer"
+
+              >
+
+                <span>Xem danh sách đồ án</span>
+
+              </button>
+
+            )}
+
+          </div>
+
+        </div>
+
+      ) : (
+
+        <>
+
       {/* ── TOP CONTROL BAR (LINEAR / JIRA STYLE) ────────────────────────── */}
 
       <header className="mb-5 flex flex-col gap-4">
@@ -5070,7 +5155,7 @@ export default function KanbanBoard({
 
                   <Crown size={10} className="fill-amber-500 text-amber-500" />
 
-                  <span>Nhóm trưởng: {currentProject.lead || teamMembers[0]?.name || "Nguyễn Bá Hòa"}</span>
+                  <span>Nhóm trưởng: {currentProject.lead || teamMembers[0]?.name || "Chưa gán"}</span>
 
                 </span>
 
@@ -5461,9 +5546,9 @@ export default function KanbanBoard({
 
 
 
-              {/* Admin Governance Actions: Lock Sprint & Audit Log */}
+              {/* Governance Actions: Lock Sprint & Audit Log */}
 
-              {role === "admin" && (
+              {canManageCurrentProject && (
 
                 <div className="flex items-center gap-2">
 
@@ -5471,7 +5556,7 @@ export default function KanbanBoard({
 
                     type="button"
 
-                    onClick={toggleSprintLock}
+                    onClick={() => void toggleSprintLock()}
 
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs ${
 
@@ -5834,10 +5919,10 @@ export default function KanbanBoard({
             </div>
           </div>
 
-          {role === "admin" && (
+          {canManageCurrentProject && (
             <button
               type="button"
-              onClick={toggleSprintLock}
+              onClick={() => void toggleSprintLock()}
               className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm"
             >
               <Unlock size={13} className="stroke-[2.5]" />
@@ -9785,6 +9870,10 @@ export default function KanbanBoard({
 
       })()}
 
+        </>
+
+      )}
+
 
 
       {/* ── 🏷️ MARLO PROJECTS SLATE GRID MODAL ── */}
@@ -9833,11 +9922,11 @@ export default function KanbanBoard({
 
         onClose={() => setIsGradingModalOpen(false)}
 
-        projectId={currentProject?.id || "prj-codemind"}
+        projectId={currentProject?.id || ""}
 
-        projectName={currentProject?.name || "CodeMind AI"}
+        projectName={currentProject?.name || ""}
 
-        projectCode={currentProject?.code || "PRJ-CODEMIND"}
+        projectCode={currentProject?.code || ""}
 
         courseName={currentProject?.course}
 

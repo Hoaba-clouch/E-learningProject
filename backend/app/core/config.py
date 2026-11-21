@@ -42,7 +42,7 @@ USE_MYSQL = os.getenv("USE_MYSQL", "true").lower() in ("true", "1", "yes")
 PROJECT_NAME = "CodeMind Campus API"
 VERSION = "2.0.0"
 
-CORS_ORIGINS = [
+_default_cors = [
     "http://127.0.0.1:5173",
     "http://localhost:5173",
     "http://127.0.0.1:5174",
@@ -54,8 +54,13 @@ CORS_ORIGINS = [
     "http://127.0.0.1:8443",
     "http://localhost:8443",
 ]
+_extra_cors = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+CORS_ORIGINS = list(dict.fromkeys([*_default_cors, *_extra_cors]))
 
-CORS_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+CORS_ORIGIN_REGEX = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|https://[a-zA-Z0-9-]+\.vercel\.app)$",
+)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "codemind-campus-secret-key-super-safe-2026")
 ALGORITHM = "HS256"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -540,6 +540,84 @@ def is_user_in_project(user: dict[str, Any] | None, proj_row: Any) -> bool:
 
     return False
 
+
+def is_user_project_leader(user: dict[str, Any] | None, proj_row: Any) -> bool:
+    """Xác định người dùng có phải Nhóm trưởng đồ án (hoặc Giảng viên/Admin) hay không."""
+    if not user:
+        return False
+    u_role = str(user.get("role") or "").strip().lower()
+    if u_role in ("admin", "org_admin", "instructor"):
+        return True
+
+    uid_val = str(user.get("id") or "").strip()
+    u_email = str(user.get("email") or "").strip().lower()
+    u_name = str(user.get("full_name") or user.get("display_name") or "").strip().lower()
+
+    p_dict = dict(proj_row)
+    leader_id = str(p_dict.get("leader_user_id") or "").strip()
+    if leader_id and (leader_id == uid_val or leader_id == f"usr-{uid_val}"):
+        return True
+
+    created_by = str(p_dict.get("created_by") or "").strip()
+    if created_by and (created_by == uid_val or created_by == f"usr-{uid_val}"):
+        return True
+
+    try:
+        raw_team = p_dict.get("team_json") or "[]"
+        team_list = json.loads(raw_team) if isinstance(raw_team, str) else (raw_team or [])
+    except Exception:
+        team_list = []
+
+    for idx, tm in enumerate(team_list):
+        if not isinstance(tm, dict):
+            continue
+        tm_id = str(tm.get("id") or "").strip()
+        tm_email = str(tm.get("email") or "").strip().lower()
+        tm_name = str(tm.get("name") or "").strip().lower()
+        matches_user = (
+            (tm_id and (tm_id == uid_val or tm_id == f"usr-{uid_val}"))
+            or (tm_email and u_email and tm_email == u_email)
+            or (tm_name and u_name and tm_name == u_name)
+        )
+        if not matches_user:
+            continue
+        tm_role = str(tm.get("role") or "").strip().lower()
+        if tm.get("isLead") or "leader" in tm_role or "trưởng nhóm" in tm_role or idx == 0:
+            return True
+
+    return False
+
+
+def _is_task_assignee(user: dict[str, Any], task_row: Any) -> bool:
+    uid_val = str(user.get("id") or "").strip()
+    u_email = str(user.get("email") or "").strip().lower()
+    u_name = str(user.get("full_name") or user.get("display_name") or "").strip().lower()
+    try:
+        raw = dict(task_row).get("assignee_json") or "{}"
+        assignee = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except Exception:
+        return False
+    if not isinstance(assignee, dict):
+        return False
+    a_id = str(assignee.get("id") or "").strip()
+    a_email = str(assignee.get("email") or "").strip().lower()
+    a_name = str(assignee.get("name") or "").strip().lower()
+    return bool(
+        (a_id and (a_id == uid_val or a_id == f"usr-{uid_val}"))
+        or (a_email and u_email and a_email == u_email)
+        or (a_name and u_name and a_name == u_name)
+    )
+
+
+def _ensure_project_writable_for_user(user: dict[str, Any], proj_row: Any, action_label: str = "chỉnh sửa công việc") -> None:
+    u_role = str(user.get("role") or "").strip().lower()
+    if u_role == "student":
+        if not is_user_in_project(user, proj_row):
+            raise HTTPException(status_code=403, detail=f"Chỉ thành viên trong nhóm đồ án này mới có quyền {action_label}.")
+        if bool(dict(proj_row).get("is_frozen")):
+            raise HTTPException(status_code=403, detail="Đồ án đã bị đóng băng nộp bài, không thể chỉnh sửa công việc.")
+
+
 DEFAULT_PROJECT_MENTORS: dict[str, str] = {
     "prj-codemind": "TS. Nguyễn Phước (GV Hướng dẫn)",
     "prj-compiler": "ThS. Trần Minh Quân (GV Hướng dẫn)",
@@ -610,6 +688,7 @@ def _serialize_project(
         "status": slate_status,
         "kanbanStatus": kanban_status,
         "fav": bool(p["fav"]),
+        "isFrozen": bool(p.get("is_frozen")),
         "dueDate": p["due_date"],
         "dueText": p["due_text"],
         "progress": progress,
@@ -634,7 +713,7 @@ def _serialize_project(
         "gitRepo": git_repo,
         "tasks": tasks_out,
         "isMyProject": is_user_in_project(user, proj_row),
-        "isLead": (str(p.get("leader_user_id") or "") == str(user.get("id") or "")) if user else False,
+        "isLead": is_user_project_leader(user, proj_row) if user else False,
         "leaderUserId": p.get("leader_user_id"),
     }
 
@@ -767,7 +846,7 @@ def _append_column_audit_log(
 ) -> list[dict[str, Any]]:
     if from_col == to_col:
         return existing_logs
-    ts = datetime.now().strftime("%d/%m/%Y %H:%M")
+    ts = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
     entry = {
         "user": actor_name,
         "fromColumn": COLUMN_LABEL.get(from_col, from_col),
@@ -1128,16 +1207,40 @@ def create_workspace_project(
 def patch_workspace_project(
     project_id: str,
     payload: WorkspaceProjectPatchIn,
-    _: dict[str, Any] = Depends(current_user),
+    user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Cập nhật trạng thái ghim (fav), tên/sprint hoặc danh sách thành viên đội ngũ của Dự án."""
+    """Cập nhật trạng thái ghim (fav), đóng băng (is_frozen), tên/sprint hoặc thành viên (Leader/GV/Admin)."""
     now = now_utc()
+    u_role = str(user.get("role") or "").strip().lower()
     with db() as conn:
         existing = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
 
+        if u_role == "student":
+            modifies_config = any(
+                val is not None
+                for val in (
+                    payload.status,
+                    payload.name,
+                    payload.sprint,
+                    payload.due_date,
+                    payload.instructor,
+                    payload.team,
+                    payload.is_frozen,
+                )
+            )
+            if modifies_config:
+                if not is_user_project_leader(user, existing):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Chỉ Nhóm trưởng hoặc Giảng viên/Admin mới có quyền chỉnh sửa cấu hình đồ án",
+                    )
+            elif payload.fav is not None and not is_user_in_project(user, existing):
+                raise HTTPException(status_code=403, detail="Chỉ thành viên đồ án mới có quyền ghim dự án này")
+
         fav = (1 if payload.fav else 0) if payload.fav is not None else existing["fav"]
+        is_frozen = (1 if payload.is_frozen else 0) if payload.is_frozen is not None else int(dict(existing).get("is_frozen") or 0)
         norm_status = _normalize_project_status(payload.status) if payload.status is not None else existing["status"]
         name = payload.name.strip() if payload.name is not None else existing["name"]
         sprint = payload.sprint if payload.sprint is not None else existing["sprint"]
@@ -1155,9 +1258,9 @@ def patch_workspace_project(
 
         conn.execute(
             """UPDATE engineering_projects
-               SET fav=?, status=?, name=?, sprint=?, due_date=?, instructor_label=?, team_json=?, updated_at=?
+               SET fav=?, is_frozen=?, status=?, name=?, sprint=?, due_date=?, instructor_label=?, team_json=?, updated_at=?
                WHERE id=?""",
-            (fav, norm_status, name, sprint, due_date, instructor_label, team_json, now, project_id),
+            (fav, is_frozen, norm_status, name, sprint, due_date, instructor_label, team_json, now, project_id),
         )
         proj_row = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         task_rows = conn.execute(
@@ -1178,6 +1281,7 @@ def patch_workspace_project(
             git_repo=repo_by_proj.get(project_id),
             commits_by_code=commits_by_proj_code,
             prs_by_code=prs_by_proj_code,
+            user=user,
         )
     }
 
@@ -1245,8 +1349,8 @@ def invite_user_to_project(
             raise HTTPException(status_code=404, detail="Không tìm thấy đồ án")
 
         u_role = str(user.get("role") or "").lower()
-        if u_role == "student" and not is_user_in_project(user, proj):
-            raise HTTPException(status_code=403, detail="Chỉ thành viên của đồ án mới có quyền mời người khác")
+        if u_role == "student" and not is_user_project_leader(user, proj):
+            raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng mới có quyền mời thành viên vào đồ án")
 
         target_user = conn.execute(
             "SELECT id, full_name, display_name, email FROM users WHERE id=? OR email=? LIMIT 1",
@@ -1516,8 +1620,7 @@ def create_workspace_task(
         proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         if not proj:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
-        if str(user.get("role") or "").lower() == "student" and not is_user_in_project(user, proj):
-            raise HTTPException(status_code=403, detail="Chỉ thành viên trong nhóm đồ án này mới có quyền tạo công việc.")
+        _ensure_project_writable_for_user(user, proj, "tạo công việc")
 
         max_pos = conn.execute(
             "SELECT COALESCE(MAX(position_order), -1) m FROM engineering_tasks WHERE project_id=? AND column_id=?",
@@ -1532,15 +1635,16 @@ def create_workspace_task(
 def batch_create_workspace_tasks(
     project_id: str,
     payload: WorkspaceTaskBatchCreateIn,
-    _: dict[str, Any] = Depends(current_user),
+    user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Lưu hàng loạt Task (dùng cho AI Chia Việc WBS & Nhập CSV)."""
     now = now_utc()
     created_list: list[dict[str, Any]] = []
     with db() as conn:
-        proj = conn.execute("SELECT id FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
+        proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         if not proj:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+        _ensure_project_writable_for_user(user, proj, "nhập danh sách công việc")
 
         if payload.replace:
             conn.execute("DELETE FROM engineering_tasks WHERE project_id=?", (project_id,))
@@ -1787,8 +1891,9 @@ def patch_workspace_task(
         u_role = str(user.get("role") or "").lower()
         if u_role == "student":
             proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (existing["project_id"],)).fetchone()
-            if not proj or not is_user_in_project(user, proj):
-                raise HTTPException(status_code=403, detail="Chỉ thành viên của đồ án này mới có quyền chỉnh sửa công việc")
+            if not proj:
+                raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+            _ensure_project_writable_for_user(user, proj, "chỉnh sửa công việc")
 
         target_col = payload.column if payload.column is not None else existing["column_id"]
         if target_col == "done" and existing["column_id"] != "done":
@@ -1866,6 +1971,12 @@ def move_workspace_task(
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
 
+        if str(user.get("role") or "").lower() == "student":
+            proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (existing["project_id"],)).fetchone()
+            if not proj:
+                raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+            _ensure_project_writable_for_user(user, proj, "di chuyển công việc")
+
         target_col = payload.target_column.strip()
         if user.get("role") == "student" and target_col == "verified":
             raise HTTPException(
@@ -1910,14 +2021,17 @@ def delete_workspace_task(
 ) -> dict[str, str]:
     """Xóa Task khỏi bảng Kanban & giải phóng các khóa phụ thuộc H2 trỏ tới Task này."""
     with db() as conn:
-        existing = conn.execute("SELECT id, project_id FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
+        existing = conn.execute("SELECT * FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
         u_role = str(user.get("role") or "").lower()
         if u_role == "student":
             proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (existing["project_id"],)).fetchone()
-            if not proj or not is_user_in_project(user, proj):
-                raise HTTPException(status_code=403, detail="Chỉ thành viên của đồ án này mới có quyền xóa công việc")
+            if not proj:
+                raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+            _ensure_project_writable_for_user(user, proj, "xóa công việc")
+            if not is_user_project_leader(user, proj) and not _is_task_assignee(user, existing):
+                raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng hoặc người phụ trách mới có quyền xóa công việc")
         conn.execute("UPDATE engineering_tasks SET depends_on=NULL WHERE depends_on=?", (task_id,))
         conn.execute("DELETE FROM engineering_tasks WHERE id=?", (task_id,))
     return {"status": "deleted", "id": task_id}
@@ -1953,7 +2067,7 @@ def review_workspace_task(
         raise HTTPException(status_code=403, detail="Chỉ Giảng viên hoặc Admin mới có quyền thẩm định task.")
 
     now = now_utc()
-    ts_display = datetime.now().strftime("%d/%m/%Y %H:%M")
+    ts_display = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
     actor_name = user.get("full_name") or user.get("display_name") or "Giảng viên"
     with db() as conn:
         task = conn.execute("SELECT * FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()

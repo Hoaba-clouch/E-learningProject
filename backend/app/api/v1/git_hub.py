@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 
 from app.api.deps import current_user, get_optional_current_user, record_audit_log
+from app.api.v1.kanban import is_user_in_project, is_user_project_leader
 from app.core.database import db
 from app.core.security import sha256, uid
 from app.core.timezone import now_utc
@@ -37,6 +38,36 @@ def _require_roles(user: dict[str, Any], allowed: tuple[str, ...], action_label:
             detail=f"Vai trò '{role}' không có quyền {action_label}.",
         )
     return role
+
+
+def _ensure_git_project_access(
+    conn: Any,
+    user: dict[str, Any] | None,
+    project_id: str,
+    *,
+    require_leader: bool = False,
+    check_frozen: bool = False,
+) -> Any | None:
+    proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
+    if not proj:
+        return None
+    if user and str(user.get("role") or "").strip().lower() == "student":
+        if not is_user_in_project(user, proj):
+            raise HTTPException(
+                status_code=403,
+                detail="Chỉ thành viên trong nhóm đồ án này mới có quyền truy cập Git Project Hub của dự án.",
+            )
+        if require_leader and not is_user_project_leader(user, proj):
+            raise HTTPException(
+                status_code=403,
+                detail="Chỉ Nhóm trưởng hoặc Giảng viên/Admin mới có quyền thay đổi cấu hình đồ án.",
+            )
+        if check_frozen and bool(dict(proj).get("is_frozen")):
+            raise HTTPException(
+                status_code=403,
+                detail="Đồ án đã bị đóng băng nộp bài, không thể thao tác Git Commit / Pull Request / Merge.",
+            )
+    return proj
 
 _IGNORED_TASK_TOKENS = {"MERGE", "README", "HOTFIX", "DOCKER", "OAUTH", "HTTPS", "FIXUP", "SQLITE"}
 _TASK_CODE_PATTERN = re.compile(r"\b([A-Z]{2,6}(?:-[A-Z0-9]{1,6}){1,2}|[A-Z]{2,6}-?[A-Z0-9]{2,6})\b")
@@ -506,12 +537,39 @@ def get_git_hub_workspace(
     project_id: str = Query(default="prj-codemind"),
     user: dict[str, Any] | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
-    """Lấy trọn gói dữ liệu Git Project Hub đồng bộ SQLite: Repo, Commits Graph, Pull Requests, Tasks & Team Analytics."""
+    """Lấy trọn gói dữ liệu Git Project Hub đồng bộ CSDL: Repo, Commits Graph, Pull Requests, Tasks & Team Analytics."""
     with db() as conn:
         projects_rows = conn.execute(
-            "SELECT id, code, name, kind, status, sprint FROM engineering_projects ORDER BY created_at DESC, rowid ASC"
+            "SELECT * FROM engineering_projects ORDER BY created_at DESC, rowid ASC"
         ).fetchall()
-        proj, repo = _ensure_project_and_repo(conn, project_id)
+        if user and str(user.get("role") or "").strip().lower() == "student":
+            projects_rows = [p for p in projects_rows if is_user_in_project(user, p)]
+
+        if not projects_rows:
+            return {
+                "activeProjectId": "",
+                "projects": [],
+                "repository": None,
+                "metrics": {
+                    "gitCultureScore": 0,
+                    "taskLinkedPct": 0,
+                    "aiIntegrityPct": 0,
+                    "cadenceVarianceHours": 0.0,
+                    "totalCommits": 0,
+                    "openPrsCount": 0,
+                    "mergedPrsCount": 0,
+                    "memberShares": [],
+                    "balanceStatus": "Chưa có đồ án",
+                },
+                "commits": [],
+                "pullRequests": [],
+                "memberAnalytics": [],
+                "projectTasks": [],
+            }
+
+        accessible_ids = {p["id"] for p in projects_rows}
+        resolved_project_id = project_id if project_id in accessible_ids else projects_rows[0]["id"]
+        proj, repo = _ensure_project_and_repo(conn, resolved_project_id)
         pid = proj["id"]
         commit_rows = conn.execute(
             "SELECT * FROM git_commits WHERE project_id=? ORDER BY position_order ASC, created_at ASC, rowid ASC",
@@ -540,6 +598,8 @@ def get_git_hub_workspace(
                 "kind": p["kind"],
                 "status": p["status"],
                 "sprint": p["sprint"],
+                "isFrozen": bool(dict(p).get("is_frozen")),
+                "isLead": is_user_project_leader(user, p) if user else False,
             }
             for p in projects_rows
         ],
@@ -580,6 +640,7 @@ def update_project_repo(
     slug = _extract_repo_slug(clean_url)
     now = now_utc()
     with db() as conn:
+        _ensure_git_project_access(conn, user, project_id, require_leader=True, check_frozen=True)
         proj, _ = _ensure_project_and_repo(conn, project_id)
         pid = proj["id"]
         conn.execute(
@@ -644,7 +705,7 @@ def _auto_advance_task_on_git_activity(
                 "user": actor_label,
                 "fromColumn": cur_col,
                 "toColumn": "Đang làm" if next_col == "in-progress" else next_col,
-                "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "timestamp": datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
             }
         )
     conn.execute(
@@ -677,6 +738,7 @@ def push_git_commit(
     files = payload.files_changed if payload.files_changed else [f"src/{payload.branch.replace('/', '_')}.ts", "tests/unit.spec.ts"]
 
     with db() as conn:
+        _ensure_git_project_access(conn, user, project_id, check_frozen=True)
         proj, repo = _ensure_project_and_repo(conn, project_id)
         pid = proj["id"]
         stats_row = conn.execute(
@@ -688,7 +750,7 @@ def push_git_commit(
         author = _resolve_author_meta(conn, pid, payload.author_name, user)
         commit_id = f"c-{uid()[:8]}"
         short_sha = sha256(f"{pid}:{clean_msg}:{now}:{commit_id}")[:7]
-        date_label = datetime.now().strftime("%d/%m/%Y %H:%M")
+        date_label = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
 
         conn.execute(
             """INSERT INTO git_commits(
@@ -758,6 +820,7 @@ def create_pull_request(
     task_code = _extract_task_code(payload.task_code, clean_title)
 
     with db() as conn:
+        _ensure_git_project_access(conn, user, project_id, check_frozen=True)
         proj, repo = _ensure_project_and_repo(conn, project_id)
         pid = proj["id"]
         num_row = conn.execute(
@@ -852,6 +915,7 @@ def apply_pr_ai_fix(
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
         if not pr:
             raise HTTPException(status_code=404, detail="Không tìm thấy Pull Request")
+        _ensure_git_project_access(conn, user, pr["project_id"], check_frozen=True)
         if pr["status"] == "merged":
             raise HTTPException(status_code=400, detail="Pull Request đã được merge, không thể vá thêm.")
 
@@ -895,7 +959,7 @@ def apply_pr_ai_fix(
                 b_color,
                 pr["task_code"],
                 f"{task_prefix}fix(ai-ast): Áp dụng bản vá 1-Click CodeMind AI cho PR #{int(pr['pr_number']):02d}",
-                datetime.now().strftime("%d/%m/%Y %H:%M"),
+                datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
                 "Vừa xong",
                 24,
                 8,
@@ -927,6 +991,7 @@ def peer_approve_pr(
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
         if not pr:
             raise HTTPException(status_code=404, detail="Không tìm thấy Pull Request")
+        _ensure_git_project_access(conn, user, pr["project_id"], check_frozen=True)
         if pr["status"] == "merged":
             raise HTTPException(
                 status_code=400,
@@ -998,6 +1063,7 @@ def request_changes_pr(
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
         if not pr:
             raise HTTPException(status_code=404, detail="Không tìm thấy Pull Request")
+        _ensure_git_project_access(conn, user, pr["project_id"], check_frozen=True)
         if pr["status"] == "merged":
             raise HTTPException(
                 status_code=400,
@@ -1057,6 +1123,7 @@ def merge_pull_request(
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
         if not pr:
             raise HTTPException(status_code=404, detail="Không tìm thấy Pull Request")
+        _ensure_git_project_access(conn, user, pr["project_id"], check_frozen=True)
         if pr["status"] == "merged":
             raise HTTPException(status_code=400, detail="Pull Request này đã được merge trước đó.")
 
@@ -1106,7 +1173,7 @@ def merge_pull_request(
                 b_color,
                 pr["task_code"],
                 f"{task_prefix}Merge ({strategy}) PR #{int(pr['pr_number']):02d} '{pr['source_branch']}' vào {pr['target_branch']}",
-                datetime.now().strftime("%d/%m/%Y %H:%M"),
+                datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
                 "Vừa xong",
                 52,
                 14,
@@ -1142,7 +1209,7 @@ def merge_pull_request(
                     "user": f"Git PR #{int(pr['pr_number']):02d}",
                     "fromColumn": task_row["column_id"],
                     "toColumn": "Hoàn thành" if h2_ok else task_row["column_id"],
-                    "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "timestamp": datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
                 })
                 next_col = "done" if h2_ok else task_row["column_id"]
                 conn.execute(
@@ -1210,7 +1277,7 @@ def merge_pull_request(
                 resolved_student_code,
                 f"[Git PR #{int(pr['pr_number']):02d}] {pr['title']}",
                 pr_url,
-                datetime.now().strftime("%H:%M · Hôm nay"),
+                datetime.now(timezone.utc).strftime("%H:%M UTC · Hôm nay"),
                 5,
                 5,
                 19,
@@ -1516,6 +1583,7 @@ def sync_github_live(
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án kỹ thuật.")
+        _ensure_git_project_access(conn, user, project_id, check_frozen=True)
 
         repo = conn.execute("SELECT * FROM git_repositories WHERE project_id = ?", (project_id,)).fetchone()
         repo_url = payload.get("repoUrl") or (repo["repo_url"] if repo else "https://github.com/Hoaba-clouch/E-learningProject")
@@ -1523,7 +1591,7 @@ def sync_github_live(
         is_remote_live = bool(remote_res.get("ok"))
         slug = remote_res["slug"]
         now = now_utc()
-        now_label = datetime.now().strftime("%H:%M · Hôm nay")
+        now_label = datetime.now(timezone.utc).strftime("%H:%M UTC · Hôm nay")
 
         # Cập nhật thông tin repo
         if repo:
@@ -1888,6 +1956,8 @@ def get_project_architecture(
     """
     with db() as conn:
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
+        if project and user and str(user.get("role") or "").strip().lower() == "student" and not is_user_in_project(user, project):
+            raise HTTPException(status_code=403, detail="Chỉ thành viên trong nhóm đồ án này mới có quyền xem sơ đồ kiến trúc.")
         project_name = project["name"] if project else "Hệ thống Phần mềm Đồ án"
         repo = conn.execute("SELECT * FROM git_repositories WHERE project_id = ?", (project_id,)).fetchone()
         repo_url = repo["repo_url"] if repo else "https://github.com/Hoaba-clouch/E-learningProject"
@@ -1935,6 +2005,7 @@ def save_project_architecture(
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án.")
+        _ensure_git_project_access(conn, user, project_id, require_leader=True, check_frozen=True)
 
         now = now_utc()
         arch_json_str = json.dumps(payload, ensure_ascii=False)
@@ -1973,6 +2044,7 @@ def generate_project_architecture(
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án.")
+        _ensure_git_project_access(conn, user, project_id, check_frozen=True)
 
         repo = conn.execute("SELECT * FROM git_repositories WHERE project_id = ?", (project_id,)).fetchone()
         repo_url = payload.get("repoUrl") or (repo["repo_url"] if repo else "https://github.com/Hoaba-clouch/E-learningProject")

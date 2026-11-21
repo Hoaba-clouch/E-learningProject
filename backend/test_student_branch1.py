@@ -5,12 +5,25 @@ Integration test suite for Branch 1 (Nhánh 1 — Student Learning Workspace + F
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+import pytest
 
 from app.core.database import init_db
 from app.main import app
 
 
-def test_student_branch1_full_learning_pipeline() -> None:
+def test_student_branch1_full_learning_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.api.v1.student_learning._verify_github_repo",
+        lambda owner, repo: {
+            "reachable": True,
+            "exists": True,
+            "size_kb": 64,
+            "language": "C++",
+            "default_branch": "main",
+            "stargazers": 1,
+            "note": "Đã xác thực repo công khai trong test suite.",
+        },
+    )
     init_db()
     client = TestClient(app)
 
@@ -150,14 +163,25 @@ def test_student_branch1_full_learning_pipeline() -> None:
     )
     assert q_dup.status_code == 400
 
+    # Free theme (0 XP server-side policy)
+    buy_theme = client.post(
+        "/v1/student/xp-shop/purchase",
+        json={"category": "theme", "item_id": "graphite", "cost": 0},
+        headers=stu_headers,
+    )
+    assert buy_theme.status_code == 200, buy_theme.text
+    assert buy_theme.json()["exp_points"] == 3720
+    assert "graphite" in buy_theme.json()["owned_items"]["theme"]
+
+    # Paid XP Shop item (mentor luna costs 800 XP server-side)
     buy_res = client.post(
         "/v1/student/xp-shop/purchase",
-        json={"category": "theme", "item_id": "graphite", "cost": 500},
+        json={"category": "mentor", "item_id": "luna", "cost": 800},
         headers=stu_headers,
     )
     assert buy_res.status_code == 200, buy_res.text
-    assert buy_res.json()["exp_points"] == 3220
-    assert "graphite" in buy_res.json()["owned_items"]["theme"]
+    assert buy_res.json()["exp_points"] == 2920
+    assert "luna" in buy_res.json()["owned_items"]["mentor"]
 
     # 7. Cleanly restore demo DB state
     r_reset_final = client.post("/v1/admin/reset-demo", headers=adm_headers)

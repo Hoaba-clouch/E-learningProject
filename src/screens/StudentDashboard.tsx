@@ -34,7 +34,7 @@ import MarloNumber from "../components/MarloNumber";
 import MarloActivityRing from "../components/MarloActivityRing";
 import MarloCapacityBar from "../components/MarloCapacityBar";
 import MarloToast from "../components/MarloToast";
-import { CNTT_PROJECTS, type CNTTProjectItem } from "./MarloProjectsScreen";
+import type { CNTTProjectItem } from "./MarloProjectsScreen";
 import {
   fetchKanbanWorkspace,
   fetchSchedulesApi,
@@ -86,10 +86,10 @@ export default function StudentDashboard({
   const [totalXp, setTotalXp] = useState(0);
   const [streakDays, setStreakDays] = useState(0);
   const [studentName, setStudentName] = useState(
-    () => getStoredUser("student")?.name || getStoredUser("student")?.full_name || "Nguyễn Văn A"
+    () => getStoredUser("student")?.name || getStoredUser("student")?.full_name || "Học viên"
   );
   const [learningOverview, setLearningOverview] = useState<StudentLearningOverview | null>(null);
-  const [projectsList, setProjectsList] = useState<CNTTProjectItem[]>(CNTT_PROJECTS);
+  const [projectsList, setProjectsList] = useState<CNTTProjectItem[]>([]);
   const [upcomingSchedules, setUpcomingSchedules] = useState<AcademicScheduleItem[]>([]);
 
   useEffect(() => {
@@ -108,9 +108,10 @@ export default function StudentDashboard({
     window.addEventListener("codemind-courses-updated", loadOverview);
 
     fetchKanbanWorkspace().then((ws) => {
-      if (!active || !ws?.projects?.length) return;
+      if (!active || !ws) return;
+      const rows = Array.isArray(ws.projects) ? ws.projects : [];
       setProjectsList(
-        ws.projects.map((p) => ({
+        rows.map((p) => ({
           id: p.id,
           name: p.name,
           client: p.client,
@@ -133,8 +134,15 @@ export default function StudentDashboard({
           tlStart: p.tlStart,
           tlWidth: p.tlWidth,
           tlColor: p.tlColor,
+          isMyProject: p.isMyProject,
+          isLead: p.isLead,
+          leaderUserId: p.leaderUserId,
         }))
       );
+      setSelectedProjectId((prev) => {
+        if (prev && rows.some((p) => p.id === prev)) return prev;
+        return rows[0]?.id || "";
+      });
     });
 
     fetchSchedulesApi(undefined, "student").then((items) => {
@@ -330,20 +338,55 @@ export default function StudentDashboard({
   }, [learningOverview]);
 
   // ─── ACTIVE FOCUSED PROJECT (Giải quyết triệt để: Biết chính xác tiến độ của dự án nào) ───
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("prj-codemind");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [workScope, setWorkScope] = useState<"project" | "all">("project");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
 
   const selectedProject = useMemo(() => {
-    return projectsList.find((p) => p.id === selectedProjectId) || projectsList[0] || CNTT_PROJECTS[0];
+    return projectsList.find((p) => p.id === selectedProjectId) || projectsList[0] || null;
   }, [projectsList, selectedProjectId]);
 
-  const selectedProgressPct = Math.round(selectedProject.progress * 100);
+  const selectedProgressPct = selectedProject ? Math.round(selectedProject.progress * 100) : 0;
 
   // Dynamic calculations for Where the work stands:
   const workStats = useMemo(() => {
     if (workScope === "project") {
       const p = selectedProject;
+      if (!p) {
+        return {
+          subtitle: "Bạn chưa tham gia đồ án nào — hãy tạo đồ án hoặc kiểm tra lời mời",
+          row1: {
+            label: "Tasks",
+            icon: "check" as const,
+            total: 0,
+            done: 0,
+            moving: 0,
+            waiting: 0,
+            navigate: () => onNavigate("projects"),
+            navTitle: "Mở trang Đồ án",
+          },
+          row2: {
+            label: "Story Points",
+            icon: "points" as const,
+            total: 0,
+            done: 0,
+            moving: 0,
+            waiting: 0,
+            navigate: () => onNavigate("projects"),
+            navTitle: "Mở trang Đồ án",
+          },
+          row3: {
+            label: "Reviews & PRs",
+            icon: "eye" as const,
+            total: 0,
+            done: 0,
+            moving: 0,
+            waiting: 0,
+            navigate: () => onNavigate("github"),
+            navTitle: "Mở Git Project Hub",
+          },
+        };
+      }
       const tasksTotal = p.tasksTotal;
       const tasksDone = p.tasksDone;
       const tasksMoving = Math.max(0, Math.round((tasksTotal - tasksDone) * 0.7));
@@ -964,7 +1007,13 @@ export default function StudentDashboard({
                       title="Bấm để chọn đồ án khác"
                     >
                       <FolderKanban size={13} />
-                      <span>{workScope === "project" ? selectedProject.name.split(" - ")[0] : "Tất cả 8 đồ án"}</span>
+                      <span>
+                        {workScope === "project"
+                          ? selectedProject
+                            ? selectedProject.name.split(" - ")[0]
+                            : "Chưa có đồ án"
+                          : `Tất cả ${projectsList.length} đồ án`}
+                      </span>
                       <ChevronDown size={13} className={`transition-transform duration-200 ${projectMenuOpen ? "rotate-180" : ""}`} />
                     </button>
 
@@ -1036,7 +1085,7 @@ export default function StudentDashboard({
                         : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                     }`}
                   >
-                    Tất cả 8 đồ án
+                    Tất cả ({projectsList.length})
                   </button>
                 </div>
 
@@ -1420,61 +1469,86 @@ export default function StudentDashboard({
 
         {/* ═══ RIGHT ASIDE STACK (MARLO METRICS & ROTAS LIÊN KẾT TRỰC TIẾP DỰ ÁN) ═══ */}
         <aside className="space-y-5">
-          {/* 1. MARLO TASK STATUS DONUT (Gắn trực tiếp với dự án đang chọn) */}
-          <MarloActivityRing
-            className="marlo-card"
-            size={128}
-            centerValue={selectedProgressPct}
-            centerLabel="tiến độ"
-            title={selectedProject.name.split(" - ")[0]}
-            subtitle={`Sprint · ${selectedProject.tasksDone}/${selectedProject.tasksTotal} task`}
-            actionText="Bảng Kanban"
-            onAction={() => onNavigate("kanban")}
-            segments={[
-              {
-                id: "upnext",
-                label: "Chờ làm",
-                value: Math.max(10, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4) / selectedProject.tasksTotal * 100)),
-                count: Math.max(1, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4)),
-                color: "#cbd5e1"
-              },
-              {
-                id: "prog",
-                label: "Đang làm",
-                value: Math.max(15, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6) / selectedProject.tasksTotal * 100)),
-                count: Math.max(1, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6)),
-                color: "#f97316"
-              },
-              {
-                id: "review",
-                label: "Cần review",
-                value: 15,
-                count: 2,
-                color: "#64748b"
-              },
-              {
-                id: "done",
-                label: "Đã hoàn thành",
-                value: selectedProgressPct,
-                count: selectedProject.tasksDone,
-                color: "#1e293b"
-              },
-            ]}
-          />
+          {selectedProject ? (
+            <>
+              {/* 1. MARLO TASK STATUS DONUT (Gắn trực tiếp với dự án đang chọn) */}
+              <MarloActivityRing
+                className="marlo-card"
+                size={128}
+                centerValue={selectedProgressPct}
+                centerLabel="tiến độ"
+                title={selectedProject.name.split(" - ")[0]}
+                subtitle={`Sprint · ${selectedProject.tasksDone}/${selectedProject.tasksTotal} task`}
+                actionText="Bảng Kanban"
+                onAction={() => onNavigate("kanban")}
+                segments={[
+                  {
+                    id: "upnext",
+                    label: "Chờ làm",
+                    value: Math.max(10, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4) / Math.max(1, selectedProject.tasksTotal) * 100)),
+                    count: Math.max(0, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4)),
+                    color: "#cbd5e1"
+                  },
+                  {
+                    id: "prog",
+                    label: "Đang làm",
+                    value: Math.max(15, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6) / Math.max(1, selectedProject.tasksTotal) * 100)),
+                    count: Math.max(0, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6)),
+                    color: "#f97316"
+                  },
+                  {
+                    id: "review",
+                    label: "Cần review",
+                    value: 15,
+                    count: 0,
+                    color: "#64748b"
+                  },
+                  {
+                    id: "done",
+                    label: "Đã hoàn thành",
+                    value: selectedProgressPct,
+                    count: selectedProject.tasksDone,
+                    color: "#1e293b"
+                  },
+                ]}
+              />
 
-          {/* 2. MARLO SPRINT CAPACITY BAR (Gắn với số Story Points của dự án đang chọn) */}
-          <div className="marlo-card">
-            <MarloCapacityBar
-              title={`Năng lực: ${selectedProject.name.split(" - ")[0]}`}
-              subtitle={`Phân bổ ${selectedProject.storyPoints} Story Points`}
-              items={[
-                { id: "done", label: "Đã xong", count: selectedProject.pointsBurned, color: "#14161a" },
-                { id: "prog", label: "Đang làm", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.6), color: "#f59e0b" },
-                { id: "review", label: "Review", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.25), color: "#fbbf24" },
-                { id: "backlog", label: "Tồn đọng", count: Math.max(20, selectedProject.storyPoints - selectedProject.pointsBurned - Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.85)), color: "#94a3b8" },
-              ]}
-            />
-          </div>
+              {/* 2. MARLO SPRINT CAPACITY BAR (Gắn với số Story Points của dự án đang chọn) */}
+              <div className="marlo-card">
+                <MarloCapacityBar
+                  title={`Năng lực: ${selectedProject.name.split(" - ")[0]}`}
+                  subtitle={`Phân bổ ${selectedProject.storyPoints} Story Points`}
+                  items={[
+                    { id: "done", label: "Đã xong", count: selectedProject.pointsBurned, color: "#14161a" },
+                    { id: "prog", label: "Đang làm", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.6), color: "#f59e0b" },
+                    { id: "review", label: "Review", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.25), color: "#fbbf24" },
+                    { id: "backlog", label: "Tồn đọng", count: Math.max(0, selectedProject.storyPoints - selectedProject.pointsBurned - Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.85)), color: "#94a3b8" },
+                  ]}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="marlo-card surface rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-3 text-center">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+                <FolderKanban size={20} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Chưa tham gia đồ án nào
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Tạo đồ án đầu tiên hoặc đồng ý lời mời từ Nhóm trưởng để theo dõi Sprint &amp; Story Points.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate("projects")}
+                className="w-full py-2 px-3 rounded-xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 text-xs font-bold transition cursor-pointer"
+              >
+                Tạo / Xem Đồ Án →
+              </button>
+            </div>
+          )}
 
           {/* 3. CA THI & HẸN GẶP HÔM NAY (TODAY'S BOOKED SESSIONS) */}
           <div className="marlo-card surface rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-3">

@@ -27,6 +27,7 @@ import {
   saveProjectArchitectureApi,
   syncGitHubLiveApi,
   updateGitHubRepoApi,
+  updateWorkspaceProjectApi,
   type GitHubProjectSummary,
   type GitMemberAnalytics,
   type GitProjectTaskRef,
@@ -534,11 +535,11 @@ const INITIAL_ARCH_NODES: Node[] = [
     type: "cardNode",
     position: { x: 800, y: 220 },
     data: {
-      label: "Tech reels",
-      subLabel: "[TechReels.tsx]",
+      label: "XP Shop",
+      subLabel: "[XPShop.tsx]",
       container: "Campus App",
       containerColor: "#2563eb",
-      filePath: "src/screens/TechReels.tsx",
+      filePath: "src/screens/XPShop.tsx",
       tech: "Client UI",
       description: "Video ngắn micro-learning tóm tắt kiến thức lập trình thực chiến.",
       badge: "Reels View",
@@ -1733,7 +1734,7 @@ const GitRepoConfigModal = memo(function GitRepoConfigModal({
 
 export default function GitProjectHub({
   role = "student",
-  initialProjectId = "prj-codemind",
+  initialProjectId = "",
   initialViewMode,
   onSelectProject,
   onNavigate,
@@ -1753,28 +1754,29 @@ export default function GitProjectHub({
   }, [initialViewMode]);
   const [activeProjectId, setActiveProjectId] = useState<string>(initialProjectId);
   const [projectsList, setProjectsList] = useState<GitHubProjectSummary[]>([]);
-  const [repoSlug, setRepoSlug] = useState<string>("hoaba-clouch/e-learningproject");
+  const [loadingWorkspace, setLoadingWorkspace] = useState<boolean>(true);
+  const [repoSlug, setRepoSlug] = useState<string>("");
   const [mergeStrategy, setMergeStrategy] = useState<string>("squash");
-  const [webhookActive, setWebhookActive] = useState<boolean>(true);
+  const [webhookActive, setWebhookActive] = useState<boolean>(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string>("");
-  const [commits, setCommits] = useState<GitCommitItem[]>(GIT_COMMITS);
+  const [commits, setCommits] = useState<GitCommitItem[]>([]);
   const [pullRequests, setPullRequests] = useState<GitPullRequestRecord[]>([]);
   const [selectedPr, setSelectedPr] = useState<GitPullRequestRecord | null>(null);
   const [memberAnalytics, setMemberAnalytics] = useState<GitMemberAnalytics[]>([]);
   const [projectTasks, setProjectTasks] = useState<GitProjectTaskRef[]>([]);
   const [metricsState, setMetricsState] = useState({
-    gitCultureScore: 94.8,
-    taskLinkedPct: 100,
-    aiIntegrityPct: 100,
-    cadenceVarianceHours: 4.8,
-    totalCommits: 16,
-    openPrsCount: 3,
-    mergedPrsCount: 1,
-    memberShares: [36, 34, 30],
-    balanceStatus: "Cân bằng",
+    gitCultureScore: 0,
+    taskLinkedPct: 0,
+    aiIntegrityPct: 0,
+    cadenceVarianceHours: 0,
+    totalCommits: 0,
+    openPrsCount: 0,
+    mergedPrsCount: 0,
+    memberShares: [] as number[],
+    balanceStatus: "Chưa có dữ liệu",
   });
   const [isRepoFrozen, setIsRepoFrozen] = useState<boolean>(() =>
-    isProjectFrozen(initialProjectId)
+    initialProjectId ? isProjectFrozen(initialProjectId) : false
   );
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -1782,23 +1784,38 @@ export default function GitProjectHub({
   const [showNewCommitModal, setShowNewCommitModal] = useState(false);
   const [showNewPrModal, setShowNewPrModal] = useState(false);
 
+  const activeProjectSummary = useMemo(
+    () => projectsList.find((p) => p.id === activeProjectId) || projectsList[0] || null,
+    [projectsList, activeProjectId]
+  );
+  const canFreezeRepo = isAdmin || isInstructor || Boolean(activeProjectSummary?.isLead);
+  const canEditRepoConfig = isAdmin || isInstructor || Boolean(activeProjectSummary?.isLead);
+
   const showToast = (msg: string) => {
     setActionToast(msg);
     setTimeout(() => setActionToast(null), 3500);
   };
 
   useEffect(() => {
-    setIsRepoFrozen(isProjectFrozen(activeProjectId));
+    setIsRepoFrozen(activeProjectId ? isProjectFrozen(activeProjectId) : false);
     return subscribeProjectLockChanges(() => {
-      setIsRepoFrozen(isProjectFrozen(activeProjectId));
+      setIsRepoFrozen(activeProjectId ? isProjectFrozen(activeProjectId) : false);
     });
   }, [activeProjectId]);
 
-  const handleToggleRepoFreeze = () => {
-    if (!isAdmin) return;
+  const handleToggleRepoFreeze = async () => {
+    if (!canFreezeRepo || !activeProjectId) return;
     const nextLocked = !isRepoFrozen;
+    const res = await updateWorkspaceProjectApi(activeProjectId, { is_frozen: nextLocked });
+    if (!res) {
+      showToast("Không thể thay đổi trạng thái đóng băng Repository (chỉ Nhóm trưởng / GVHD / Admin).");
+      return;
+    }
     setProjectFrozen(activeProjectId, nextLocked);
     setIsRepoFrozen(nextLocked);
+    setProjectsList((prev) =>
+      prev.map((p) => (p.id === activeProjectId ? { ...p, isFrozen: nextLocked } : p))
+    );
     showToast(
       nextLocked
         ? `Đã đóng băng Repository & khóa Sprint Kanban của dự án ${activeProjectId} — Sinh viên không thể Commit / PR / Merge.`
@@ -1936,7 +1953,7 @@ export default function GitProjectHub({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [archDrawerOpen, showRepoModal, isArchDrawerClosing, isRepoModalClosing, isSyncingLive, handleCloseRepoModal]);
-  const [repoUrl, setRepoUrl] = useState<string>("https://github.com/Hoaba-clouch/E-learningProject");
+  const [repoUrl, setRepoUrl] = useState<string>("");
   const [targetBranch, setTargetBranch] = useState<string>("main");
   const [topoAnimKey, setTopoAnimKey] = useState<number>(0);
   const [statAnimKey, setStatAnimKey] = useState<number>(0);
@@ -1950,40 +1967,72 @@ export default function GitProjectHub({
   };
 
   // Topology Interactive State
-  const [selectedCommit, setSelectedCommit] = useState<GitCommitItem>(GIT_COMMITS[8] || GIT_COMMITS[0]);
+  const [selectedCommit, setSelectedCommit] = useState<GitCommitItem | null>(null);
   const [hoveredCommit, setHoveredCommit] = useState<GitCommitItem | null>(null);
   const [memberFilter, setMemberFilter] = useState<string>("all");
   const [branchFilter, setBranchFilter] = useState<string>("all");
 
   const loadGitWorkspace = useCallback(async (pid: string, preserveSelectedPrId?: string) => {
-    const data = await fetchGitHubWorkspaceApi(pid, role);
-    if (!data) return;
-    setProjectsList(data.projects || []);
-    setRepoUrl(data.repository.repoUrl);
-    setRepoSlug(data.repository.repoSlug);
-    setTargetBranch(data.repository.targetBranch);
-    setMergeStrategy(data.repository.defaultMergeStrategy || "squash");
-    setWebhookActive(Boolean(data.repository.webhookActive));
-    setLastSyncedAt(data.repository.lastSyncedAt || "");
-    setMetricsState(data.metrics);
-    setProjectTasks(data.projectTasks || []);
-    setMemberAnalytics(data.memberAnalytics || []);
-    if (Array.isArray(data.commits) && data.commits.length > 0) {
-      setCommits(data.commits as GitCommitItem[]);
-      setSelectedCommit((prev) => {
-        const match = data.commits.find((c) => c.id === prev?.id);
-        return (match || data.commits[data.commits.length - 1] || data.commits[0]) as GitCommitItem;
+    setLoadingWorkspace(true);
+    try {
+      const data = await fetchGitHubWorkspaceApi(pid || undefined, role);
+      if (!data) return;
+      const projList = data.projects || [];
+      setProjectsList(projList);
+      if (!projList.length || !data.repository) {
+        setRepoUrl("");
+        setRepoSlug("");
+        setTargetBranch("main");
+        setMergeStrategy("squash");
+        setWebhookActive(false);
+        setLastSyncedAt("");
+        setCommits([]);
+        setSelectedCommit(null);
+        setPullRequests([]);
+        setSelectedPr(null);
+        setProjectTasks([]);
+        setMemberAnalytics([]);
+        setMetricsState(data.metrics);
+        setIsRepoFrozen(false);
+        return;
+      }
+      const resolvedId = data.activeProjectId || data.repository.projectId || projList[0].id;
+      if (resolvedId && resolvedId !== pid) {
+        setActiveProjectId(resolvedId);
+      }
+      const matchedProj = projList.find((p) => p.id === resolvedId) || projList[0];
+      const serverFrozen = Boolean(matchedProj?.isFrozen);
+      setProjectFrozen(resolvedId, serverFrozen);
+      setIsRepoFrozen(serverFrozen);
+      setRepoUrl(data.repository.repoUrl || "");
+      setRepoSlug(data.repository.repoSlug || "");
+      setTargetBranch(data.repository.targetBranch || "main");
+      setMergeStrategy(data.repository.defaultMergeStrategy || "squash");
+      setWebhookActive(Boolean(data.repository.webhookActive));
+      setLastSyncedAt(data.repository.lastSyncedAt || "");
+      setMetricsState(data.metrics);
+      setProjectTasks(data.projectTasks || []);
+      setMemberAnalytics(data.memberAnalytics || []);
+      if (Array.isArray(data.commits) && data.commits.length > 0) {
+        setCommits(data.commits as GitCommitItem[]);
+        setSelectedCommit((prev) => {
+          const match = data.commits.find((c) => c.id === prev?.id);
+          return (match || data.commits[data.commits.length - 1] || data.commits[0]) as GitCommitItem;
+        });
+      } else {
+        setCommits([]);
+        setSelectedCommit(null);
+      }
+      const prs = data.pullRequests || [];
+      setPullRequests(prs);
+      setSelectedPr((prev) => {
+        const targetId = preserveSelectedPrId || prev?.id;
+        return prs.find((p) => p.id === targetId) || prs[0] || null;
       });
-    } else {
-      setCommits([]);
+      void loadArchitecture(resolvedId);
+    } finally {
+      setLoadingWorkspace(false);
     }
-    const prs = data.pullRequests || [];
-    setPullRequests(prs);
-    setSelectedPr((prev) => {
-      const targetId = preserveSelectedPrId || prev?.id;
-      return prs.find((p) => p.id === targetId) || prs[0] || null;
-    });
-    void loadArchitecture(pid);
   }, [loadArchitecture, role]);
 
   const handleApplyRepoUrl = async (targetUrl: string) => {
@@ -2078,7 +2127,7 @@ export default function GitProjectHub({
   };
 
   useEffect(() => {
-    setActiveProjectId(initialProjectId || "prj-codemind");
+    setActiveProjectId(initialProjectId || "");
   }, [initialProjectId]);
 
   useEffect(() => {
@@ -2833,21 +2882,25 @@ export default function GitProjectHub({
               <Network size={13} />
               Phân hệ 3 • Git Project Hub & Kiến trúc
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium font-mono">
-              {repoSlug} ({targetBranch})
-            </span>
-            <span
-              className={`pill pill--plain font-mono text-[10.5px] font-bold flex items-center gap-1 ${
-                webhookActive ? "pill--good" : "pill--warn"
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  webhookActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
-                }`}
-              />
-              {webhookActive ? "Webhook Tự động" : "Webhook Tạm dừng"}
-            </span>
+            {projectsList.length > 0 && (
+              <>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium font-mono">
+                  {repoSlug ? `${repoSlug} (${targetBranch})` : "Chưa liên kết Repo"}
+                </span>
+                <span
+                  className={`pill pill--plain font-mono text-[10.5px] font-bold flex items-center gap-1 ${
+                    webhookActive ? "pill--good" : "pill--warn"
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      webhookActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+                    }`}
+                  />
+                  {webhookActive ? "Webhook Tự động" : "Webhook Tạm dừng"}
+                </span>
+              </>
+            )}
             {isRepoFrozen && (
               <span className="pill pill--bad pill--plain font-mono text-[10.5px] font-bold flex items-center gap-1">
                 <Lock size={11} />
@@ -2904,20 +2957,43 @@ export default function GitProjectHub({
               </button>
             </>
           )}
-          <a
-            href={repoUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
-          >
-            <FolderGit2 size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
-            <span>Mở Repo GitHub</span>
-          </a>
-          {(isStudent || isAdmin) && (
+          {repoUrl && (
+            <a
+              href={repoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-1.5"
+            >
+              <FolderGit2 size={15} className="text-slate-600 dark:text-slate-300 shrink-0" />
+              <span>Mở Repo GitHub</span>
+            </a>
+          )}
+          {projectsList.length > 0 && !isAdmin && canFreezeRepo && (
+            <button
+              type="button"
+              onClick={() => void handleToggleRepoFreeze()}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer shadow-2xs transition ${
+                isRepoFrozen
+                  ? "bg-amber-500 hover:bg-amber-600 border-amber-500 text-slate-950"
+                  : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
+              }`}
+              title="Đóng băng hoặc mở khóa nộp bài Repository (Nhóm trưởng / GVHD / Admin)"
+            >
+              {isRepoFrozen ? <Unlock size={13} /> : <Lock size={13} />}
+              <span>{isRepoFrozen ? "Mở khóa Repo" : "Đóng băng Repo"}</span>
+            </button>
+          )}
+          {projectsList.length > 0 && (isStudent || isAdmin || isInstructor) && (
             <button
               onClick={() => setShowRepoModal(true)}
-              disabled={isStudent && isRepoFrozen}
-              title={isStudent && isRepoFrozen ? "Repository đang bị đóng băng (Freeze)" : "Liên kết URL Repo, chọn nhánh chính & chiến lược Merge"}
+              disabled={isStudent && (isRepoFrozen || !canEditRepoConfig)}
+              title={
+                isStudent && isRepoFrozen
+                  ? "Repository đang bị đóng băng (Freeze)"
+                  : isStudent && !canEditRepoConfig
+                    ? "Chỉ Nhóm trưởng / GVHD / Admin mới được liên kết & cấu hình Repo"
+                    : "Liên kết URL Repo, chọn nhánh chính & chiến lược Merge"
+              }
               className="btn-marlo-primary btn--primary magnetic flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <GitFork size={15} className="text-[#1c1304] shrink-0" />
@@ -2926,6 +3002,44 @@ export default function GitProjectHub({
           )}
         </div>
       </header>
+
+      {loadingWorkspace && projectsList.length === 0 ? (
+        <section className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+          Đang tải dữ liệu Git Project Hub từ hệ thống...
+        </section>
+      ) : projectsList.length === 0 ? (
+        <section className="marlo-card rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center space-y-3">
+          <div className="mx-auto w-11 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
+            <FolderGit2 size={22} />
+          </div>
+          <h2 className="text-base font-bold text-slate-900 dark:text-white">
+            Chưa có Repository đồ án nào trong không gian của bạn
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+            Bạn chưa tham gia đồ án nào hoặc chưa có đồ án được tạo. Hãy tạo đồ án mới hoặc nhận lời mời từ Nhóm trưởng để sử dụng Git Graph, AI Reviewer và Kiến trúc hệ thống.
+          </p>
+          {onNavigate && (
+            <div className="pt-2 flex items-center justify-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => onNavigate("projects")}
+                className="btn-marlo-primary btn--primary inline-flex items-center gap-1.5 text-xs"
+              >
+                <FolderKanban size={14} />
+                <span>Đi tới Danh sách Đồ án</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate("kanban")}
+                className="btn-marlo-secondary btn--secondary inline-flex items-center gap-1.5 text-xs"
+              >
+                <span>Mở Bảng Kanban</span>
+              </button>
+            </div>
+          )}
+        </section>
+      ) : (
+        <>
 
       {/* Role-Specific Control Banners */}
       {isInstructor && (
@@ -3059,12 +3173,12 @@ export default function GitProjectHub({
 
         <div key="metric-team-split" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Phân bổ Nhóm ({memberAnalytics.length || 3} người)</span>
+            <span>Phân bổ Nhóm ({memberAnalytics.length} người)</span>
             <UserCheck size={16} className="text-slate-400 dark:text-slate-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-              {(metricsState.memberShares.length > 0 ? metricsState.memberShares : [36, 34, 30]).join(" : ")}
+              {metricsState.memberShares.length > 0 ? metricsState.memberShares.join(" : ") : "—"}
             </span>
             <span className="pill pill--plain text-[10.5px] font-bold">
               {metricsState.balanceStatus}
@@ -4492,6 +4606,8 @@ export default function GitProjectHub({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
       {/* Modal Cấu hình & Đồng Bộ GitHub Repo (Isolated Draft State) */}

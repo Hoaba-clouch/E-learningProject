@@ -52,6 +52,7 @@ import {
 import {
   fetchStudentLearningOverview,
   completeStudentLessonApi,
+  getStoredUser,
   saveStudentVideoProgressApi,
   type StudentLearningOverview,
   type StudentChapterSubmissionDto,
@@ -1904,7 +1905,11 @@ export default function LearningWorkspace({
         activeTopic={activeMultiLesson.title}
         subjectId={selectedSubjectId}
         subjectName={currentMultiSubject?.name}
-        currentUserName={learningOverview?.user?.name || "Minh Anh"}
+        currentUserName={
+          learningOverview?.user?.name ||
+          getStoredUser("student")?.full_name ||
+          "Học viên"
+        }
       />
 
       {toastMessage && (

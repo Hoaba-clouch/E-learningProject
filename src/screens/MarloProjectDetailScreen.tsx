@@ -25,6 +25,7 @@ import gsap from "gsap";
 import { animateMarloCards } from "../utils/marloAnimations";
 import {
   isProjectFrozen,
+  setProjectFrozen,
   subscribeProjectLockChanges,
 } from "../utils/projectFreeze";
 import {
@@ -123,8 +124,14 @@ export default function MarloProjectDetailScreen({
     if (matched) {
       setWsProject(matched);
       setCurrentStatus(matched.status || "active");
+      if (typeof matched.isFrozen === "boolean") {
+        setProjectFrozen(matched.id, matched.isFrozen);
+        setIsSprintLocked(matched.isFrozen);
+      }
     }
   };
+
+  const canManageProject = role !== "student" || Boolean(wsProject?.isLead);
 
   useEffect(() => {
     void loadWorkspaceProject();
@@ -388,7 +395,28 @@ export default function MarloProjectDetailScreen({
     showToast(`✓ Đã thêm thẻ "${createdPayload.title}" và đồng bộ sang Bảng Kanban!`);
   };
 
+  const handleToggleProjectFreeze = async () => {
+    if (!canManageProject) {
+      showToast("🔒 Chỉ Nhóm trưởng hoặc Giảng viên/Admin mới có quyền đóng băng/mở khóa nộp bài đồ án.");
+      return;
+    }
+    const nextLocked = !isSprintLocked;
+    setProjectFrozen(displayId, nextLocked);
+    setIsSprintLocked(nextLocked);
+    await updateWorkspaceProjectApi(displayId, { is_frozen: nextLocked });
+    await loadWorkspaceProject();
+    showToast(
+      nextLocked
+        ? "🔒 Đã đóng băng đồ án (đồng bộ MySQL · Dự án · Kanban · Git Hub) — Thành viên không thể sửa/commit."
+        : "🔓 Đã mở khóa đồ án — Nhóm có thể tiếp tục cập nhật Sprint & Git."
+    );
+  };
+
   const handleStatusChange = async (newStatus: string) => {
+    if (!canManageProject) {
+      showToast("🔒 Chỉ Nhóm trưởng hoặc Giảng viên/Admin mới có quyền đổi trạng thái đồ án.");
+      return;
+    }
     if (role === "student" && newStatus === "delivered") {
       showToast("⚠️ Trạng thái 'Đã bảo vệ xong' chỉ do Giảng viên hoặc Hội đồng xác nhận sau khi chấm DoD.");
       return;
@@ -506,6 +534,21 @@ export default function MarloProjectDetailScreen({
                 <span>Mở Git Hub</span>
               </button>
             )}
+            {canManageProject && (
+              <button
+                type="button"
+                onClick={() => void handleToggleProjectFreeze()}
+                className={`px-3.5 py-2.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5 ${
+                  isSprintLocked
+                    ? "bg-rose-600 hover:bg-rose-700 border-rose-600 text-white"
+                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+                }`}
+                title="Đóng băng hoặc mở khóa nộp bài cho đồ án này (chỉ Nhóm trưởng / GVHD / Admin)"
+              >
+                <Lock size={14} />
+                <span>{isSprintLocked ? "Mở khóa Đồ án" : "Đóng băng Nộp bài"}</span>
+              </button>
+            )}
             {role === "student" && (
               <button
                 type="button"
@@ -616,13 +659,19 @@ export default function MarloProjectDetailScreen({
             <div className="flex items-center justify-between">
               <small className="text-xs text-slate-500 font-semibold">Trạng thái đồ án</small>
               {role === "student" && (
-                <span className="text-[10px] text-slate-400">Đồng bộ Kanban</span>
+                <span
+                  className={`text-[10px] font-semibold ${
+                    canManageProject ? "text-amber-600 dark:text-amber-400" : "text-slate-400"
+                  }`}
+                >
+                  {canManageProject ? "👑 Quyền Nhóm trưởng" : "Chỉ Nhóm trưởng được đổi"}
+                </span>
               )}
             </div>
             <div className="my-1">
               <select
                 value={currentStatus}
-                disabled={isSprintLocked && role === "student"}
+                disabled={!canManageProject || (isSprintLocked && role === "student")}
                 onChange={(e) => handleStatusChange(e.target.value)}
                 className="w-full h-10 px-3 bg-[#ecedef] dark:bg-[#222326] border border-[#14161a26] dark:border-[#ffffff24] rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23] cursor-pointer disabled:opacity-60"
               >
@@ -856,7 +905,7 @@ export default function MarloProjectDetailScreen({
                     {projectStudents.length} sinh viên trực tiếp thực hiện đồ án
                   </p>
                 </div>
-                {!isSprintLocked && (
+                {!isSprintLocked && canManageProject && (
                   <button
                     type="button"
                     onClick={() => {
@@ -865,7 +914,7 @@ export default function MarloProjectDetailScreen({
                       setIsAddMemberModalOpen(true);
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition cursor-pointer active:scale-95 shadow-xs"
-                    title="Mời sinh viên tham gia đồ án (GitHub-style Collaborator)"
+                    title="Mời sinh viên tham gia đồ án (chỉ Nhóm trưởng / GVHD)"
                   >
                     <UserPlus size={14} />
                     <span>Mời thành viên</span>

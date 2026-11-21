@@ -22,10 +22,17 @@ def test_git_hub_full_pipeline_and_cross_module_sync() -> None:
 
     r_stu = client.post(
         "/v1/demo/session",
-        json={"demo_role": "student", "preferred_email": "hasib@gmail.com"},
+        json={"demo_role": "student", "preferred_email": "hoa.nb@student.edu.vn"},
     )
     assert r_stu.status_code == 201, r_stu.text
     stu_headers = {"Authorization": f"Bearer {r_stu.json()['access_token']}"}
+
+    r_outsider = client.post(
+        "/v1/demo/session",
+        json={"demo_role": "student", "preferred_email": "hasib@gmail.com"},
+    )
+    assert r_outsider.status_code == 201, r_outsider.text
+    outsider_headers = {"Authorization": f"Bearer {r_outsider.json()['access_token']}"}
 
     r_ins = client.post(
         "/v1/demo/session",
@@ -39,12 +46,23 @@ def test_git_hub_full_pipeline_and_cross_module_sync() -> None:
     assert prof_before.status_code == 200, prof_before.text
     xp_before = int(prof_before.json()["profile"]["exp_points"])
 
-    # 2. Fetch Git Hub Workspace for prj-codemind & prj-ecommerce
+    # Outsider student cannot access/push onto prj-codemind and sees only their enrolled project(s)
+    ws_outsider = client.get("/v1/git-hub/workspace?project_id=prj-codemind", headers=outsider_headers)
+    assert ws_outsider.status_code == 200, ws_outsider.text
+    assert all(p["id"] != "prj-codemind" for p in ws_outsider.json()["projects"])
+    push_forbidden = client.post(
+        "/v1/git-hub/projects/prj-codemind/commits",
+        json={"branch": "feature/hack", "message": "feat: unauthorized"},
+        headers=outsider_headers,
+    )
+    assert push_forbidden.status_code == 403
+
+    # 2. Fetch Git Hub Workspace for prj-codemind & prj-ecommerce (member access)
     ws_cm = client.get("/v1/git-hub/workspace?project_id=prj-codemind", headers=stu_headers)
     assert ws_cm.status_code == 200, ws_cm.text
     cm = ws_cm.json()
     assert cm["activeProjectId"] == "prj-codemind"
-    assert len(cm["projects"]) == 8
+    assert len(cm["projects"]) >= 2
     assert len(cm["commits"]) == 16
     assert len(cm["pullRequests"]) == 4
     assert sum(m["sharePct"] for m in cm["memberAnalytics"]) == 100

@@ -49,6 +49,7 @@ class ProjectInviteIn(BaseModel):
 
 class WorkspaceProjectPatchIn(BaseModel):
     fav: bool | None = None
+    is_frozen: bool | None = None
     status: str | None = None
     name: str | None = None
     sprint: str | None = None

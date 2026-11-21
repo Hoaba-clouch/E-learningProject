@@ -6,8 +6,8 @@ def test_sync_github_different_repos_updates_commits_and_diagram():
     init_db()
     client = TestClient(app)
 
-    # 1. Sign in demo student
-    r_stu = client.post("/v1/demo/session", json={"demo_role": "student", "preferred_email": "hasib@gmail.com"})
+    # 1. Sign in demo student (Nguyễn Bá Hòa - Leader of prj-codemind)
+    r_stu = client.post("/v1/demo/session", json={"demo_role": "student", "preferred_email": "hoa.nb@student.edu.vn"})
     assert r_stu.status_code == 201
     headers = {"Authorization": f"Bearer {r_stu.json()['access_token']}"}
 

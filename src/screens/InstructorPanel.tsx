@@ -314,6 +314,10 @@ import {
 
 
 
+  fetchKanbanWorkspace,
+
+
+
   fetchStudentsAnalyticsApi,
 
 
@@ -351,6 +355,10 @@ import {
 
 
   type StudentAnalyticsItem,
+
+
+
+  type WorkspaceProjectDto,
 
 
 
@@ -445,9 +453,6 @@ import {
 
 } from "../data/instructorData";
 
-
-
-import { CNTT_PROJECTS } from "./MarloProjectsScreen";
 import { MULTI_CHAPTER_SUBJECTS } from "../data/multiChapterCurriculum";
 import { extractNumericLessonCode } from "../utils/lessonFormat";
 
@@ -1447,6 +1452,8 @@ export default function InstructorPanel({
 
   const [newTcEdgeCase, setNewTcEdgeCase] = useState(false);
 
+  const [workspaceProjects, setWorkspaceProjects] = useState<WorkspaceProjectDto[]>([]);
+
 
 
   // Student Preview Modal State
@@ -1720,7 +1727,7 @@ export default function InstructorPanel({
 
     await ensureRoleSession("instructor");
 
-    const [apiCourses, apiSubs, apiRubric, apiStudents] = await Promise.all([
+    const [apiCourses, apiSubs, apiRubric, apiStudents, apiKbWs] = await Promise.all([
 
       fetchInstructorCourses(),
 
@@ -1729,6 +1736,8 @@ export default function InstructorPanel({
       fetchDefenseRubric(),
 
       fetchStudentsAnalyticsApi(),
+
+      fetchKanbanWorkspace("all"),
 
     ]);
 
@@ -1753,6 +1762,12 @@ export default function InstructorPanel({
     if (Array.isArray(apiStudents)) {
 
       setStudentsAnalytics(apiStudents);
+
+    }
+
+    if (apiKbWs?.projects) {
+
+      setWorkspaceProjects(apiKbWs.projects);
 
     }
 
@@ -2054,23 +2069,19 @@ export default function InstructorPanel({
 
 
 
-    const projectsDone = CNTT_PROJECTS.filter((p) => p.status === "delivered").length;
+    const projectsDone = workspaceProjects.filter((p) => p.status === "delivered").length;
 
 
 
-    const projectsActive = CNTT_PROJECTS.filter(
-
-
+    const projectsActive = workspaceProjects.filter(
 
       (p) => p.status === "active" || p.status === "review"
-
-
 
     ).length;
 
 
 
-    const projectsPlan = CNTT_PROJECTS.filter((p) => p.status === "planning").length;
+    const projectsPlan = workspaceProjects.filter((p) => p.status === "planning").length;
 
 
 
@@ -2130,7 +2141,7 @@ export default function InstructorPanel({
 
 
 
-  }, [overviewScope, submissions, selectedClassId, rubric, classes, activeClass, studentsAnalytics]);
+  }, [overviewScope, submissions, selectedClassId, rubric, classes, activeClass, studentsAnalytics, workspaceProjects]);
 
 
 
@@ -4151,7 +4162,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                      total: CNTT_PROJECTS.length,
+                      total: workspaceProjects.length,
 
 
 
@@ -4638,7 +4649,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                  {CNTT_PROJECTS.slice(0, 4).map((prj) => {
+                  {workspaceProjects.slice(0, 4).map((prj) => {
 
 
 

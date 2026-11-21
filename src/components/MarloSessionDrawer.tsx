@@ -215,23 +215,23 @@ export default function MarloSessionDrawer({
   if (!isRendered || !activeSchedule) return null;
 
   const catMeta =
-    SCHEDULE_CATEGORY_META[schedule.category] || SCHEDULE_CATEGORY_META.office_hours;
+    SCHEDULE_CATEGORY_META[activeSchedule.category] || SCHEDULE_CATEGORY_META.office_hours;
   const kindMeta = KIND_META[catMeta.kind];
   const IconComponent = kindMeta.icon;
   const isStaff = role === "instructor" || role === "admin";
-  const isLocked = Boolean(schedule.is_locked);
-  const isFull = (schedule.current_booked || 0) >= (schedule.max_capacity || 1);
+  const isLocked = Boolean(activeSchedule.is_locked);
+  const isFull = (activeSchedule.current_booked || 0) >= (activeSchedule.max_capacity || 1);
   const capacityPct = Math.min(
     100,
-    Math.round(((schedule.current_booked || 0) / Math.max(1, schedule.max_capacity)) * 100)
+    Math.round(((activeSchedule.current_booked || 0) / Math.max(1, activeSchedule.max_capacity)) * 100)
   );
-  const myBooking = schedule.my_booking || null;
+  const myBooking = activeSchedule.my_booking || null;
   const hasActiveStudentBooking = Boolean(
     myBooking && myBooking.booking_status !== "rejected"
   );
-  const bookings = schedule.bookings || [];
+  const bookings = activeSchedule.bookings || [];
   const canJoinDefense =
-    (schedule.category === "exam" || schedule.category === "defense") &&
+    (activeSchedule.category === "exam" || activeSchedule.category === "defense") &&
     Boolean(onOpenDefenseRoom);
 
   const runAsync = async (key: string, fn?: () => Promise<void>) => {
@@ -257,7 +257,7 @@ export default function MarloSessionDrawer({
         className="fixed top-4 bottom-4 right-3 sm:top-5 sm:bottom-5 sm:right-5 w-[calc(100vw-24px)] sm:w-[460px] max-w-[calc(100vw-24px)] z-[9999] flex flex-col rounded-[24px] bg-[#FAF9F6] dark:bg-[#16171f] text-slate-900 dark:text-slate-100 shadow-2xl border border-[#EBE8E2] dark:border-slate-800 overflow-hidden"
         role="dialog"
         aria-modal="true"
-        aria-label={schedule.title}
+        aria-label={activeSchedule.title}
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-[#EBE8E2] dark:border-slate-800 bg-white/80 dark:bg-[#1a1b24]/90 shrink-0">
@@ -268,9 +268,9 @@ export default function MarloSessionDrawer({
               >
                 {catMeta.label}
               </span>
-              {schedule.course_code && (
+              {activeSchedule.course_code && (
                 <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10.5px] font-bold">
-                  {schedule.course_code}
+                  {activeSchedule.course_code}
                 </span>
               )}
               {isLocked && (
@@ -281,10 +281,10 @@ export default function MarloSessionDrawer({
               )}
             </div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
-              {schedule.title}
+              {activeSchedule.title}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {formatVietnameseDate(schedule.schedule_date)}
+              {formatVietnameseDate(activeSchedule.schedule_date)}
             </p>
           </div>
           <button
@@ -306,12 +306,12 @@ export default function MarloSessionDrawer({
             </div>
             <div className="min-w-0 flex-1">
               <b className="text-xl font-bold font-mono tracking-tight block">
-                {formatScheduleHour(schedule.start_hour)} –{" "}
-                {formatScheduleHour(schedule.end_hour)}
+                {formatScheduleHour(activeSchedule.start_hour)} –{" "}
+                {formatScheduleHour(activeSchedule.end_hour)}
               </b>
               <small className="text-xs text-slate-300 font-medium block truncate mt-0.5">
-                {formatScheduleDuration(schedule.start_hour, schedule.end_hour)} ·{" "}
-                {schedule.room_or_link}
+                {formatScheduleDuration(activeSchedule.start_hour, activeSchedule.end_hour)} ·{" "}
+                {activeSchedule.room_or_link}
               </small>
             </div>
           </div>
@@ -333,9 +333,9 @@ export default function MarloSessionDrawer({
               </span>
               <span className="font-bold text-slate-900 dark:text-white inline-flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 text-[10px] font-bold inline-flex items-center justify-center">
-                  {getNameInitials(schedule.instructor_name)}
+                  {getNameInitials(activeSchedule.instructor_name)}
                 </span>
-                {schedule.instructor_name}
+                {activeSchedule.instructor_name}
               </span>
             </div>
 
@@ -344,7 +344,7 @@ export default function MarloSessionDrawer({
                 Phòng / Link
               </span>
               <span className="font-semibold text-slate-900 dark:text-slate-100 text-right break-all">
-                {schedule.room_or_link}
+                {activeSchedule.room_or_link}
               </span>
             </div>
 
@@ -354,7 +354,7 @@ export default function MarloSessionDrawer({
                   Sĩ số đăng ký
                 </span>
                 <span className="font-mono font-bold text-slate-900 dark:text-white">
-                  {schedule.current_booked}/{schedule.max_capacity} ({capacityPct}%)
+                  {activeSchedule.current_booked}/{activeSchedule.max_capacity} ({capacityPct}%)
                 </span>
               </div>
               <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -369,23 +369,23 @@ export default function MarloSessionDrawer({
           </div>
 
           {/* Cross-Module Project Linkage Card */}
-          {schedule.project_id && (
+          {activeSchedule.project_id && (
             <div className="drawer-cascade-item rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1e202b] p-4 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <FolderGit2 size={15} className="text-blue-600 dark:text-blue-400 shrink-0" />
                   <div className="min-w-0">
                     <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
-                      Đồ án liên kết · {schedule.project_code || schedule.project_id}
+                      Đồ án liên kết · {activeSchedule.project_code || activeSchedule.project_id}
                     </div>
                     <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                      {schedule.project_name || schedule.project_id}
+                      {activeSchedule.project_name || activeSchedule.project_id}
                     </div>
                   </div>
                 </div>
-                {safeExternalUrl(schedule.project_repo_url) && (
+                {safeExternalUrl(activeSchedule.project_repo_url) && (
                   <a
-                    href={safeExternalUrl(schedule.project_repo_url)!}
+                    href={safeExternalUrl(activeSchedule.project_repo_url)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 shrink-0"
@@ -402,7 +402,7 @@ export default function MarloSessionDrawer({
                     type="button"
                     onClick={() => {
                       handleAnimatedClose();
-                      onOpenProjectDetail(schedule.project_id!);
+                      onOpenProjectDetail(activeSchedule.project_id!);
                     }}
                     className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-[11px] font-bold transition cursor-pointer"
                   >
@@ -414,7 +414,7 @@ export default function MarloSessionDrawer({
                     type="button"
                     onClick={() => {
                       handleAnimatedClose();
-                      onOpenKanban(schedule.project_id!);
+                      onOpenKanban(activeSchedule.project_id!);
                     }}
                     className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
                   >
@@ -427,7 +427,7 @@ export default function MarloSessionDrawer({
                     type="button"
                     onClick={() => {
                       handleAnimatedClose();
-                      onOpenGitHub(schedule.project_id!);
+                      onOpenGitHub(activeSchedule.project_id!);
                     }}
                     className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
                   >
@@ -440,13 +440,13 @@ export default function MarloSessionDrawer({
           )}
 
           {/* Note */}
-          {schedule.note && (
+          {activeSchedule.note && (
             <div className="drawer-cascade-item p-3.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
               <div className="font-bold text-[11px] text-slate-900 dark:text-white mb-1 flex items-center gap-1.5">
                 <Info size={13} className="text-blue-500" />
                 <span>Lưu ý học vụ</span>
               </div>
-              {schedule.note}
+              {activeSchedule.note}
             </div>
           )}
 
@@ -612,13 +612,13 @@ export default function MarloSessionDrawer({
               {!hasActiveStudentBooking && onBookForStudent && (
                 <button
                   type="button"
-                  disabled={isLocked || isFull || schedule.status === "completed"}
+                  disabled={isLocked || isFull || activeSchedule.status === "completed"}
                   onClick={() => {
                     handleAnimatedClose();
-                    onBookForStudent(schedule);
+                    onBookForStudent(activeSchedule);
                   }}
                   className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition ${
-                    isLocked || isFull || schedule.status === "completed"
+                    isLocked || isFull || activeSchedule.status === "completed"
                       ? "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                       : "bg-[#EE8420] hover:bg-[#d97316] text-slate-950 cursor-pointer shadow-xs"
                   }`}
@@ -641,7 +641,7 @@ export default function MarloSessionDrawer({
                   <button
                     type="button"
                     disabled={busyKey === "lock"}
-                    onClick={() => runAsync("lock", () => onToggleLock(schedule))}
+                    onClick={() => runAsync("lock", () => onToggleLock(activeSchedule))}
                     className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer disabled:opacity-50 ${
                       isLocked
                         ? "bg-rose-50 dark:bg-rose-950/50 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300"
@@ -660,7 +660,7 @@ export default function MarloSessionDrawer({
                         disabled={busyKey === "del"}
                         onClick={() =>
                           runAsync("del", async () => {
-                            await onDeleteSchedule(schedule);
+                            await onDeleteSchedule(activeSchedule);
                             handleAnimatedClose();
                           })
                         }
@@ -707,7 +707,7 @@ export default function MarloSessionDrawer({
                     type="button"
                     onClick={() => {
                       handleAnimatedClose();
-                      onEditSchedule(schedule);
+                      onEditSchedule(activeSchedule);
                     }}
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 text-xs font-bold transition cursor-pointer shadow-xs"
                   >

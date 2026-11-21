@@ -1,27 +1,28 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import Sidebar from "./components/Sidebar";
 import LoginScreen from "./screens/LoginScreen";
-import StudentDashboard from "./screens/StudentDashboard";
-import LearningWorkspace from "./screens/LearningWorkspace";
-import GitProjectHub from "./screens/GitProjectHub";
-import XPShop from "./screens/XPShop";
-import StudentProfile from "./screens/StudentProfile";
-import AdminDashboard from "./screens/AdminDashboard";
-import InstructorPanel from "./screens/InstructorPanel";
-import KanbanBoard from "./screens/KanbanBoard";
-import EngineeringScheduleRota from "./screens/EngineeringScheduleRota";
-import MarloProjectsScreen from "./screens/MarloProjectsScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
 import MarloCommandPalette from "./components/MarloCommandPalette";
 import MarloGlobalHeader from "./components/MarloGlobalHeader";
-import CodeMindIntroLandingPage from "./screens/CodeMindIntroLandingPage";
-import AIDefenseRoomScreen from "./screens/AIDefenseRoomScreen";
-import SecurityDevicesScreen from "./screens/SecurityDevicesScreen";
-import MarloProjectDetailScreen from "./screens/MarloProjectDetailScreen";
-import MarloTeamScreen from "./screens/MarloTeamScreen";
-import MarloPersonDetailScreen from "./screens/MarloPersonDetailScreen";
 import { fetchCurrentUser, getStoredUser, logoutUser, setTabSessionRole, updateUserPreferencesApi } from "./api";
+
+const StudentDashboard = lazy(() => import("./screens/StudentDashboard"));
+const LearningWorkspace = lazy(() => import("./screens/LearningWorkspace"));
+const GitProjectHub = lazy(() => import("./screens/GitProjectHub"));
+const XPShop = lazy(() => import("./screens/XPShop"));
+const StudentProfile = lazy(() => import("./screens/StudentProfile"));
+const AdminDashboard = lazy(() => import("./screens/AdminDashboard"));
+const InstructorPanel = lazy(() => import("./screens/InstructorPanel"));
+const KanbanBoard = lazy(() => import("./screens/KanbanBoard"));
+const EngineeringScheduleRota = lazy(() => import("./screens/EngineeringScheduleRota"));
+const MarloProjectsScreen = lazy(() => import("./screens/MarloProjectsScreen"));
+const CodeMindIntroLandingPage = lazy(() => import("./screens/CodeMindIntroLandingPage"));
+const AIDefenseRoomScreen = lazy(() => import("./screens/AIDefenseRoomScreen"));
+const SecurityDevicesScreen = lazy(() => import("./screens/SecurityDevicesScreen"));
+const MarloProjectDetailScreen = lazy(() => import("./screens/MarloProjectDetailScreen"));
+const MarloTeamScreen = lazy(() => import("./screens/MarloTeamScreen"));
+const MarloPersonDetailScreen = lazy(() => import("./screens/MarloPersonDetailScreen"));
 
 export type Screen =
   | "login"
@@ -95,20 +96,8 @@ export default function App() {
     if (!subjectId && !lessonId && !tab && !openTutor) return null;
     return { subjectId, lessonId, tab, openTutor, nonce: Date.now() };
   });
-  const [selectedKanbanProjectId, setSelectedKanbanProjectId] = useState<string>(() => {
-    const user = getStoredUser();
-    if (user?.email === "hasib@gmail.com" || user?.id === "usr-sv-02" || String(user?.full_name || "").includes("Nguyễn Văn A")) {
-      return "prj-compiler";
-    }
-    return "prj-codemind";
-  });
-  const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>(() => {
-    const user = getStoredUser();
-    if (user?.email === "hasib@gmail.com" || user?.id === "usr-sv-02" || String(user?.full_name || "").includes("Nguyễn Văn A")) {
-      return "prj-compiler";
-    }
-    return "codemind";
-  });
+  const [selectedKanbanProjectId, setSelectedKanbanProjectId] = useState<string>("");
+  const [selectedMarloProjectId, setSelectedMarloProjectId] = useState<string>("");
   const [selectedMarloPersonId, setSelectedMarloPersonId] = useState<string>("hoa");
   const [gitHubInitialTab, setGitHubInitialTab] = useState<
     "topology" | "prs" | "gitdiagram" | "analytics" | "gitflow" | undefined
@@ -206,11 +195,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    const user = getStoredUser(role);
-    if (user?.email === "hasib@gmail.com" || user?.id === "usr-sv-02" || String(user?.full_name || "").includes("Nguyễn Văn A")) {
-      setSelectedKanbanProjectId("prj-compiler");
-      setSelectedMarloProjectId("prj-compiler");
-    }
+    setSelectedKanbanProjectId("");
+    setSelectedMarloProjectId("");
   }, [role]);
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "light";
@@ -409,13 +395,21 @@ export default function App() {
   if (screen === "intro") {
     return (
       <div className={`theme-${theme} ${theme === "dark" ? "dark" : ""}`}>
-        <CodeMindIntroLandingPage
-          onEnterPlatform={(targetScreen) => {
-            setRole("student");
-            setScreen(targetScreen || "student-dashboard");
-          }}
-          onLogin={() => setScreen("login")}
-        />
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center p-10 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Đang tải phân hệ...
+            </div>
+          }
+        >
+          <CodeMindIntroLandingPage
+            onEnterPlatform={(targetScreen) => {
+              setRole("student");
+              setScreen(targetScreen || "student-dashboard");
+            }}
+            onLogin={() => setScreen("login")}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -675,7 +669,15 @@ export default function App() {
         <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto relative flex flex-col scroll-smooth">
           <ErrorBoundary>
             <div key={screenContainerKey} className="min-h-full flex-1">
-              {renderScreen()}
+              <Suspense
+                fallback={
+                  <div className="flex-1 min-h-[240px] flex items-center justify-center p-10 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    Đang tải phân hệ...
+                  </div>
+                }
+              >
+                {renderScreen()}
+              </Suspense>
             </div>
           </ErrorBoundary>
         </main>

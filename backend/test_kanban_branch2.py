@@ -14,7 +14,7 @@ def test_kanban_branch2_full_project_task_pipeline() -> None:
     init_db()
     client = TestClient(app)
 
-    # 1. Reset demo DB via Admin & login Student (hasib@gmail.com / usr-sv-02)
+    # 1. Reset demo DB via Admin & login Instructor + Outsider Student (hasib) + Leader Student (hoa.nb)
     r_adm = client.post("/v1/auth/login", json={"email": "admin@codemind.ai", "password": "hasib123"})
     assert r_adm.status_code == 200, r_adm.text
     adm_headers = {"Authorization": f"Bearer {r_adm.json()['access_token']}"}
@@ -22,15 +22,43 @@ def test_kanban_branch2_full_project_task_pipeline() -> None:
     r_reset = client.post("/v1/admin/reset-demo", headers=adm_headers)
     assert r_reset.status_code == 200, r_reset.text
 
-    r_stu = client.post(
+    r_ins = client.post(
+        "/v1/demo/session",
+        json={"demo_role": "instructor", "preferred_email": "lananh.gv@codemind.ai"},
+    )
+    assert r_ins.status_code == 201, r_ins.text
+    ins_headers = {"Authorization": f"Bearer {r_ins.json()['access_token']}"}
+
+    r_hasib = client.post(
         "/v1/demo/session",
         json={"demo_role": "student", "preferred_email": "hasib@gmail.com"},
+    )
+    assert r_hasib.status_code == 201, r_hasib.text
+    hasib_headers = {"Authorization": f"Bearer {r_hasib.json()['access_token']}"}
+
+    r_stu = client.post(
+        "/v1/demo/session",
+        json={"demo_role": "student", "preferred_email": "hoa.nb@student.edu.vn"},
     )
     assert r_stu.status_code == 201, r_stu.text
     stu_headers = {"Authorization": f"Bearer {r_stu.json()['access_token']}"}
 
-    # 2. Fetch full Kanban workspace -> 8 projects, 14 tasks on prj-codemind, 4/4 on prj-compiler
-    ws_res = client.get("/v1/kanban/workspace", headers=stu_headers)
+    # Verify strict student scoping: hasib only sees prj-compiler and cannot patch/invite prj-codemind
+    hasib_ws = client.get("/v1/kanban/workspace", headers=hasib_headers).json()
+    assert [p["id"] for p in hasib_ws["projects"]] == ["prj-compiler"]
+    assert client.patch(
+        "/v1/kanban/workspace/projects/prj-codemind",
+        json={"status": "delivered"},
+        headers=hasib_headers,
+    ).status_code == 403
+    assert client.post(
+        "/v1/kanban/projects/prj-codemind/invitations",
+        json={"user_id": "usr-sv-02", "role_title": "Developer"},
+        headers=hasib_headers,
+    ).status_code == 403
+
+    # 2. Fetch full Kanban workspace as Instructor -> 8 projects, 14 tasks on prj-codemind, 4/4 on prj-compiler
+    ws_res = client.get("/v1/kanban/workspace", headers=ins_headers)
     assert ws_res.status_code == 200, ws_res.text
     ws = ws_res.json()
     projects = ws["projects"]
@@ -180,6 +208,30 @@ def test_kanban_branch2_full_project_task_pipeline() -> None:
 
     del_res = client.delete(f"/v1/kanban/workspace/tasks/{new_task_id}", headers=stu_headers)
     assert del_res.status_code == 200, del_res.text
+
+    # 6b. Verify Leader-only is_frozen sync & enforcement across students
+    freeze_res = client.patch(
+        "/v1/kanban/workspace/projects/prj-codemind",
+        json={"is_frozen": True},
+        headers=stu_headers,
+    )
+    assert freeze_res.status_code == 200, freeze_res.text
+    assert freeze_res.json()["project"]["isFrozen"] is True
+
+    blocked_create = client.post(
+        "/v1/kanban/workspace/projects/prj-codemind/tasks",
+        json={"title": "Should be blocked when frozen", "column": "ready", "points": 2},
+        headers=stu_headers,
+    )
+    assert blocked_create.status_code == 403
+
+    unfreeze_res = client.patch(
+        "/v1/kanban/workspace/projects/prj-codemind",
+        json={"is_frozen": False},
+        headers=stu_headers,
+    )
+    assert unfreeze_res.status_code == 200, unfreeze_res.text
+    assert unfreeze_res.json()["project"]["isFrozen"] is False
 
     # 7. Cleanly restore demo DB state
     r_reset_final = client.post("/v1/admin/reset-demo", headers=adm_headers)

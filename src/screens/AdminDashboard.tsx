@@ -78,8 +78,6 @@ import type { Screen } from "../App";
 
 import {
 
-  FALLBACK_ADMIN_USERS,
-
   clearBroadcastApi,
 
   createAdminClass,
@@ -96,7 +94,11 @@ import {
 
   fetchAdminAnalyticsApi,
 
+  fetchKanbanWorkspace,
+
   type AdminAnalyticsData,
+
+  type WorkspaceProjectDto,
 
   patchAdminAiService,
 
@@ -155,8 +157,6 @@ import {
   type PendingApprovalItem,
 
 } from "../data/adminData";
-
-import { CNTT_PROJECTS } from "./MarloProjectsScreen";
 
 import {
 
@@ -340,7 +340,9 @@ export default function AdminDashboard({
 
   // Core Governance States (pre-populated with zero-flicker synced fallback)
 
-  const [users, setUsers] = useState<AdminUserRecord[]>(FALLBACK_ADMIN_USERS);
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
+
+  const [workspaceProjects, setWorkspaceProjects] = useState<WorkspaceProjectDto[]>([]);
 
   const [usersLoading, setUsersLoading] = useState(false);
 
@@ -488,11 +490,18 @@ export default function AdminDashboard({
 
     await ensureRoleSession("admin");
 
-    const bundle = await fetchAdminGovernanceBundle();
+    const [bundle, kbWs] = await Promise.all([
+      fetchAdminGovernanceBundle(),
+      fetchKanbanWorkspace("all"),
+    ]);
+
+    if (kbWs?.projects) {
+      setWorkspaceProjects(kbWs.projects);
+    }
 
     if (bundle) {
 
-      if (bundle.users.length > 0) setUsers(bundle.users);
+      setUsers(bundle.users);
 
       if (bundle.classes.length > 0) setClassesList(bundle.classes);
 
@@ -1959,13 +1968,13 @@ export default function AdminDashboard({
 
                     <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-0.5">
 
-                      {CNTT_PROJECTS.length} Dự án
+                      {workspaceProjects.length} Dự án
 
                     </div>
 
                     <div className="text-[10.5px] text-slate-500">
 
-                      {CNTT_PROJECTS.filter((p) => p.status === "delivered").length} đã nghiệm thu
+                      {workspaceProjects.filter((p) => p.status === "delivered").length} đã nghiệm thu
 
                     </div>
 
@@ -1977,7 +1986,7 @@ export default function AdminDashboard({
 
                 <div className="space-y-2">
 
-                  {CNTT_PROJECTS.slice(0, 2).map((prj) => {
+                  {workspaceProjects.slice(0, 2).map((prj) => {
 
                     const pct = Math.round(prj.progress * 100);
 
