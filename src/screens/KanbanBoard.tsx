@@ -6317,14 +6317,6 @@ export default function KanbanBoard({
                           <div className="mb-2 flex items-center gap-1.5 flex-wrap">
                             {task.gitActivity.latestPrNumber && (() => {
                               const stLow = (task.gitActivity.latestPrStatus || "open").toLowerCase();
-                              const badgeCls =
-                                stLow === "merged"
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60"
-                                  : stLow === "approved"
-                                  ? "bg-blue-50 text-blue-700 border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60"
-                                  : stLow === "changes_requested"
-                                  ? "bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60"
-                                  : "bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60";
                               const stText =
                                 stLow === "merged"
                                   ? "Merged"
@@ -6340,7 +6332,7 @@ export default function KanbanBoard({
                                     e.stopPropagation();
                                     onOpenGitHub?.(currentProjectId, "prs");
                                   }}
-                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-mono font-bold cursor-pointer hover:opacity-85 transition ${badgeCls}`}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border-0 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-semibold cursor-pointer hover:bg-slate-200/80 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition"
                                   title="Mở Pull Request trên Git Project Hub"
                                 >
                                   <GitPullRequest size={10} />
@@ -6355,7 +6347,7 @@ export default function KanbanBoard({
                                   e.stopPropagation();
                                   onOpenGitHub?.(currentProjectId, "topology");
                                 }}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-semibold cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border-0 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-semibold cursor-pointer hover:bg-slate-200/80 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition"
                                 title="Xem lịch sử Commit trên Cây nhánh Git"
                               >
                                 <GitCommit size={10} />
