@@ -2502,33 +2502,11 @@ export async function submitStudentChapterExercise(payload: {
   }
 }
 
-export interface XpShopPurchaseResponse {
-  exp_points?: number;
-  owned_items?: Record<string, string[]>;
-  equipped_items?: Record<string, string>;
-  error?: string;
-}
-
-export interface XpShopEquipResponse {
-  success?: boolean;
-  category?: string;
-  equipped_id?: string;
-  equipped_items?: Record<string, string>;
-  error?: string;
-}
-
-export interface XpShopInventoryResponse {
-  exp_points?: number;
-  owned_items?: Record<string, string[]>;
-  equipped_items?: Record<string, string>;
-  error?: string;
-}
-
 export async function purchaseXpShopItem(payload: {
   category: string;
   item_id: string;
   cost: number;
-}): Promise<XpShopPurchaseResponse> {
+}): Promise<{ exp_points?: number; owned_items?: Record<string, string[]>; error?: string }> {
   const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
   try {
     const res = await fetch(`${API_BASE}/v1/student/xp-shop/purchase`, {
@@ -2542,45 +2520,6 @@ export async function purchaseXpShopItem(payload: {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { error: data.detail || "Không thể mua vật phẩm" };
     dispatchXpUpdated();
-    return data;
-  } catch {
-    return { error: "Lỗi kết nối Backend" };
-  }
-}
-
-export async function equipXpShopItemApi(payload: {
-  category: string;
-  item_id: string;
-}): Promise<XpShopEquipResponse> {
-  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
-  try {
-    const res = await fetch(`${API_BASE}/v1/student/xp-shop/equip`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.detail || "Không thể trang bị vật phẩm" };
-    dispatchXpUpdated();
-    return data;
-  } catch {
-    return { error: "Lỗi kết nối Backend" };
-  }
-}
-
-export async function fetchXpShopInventory(): Promise<XpShopInventoryResponse> {
-  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
-  try {
-    const res = await fetch(`${API_BASE}/v1/student/xp-shop/inventory`, {
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.detail || "Không thể tải kho đồ" };
     return data;
   } catch {
     return { error: "Lỗi kết nối Backend" };

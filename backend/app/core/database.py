@@ -713,7 +713,6 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     radar_defense DOUBLE DEFAULT 10.0,
     owned_items_json LONGTEXT,
     claimed_quests_json LONGTEXT,
-    equipped_items_json LONGTEXT,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1031,7 +1030,6 @@ def _run_safe_migrations(conn: MySQLConnectionWrapper) -> None:
     """Chạy các ALTER TABLE an toàn cho CSDL MySQL 8.0 đang tồn tại."""
     alter_statements = [
         "ALTER TABLE student_profiles ADD COLUMN last_activity_date VARCHAR(32) DEFAULT ''",
-        "ALTER TABLE student_profiles ADD COLUMN equipped_items_json LONGTEXT",
         "ALTER TABLE student_chapter_submissions ADD COLUMN status VARCHAR(32) DEFAULT 'pending'",
         "ALTER TABLE student_chapter_submissions ADD COLUMN instructor_grade DOUBLE DEFAULT NULL",
         "ALTER TABLE student_chapter_submissions ADD COLUMN instructor_feedback TEXT",
