@@ -50,12 +50,43 @@ def _mark_key_cooldown(api_key: str, seconds: float = _COOLDOWN_SECONDS) -> None
         _KEY_COOLDOWN_UNTIL[api_key] = time.monotonic() + seconds
 
 
+def _build_gemini_contents(
+    prompt: str,
+    history: list[dict[str, str]] | None = None,
+) -> list[dict[str, Any]]:
+    """Chuyển lịch sử hội thoại thành mảng contents luân phiên user/model hợp lệ cho Gemini."""
+    contents: list[dict[str, Any]] = []
+    if history:
+        for turn in history[-8:]:
+            if not isinstance(turn, dict):
+                continue
+            txt = str(turn.get("text") or turn.get("content") or "").strip()
+            if not txt:
+                continue
+            raw_role = str(turn.get("role") or turn.get("from") or "user").strip().lower()
+            gemini_role = "model" if raw_role in ("assistant", "mentor", "model", "ai") else "user"
+            if not contents and gemini_role == "model":
+                continue
+            if contents and contents[-1]["role"] == gemini_role:
+                contents[-1]["parts"][0]["text"] += f"\n\n{txt}"
+            else:
+                contents.append({"role": gemini_role, "parts": [{"text": txt}]})
+
+    clean_prompt = prompt.strip()
+    if contents and contents[-1]["role"] == "user":
+        contents[-1]["parts"][0]["text"] += f"\n\n{clean_prompt}"
+    else:
+        contents.append({"role": "user", "parts": [{"text": clean_prompt}]})
+    return contents
+
+
 def call_gemini(
     prompt: str,
     system_instruction: str = "",
     temperature: float = 0.4,
     max_output_tokens: int = 512,
     response_mime_type: str | None = None,
+    history: list[dict[str, str]] | None = None,
 ) -> dict[str, Any] | None:
     """
     Gọi Google Gemini REST API với xoay vòng key tự động & fallback model an toàn.
@@ -77,7 +108,7 @@ def call_gemini(
         gen_config["responseMimeType"] = response_mime_type
 
     body: dict[str, Any] = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": _build_gemini_contents(prompt, history),
         "generationConfig": gen_config,
     }
     if system_instruction.strip():
@@ -132,12 +163,14 @@ def generate_text(
     system_instruction: str = "",
     temperature: float = 0.4,
     max_output_tokens: int = 512,
+    history: list[dict[str, str]] | None = None,
 ) -> dict[str, Any] | None:
     return call_gemini(
         prompt=prompt,
         system_instruction=system_instruction,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
+        history=history,
     )
 
 

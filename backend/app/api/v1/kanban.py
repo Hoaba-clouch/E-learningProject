@@ -555,12 +555,13 @@ def is_user_project_leader(user: dict[str, Any] | None, proj_row: Any) -> bool:
 
     p_dict = dict(proj_row)
     leader_id = str(p_dict.get("leader_user_id") or "").strip()
-    if leader_id and (leader_id == uid_val or leader_id == f"usr-{uid_val}"):
-        return True
-
-    created_by = str(p_dict.get("created_by") or "").strip()
-    if created_by and (created_by == uid_val or created_by == f"usr-{uid_val}"):
-        return True
+    if leader_id:
+        if leader_id == uid_val or leader_id == f"usr-{uid_val}":
+            return True
+    else:
+        created_by = str(p_dict.get("created_by") or "").strip()
+        if created_by and (created_by == uid_val or created_by == f"usr-{uid_val}"):
+            return True
 
     try:
         raw_team = p_dict.get("team_json") or "[]"
@@ -581,8 +582,7 @@ def is_user_project_leader(user: dict[str, Any] | None, proj_row: Any) -> bool:
         )
         if not matches_user:
             continue
-        tm_role = str(tm.get("role") or "").strip().lower()
-        if tm.get("isLead") or "leader" in tm_role or "trưởng nhóm" in tm_role or idx == 0:
+        if tm.get("isLead") is True or idx == 0:
             return True
 
     return False
@@ -612,10 +612,13 @@ def _is_task_assignee(user: dict[str, Any], task_row: Any) -> bool:
 def _ensure_project_writable_for_user(user: dict[str, Any], proj_row: Any, action_label: str = "chỉnh sửa công việc") -> None:
     u_role = str(user.get("role") or "").strip().lower()
     if u_role == "student":
+        p_dict = dict(proj_row)
         if not is_user_in_project(user, proj_row):
             raise HTTPException(status_code=403, detail=f"Chỉ thành viên trong nhóm đồ án này mới có quyền {action_label}.")
-        if bool(dict(proj_row).get("is_frozen")):
-            raise HTTPException(status_code=403, detail="Đồ án đã bị đóng băng nộp bài, không thể chỉnh sửa công việc.")
+        if bool(p_dict.get("is_frozen")):
+            raise HTTPException(status_code=403, detail=f"Đồ án đã bị đóng băng nộp bài, không thể {action_label}.")
+        if _normalize_project_status(p_dict.get("status")) == "delivered":
+            raise HTTPException(status_code=403, detail=f"Đồ án đã bảo vệ xong (Do GVHD chốt), không thể {action_label}.")
 
 
 DEFAULT_PROJECT_MENTORS: dict[str, str] = {
@@ -1001,6 +1004,8 @@ def create_workspace_project(
     proj_id = payload.id.strip() if payload.id else f"prj-{uid()[:8]}"
     code = (payload.code or f"PRJ-{random.randint(100, 999)}").strip().upper()
     norm_status = _normalize_project_status(payload.status)
+    if str(user.get("role") or "").strip().lower() == "student" and norm_status == "delivered":
+        norm_status = "planning"
 
     raw_repo_url = (payload.repo_url or "").strip()
     if raw_repo_url and not (raw_repo_url.startswith("http://") or raw_repo_url.startswith("https://")):
@@ -1218,6 +1223,11 @@ def patch_workspace_project(
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
 
         if u_role == "student":
+            if payload.is_frozen is not None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Chỉ Giảng viên hướng dẫn hoặc Admin mới có quyền Đóng băng / Mở khóa nộp bài đồ án.",
+                )
             modifies_config = any(
                 val is not None
                 for val in (
@@ -1227,14 +1237,28 @@ def patch_workspace_project(
                     payload.due_date,
                     payload.instructor,
                     payload.team,
-                    payload.is_frozen,
                 )
             )
             if modifies_config:
                 if not is_user_project_leader(user, existing):
                     raise HTTPException(
                         status_code=403,
-                        detail="Chỉ Nhóm trưởng hoặc Giảng viên/Admin mới có quyền chỉnh sửa cấu hình đồ án",
+                        detail="Chỉ Nhóm trưởng thực tế của đồ án hoặc Giảng viên/Admin mới có quyền chỉnh sửa cấu hình đồ án",
+                    )
+                if bool(dict(existing).get("is_frozen")):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Đồ án đã bị đóng băng nộp bài, không thể chỉnh sửa trạng thái hoặc cấu hình.",
+                    )
+                if _normalize_project_status(existing["status"]) == "delivered":
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Đồ án đã bảo vệ xong (Do GVHD chốt), Nhóm trưởng không thể chỉnh sửa trạng thái hoặc cấu hình.",
+                    )
+                if payload.status is not None and _normalize_project_status(payload.status) == "delivered":
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Trạng thái 'Đã bảo vệ xong' chỉ do Giảng viên hướng dẫn hoặc Admin chốt.",
                     )
             elif payload.fav is not None and not is_user_in_project(user, existing):
                 raise HTTPException(status_code=403, detail="Chỉ thành viên đồ án mới có quyền ghim dự án này")
@@ -1349,8 +1373,13 @@ def invite_user_to_project(
             raise HTTPException(status_code=404, detail="Không tìm thấy đồ án")
 
         u_role = str(user.get("role") or "").lower()
-        if u_role == "student" and not is_user_project_leader(user, proj):
-            raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng mới có quyền mời thành viên vào đồ án")
+        if u_role == "student":
+            if not is_user_project_leader(user, proj):
+                raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng thực tế của đồ án mới có quyền mời thành viên vào đồ án")
+            if bool(dict(proj).get("is_frozen")):
+                raise HTTPException(status_code=403, detail="Đồ án đã bị đóng băng nộp bài, không thể mời thêm thành viên.")
+            if _normalize_project_status(proj["status"]) == "delivered":
+                raise HTTPException(status_code=403, detail="Đồ án đã bảo vệ xong, không thể mời thêm thành viên.")
 
         target_user = conn.execute(
             "SELECT id, full_name, display_name, email FROM users WHERE id=? OR email=? LIMIT 1",
@@ -1499,6 +1528,8 @@ def accept_project_invitation(
         proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (inv["project_id"],)).fetchone()
         if not proj:
             raise HTTPException(status_code=404, detail="Đồ án không còn tồn tại")
+        if bool(dict(proj).get("is_frozen")) or _normalize_project_status(proj["status"]) == "delivered":
+            raise HTTPException(status_code=403, detail="Đồ án đã bị đóng băng hoặc đã bảo vệ xong, không thể tham gia thêm thành viên.")
 
         team = json.loads(proj["team_json"] or "[]")
         already_in = any(m.get("id") == uid_val or m.get("name") == user.get("full_name") for m in team)
@@ -1583,22 +1614,19 @@ def remove_member_from_project(
 
         u_role = str(user.get("role") or "").lower()
         team = json.loads(proj["team_json"] or "[]")
-        first_member_id = team[0].get("id") if team else None
-        first_member_name = team[0].get("name") if team else None
-        u_name = user.get("full_name") or user.get("display_name") or ""
-        is_leader = (
-            str(proj.get("leader_user_id") or "") in (str(user.get("id") or ""), f"usr-{user.get('id')}")
-            or first_member_id in (str(user.get("id") or ""), f"usr-{user.get('id')}")
-            or (first_member_name and (first_member_name == u_name or first_member_name in u_name))
-            or str(proj.get("created_by") or "") in (str(user.get("id") or ""), f"usr-{user.get('id')}")
-        )
-        is_self = member_id in (str(user.get("id") or ""), f"usr-{user.get('id')}") or (member_id == u_name)
-        if u_role == "student" and not is_leader and not is_self:
-            raise HTTPException(status_code=403, detail="Chỉ nhóm trưởng mới có quyền xóa thành viên khỏi đồ án")
+        if u_role == "student":
+            if bool(dict(proj).get("is_frozen")):
+                raise HTTPException(status_code=403, detail="Đồ án đã bị đóng băng nộp bài, không thể gỡ thành viên.")
+            if _normalize_project_status(proj["status"]) == "delivered":
+                raise HTTPException(status_code=403, detail="Đồ án đã bảo vệ xong, không thể gỡ thành viên.")
+            if not is_user_project_leader(user, proj):
+                raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng thực tế của đồ án hoặc Giảng viên/Admin mới có quyền gỡ thành viên.")
 
         new_team = [m for m in team if m.get("id") != member_id and m.get("name") != member_id]
         if len(new_team) == len(team):
             raise HTTPException(status_code=404, detail="Không tìm thấy thành viên trong đồ án")
+        if len(new_team) == 0:
+            raise HTTPException(status_code=400, detail="Đồ án phải có ít nhất 1 thành viên.")
 
         conn.execute(
             "UPDATE engineering_projects SET team_json=?, updated_at=? WHERE id=?",
@@ -2049,6 +2077,7 @@ class TaskReviewIn(BaseModel):
 
 class ProjectEvaluationIn(BaseModel):
     group_score: float
+    demo_score: float | None = None
     architecture_score: float
     process_score: float
     defense_score: float
@@ -2222,10 +2251,23 @@ def evaluate_project(
     now = now_utc()
     instructor_name = user.get("full_name") or user.get("display_name") or "Giảng viên"
 
-    final_score = round(
-        0.30 * payload.architecture_score + 0.40 * payload.process_score + 0.30 * payload.defense_score,
-        2,
+    final_score = (
+        round(
+            0.35 * payload.demo_score
+            + 0.25 * payload.architecture_score
+            + 0.15 * payload.process_score
+            + 0.25 * payload.defense_score,
+            2,
+        )
+        if payload.demo_score is not None
+        else round(
+            0.30 * payload.architecture_score
+            + 0.40 * payload.process_score
+            + 0.30 * payload.defense_score,
+            2,
+        )
     )
+    demo_val = payload.demo_score if payload.demo_score is not None else payload.group_score
 
     with db() as conn:
         proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
@@ -2234,15 +2276,16 @@ def evaluate_project(
 
         conn.execute(
             """INSERT OR REPLACE INTO project_evaluations(
-                   id, project_id, instructor_id, group_score, architecture_score,
+                   id, project_id, instructor_id, group_score, demo_score, architecture_score,
                    process_score, defense_score, final_score, feedback,
-                   member_scores_json, anti_freerider_metrics_json, status, graded_at
-               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   member_scores_json, anti_freerider_metrics_json, grader_name, defense_date, status, graded_at
+               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 eval_id,
                 project_id,
                 user["id"],
                 payload.group_score,
+                demo_val,
                 payload.architecture_score,
                 payload.process_score,
                 payload.defense_score,
@@ -2250,6 +2293,8 @@ def evaluate_project(
                 payload.feedback,
                 json.dumps(payload.member_scores, ensure_ascii=False),
                 json.dumps(payload.member_scores, ensure_ascii=False),
+                instructor_name,
+                now,
                 "graded",
                 now,
             ),

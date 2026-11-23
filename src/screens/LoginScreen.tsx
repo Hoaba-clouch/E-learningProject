@@ -15,7 +15,10 @@ import "../styles/huddle.css";
 interface Props {
   theme: Theme;
   onToggleTheme: (trigger?: any) => void;
-  onLogin: (role: Role) => void;
+  onLogin: (
+    role: Role,
+    opts?: { isNewSignUp?: boolean; pendingApproval?: boolean; user?: any }
+  ) => void;
   onOpenIntro?: () => void;
 }
 
@@ -260,16 +263,17 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
 
   const passwordStrength = getPasswordStrength(isSignUp ? passwordVal : newResetPassword);
 
-  const finishAuthenticatedTransition = (resolvedRole: Role, isNewSignUp: boolean) => {
+  const finishAuthenticatedTransition = (
+    resolvedRole: Role,
+    isNewSignUp: boolean,
+    pendingApproval = false,
+    user?: any
+  ) => {
     setIsBusy(false);
     setIsSignedIn(true);
     throwConfetti();
     setTimeout(() => {
-      if (isNewSignUp && onOpenIntro) {
-        onOpenIntro();
-      } else {
-        onLogin(resolvedRole);
-      }
+      onLogin(resolvedRole, { isNewSignUp, pendingApproval, user });
     }, 1500);
   };
 
@@ -282,7 +286,7 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
       data?.role === "admin" || data?.role === "instructor" || data?.role === "student"
         ? data.role
         : role;
-    finishAuthenticatedTransition(resolved, false);
+    finishAuthenticatedTransition(resolved, false, false, data?.user);
   };
 
   const handleVerify2FaSubmit = async (e: React.FormEvent) => {
@@ -302,7 +306,12 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
         authData?.role === "admin" || authData?.role === "instructor" || authData?.role === "student"
           ? authData.role
           : role;
-      finishAuthenticatedTransition(resolved, false);
+      finishAuthenticatedTransition(
+        resolved,
+        false,
+        authData?.user?.status === "pending",
+        authData?.user
+      );
     } catch (err: any) {
       setIsBusy(false);
       setOtpErr(err?.message || "Mã OTP không hợp lệ");
@@ -420,6 +429,8 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
 
     const backendUp = await checkBackendHealth();
     let resolvedRole: Role = role;
+    let isPendingApproval = !backendUp && isSignUp && role === "student";
+    let signedUser: any = null;
 
     if (backendUp) {
       try {
@@ -451,6 +462,9 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
         ) {
           resolvedRole = authData.role;
         }
+        signedUser = authData?.user || null;
+        isPendingApproval =
+          resolvedRole === "student" && authData?.user?.status === "pending";
       } catch (err: any) {
         const msg = err?.message || "Email hoặc mật khẩu không chính xác";
         setIsBusy(false);
@@ -466,7 +480,12 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
     }
 
     setTimeout(() => {
-      finishAuthenticatedTransition(resolvedRole, isSignUp);
+      finishAuthenticatedTransition(
+        resolvedRole,
+        isSignUp,
+        isPendingApproval,
+        signedUser
+      );
     }, backendUp ? 500 : 1000);
   };
 
@@ -1210,6 +1229,18 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
                     </div>
 
                     {/* CTA Action button & Done Box */}
+                    {isSignUp && role === "student" && (
+                      <p
+                        style={{
+                          fontSize: "0.75rem",
+                          lineHeight: 1.45,
+                          color: "#64748b",
+                          margin: "0 0 10px",
+                        }}
+                      >
+                        Học viên mới đăng ký sẽ xem trang Giới thiệu và chờ Quản trị viên phê duyệt quyền vào học.
+                      </p>
+                    )}
                     <div className="actions">
                       <button
                         ref={ctaRef}

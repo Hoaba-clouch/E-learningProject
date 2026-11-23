@@ -862,6 +862,7 @@ CREATE TABLE IF NOT EXISTS project_evaluations (
     project_id VARCHAR(64) NOT NULL,
     instructor_id VARCHAR(64) NOT NULL,
     group_score DOUBLE NOT NULL DEFAULT 85.0,
+    demo_score DOUBLE DEFAULT 8.5,
     architecture_score DOUBLE NOT NULL DEFAULT 85.0,
     process_score DOUBLE NOT NULL DEFAULT 85.0,
     defense_score DOUBLE NOT NULL DEFAULT 85.0,
@@ -869,8 +870,25 @@ CREATE TABLE IF NOT EXISTS project_evaluations (
     feedback TEXT NOT NULL,
     member_scores_json LONGTEXT NOT NULL,
     anti_freerider_metrics_json LONGTEXT NOT NULL,
+    council_notes_json LONGTEXT,
+    grader_name VARCHAR(191) DEFAULT '',
+    defense_date VARCHAR(64) DEFAULT '',
     status VARCHAR(32) NOT NULL DEFAULT 'graded',
     graded_at VARCHAR(64) NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS project_defense_packages (
+    project_id VARCHAR(64) PRIMARY KEY,
+    demo_url VARCHAR(500) DEFAULT '',
+    slide_url VARCHAR(500) DEFAULT '',
+    report_url VARCHAR(500) DEFAULT '',
+    video_url VARCHAR(500) DEFAULT '',
+    architecture_summary TEXT,
+    member_roles_summary TEXT,
+    submitted_by VARCHAR(64) DEFAULT '',
+    submitted_by_name VARCHAR(191) DEFAULT '',
+    updated_at VARCHAR(64) NOT NULL,
     FOREIGN KEY (project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1043,6 +1061,23 @@ def _run_safe_migrations(conn: MySQLConnectionWrapper) -> None:
         "ALTER TABLE engineering_projects ADD COLUMN instructor_name VARCHAR(191) DEFAULT 'Cô Trần Thị B'",
         "ALTER TABLE engineering_projects ADD COLUMN course_id VARCHAR(64) DEFAULT 'oop'",
         "ALTER TABLE engineering_projects ADD COLUMN is_frozen INT NOT NULL DEFAULT 0",
+        "ALTER TABLE project_evaluations ADD COLUMN demo_score DOUBLE DEFAULT 8.5",
+        "ALTER TABLE project_evaluations ADD COLUMN council_notes_json LONGTEXT",
+        "ALTER TABLE project_evaluations ADD COLUMN grader_name VARCHAR(191) DEFAULT ''",
+        "ALTER TABLE project_evaluations ADD COLUMN defense_date VARCHAR(64) DEFAULT ''",
+        """CREATE TABLE IF NOT EXISTS project_defense_packages (
+            project_id VARCHAR(64) PRIMARY KEY,
+            demo_url VARCHAR(500) DEFAULT '',
+            slide_url VARCHAR(500) DEFAULT '',
+            report_url VARCHAR(500) DEFAULT '',
+            video_url VARCHAR(500) DEFAULT '',
+            architecture_summary TEXT,
+            member_roles_summary TEXT,
+            submitted_by VARCHAR(64) DEFAULT '',
+            submitted_by_name VARCHAR(191) DEFAULT '',
+            updated_at VARCHAR(64) NOT NULL,
+            FOREIGN KEY (project_id) REFERENCES engineering_projects(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
         """CREATE TABLE IF NOT EXISTS project_invitations (
             id VARCHAR(64) PRIMARY KEY,
             project_id VARCHAR(64) NOT NULL,

@@ -43,9 +43,13 @@ def test_kanban_branch2_full_project_task_pipeline() -> None:
     assert r_stu.status_code == 201, r_stu.text
     stu_headers = {"Authorization": f"Bearer {r_stu.json()['access_token']}"}
 
-    # Verify strict student scoping: hasib only sees prj-compiler and cannot patch/invite prj-codemind
+    # Verify strict student scoping: hasib only sees prj-compiler (member, non-leader) and cannot patch/invite prj-codemind
     hasib_ws = client.get("/v1/kanban/workspace", headers=hasib_headers).json()
     assert [p["id"] for p in hasib_ws["projects"]] == ["prj-compiler"]
+    hasib_compiler = hasib_ws["projects"][0]
+    assert hasib_compiler["isMyProject"] is True
+    assert hasib_compiler["isLead"] is False
+    assert hasib_compiler["status"] == "delivered"
     assert client.patch(
         "/v1/kanban/workspace/projects/prj-codemind",
         json={"status": "delivered"},
@@ -57,19 +61,27 @@ def test_kanban_branch2_full_project_task_pipeline() -> None:
         headers=hasib_headers,
     ).status_code == 403
 
-    # 2. Fetch full Kanban workspace as Instructor -> 8 projects, 14 tasks on prj-codemind, 4/4 on prj-compiler
+    # 2. Fetch full Kanban workspace as Instructor -> 8 projects, verify seeded leaderUserId alignment
     ws_res = client.get("/v1/kanban/workspace", headers=ins_headers)
     assert ws_res.status_code == 200, ws_res.text
     ws = ws_res.json()
     projects = ws["projects"]
     assert len(projects) == 8
+    by_id = {p["id"]: p for p in projects}
+    assert by_id["prj-codemind"]["leaderUserId"] == "usr-sv-01"
+    assert by_id["prj-security"]["leaderUserId"] == "usr-sv-01"
+    assert by_id["prj-compiler"]["leaderUserId"] == "usr-sv-04"
+    assert by_id["prj-devnet"]["leaderUserId"] == "usr-sv-03"
+    assert by_id["prj-pintos"]["leaderUserId"] == "usr-sv-03"
+    assert by_id["prj-faceattend"]["leaderUserId"] == "usr-sv-03"
+    assert by_id["prj-ecommerce"]["leaderUserId"] == "usr-sv-08"
 
-    codemind = next((p for p in projects if p["id"] == "prj-codemind"), None)
+    codemind = by_id.get("prj-codemind")
     assert codemind is not None
     assert codemind["tasksTotal"] == 14
     initial_codemind_done = codemind["tasksDone"]
 
-    compiler = next((p for p in projects if p["id"] == "prj-compiler"), None)
+    compiler = by_id.get("prj-compiler")
     assert compiler is not None
     assert compiler["tasksDone"] == 4
     assert compiler["tasksTotal"] == 4
@@ -209,29 +221,118 @@ def test_kanban_branch2_full_project_task_pipeline() -> None:
     del_res = client.delete(f"/v1/kanban/workspace/tasks/{new_task_id}", headers=stu_headers)
     assert del_res.status_code == 200, del_res.text
 
-    # 6b. Verify Leader-only is_frozen sync & enforcement across students
-    freeze_res = client.patch(
+    # 6b. Verify Staff-only is_frozen, frozen/delivered locks, and real leader RBAC
+    assert client.patch(
         "/v1/kanban/workspace/projects/prj-codemind",
         json={"is_frozen": True},
         headers=stu_headers,
+    ).status_code == 403
+
+    freeze_res = client.patch(
+        "/v1/kanban/workspace/projects/prj-codemind",
+        json={"is_frozen": True},
+        headers=ins_headers,
     )
     assert freeze_res.status_code == 200, freeze_res.text
     assert freeze_res.json()["project"]["isFrozen"] is True
 
-    blocked_create = client.post(
+    assert client.post(
         "/v1/kanban/workspace/projects/prj-codemind/tasks",
         json={"title": "Should be blocked when frozen", "column": "ready", "points": 2},
         headers=stu_headers,
-    )
-    assert blocked_create.status_code == 403
+    ).status_code == 403
+    assert client.patch(
+        "/v1/kanban/workspace/projects/prj-codemind",
+        json={"status": "review"},
+        headers=stu_headers,
+    ).status_code == 403
+    assert client.post(
+        "/v1/kanban/projects/prj-codemind/invitations",
+        json={"user_id": "usr-sv-02", "role_title": "Developer"},
+        headers=stu_headers,
+    ).status_code == 403
 
     unfreeze_res = client.patch(
         "/v1/kanban/workspace/projects/prj-codemind",
         json={"is_frozen": False},
-        headers=stu_headers,
+        headers=ins_headers,
     )
     assert unfreeze_res.status_code == 200, unfreeze_res.text
     assert unfreeze_res.json()["project"]["isFrozen"] is False
+
+    # Student leader cannot set status=delivered, but can toggle planning/active/review when unfrozen
+    assert client.patch(
+        "/v1/kanban/workspace/projects/prj-codemind",
+        json={"status": "delivered"},
+        headers=stu_headers,
+    ).status_code == 403
+    rev_res = client.patch(
+        "/v1/kanban/workspace/projects/prj-codemind",
+        json={"status": "review"},
+        headers=stu_headers,
+    )
+    assert rev_res.status_code == 200, rev_res.text
+    assert rev_res.json()["project"]["status"] == "review"
+    act_res = client.patch(
+        "/v1/kanban/workspace/projects/prj-codemind",
+        json={"status": "active"},
+        headers=stu_headers,
+    )
+    assert act_res.status_code == 200, act_res.text
+    assert act_res.json()["project"]["status"] == "active"
+
+    # Non-leader member (hasib on prj-compiler) is blocked from status/freeze/invite/task mutations
+    assert client.patch(
+        "/v1/kanban/workspace/projects/prj-compiler",
+        json={"status": "active"},
+        headers=hasib_headers,
+    ).status_code == 403
+    assert client.patch(
+        "/v1/kanban/workspace/projects/prj-compiler",
+        json={"is_frozen": True},
+        headers=hasib_headers,
+    ).status_code == 403
+    assert client.post(
+        "/v1/kanban/projects/prj-compiler/invitations",
+        json={"user_id": "usr-sv-03", "role_title": "Developer"},
+        headers=hasib_headers,
+    ).status_code == 403
+    assert client.post(
+        "/v1/kanban/workspace/projects/prj-compiler/tasks",
+        json={"title": "Blocked on delivered project", "column": "ready", "points": 2},
+        headers=hasib_headers,
+    ).status_code == 403
+
+    # Real leader of delivered prj-compiler (Phan Đình Nghị) sees isLead=True but cannot modify delivered project
+    r_nghi = client.post(
+        "/v1/demo/session",
+        json={"demo_role": "student", "preferred_email": "nghi.pd@student.edu.vn"},
+    )
+    assert r_nghi.status_code == 201, r_nghi.text
+    nghi_headers = {"Authorization": f"Bearer {r_nghi.json()['access_token']}"}
+    nghi_ws = client.get("/v1/kanban/workspace", headers=nghi_headers).json()
+    nghi_compiler = next(p for p in nghi_ws["projects"] if p["id"] == "prj-compiler")
+    assert nghi_compiler["isMyProject"] is True
+    assert nghi_compiler["isLead"] is True
+    assert client.patch(
+        "/v1/kanban/workspace/projects/prj-compiler",
+        json={"status": "active"},
+        headers=nghi_headers,
+    ).status_code == 403
+    assert client.post(
+        "/v1/kanban/projects/prj-compiler/invitations",
+        json={"user_id": "usr-sv-03", "role_title": "Developer"},
+        headers=nghi_headers,
+    ).status_code == 403
+    assert client.delete(
+        "/v1/kanban/projects/prj-compiler/members/usr-sv-02",
+        headers=nghi_headers,
+    ).status_code == 403
+    assert client.post(
+        "/v1/kanban/workspace/projects/prj-compiler/tasks",
+        json={"title": "Leader blocked on delivered project", "column": "ready", "points": 2},
+        headers=nghi_headers,
+    ).status_code == 403
 
     # 7. Cleanly restore demo DB state
     r_reset_final = client.post("/v1/admin/reset-demo", headers=adm_headers)

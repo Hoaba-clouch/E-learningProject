@@ -131,7 +131,17 @@ export default function MarloProjectDetailScreen({
     }
   };
 
-  const canManageProject = role !== "student" || Boolean(wsProject?.isLead);
+  const isStaff = role === "instructor" || role === "admin";
+  const isProjectDelivered = currentStatus === "delivered";
+  const isMyProjectMember = isStaff || Boolean(wsProject?.isMyProject);
+  const canManageProject = isStaff || Boolean(wsProject?.isLead);
+  const canToggleFreeze = isStaff;
+  const canChangeStatus =
+    isStaff || (Boolean(wsProject?.isLead) && !isSprintLocked && !isProjectDelivered);
+  const canManageMembers =
+    isStaff || (Boolean(wsProject?.isLead) && !isSprintLocked && !isProjectDelivered);
+  const canAddTask =
+    role === "student" && Boolean(wsProject?.isMyProject) && !isProjectDelivered;
 
   useEffect(() => {
     void loadWorkspaceProject();
@@ -318,7 +328,7 @@ export default function MarloProjectDetailScreen({
   }, [memberSearchQuery, projectStudents]);
 
   const handleSendInvite = async () => {
-    if (!selectedUserToInvite) return;
+    if (!canManageMembers || !selectedUserToInvite) return;
     const res = await inviteUserToProjectApi(displayId, {
       user_id: selectedUserToInvite.id,
       role_title: selectedRoleToInvite,
@@ -337,6 +347,14 @@ export default function MarloProjectDetailScreen({
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
+    if (role === "student" && !wsProject?.isMyProject) {
+      showToast("🔒 Chỉ thành viên thuộc nhóm đồ án này mới có quyền thêm công việc.");
+      return;
+    }
+    if (isProjectDelivered && role === "student") {
+      showToast("🔒 Đồ án đã bảo vệ xong (Do GVHD chốt), không thể thêm công việc mới.");
+      return;
+    }
     if (isSprintLocked && role === "student") {
       showToast("🔒 Sprint hoặc Cổng nộp đang bị khóa bởi Ban Đào Tạo.");
       return;
@@ -376,6 +394,10 @@ export default function MarloProjectDetailScreen({
     };
 
     const savedTask = await createWorkspaceTaskApi(displayId, createdPayload);
+    if (!savedTask) {
+      showToast("⚠️ Không thể thêm công việc (đồ án đã đóng băng, đã bảo vệ xong hoặc bạn không thuộc nhóm).");
+      return;
+    }
     addMarloTask({
       title: newTaskTitle.trim(),
       projectId: displayId,
@@ -387,23 +409,25 @@ export default function MarloProjectDetailScreen({
       due: Date.now() + 3 * 86400000,
     });
 
-    if (savedTask) {
-      await loadWorkspaceProject();
-    }
+    await loadWorkspaceProject();
     setNewTaskTitle("");
     setIsAddTaskModalOpen(false);
     showToast(`✓ Đã thêm thẻ "${createdPayload.title}" và đồng bộ sang Bảng Kanban!`);
   };
 
   const handleToggleProjectFreeze = async () => {
-    if (!canManageProject) {
-      showToast("🔒 Chỉ Nhóm trưởng hoặc Giảng viên/Admin mới có quyền đóng băng/mở khóa nộp bài đồ án.");
+    if (!canToggleFreeze) {
+      showToast("🔒 Chỉ Giảng viên hướng dẫn hoặc Admin mới có quyền đóng băng/mở khóa nộp bài đồ án.");
       return;
     }
     const nextLocked = !isSprintLocked;
+    const res = await updateWorkspaceProjectApi(displayId, { is_frozen: nextLocked });
+    if (!res) {
+      showToast("⚠️ Không thể thay đổi trạng thái đóng băng đồ án (chỉ GVHD / Admin).");
+      return;
+    }
     setProjectFrozen(displayId, nextLocked);
     setIsSprintLocked(nextLocked);
-    await updateWorkspaceProjectApi(displayId, { is_frozen: nextLocked });
     await loadWorkspaceProject();
     showToast(
       nextLocked
@@ -413,19 +437,25 @@ export default function MarloProjectDetailScreen({
   };
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!canManageProject) {
-      showToast("🔒 Chỉ Nhóm trưởng hoặc Giảng viên/Admin mới có quyền đổi trạng thái đồ án.");
+    if (!canChangeStatus) {
+      showToast("🔒 Chỉ Nhóm trưởng thực tế (khi chưa đóng băng / chưa bảo vệ xong) hoặc GVHD/Admin mới được đổi trạng thái.");
       return;
     }
     if (role === "student" && newStatus === "delivered") {
       showToast("⚠️ Trạng thái 'Đã bảo vệ xong' chỉ do Giảng viên hoặc Hội đồng xác nhận sau khi chấm DoD.");
       return;
     }
-    setCurrentStatus(newStatus);
-    updateMarloProjectStatus(displayId, newStatus as any);
-    await updateWorkspaceProjectApi(displayId, { status: newStatus });
+    const res = await updateWorkspaceProjectApi(displayId, { status: newStatus });
+    if (!res) {
+      showToast("⚠️ Không thể cập nhật trạng thái đồ án (kiểm tra quyền Nhóm trưởng hoặc trạng thái khóa).");
+      await loadWorkspaceProject();
+      return;
+    }
+    const resolvedStatus = res.status || newStatus;
+    setCurrentStatus(resolvedStatus);
+    updateMarloProjectStatus(displayId, resolvedStatus as any);
     await loadWorkspaceProject();
-    showToast(`✓ Đã đồng bộ trạng thái đồ án thành "${MARLO_PROJECT_STATUS[newStatus] || newStatus}"`);
+    showToast(`✓ Đã đồng bộ trạng thái đồ án thành "${MARLO_PROJECT_STATUS[resolvedStatus] || resolvedStatus}"`);
   };
 
   // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
@@ -495,12 +525,12 @@ export default function MarloProjectDetailScreen({
               <span className="eyebrow text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
                 {displayCourse} · {displayKind}
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-mono">
                 {displaySprint}
               </span>
               {wsProject?.finalScore != null && (
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                  <ShieldCheck size={12} />
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 inline-flex items-center gap-1">
+                  <ShieldCheck size={12} className="text-emerald-500" />
                   <span>Điểm Hội đồng DoD: {wsProject.finalScore}/10</span>
                 </span>
               )}
@@ -528,28 +558,34 @@ export default function MarloProjectDetailScreen({
               <button
                 type="button"
                 onClick={() => onNavigateToGitHub(displayId)}
-                className="px-4 py-2.5 rounded-xl border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 text-xs font-bold text-blue-700 dark:text-blue-300 transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
               >
-                <GitFork size={14} />
+                <GitFork size={14} className="text-blue-500" />
                 <span>Mở Git Hub</span>
               </button>
             )}
-            {canManageProject && (
+            {canToggleFreeze && (
               <button
                 type="button"
                 onClick={() => void handleToggleProjectFreeze()}
                 className={`px-3.5 py-2.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5 ${
                   isSprintLocked
-                    ? "bg-rose-600 hover:bg-rose-700 border-rose-600 text-white"
+                    ? "bg-slate-900 hover:bg-slate-800 border-slate-900 text-white dark:bg-white dark:hover:bg-slate-100 dark:border-white dark:text-slate-950"
                     : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
                 }`}
-                title="Đóng băng hoặc mở khóa nộp bài cho đồ án này (chỉ Nhóm trưởng / GVHD / Admin)"
+                title="Đóng băng hoặc mở khóa nộp bài cho đồ án này (chỉ GVHD / Admin)"
               >
                 <Lock size={14} />
                 <span>{isSprintLocked ? "Mở khóa Đồ án" : "Đóng băng Nộp bài"}</span>
               </button>
             )}
-            {role === "student" && (
+            {!canToggleFreeze && isSprintLocked && (
+              <span className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5">
+                <Lock size={13} className="text-slate-500" />
+                <span>Đồ án đã đóng băng</span>
+              </span>
+            )}
+            {canAddTask && (
               <button
                 type="button"
                 disabled={isSprintLocked}
@@ -621,8 +657,8 @@ export default function MarloProjectDetailScreen({
               <small className="text-xs text-slate-500 font-semibold">
                 Quỹ Điểm Kỹ Nghệ (Story Points)
               </small>
-              <span className="text-[11px] font-mono font-bold text-[#f29b23] flex items-center gap-1">
-                <Sparkles size={12} />
+              <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                <Sparkles size={12} className="text-amber-500" />
                 <span>Chuẩn Scrum</span>
               </span>
             </div>
@@ -644,7 +680,8 @@ export default function MarloProjectDetailScreen({
               <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>Tỷ lệ đốt điểm (Burned): {progressPercent}%</span>
                 {wsProject?.finalScore != null ? (
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 inline-flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     Điểm DoD: {wsProject.finalScore}/10
                   </span>
                 ) : (
@@ -659,19 +696,27 @@ export default function MarloProjectDetailScreen({
             <div className="flex items-center justify-between">
               <small className="text-xs text-slate-500 font-semibold">Trạng thái đồ án</small>
               {role === "student" && (
-                <span
-                  className={`text-[10px] font-semibold ${
-                    canManageProject ? "text-amber-600 dark:text-amber-400" : "text-slate-400"
-                  }`}
-                >
-                  {canManageProject ? "👑 Quyền Nhóm trưởng" : "Chỉ Nhóm trưởng được đổi"}
+                <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 inline-flex items-center gap-1">
+                  {isProjectDelivered ? (
+                    <>
+                      <Lock size={10} className="text-slate-500" />
+                      <span>Đã chốt bảo vệ</span>
+                    </>
+                  ) : wsProject?.isLead ? (
+                    <>
+                      <Crown size={10} className="text-amber-500 fill-amber-500" />
+                      <span>Quyền Nhóm trưởng</span>
+                    </>
+                  ) : (
+                    <span>Chỉ Nhóm trưởng được đổi</span>
+                  )}
                 </span>
               )}
             </div>
             <div className="my-1">
               <select
                 value={currentStatus}
-                disabled={!canManageProject || (isSprintLocked && role === "student")}
+                disabled={!canChangeStatus}
                 onChange={(e) => handleStatusChange(e.target.value)}
                 className="w-full h-10 px-3 bg-[#ecedef] dark:bg-[#222326] border border-[#14161a26] dark:border-[#ffffff24] rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23] cursor-pointer disabled:opacity-60"
               >
@@ -711,16 +756,16 @@ export default function MarloProjectDetailScreen({
                   <div className="min-w-0">
                     <div className="flex items-center gap-1">
                       <Crown size={10} className="text-amber-500 fill-amber-500 shrink-0" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 font-mono">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 font-mono">
                         Nhóm trưởng
                       </span>
                     </div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-amber-600 transition truncate block">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">
                       {leadStudent.name}
                     </span>
                   </div>
                 </div>
-                <ExternalLink size={12} className="text-slate-400 group-hover:text-amber-500 shrink-0 transition" />
+                <ExternalLink size={12} className="text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200 shrink-0 transition" />
               </div>
             )}
           </section>
@@ -729,7 +774,7 @@ export default function MarloProjectDetailScreen({
         {/* Git Repository & Code Verification Summary Banner */}
         <section className="card mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-start md:items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200/70 dark:border-blue-800/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
               <FolderGit2 size={18} />
             </div>
             <div className="min-w-0 space-y-1">
@@ -741,7 +786,8 @@ export default function MarloProjectDetailScreen({
                   {wsProject?.gitRepo?.repoSlug || "Chưa liên kết Repo"}
                 </span>
                 {wsProject?.gitRepo?.targetBranch && (
-                  <span className="font-mono text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                  <span className="font-mono text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     nhánh: {wsProject.gitRepo.targetBranch}
                   </span>
                 )}
@@ -841,7 +887,7 @@ export default function MarloProjectDetailScreen({
                             title={`${task.code}: ${task.title} — Phụ trách: ${task.assigneeName}`}
                           >
                             <div className="flex items-center justify-between gap-1.5">
-                              <span className="text-[10.5px] font-bold font-mono text-[#f29b23] bg-[#f29b23]/10 px-1.5 py-0.5 rounded">
+                              <span className="text-[10.5px] font-bold font-mono text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                                 {task.code}
                               </span>
                               <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-800 px-1.5 py-0.5 rounded">
@@ -857,13 +903,10 @@ export default function MarloProjectDetailScreen({
                               <span className="truncate font-semibold text-slate-700 dark:text-slate-300">
                                 {task.assigneeName}
                               </span>
-                              <span
-                                className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                  task.priority === "high"
-                                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
-                                    : "bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                                }`}
-                              >
+                              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                {task.priority === "high" && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                )}
                                 {task.priority === "high" ? "Cao" : task.priority === "low" ? "Thấp" : "Vừa"}
                               </span>
                             </div>
@@ -882,7 +925,7 @@ export default function MarloProjectDetailScreen({
             {/* Faculty Advisor Card */}
             <section className="card">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-[#f29b23] shrink-0">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0">
                   <GraduationCap size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -905,7 +948,7 @@ export default function MarloProjectDetailScreen({
                     {projectStudents.length} sinh viên trực tiếp thực hiện đồ án
                   </p>
                 </div>
-                {!isSprintLocked && canManageProject && (
+                {canManageMembers && (
                   <button
                     type="button"
                     onClick={() => {
@@ -932,7 +975,7 @@ export default function MarloProjectDetailScreen({
                       key={m.rawId}
                       onClick={() => onNavigateToPerson(m.id)}
                       className={`pd__person py-3 px-2.5 flex items-center justify-between gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/60 rounded-xl transition cursor-pointer ${
-                        isLead ? "bg-amber-50/50 dark:bg-amber-950/20" : ""
+                        isLead ? "bg-slate-50/70 dark:bg-slate-800/40" : ""
                       }`}
                       title={`Xem chi tiết hồ sơ thành viên ${m.name}`}
                     >
@@ -965,7 +1008,7 @@ export default function MarloProjectDetailScreen({
 
                       <div className="text-right shrink-0">
                         {isLead ? (
-                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono inline-flex items-center gap-1">
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono inline-flex items-center gap-1">
                             <Crown size={10} className="fill-amber-500 text-amber-500" />
                             <span>Nhóm trưởng</span>
                           </span>
@@ -983,8 +1026,8 @@ export default function MarloProjectDetailScreen({
                 {pendingInvitations.length > 0 && (
                   <div className="pt-3 mt-2 border-t border-dashed border-slate-200 dark:border-slate-800">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                        <Clock size={12} />
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                        <Clock size={12} className="text-amber-500" />
                         <span>Lời mời chờ xác nhận ({pendingInvitations.length})</span>
                       </span>
                       <span className="text-[10px] text-slate-400 font-mono">Pending</span>
@@ -993,10 +1036,10 @@ export default function MarloProjectDetailScreen({
                       {pendingInvitations.map((inv) => (
                         <div
                           key={inv.id}
-                          className="flex items-center justify-between p-2 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs"
+                          className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-xs"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 font-bold text-xs flex items-center justify-center shrink-0">
+                            <div className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center justify-center shrink-0">
                               {(inv.invitee_name || "SV").slice(0, 2).toUpperCase()}
                             </div>
                             <div className="min-w-0">
@@ -1008,7 +1051,8 @@ export default function MarloProjectDetailScreen({
                               </span>
                             </div>
                           </div>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                             Đang chờ đồng ý
                           </span>
                         </div>
@@ -1168,11 +1212,11 @@ export default function MarloProjectDetailScreen({
                     onChange={(e) => setMemberSearchQuery(e.target.value)}
                     placeholder="VD: Nguyễn Văn A, vhuy, hoặc hasib@gmail.com..."
                     autoFocus
-                    className="w-full pl-9 pr-8 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121316] text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-amber-500"
+                    className="w-full pl-9 pr-8 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121316] text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-slate-400"
                   />
                   {isMemberSearching && (
                     <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
-                      <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
                     </div>
                   )}
                 </div>
@@ -1194,7 +1238,7 @@ export default function MarloProjectDetailScreen({
                           onClick={() => setSelectedUserToInvite(u)}
                           className={`flex items-center justify-between p-2 rounded-xl transition cursor-pointer ${
                             isSelected
-                              ? "bg-amber-500/15 border border-amber-500/30"
+                              ? "bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600"
                               : "hover:bg-slate-100 dark:hover:bg-slate-800/60"
                           }`}
                         >
@@ -1215,7 +1259,7 @@ export default function MarloProjectDetailScreen({
                             </div>
                           </div>
                           {isSelected ? (
-                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950 px-2 py-0.5 rounded-md">
+                            <span className="text-[10px] font-bold text-slate-900 dark:text-white bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-md">
                               ✓ Đang chọn
                             </span>
                           ) : (
@@ -1232,10 +1276,10 @@ export default function MarloProjectDetailScreen({
 
               {/* Selected User preview & Role Selector */}
               {selectedUserToInvite && (
-                <div className="p-3 rounded-2xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 space-y-2.5">
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      Người được mời: <span className="text-amber-600">{selectedUserToInvite.name}</span>
+                      Người được mời: <span className="text-slate-900 dark:text-white">{selectedUserToInvite.name}</span>
                     </span>
                     <button
                       type="button"

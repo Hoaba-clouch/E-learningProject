@@ -8,7 +8,7 @@ import {
   BookOpen,
   Play,
   GitFork,
-  ShoppingBag,
+  Award,
   GraduationCap,
   Shield,
   ShieldCheck,
@@ -152,10 +152,10 @@ export default function MarloCommandPalette({
     },
     {
       id: "nav-xpshop",
-      title: "XP Shop - Đổi quà & Skins",
-      subtitle: "Trang phục Mascot, khung avatar & hình nền phong cách",
+      title: "Mốc XP - Mở khóa Phần thưởng",
+      subtitle: "Đạt mốc XP tích lũy để mở khóa Mascot, avatar & giao diện (không trừ XP)",
       category: "Điều hướng",
-      icon: <ShoppingBag size={16} className="text-yellow-600" />,
+      icon: <Award size={16} className="text-amber-500" />,
       action: () => { onNavigate("xp-shop"); onClose(); },
     },
     {

@@ -21,6 +21,8 @@ import {
   HelpCircle,
   Laptop,
   Layers,
+  Lock,
+  LogOut,
   Play,
   PlayCircle,
   RefreshCw,
@@ -44,6 +46,11 @@ import type { Screen } from "../App";
 interface Props {
   onEnterPlatform: (targetScreen?: Screen) => void;
   onLogin?: () => void;
+  isPendingApproval?: boolean;
+  pendingUserName?: string;
+  pendingUserEmail?: string;
+  onRecheckApproval?: (targetScreen?: Screen) => Promise<boolean>;
+  onLogout?: () => void;
 }
 
 // ── SALARY TIERS & JOBS DATA (2026 IT BENCHMARK) ──
@@ -502,10 +509,26 @@ function CountUpNumber({
   );
 }
 
-export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: Props) {
+export default function CodeMindIntroLandingPage({
+  onEnterPlatform,
+  onLogin,
+  isPendingApproval = false,
+  pendingUserName,
+  pendingUserEmail,
+  onRecheckApproval,
+  onLogout,
+}: Props) {
   const [hasIntroCompleted, setHasIntroCompleted] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<string>("swe");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [checkingApproval, setCheckingApproval] = useState(false);
+  const [approvalToast, setApprovalToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!approvalToast) return;
+    const timer = window.setTimeout(() => setApprovalToast(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [approvalToast]);
 
   // Intro Stage Refs
   const stageRef = useRef<HTMLDivElement>(null);
@@ -809,8 +832,86 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
     }
   };
 
+  const handleCheckApproval = async (targetScreen?: Screen) => {
+    if (checkingApproval) return;
+    setCheckingApproval(true);
+    try {
+      const approved = await onRecheckApproval?.(targetScreen);
+      if (!approved) {
+        setApprovalToast(
+          "Tài khoản của bạn vẫn đang chờ Quản trị viên phê duyệt quyền vào học. Hiện bạn chỉ có thể xem trang giới thiệu."
+        );
+      }
+    } finally {
+      setCheckingApproval(false);
+    }
+  };
+
+  const handlePlatformAction = (targetScreen?: Screen) => {
+    if (isPendingApproval) {
+      void handleCheckApproval(targetScreen);
+      return;
+    }
+    onEnterPlatform(targetScreen);
+  };
+
+  const handleSwitchOrLogout = () => {
+    if (onLogout) {
+      onLogout();
+    } else if (onLogin) {
+      onLogin();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFCFB] text-slate-900 font-sans selection:bg-amber-400 selection:text-slate-900 overflow-x-clip">
+      {isPendingApproval && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[70] w-[calc(100%-2rem)] max-w-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-2.5 shadow-lg">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white">
+                <Clock size={14} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  Đang chờ Admin duyệt vào học
+                </p>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {pendingUserName || pendingUserEmail || "Tài khoản học viên mới"} · Chỉ xem trang Giới thiệu
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => void handleCheckApproval()}
+                disabled={checkingApproval}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-slate-800 disabled:opacity-60 transition cursor-pointer"
+              >
+                <RefreshCw size={12} className={checkingApproval ? "animate-spin" : ""} />
+                <span>{checkingApproval ? "Đang kiểm tra..." : "Kiểm tra duyệt"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSwitchOrLogout}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                <LogOut size={12} />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {approvalToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] w-[calc(100%-2rem)] max-w-md">
+          <div className="flex items-center gap-2.5 rounded-2xl bg-slate-900 text-white px-4 py-3 text-xs font-medium shadow-xl border border-slate-800">
+            <Clock size={15} className="text-amber-400 shrink-0" />
+            <span>{approvalToast}</span>
+          </div>
+        </div>
+      )}
       {/* ─── KINETIC TYPOGRAPHY INTRO STAGE ─── */}
       <section className="intro-stage relative">
         {/* Grain overlay */}
@@ -931,40 +1032,79 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
           {/* End Card */}
           <div ref={endcardRef} className="intro-endcard">
             <p className="intro-endcard__cta">
-              Sẵn sàng bứt phá sự nghiệp lập trình?
+              {isPendingApproval
+                ? "Tài khoản đã đăng ký · Chờ Quản trị viên phê duyệt"
+                : "Sẵn sàng bứt phá sự nghiệp lập trình?"}
             </p>
             <p className="intro-endcard__sub">
-              Chào mừng bạn đến với hệ sinh thái đào tạo kỹ sư công nghệ CodeMind AI Campus. Học thực chiến qua đồ án chuẩn doanh nghiệp cùng AI Mentor 24/7.
+              {isPendingApproval
+                ? `Xin chào ${pendingUserName || "bạn"}. Tài khoản học viên của bạn đang chờ Admin cấp quyền để vào lớp học. Trong thời gian chờ duyệt, bạn có thể khám phá toàn bộ trang giới thiệu & lộ trình CodeMind AI.`
+                : "Chào mừng bạn đến với hệ sinh thái đào tạo kỹ sư công nghệ CodeMind AI Campus. Học thực chiến qua đồ án chuẩn doanh nghiệp cùng AI Mentor 24/7."}
             </p>
 
             <div className="intro-endcard__actions flex items-center justify-center gap-3 flex-wrap relative z-20 pointer-events-auto">
-              <button
-                type="button"
-                onClick={() => onEnterPlatform("defense-room")}
-                className="btn-marlo-primary btn--primary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
-              >
-                <ShieldCheck size={15} className="text-[#1c1304] shrink-0" />
-                <span>Thử Phòng Phản Biện AI</span>
-                <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
-              </button>
+              {isPendingApproval ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleCheckApproval()}
+                    disabled={checkingApproval}
+                    className="btn-marlo-primary btn--primary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
+                  >
+                    <RefreshCw size={15} className={`text-[#1c1304] shrink-0 ${checkingApproval ? "animate-spin" : ""}`} />
+                    <span>{checkingApproval ? "Đang kiểm tra..." : "Kiểm tra quyền vào học"}</span>
+                    <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => onEnterPlatform()}
-                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
-              >
-                <BookOpen size={15} className="shrink-0" />
-                <span>Vào trang Tổng quan</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={handleScrollToContent}
+                    className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
+                  >
+                    <Compass size={15} className="shrink-0" />
+                    <span>Khám phá Lộ trình</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={handleScrollToContent}
-                className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
-              >
-                <Compass size={15} className="shrink-0" />
-                <span>Khám phá Lộ trình & Mức lương</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={handleSwitchOrLogout}
+                    className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
+                  >
+                    <LogOut size={15} className="shrink-0" />
+                    <span>Đăng xuất / Đổi tài khoản</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handlePlatformAction("defense-room")}
+                    className="btn-marlo-primary btn--primary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
+                  >
+                    <ShieldCheck size={15} className="text-[#1c1304] shrink-0" />
+                    <span>Thử Phòng Phản Biện AI</span>
+                    <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePlatformAction()}
+                    className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
+                  >
+                    <BookOpen size={15} className="shrink-0" />
+                    <span>Vào trang Tổng quan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleScrollToContent}
+                    className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2 cursor-pointer relative z-30 pointer-events-auto"
+                  >
+                    <Compass size={15} className="shrink-0" />
+                    <span>Khám phá Lộ trình & Mức lương</span>
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="intro-endcard__handle">
@@ -995,35 +1135,65 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-amber-400 font-bold text-sm shadow-xs">
-                ★
+                {isPendingApproval ? <Clock size={15} /> : "★"}
               </span>
               <div>
                 <p className="text-sm font-bold text-slate-900">
-                  Chào mừng Tân Học viên gia nhập Hệ sinh thái CodeMind AI Campus
+                  {isPendingApproval
+                    ? "Tài khoản học viên đang chờ Quản trị viên cấp quyền vào học"
+                    : "Chào mừng Tân Học viên gia nhập Hệ sinh thái CodeMind AI Campus"}
                 </p>
                 <p className="text-xs text-slate-600">
-                  Tài khoản của bạn đã được kích hoạt đầy đủ quyền truy cập Cloud Docker Sandbox & AI Mentor 24/7.
+                  {isPendingApproval
+                    ? `${pendingUserEmail ? `${pendingUserEmail} · ` : ""}Bạn hiện chỉ được xem trang Giới thiệu. Sau khi Admin phê duyệt, nhấn Kiểm tra quyền để vào học ngay.`
+                    : "Tài khoản của bạn đã được kích hoạt đầy đủ quyền truy cập Cloud Docker Sandbox & AI Mentor 24/7."}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <button
-                onClick={() => onEnterPlatform("defense-room")}
-                className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
-              >
-                <ShieldCheck size={15} className="text-slate-500 dark:text-slate-400" />
-                <span>Phòng Phản Biện AI (Live)</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              </button>
+              {isPendingApproval ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSwitchOrLogout}
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                  >
+                    <LogOut size={14} className="text-slate-500" />
+                    <span>Đăng xuất</span>
+                  </button>
 
-              <button
-                onClick={() => onEnterPlatform()}
-                className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
-              >
-                <BookOpen size={15} className="text-[#1c1304] shrink-0" />
-                <span>Vào học tiếp</span>
-                <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCheckApproval()}
+                    disabled={checkingApproval}
+                    className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+                  >
+                    <RefreshCw size={14} className={`text-[#1c1304] shrink-0 ${checkingApproval ? "animate-spin" : ""}`} />
+                    <span>{checkingApproval ? "Đang kiểm tra..." : "Kiểm tra quyền vào học"}</span>
+                    <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handlePlatformAction("defense-room")}
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                  >
+                    <ShieldCheck size={15} className="text-slate-500" />
+                    <span>Phòng Phản Biện AI (Live)</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  </button>
+
+                  <button
+                    onClick={() => handlePlatformAction()}
+                    className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+                  >
+                    <BookOpen size={15} className="text-[#1c1304] shrink-0" />
+                    <span>Vào học tiếp</span>
+                    <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1082,7 +1252,7 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
         </section>
 
         {/* ── MONOLITH 3D ARCHITECTURAL BLUEPRINTS SHOWCASE (Inspired by Monolith Template) ── */}
-        <MonolithCoverflowShowcase onSelectMonument={() => onEnterPlatform()} />
+        <MonolithCoverflowShowcase onSelectMonument={() => handlePlatformAction()} />
 
         {/* ── SECTION 1: LỘ TRÌNH ĐÀO TẠO 4 CHẶNG CHI TIẾT (CYBER ROADMAP MATRIX) ── */}
         <section id="codemind-roadmap-matrix" className="py-20 px-4 md:px-6 bg-gradient-to-b from-slate-50/90 via-white to-slate-50/80 border-t border-slate-200/80 relative overflow-hidden">
@@ -1344,7 +1514,7 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               <div
-                onClick={() => onEnterPlatform("workspace")}
+                onClick={() => handlePlatformAction("workspace")}
                 className="group cursor-pointer reveal-pulse-glow reveal-delay-1 p-8 rounded-3xl bg-slate-800/80 border border-slate-700/80 hover:border-amber-400/80 hover:bg-slate-800 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300"
               >
                 <div className="flex items-center justify-between mb-5">
@@ -1352,8 +1522,17 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
                     <Laptop size={24} />
                   </div>
                   <span className="text-[11px] font-bold text-amber-400/90 group-hover:text-amber-400 flex items-center gap-1">
-                    <span>Vào Code Lab</span>
-                    <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    {isPendingApproval ? (
+                      <>
+                        <Lock size={12} />
+                        <span>Mở sau khi duyệt</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Vào Code Lab</span>
+                        <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                      </>
+                    )}
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-white mb-2 group-hover:text-amber-400 transition-colors">100% Cloud Docker Sandbox</h3>
@@ -1363,7 +1542,7 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
               </div>
 
               <div
-                onClick={() => onEnterPlatform("workspace")}
+                onClick={() => handlePlatformAction("workspace")}
                 className="group cursor-pointer reveal-pulse-glow reveal-delay-2 p-8 rounded-3xl bg-slate-800/80 border border-slate-700/80 hover:border-purple-400/80 hover:bg-slate-800 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300"
               >
                 <div className="flex items-center justify-between mb-5">
@@ -1371,8 +1550,17 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
                     <Cpu size={24} />
                   </div>
                   <span className="text-[11px] font-bold text-purple-400/90 group-hover:text-purple-400 flex items-center gap-1">
-                    <span>Hỏi AI ngay</span>
-                    <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    {isPendingApproval ? (
+                      <>
+                        <Lock size={12} />
+                        <span>Mở sau khi duyệt</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Hỏi AI ngay</span>
+                        <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                      </>
+                    )}
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">AI Socratic Mentor 24/7</h3>
@@ -1382,7 +1570,7 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
               </div>
 
               <div
-                onClick={() => onEnterPlatform("defense-room")}
+                onClick={() => handlePlatformAction("defense-room")}
                 className="group cursor-pointer reveal-pulse-glow reveal-delay-3 p-8 rounded-3xl bg-slate-800/80 border border-slate-700/80 hover:border-amber-400 hover:bg-slate-800 hover:-translate-y-2 hover:shadow-2xl hover:shadow-amber-500/10 transition-all duration-300 relative overflow-hidden"
               >
                 <div className="flex items-center justify-between mb-5">
@@ -1390,8 +1578,17 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
                     <ShieldCheck size={24} />
                   </div>
                   <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-400/15 text-amber-400 border border-amber-400/30 group-hover:bg-amber-400 group-hover:text-slate-950 transition-all flex items-center gap-1">
-                    <span>Phản biện ngay</span>
-                    <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    {isPendingApproval ? (
+                      <>
+                        <Lock size={12} />
+                        <span>Mở sau khi duyệt</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Phản biện ngay</span>
+                        <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                      </>
+                    )}
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-white mb-2 group-hover:text-amber-400 transition-colors">AI Defense Room</h3>
@@ -1545,30 +1742,62 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
         <section className="py-20 px-6 bg-[#FDFCFB] border-t border-slate-100 text-center">
           <div className="reveal-3d-tilt max-w-3xl mx-auto space-y-6">
             <h2 className="text-3xl md:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight">
-              Bắt Đầu Trải Nghiệm Học Tập Thực Chiến Cùng CodeMind AI
+              {isPendingApproval
+                ? "Tài khoản đang chờ Quản trị viên kích hoạt quyền vào học"
+                : "Bắt Đầu Trải Nghiệm Học Tập Thực Chiến Cùng CodeMind AI"}
             </h2>
 
             <p className="text-slate-600 text-base md:text-lg leading-relaxed max-w-2xl mx-auto">
-              Tài khoản đã sẵn sàng. Hãy bắt đầu chinh phục Chặng 01 ngay hôm nay và khẳng định năng lực kỹ nghệ phần mềm của bạn.
+              {isPendingApproval
+                ? "Bạn đã đăng ký thành công và hiện đang ở trang Giới thiệu. Sau khi Quản trị viên phê duyệt hồ sơ, nhấn Kiểm tra quyền vào học để mở khóa toàn bộ lớp học & Docker Sandbox."
+                : "Tài khoản đã sẵn sàng. Hãy bắt đầu chinh phục Chặng 01 ngay hôm nay và khẳng định năng lực kỹ nghệ phần mềm của bạn."}
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-              <button
-                onClick={() => onEnterPlatform()}
-                className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
-              >
-                <BookOpen size={15} className="text-[#1c1304] shrink-0" />
-                <span>Vào học tiếp</span>
-                <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
-              </button>
+              {isPendingApproval ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleCheckApproval()}
+                    disabled={checkingApproval}
+                    className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+                  >
+                    <RefreshCw size={15} className={`text-[#1c1304] shrink-0 ${checkingApproval ? "animate-spin" : ""}`} />
+                    <span>{checkingApproval ? "Đang kiểm tra..." : "Kiểm tra quyền vào học"}</span>
+                    <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+                  </button>
 
-              {onLogin && (
-                <button
-                  onClick={onLogin}
-                  className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2"
-                >
-                  <span>Quay lại Màn hình Đăng nhập</span>
-                </button>
+                  {(onLogout || onLogin) && (
+                    <button
+                      type="button"
+                      onClick={handleSwitchOrLogout}
+                      className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2"
+                    >
+                      <LogOut size={15} className="shrink-0" />
+                      <span>Quay lại Màn hình Đăng nhập</span>
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handlePlatformAction()}
+                    className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+                  >
+                    <BookOpen size={15} className="text-[#1c1304] shrink-0" />
+                    <span>Vào học tiếp</span>
+                    <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+                  </button>
+
+                  {onLogin && (
+                    <button
+                      onClick={onLogin}
+                      className="btn-marlo-secondary btn--secondary magnetic flex items-center gap-2"
+                    >
+                      <span>Quay lại Màn hình Đăng nhập</span>
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -1583,7 +1812,11 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
               </div>
               <div className="text-xs">
                 <p className="font-bold text-slate-900">CodeMind AI Campus · Learning OS</p>
-                <p className="text-slate-500">Kích hoạt tài khoản & Lộ trình Kỹ sư 2026</p>
+                <p className="text-slate-500">
+                  {isPendingApproval
+                    ? "Hồ sơ học viên đang chờ Admin phê duyệt"
+                    : "Kích hoạt tài khoản & Lộ trình Kỹ sư 2026"}
+                </p>
               </div>
             </div>
 
@@ -1600,14 +1833,27 @@ export default function CodeMindIntroLandingPage({ onEnterPlatform, onLogin }: P
                 <span>Lên đầu trang & Xem Intro</span>
               </button>
 
-              <button
-                onClick={() => onEnterPlatform()}
-                className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
-              >
-                <BookOpen size={15} className="text-[#1c1304] shrink-0" />
-                <span>Vào học tiếp</span>
-                <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
-              </button>
+              {isPendingApproval ? (
+                <button
+                  type="button"
+                  onClick={() => void handleCheckApproval()}
+                  disabled={checkingApproval}
+                  className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+                >
+                  <RefreshCw size={15} className={`text-[#1c1304] shrink-0 ${checkingApproval ? "animate-spin" : ""}`} />
+                  <span>{checkingApproval ? "Đang kiểm tra..." : "Kiểm tra quyền vào học"}</span>
+                  <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => handlePlatformAction()}
+                  className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+                >
+                  <BookOpen size={15} className="text-[#1c1304] shrink-0" />
+                  <span>Vào học tiếp</span>
+                  <ArrowRight size={14} className="text-[#1c1304] shrink-0" />
+                </button>
+              )}
             </div>
           </div>
         </footer>

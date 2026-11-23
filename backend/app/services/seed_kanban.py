@@ -24,6 +24,7 @@ MEMBERS_META: dict[str, dict[str, Any]] = {
     "ha": {"id": "e2", "name": "Lê Thị Hà", "avatar": "H", "initials": "LH", "role": "DevOps & Cloud", "color": "bg-slate-700 dark:bg-slate-600", "bg": "#E9D5FF", "textColor": "#581C87"},
     "nam": {"id": "a1", "name": "Hoàng Trọng Nam", "avatar": "N", "initials": "HN", "role": "AI Research Lead", "color": "bg-[#14161a] dark:bg-slate-700", "bg": "#CCFBF1", "textColor": "#115E59"},
     "linh": {"id": "a2", "name": "Đỗ Mỹ Linh", "avatar": "L", "initials": "ML", "role": "Data Scientist", "color": "bg-amber-500", "bg": "#FFE4E6", "textColor": "#9F1239"},
+    "vana": {"id": "usr-sv-02", "name": "Nguyễn Văn A", "email": "hasib@gmail.com", "avatar": "A", "initials": "NA", "role": "Thành viên Frontend", "color": "bg-emerald-600", "bg": "#D1FAE5", "textColor": "#065F46"},
 }
 
 
@@ -43,7 +44,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "instructor_id": "usr-gv-01",
             "instructor_name": "Cô Trần Thị B",
             "instructor_label": "Cô Trần Thị B (GV Hướng dẫn)",
-            "leader_user_id": "student-demo",
+            "leader_user_id": "usr-sv-01",
             "sprint": "Sprint 1 (Tuần 1 - 4)",
             "kind": "AI / AGENT SYSTEM",
             "status": "active",
@@ -67,7 +68,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "instructor_id": "usr-gv-02",
             "instructor_name": "Thầy Nguyễn Phước",
             "instructor_label": "Thầy Nguyễn Phước (GV Hướng dẫn)",
-            "leader_user_id": "usr-sv-03",
+            "leader_user_id": "usr-sv-08",
             "sprint": "Sprint 2 (Tuần 3 - 6)",
             "kind": "MICROSERVICES & CLOUD",
             "status": "active",
@@ -91,7 +92,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "instructor_id": "usr-gv-04",
             "instructor_name": "TS. Lê Hoàng Mai",
             "instructor_label": "TS. Lê Hoàng Mai (GV Hướng dẫn)",
-            "leader_user_id": "usr-sv-04",
+            "leader_user_id": "a1",
             "sprint": "Sprint 1 (Tuần 1 - 3)",
             "kind": "AI / COMPUTER VISION",
             "status": "active",
@@ -115,7 +116,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "instructor_id": "usr-gv-01",
             "instructor_name": "Cô Trần Thị B",
             "instructor_label": "Cô Trần Thị B (GV Hướng dẫn)",
-            "leader_user_id": "usr-sv-02",
+            "leader_user_id": "usr-sv-04",
             "sprint": "Sprint Final (Tuần 8 - 10)",
             "kind": "COMPILER",
             "status": "delivered",
@@ -127,7 +128,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "tl_start": 5.0,
             "tl_width": 48.0,
             "tl_color": "done",
-            "team": _team("dnghi", "bhoa"),
+            "team": _team("dnghi", "bhoa", "vana"),
         },
         {
             "id": "prj-pintos",
@@ -139,7 +140,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "instructor_id": "usr-gv-03",
             "instructor_name": "Thầy Trần Minh Quân",
             "instructor_label": "Thầy Trần Minh Quân (GV Hướng dẫn)",
-            "leader_user_id": "usr-sv-01",
+            "leader_user_id": "usr-sv-03",
             "sprint": "Sprint 3 (Tuần 5 - 8)",
             "kind": "OPERATING SYSTEM",
             "status": "delivered",
@@ -163,7 +164,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "instructor_id": "usr-gv-05",
             "instructor_name": "Thầy Đặng Quốc Bảo",
             "instructor_label": "Thầy Đặng Quốc Bảo (GV Hướng dẫn)",
-            "leader_user_id": "student-demo",
+            "leader_user_id": "usr-sv-01",
             "sprint": "Sprint 2 (Tuần 4 - 6)",
             "kind": "CYBERSECURITY",
             "status": "review",
@@ -187,7 +188,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "instructor_id": "usr-gv-04",
             "instructor_name": "TS. Lê Hoàng Mai",
             "instructor_label": "TS. Lê Hoàng Mai (GV Hướng dẫn)",
-            "leader_user_id": "usr-sv-01",
+            "leader_user_id": "usr-sv-03",
             "sprint": "Sprint 2 (Tuần 3 - 5)",
             "kind": "EDGE AI & IOT",
             "status": "planning",
@@ -211,7 +212,7 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "instructor_id": "usr-gv-01",
             "instructor_name": "Cô Trần Thị B",
             "instructor_label": "Cô Trần Thị B (GV Hướng dẫn)",
-            "leader_user_id": "usr-sv-01",
+            "leader_user_id": "usr-sv-03",
             "sprint": "Sprint 1 (Tuần 1 - 4)",
             "kind": "WEB PLATFORM",
             "status": "planning",
@@ -729,10 +730,55 @@ def _build_seed_tasks() -> list[dict[str, Any]]:
     return tasks
 
 
+def _reconcile_seed_project_leaders(conn: sqlite3.Connection) -> None:
+    """Đồng bộ leader_user_id & danh sách thành viên cho các đồ án mẫu trên DB đã tồn tại."""
+    legacy_leader_fixes = [
+        ("prj-codemind", "student-demo", "usr-sv-01"),
+        ("prj-security", "student-demo", "usr-sv-01"),
+        ("prj-ecommerce", "usr-sv-03", "usr-sv-08"),
+        ("prj-medai", "usr-sv-04", "a1"),
+        ("prj-compiler", "usr-sv-02", "usr-sv-04"),
+        ("prj-pintos", "usr-sv-01", "usr-sv-03"),
+        ("prj-faceattend", "usr-sv-01", "usr-sv-03"),
+        ("prj-devnet", "usr-sv-01", "usr-sv-03"),
+    ]
+    for proj_id, old_leader, new_leader in legacy_leader_fixes:
+        conn.execute(
+            "UPDATE engineering_projects SET leader_user_id=?, created_by=? WHERE id=? AND leader_user_id=?",
+            (new_leader, new_leader, proj_id, old_leader),
+        )
+
+    comp_row = conn.execute(
+        "SELECT team_json FROM engineering_projects WHERE id=?",
+        ("prj-compiler",),
+    ).fetchone()
+    if comp_row:
+        try:
+            comp_team = json.loads(comp_row["team_json"] or "[]")
+        except Exception:
+            comp_team = []
+        if isinstance(comp_team, list):
+            has_vana = any(
+                isinstance(tm, dict)
+                and (
+                    str(tm.get("id") or "") == "usr-sv-02"
+                    or str(tm.get("name") or "").strip().lower() == "nguyễn văn a"
+                )
+                for tm in comp_team
+            )
+            if not has_vana and "vana" in MEMBERS_META:
+                comp_team.append(dict(MEMBERS_META["vana"]))
+                conn.execute(
+                    "UPDATE engineering_projects SET team_json=? WHERE id=?",
+                    (json.dumps(comp_team, ensure_ascii=False), "prj-compiler"),
+                )
+
+
 def seed_kanban_workspace(conn: sqlite3.Connection, force_reseed: bool = False) -> None:
     """Khởi tạo 8 Dự án Kỹ nghệ và toàn bộ 35 Task Kanban vào SQLite (Nhánh 2)."""
     existing_count = conn.execute("SELECT COUNT(*) c FROM engineering_projects").fetchone()["c"]
     if existing_count > 0 and not force_reseed:
+        _reconcile_seed_project_leaders(conn)
         return
 
     now = now_utc()

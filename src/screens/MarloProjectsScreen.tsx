@@ -200,18 +200,18 @@ export const CNTT_PROJECTS: CNTTProjectItem[] = [
     totalXp: 750,
     pointsBurned: 750,
     budgetStr: "750 SP",
-    lead: "Nguyễn Văn A",
-    leaderUserId: "usr-sv-02",
-    instructor: "Nguyễn Văn A (Lead)",
-    instructorAvatar: "NA",
-    members: [CNTT_MEMBERS.hasib, CNTT_MEMBERS.dnghi],
+    lead: "Phan Đình Nghị",
+    leaderUserId: "usr-sv-04",
+    instructor: "Cô Trần Thị B (GV Hướng dẫn)",
+    instructorAvatar: "PN",
+    members: [CNTT_MEMBERS.dnghi, CNTT_MEMBERS.bhoa, CNTT_MEMBERS.hasib],
     fav: true,
     colorHex: "#10b981",
     tlStart: 5.0,
     tlWidth: 48.0,
     tlColor: "done",
     isMyProject: true,
-    isLead: true,
+    isLead: false,
   },
   {
     id: "prj-pintos",
@@ -984,27 +984,38 @@ export default function MarloProjectsScreen({
                 : "Không Gian Đồ Án Nhóm Của Tôi"}
             </h1>
             {role === "admin" && (
-              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-slate-200/80 dark:border-slate-800">
+              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-0 whitespace-nowrap">
                 Quản trị viên / Đào tạo
               </span>
             )}
             {role === "instructor" && (
-              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-slate-200/80 dark:border-slate-800">
+              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-0 whitespace-nowrap">
                 Góc nhìn Giảng viên
               </span>
             )}
             {role === "student" && (
-              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-slate-200/80 dark:border-slate-800">
+              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-0 whitespace-nowrap">
                 Học viên thực hiện
               </span>
             )}
             {anyFrozen && (
-              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-600 text-white inline-flex items-center gap-1">
-                <Lock size={11} />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-0 whitespace-nowrap">
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="w-3 h-3 shrink-0 text-rose-500 dark:text-rose-400"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7V4.5A3.5 3.5 0 0 0 8 1Zm2 6V4.5a2 2 0 1 0-4 0V7h4Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
                 <span>
                   {isSubmissionLocked
-                    ? "Cổng nộp đã khóa (FROZEN)"
-                    : `Đang đóng băng ${frozenProjectIds.length} đồ án (FROZEN)`}
+                    ? "Cổng nộp đã khóa"
+                    : `Đang đóng băng ${frozenProjectIds.length} đồ án`}
                 </span>
               </span>
             )}
@@ -1026,7 +1037,7 @@ export default function MarloProjectsScreen({
                 onClick={handleToggleSubmissionLock}
                 className={`flex items-center gap-1.5 px-4 py-2.5 rounded-2xl font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer ${
                   anyFrozen
-                    ? "bg-rose-600 hover:bg-rose-700 text-white"
+                    ? "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700"
                     : "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950"
                 }`}
                 title="Khóa cổng để đóng băng dữ liệu đăng ký và nộp đồ án của học viên (đồng bộ Dự án · Kanban · Git Hub)"
@@ -1299,81 +1310,108 @@ export default function MarloProjectsScreen({
                           onOpenProject?.(p);
                         }
                       }}
-                      className={`pcard cursor-pointer group ${isCardFrozen ? "ring-1 ring-rose-300 dark:ring-rose-800/70" : ""}`}
+                      className="pcard cursor-pointer group"
                       title="Nhấn để xem trang Chi Tiết Đồ Án"
                     >
-                      {/* Top row: Kind + DoD Score / Role Quick Action + Pin Button */}
+                      {/* Top row: Kind + Fixed Top-Right Pin Button */}
                       <div className="pcard__top">
                         <span
                           className="pcard__kind"
                           style={{ "--cc": p.colorHex || "#E5A023" } as React.CSSProperties}
                         >
-                          {p.kind}
+                          <span className="truncate">{p.kind}</span>
                         </span>
-                        <div className="flex items-center gap-1.5">
-                          {p.isMyProject && (
-                            <span
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                              title="Đồ án bạn đang trực tiếp tham gia"
+                        <button
+                          type="button"
+                          className={`pcard__pin ${p.fav ? "is-on" : ""}`}
+                          aria-pressed={p.fav}
+                          aria-label={p.fav ? "Bỏ ghim" : "Ghim"}
+                          onClick={(e) => handleToggleFav(p.id, e)}
+                        >
+                          <Pin size={14} className={p.fav ? "fill-current text-[#E5A023]" : "text-slate-400 hover:text-slate-600"} />
+                        </button>
+                      </div>
+
+                      {/* Badges Strip (never pushes the top-right Pin button out of alignment) */}
+                      <div className="flex items-center gap-1.5 flex-wrap min-h-[22px]">
+                        {p.isMyProject && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border-0 whitespace-nowrap shrink-0 text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                            title="Đồ án bạn đang trực tiếp tham gia"
+                          >
+                            {p.isLead ? (
+                              <Crown
+                                size={11}
+                                className="shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+                              />
+                            ) : (
+                              <svg
+                                viewBox="0 0 16 16"
+                                fill="currentColor"
+                                className="w-3 h-3 shrink-0 text-emerald-500 dark:text-emerald-400"
+                                aria-hidden="true"
+                              >
+                                <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12.735 14c.618 0 1.093-.561.872-1.139a6.002 6.002 0 0 0-11.215 0c-.22.578.254 1.139.872 1.139h9.47Z" />
+                              </svg>
+                            )}
+                            <span>{p.isLead ? "Trưởng nhóm" : "Của bạn"}</span>
+                          </span>
+                        )}
+                        {isCardFrozen && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border-0 whitespace-nowrap shrink-0 text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                            title="Đồ án đang bị đóng băng (Dự án · Kanban · Git Hub)"
+                          >
+                            <svg
+                              viewBox="0 0 16 16"
+                              fill="currentColor"
+                              className="w-2.5 h-2.5 shrink-0 text-rose-500 dark:text-rose-400"
+                              aria-hidden="true"
                             >
-                              <UserCheck size={10} />
-                              <span>{p.isLead ? "Trưởng nhóm" : "Của bạn"}</span>
-                            </span>
-                          )}
-                          {isCardFrozen && (
-                            <span
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
-                              title="Đồ án đang bị đóng băng (Dự án · Kanban · Git Hub)"
-                            >
-                              <Lock size={10} />
-                              <span>Đóng băng</span>
-                            </span>
-                          )}
-                          {p.finalScore != null && (
-                            <span
-                              className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-mono"
-                              title="Điểm Hội đồng Chấm Đồ án (DoD)"
-                            >
-                              {p.finalScore}/10
-                            </span>
-                          )}
-                          {role === "instructor" && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setGradingProject(p);
-                              }}
-                              className="px-2 py-0.5 rounded-lg text-[10.5px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 transition cursor-pointer"
-                              title={`Chấm điểm DoD cho đồ án ${p.name}`}
-                            >
-                              Chấm DoD
-                            </button>
-                          )}
-                          {role === "admin" && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAssignMentorProject(p);
-                                setSelectedMentor(p.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)");
-                              }}
-                              className="px-2 py-0.5 rounded-lg text-[10.5px] font-bold bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
-                              title={`Đổi GVHD cho đồ án ${p.name}`}
-                            >
-                              Đổi GVHD
-                            </button>
-                          )}
+                              <path
+                                fillRule="evenodd"
+                                d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7V4.5A3.5 3.5 0 0 0 8 1Zm2 6V4.5a2 2 0 1 0-4 0V7h4Z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                            <span>Đóng băng</span>
+                          </span>
+                        )}
+                        {p.finalScore != null && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-md border-0 whitespace-nowrap shrink-0 text-[10.5px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-mono"
+                            title="Điểm Hội đồng Chấm Đồ án (DoD)"
+                          >
+                            {p.finalScore}/10
+                          </span>
+                        )}
+                        {role === "instructor" && (
                           <button
                             type="button"
-                            className={`pcard__pin ${p.fav ? "is-on" : ""}`}
-                            aria-pressed={p.fav}
-                            aria-label={p.fav ? "Bỏ ghim" : "Ghim"}
-                            onClick={(e) => handleToggleFav(p.id, e)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setGradingProject(p);
+                            }}
+                            className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 transition cursor-pointer whitespace-nowrap shrink-0"
+                            title={`Chấm điểm DoD cho đồ án ${p.name}`}
                           >
-                            <Pin size={14} className={p.fav ? "fill-current text-[#E5A023]" : "text-slate-400 hover:text-slate-600"} />
+                            Chấm DoD
                           </button>
-                        </div>
+                        )}
+                        {role === "admin" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAssignMentorProject(p);
+                              setSelectedMentor(p.instructor || "TS. Nguyễn Phước (GV Hướng dẫn)");
+                            }}
+                            className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer whitespace-nowrap shrink-0"
+                            title={`Đổi GVHD cho đồ án ${p.name}`}
+                          >
+                            Đổi GVHD
+                          </button>
+                        )}
                       </div>
 
                       {/* Middle: Ring progress + Project name & client */}

@@ -244,6 +244,40 @@ def test_auth_and_rbac_suite():
     assert tampered_call.status_code == 401, "Token giả mạo phải trả về 401"
 
     print("✓ Phân quyền RBAC 3 vai trò (Student, Instructor, Admin) qua FastAPI Dependencies: PASS")
+
+    print("\n--- 7. KIỂM THỬ LUỒNG CHỜ ADMIN DUYỆT HỌC VIÊN MỚI ĐĂNG KÝ ---")
+    assert student_data["user"]["status"] == "pending", f"Học viên mới phải có status='pending', nhận {student_data['user']['status']}"
+    assert me_student.json()["status"] == "pending"
+
+    approvals_res = client.get("/v1/admin/pending-approvals", headers=admin_headers)
+    assert approvals_res.status_code == 200, approvals_res.text
+    matched_approval = next(
+        (a for a in approvals_res.json().get("approvals", []) if a["email"].lower() == student_email.lower()),
+        None,
+    )
+    assert matched_approval is not None, "Học viên mới đăng ký phải xuất hiện trong danh sách pending-approvals của Admin"
+
+    blocked_learning = client.get("/v1/student/learning-overview", headers=student_headers)
+    assert blocked_learning.status_code == 403, f"Học viên pending phải bị chặn 403 khi vào học, nhận: {blocked_learning.status_code}"
+
+    blocked_kanban = client.get("/v1/kanban/workspace", headers=student_headers)
+    assert blocked_kanban.status_code == 403, f"Học viên pending phải bị chặn 403 ở Kanban, nhận: {blocked_kanban.status_code}"
+
+    approve_res = client.post(
+        f"/v1/admin/pending-approvals/{matched_approval['id']}/resolve",
+        json={"decision": "approved"},
+        headers=admin_headers,
+    )
+    assert approve_res.status_code == 200, approve_res.text
+
+    me_after = client.get("/v1/users/me", headers=student_headers)
+    assert me_after.status_code == 200, me_after.text
+    assert me_after.json()["status"] == "active", "Sau khi Admin duyệt, status phải chuyển thành active"
+
+    unlocked_learning = client.get("/v1/student/learning-overview", headers=student_headers)
+    assert unlocked_learning.status_code == 200, unlocked_learning.text
+    print("✓ Học viên mới chờ duyệt (403 -> Admin duyệt -> 200 mở khóa vào học): PASS")
+
     print("\n=======================================================")
     print(">>> TẤT CẢ CÁC BÀI KIỂM THỬ AUTH & RBAC ĐÃ ĐẠT 100%! <<<")
     print("=======================================================")

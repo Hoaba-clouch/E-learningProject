@@ -281,13 +281,23 @@ def patch_admin_user(
         new_role = _to_db_role(payload.role) if payload.role else target["role"]
         new_status = _to_db_status(payload.status) if payload.status else target["status"]
         new_name = payload.name.strip() if payload.name else target["full_name"]
+        new_active_label = (
+            "Vừa duyệt"
+            if (target["status"] == "pending" and new_status == "active")
+            else (target["last_active_label"] or "Vừa xong")
+        )
 
         conn.execute(
-            "UPDATE users SET role=?, status=?, full_name=?, display_name=?, updated_at=? WHERE id=?",
-            (new_role, new_status, new_name, new_name, now, user_id),
+            "UPDATE users SET role=?, status=?, full_name=?, display_name=?, last_active_label=?, updated_at=? WHERE id=?",
+            (new_role, new_status, new_name, new_name, new_active_label, now, user_id),
         )
         m_role = "org_admin" if new_role == "admin" else new_role
         conn.execute("UPDATE memberships SET role=? WHERE user_id=?", (m_role, user_id))
+        if new_status == "active" and target["email"]:
+            conn.execute(
+                "UPDATE pending_approvals SET status='approved' WHERE lower(email)=? AND status='pending'",
+                (target["email"].lower(),),
+            )
         updated = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
 
     action_text = (
@@ -328,6 +338,9 @@ def _delete_user_cascade(conn: Any, user_id: str) -> None:
     conn.execute("DELETE FROM defense_sessions WHERE user_id=?", (user_id,))
     conn.execute("DELETE FROM security_otp_codes WHERE user_id=?", (user_id,))
     conn.execute("DELETE FROM jwt_sessions WHERE user_id=?", (user_id,))
+    u_row = conn.execute("SELECT email FROM users WHERE id=?", (user_id,)).fetchone()
+    if u_row and u_row["email"]:
+        conn.execute("DELETE FROM pending_approvals WHERE lower(email)=?", (u_row["email"].lower(),))
     conn.execute("DELETE FROM student_notes WHERE user_id=?", (user_id,))
     conn.execute("DELETE FROM student_profiles WHERE user_id=?", (user_id,))
     conn.execute("DELETE FROM consents WHERE user_id=?", (user_id,))
@@ -386,6 +399,10 @@ def resolve_pending_approval(
         db_role = _to_db_role(item["requested_role"])
 
         if payload.decision == "approved":
+            conn.execute(
+                "UPDATE pending_approvals SET status='approved' WHERE lower(email)=? AND status='pending'",
+                (item["email"].lower(),),
+            )
             existing_user = conn.execute("SELECT * FROM users WHERE lower(email)=?", (item["email"].lower(),)).fetchone()
             if existing_user:
                 conn.execute(
@@ -413,6 +430,11 @@ def resolve_pending_approval(
                         "INSERT INTO student_profiles(id, user_id, current_streak, longest_streak, exp_points, selected_title) VALUES(?, ?, 1, 1, 150, 'Verified Learner')",
                         (uid(), new_uid),
                     )
+        else:
+            conn.execute(
+                "UPDATE users SET status='suspended', last_active_label='Đã từ chối', updated_at=? WHERE lower(email)=? AND status='pending'",
+                (now, item["email"].lower()),
+            )
 
     record_audit_log(
         admin_user.get("full_name") or admin_user.get("display_name") or "Admin AIO",

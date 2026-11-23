@@ -1,4 +1,5 @@
 import {
+  Award,
   BookOpen,
   Bot,
   CalendarDays,
@@ -17,7 +18,6 @@ import {
   ServerCog,
   Shield,
   ShieldCheck,
-  ShoppingBag,
   Sun,
   UserRound,
   Users,
@@ -99,9 +99,9 @@ const navGroups: NavGroup[] = [
     items: [
       { id: "instructor-mindmap", label: "Master Map", icon: <Compass size={18} strokeWidth={1.85} />, roles: ["instructor"] },
       { id: "intro", label: "Roadmap", icon: <Compass size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "Intro" },
-      { id: "defense-room", label: "AI Defense", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
+      { id: "defense-room", label: "Bảo vệ Đồ án", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
       { id: "github", label: "Git", icon: <GitFork size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
-      { id: "xp-shop", label: "Shop", icon: <ShoppingBag size={18} strokeWidth={1.85} />, roles: ["student"] },
+      { id: "xp-shop", label: "Mốc XP", icon: <Award size={18} strokeWidth={1.85} />, roles: ["student"] },
     ],
   },
   {

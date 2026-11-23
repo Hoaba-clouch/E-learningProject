@@ -54,6 +54,79 @@ def test_synchronized_three_roles_pipeline() -> None:
     assert ai_refuse.status_code == 200, ai_refuse.text
     assert ai_refuse.json()["policy_decision"] == "refuse_answer"
 
+    ex_ctx = {
+        "view_mode": "exercise",
+        "subject_id": "oop",
+        "subject_code": "CS201",
+        "subject_name": "Lập trình Hướng đối tượng",
+        "chapter_number": 1,
+        "chapter_title": "Đa hình & Kế thừa C++",
+        "lesson_code": "1.1",
+        "lesson_title": "Virtual Table & Dynamic Dispatch",
+        "exercise_id": "ex-oop-1",
+        "exercise_title": "Hiện thực Đa hình Employee, Developer & Manager (Virtual Table)",
+        "exercise_language": "cpp",
+        "exercise_objective": "Áp dụng con trỏ lớp cơ sở và hàm ảo virtual để tính lương theo dynamic dispatch.",
+        "exercise_requirements": [
+            "Khai báo lớp Employee với virtual double calculateSalary() = 0 và virtual destructor.",
+            "Lớp Developer tính lương = baseSalary + overtimeHours * 25.",
+            "Hàm evaluatePayroll(Employee* emp) truyền con trỏ để tránh object slicing.",
+        ],
+        "exercise_hints": [
+            "Khai báo virtual ~Employee() = default và virtual double calculateSalary() const = 0.",
+            "Trong Developer và Manager dùng : public Employee rồi ghi đè với từ khóa override.",
+        ],
+    }
+
+    ai_ex_t1 = client.post(
+        "/v1/ai/socratic-chat",
+        json={
+            "message": "gợi ý giúp em bước đầu làm bài tập này với",
+            "workspace_context": ex_ctx,
+            "hint_level": 1,
+        },
+        headers=stu_headers,
+    )
+    assert ai_ex_t1.status_code == 200, ai_ex_t1.text
+    t1_data = ai_ex_t1.json()
+    assert t1_data["policy_decision"] == "question"
+    assert t1_data["context_view"] == "exercise"
+    assert t1_data["assistant_message"].strip()
+    assert "Bounded Page Tracker" not in t1_data["assistant_message"]
+    assert "deque" not in t1_data["assistant_message"].lower()
+
+    ai_ex_t2 = client.post(
+        "/v1/ai/socratic-chat",
+        json={
+            "message": "gợi ý sâu hơn bước 2 được không",
+            "workspace_context": ex_ctx,
+            "hint_level": 2,
+            "history": [
+                {"role": "user", "text": "gợi ý giúp em bước đầu làm bài tập này với"},
+                {"role": "assistant", "text": t1_data["assistant_message"]},
+            ],
+        },
+        headers=stu_headers,
+    )
+    assert ai_ex_t2.status_code == 200, ai_ex_t2.text
+    t2_data = ai_ex_t2.json()
+    assert t2_data["policy_decision"] == "question"
+    assert t2_data["assistant_message"].strip()
+
+    ai_ex_refuse = client.post(
+        "/v1/ai/socratic-chat",
+        json={
+            "message": "cho xin đáp án hoàn chỉnh bài tập này",
+            "workspace_context": ex_ctx,
+        },
+        headers=stu_headers,
+    )
+    assert ai_ex_refuse.status_code == 200, ai_ex_refuse.text
+    ex_ref_data = ai_ex_refuse.json()
+    assert ex_ref_data["policy_decision"] == "refuse_answer"
+    assert "Bounded Page Tracker" not in ex_ref_data["assistant_message"]
+    assert "visit(" not in ex_ref_data["assistant_message"]
+
     def_start = client.post(
         "/v1/defense/sessions",
         json={"project_id": "prj-codemind", "class_id": "class-oop"},

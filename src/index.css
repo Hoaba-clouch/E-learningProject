@@ -4264,6 +4264,7 @@ html.dark .themesw span.is-on {
 .pcard__top {
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   display: flex;
 }
 .pcard__kind {
@@ -4274,6 +4275,7 @@ html.dark .themesw span.is-on {
   align-items: center;
   gap: 8px;
   font-weight: 700;
+  min-width: 0;
   display: inline-flex;
 }
 .dark .pcard__kind {
@@ -4285,10 +4287,12 @@ html.dark .themesw span.is-on {
   border-radius: 3px;
   width: 8px;
   height: 8px;
+  flex-shrink: 0;
 }
 .pcard__pin {
   width: 32px;
   height: 30px;
+  flex-shrink: 0;
   color: #7A7873;
   box-shadow: inset 0 0 0 1px var(--line, #EBE8E2);
   border-radius: 10px;

@@ -12,8 +12,10 @@ from app.core.security import sha256, uid
 from app.core.timezone import now_utc
 from app.schemas.defense import (
     DefenseCompleteIn,
+    DefensePackageIn,
     DefenseRespondIn,
     DefenseStartIn,
+    LiveCouncilGradeIn,
     ToggleCourseDefenseIn,
 )
 from app.services.analytics import track_event
@@ -349,16 +351,34 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
         }
 
         proj_rows = conn.execute(
-            """SELECT ep.id, ep.code, ep.name, ep.course, ep.status, gr.repo_url
+            """SELECT ep.id, ep.code, ep.name, ep.course, ep.status, ep.is_frozen, gr.repo_url
                FROM engineering_projects ep
                LEFT JOIN git_repositories gr ON gr.project_id = ep.id
                ORDER BY ep.id ASC"""
         ).fetchall()
+        pkg_rows = {
+            r["project_id"]: row_dict(r) or {}
+            for r in conn.execute("SELECT project_id, demo_url, slide_url, report_url FROM project_defense_packages").fetchall()
+        }
+        eval_rows: dict[str, dict[str, Any]] = {}
+        for er in conn.execute(
+            "SELECT project_id, final_score, graded_at, status FROM project_evaluations ORDER BY graded_at ASC"
+        ).fetchall():
+            eval_rows[er["project_id"]] = row_dict(er) or {}
+        practice_counts = {
+            r["project_id"]: int(r["cnt"] or 0)
+            for r in conn.execute(
+                "SELECT project_id, COUNT(*) AS cnt FROM defense_sessions GROUP BY project_id"
+            ).fetchall()
+        }
+
         projects = []
         for p in proj_rows:
             c_code = (p["course"] or "").split("·")[0].strip().upper()
             matched_c = courses_by_code.get(c_code)
             done_cnt, total_cnt = task_stats.get(p["id"], (0, 0))
+            pkg = pkg_rows.get(p["id"], {})
+            ev = eval_rows.get(p["id"])
             projects.append(
                 {
                     "id": p["id"],
@@ -366,6 +386,13 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
                     "name": p["name"],
                     "course": p["course"],
                     "status": p["status"],
+                    "isFrozen": bool(p["is_frozen"]),
+                    "hasDefensePackage": bool((pkg.get("demo_url") or "").strip()),
+                    "demoUrl": (pkg.get("demo_url") or "").strip(),
+                    "isGraded": bool(ev),
+                    "officialFinalScore": round(float(ev["final_score"]), 2) if ev and ev.get("final_score") is not None else None,
+                    "officialGradedAt": ev.get("graded_at") if ev else None,
+                    "practiceCount": practice_counts.get(p["id"], 0),
                     "classId": matched_c["id"] if matched_c else "class-capstone",
                     "courseCode": matched_c["code"] if matched_c else c_code,
                     "aiDefenseEnabled": matched_c["aiDefenseEnabled"] if matched_c else True,
@@ -432,6 +459,8 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
             ),
             "enabledCoursesCount": sum(1 for c in courses if c["aiDefenseEnabled"]),
             "totalCoursesCount": len(courses),
+            "gradedProjectsCount": sum(1 for pr in projects if pr.get("isGraded")),
+            "totalProjectsCount": len(projects),
         }
 
     display_name = user.get("full_name") or user.get("display_name") or "Thành viên"
@@ -729,9 +758,9 @@ def complete_defense_session(
 
         sub_id = f"sub-def-{defense_id[4:]}"
         coherence = (
-            f"Cảnh báo lệch điểm tiến độ/CI ({round(cicd_pct)}%) vs Phản biện AI ({final_defense}%): cần Giảng viên kiểm tra lại."
+            f"Cảnh báo luyện tập lệch chỉ số tiến độ ({round(cicd_pct)}%) vs AI Mock ({final_defense}%): Giảng viên cần kiểm tra kỹ khi hỏi đáp trực tiếp."
             if discrepancy
-            else f"Học viên bảo vệ qua {len(student_turns)} lượt phản biện AI đạt {final_defense}/100 ({real_commit_count} commit Git, {passed_tests}/{total_tests} hạng mục)."
+            else f"Luyện tập Phản biện AI (Mock Readiness) đạt {final_defense}/100 ({real_commit_count} commit Git, {passed_tests}/{total_tests} hạng mục). Điểm chính thức do Hội đồng chấm trực tiếp."
         )
         sub_status = "flagged" if discrepancy else "pending"
         def_status = "flagged" if discrepancy else "completed"
@@ -916,4 +945,1064 @@ def toggle_course_defense(
         "code": updated["code"],
         "name": updated["name"],
         "aiDefenseEnabled": bool(updated["ai_defense_enabled"]),
+    }
+
+
+def _validate_optional_http_url(raw_url: str | None, field_label: str) -> str:
+    clean = (raw_url or "").strip()
+    if not clean:
+        return ""
+    if not (clean.startswith("http://") or clean.startswith("https://")):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_label} phải bắt đầu bằng http:// hoặc https://",
+        )
+    return clean
+
+
+def _match_member_by_name(author_name: str | None, member_stats: dict[str, dict[str, Any]]) -> str | None:
+    clean_author = (author_name or "").strip().lower()
+    if not clean_author:
+        return None
+    for mid, st in member_stats.items():
+        mname = (st.get("name") or "").strip().lower()
+        if not mname:
+            continue
+        if clean_author == mname or (len(mname) >= 4 and (mname in clean_author or clean_author in mname)):
+            return mid
+    return None
+
+
+def _serialize_official_evaluation(eval_row: Any) -> dict[str, Any]:
+    if not eval_row:
+        return {"isGraded": False}
+    ev = row_dict(eval_row) or {}
+    try:
+        member_scores = json.loads(ev.get("member_scores_json") or "[]")
+    except Exception:
+        member_scores = []
+    try:
+        council_notes = json.loads(ev.get("council_notes_json") or "{}")
+    except Exception:
+        council_notes = {}
+    if not isinstance(council_notes, dict):
+        council_notes = {}
+
+    demo_raw = ev.get("demo_score")
+    demo_val = float(demo_raw) if demo_raw is not None else float(ev.get("group_score") or 0)
+    return {
+        "isGraded": True,
+        "evalId": ev["id"],
+        "groupScore": round(float(ev.get("group_score") or 0), 2),
+        "demoScore": round(demo_val, 2),
+        "architectureScore": round(float(ev.get("architecture_score") or 0), 2),
+        "processScore": round(float(ev.get("process_score") or 0), 2),
+        "defenseScore": round(float(ev.get("defense_score") or 0), 2),
+        "finalScore": round(float(ev.get("final_score") or 0), 2),
+        "feedback": ev.get("feedback") or "",
+        "verdict": council_notes.get("verdict")
+        or ("fail" if ev.get("status") == "redefense_required" else "pass"),
+        "councilMembers": council_notes.get("council_members") or "",
+        "demoVerified": bool(council_notes.get("demo_verified", True)),
+        "repoVerified": bool(council_notes.get("repo_verified", True)),
+        "frozenVerified": bool(council_notes.get("frozen_verified", False)),
+        "graderName": ev.get("grader_name") or "Hội đồng Bảo vệ Đồ án",
+        "defenseDate": ev.get("defense_date") or ev.get("graded_at") or "",
+        "gradedAt": ev.get("graded_at") or "",
+        "status": ev.get("status") or "graded",
+        "memberScores": member_scores if isinstance(member_scores, list) else [],
+    }
+
+
+def _build_project_defense_dossier(conn: Any, project_id: str) -> dict[str, Any]:
+    proj_row = conn.execute(
+        "SELECT * FROM engineering_projects WHERE id = ?", (project_id,)
+    ).fetchone()
+    if not proj_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy dự án '{project_id}' trong hệ thống.",
+        )
+    proj = row_dict(proj_row) or {}
+
+    repo_row = conn.execute(
+        "SELECT * FROM git_repositories WHERE project_id = ?", (project_id,)
+    ).fetchone()
+    repo = row_dict(repo_row) if repo_row else {}
+
+    commit_rows = conn.execute(
+        """SELECT id, sha, author_name, branch, task_code, message,
+                  time_ago_label, additions, deletions
+           FROM git_commits WHERE project_id = ?
+           ORDER BY position_order DESC, created_at DESC""",
+        (project_id,),
+    ).fetchall()
+    pr_rows = conn.execute(
+        """SELECT id, pr_number, title, source_branch, target_branch,
+                  task_code, author_name, status, ai_review_score, peer_approved
+           FROM git_pull_requests WHERE project_id = ?
+           ORDER BY pr_number DESC""",
+        (project_id,),
+    ).fetchall()
+    task_rows = conn.execute(
+        """SELECT id, code, title, description, column_id, priority,
+                  points, assignee_json, epic, dod_json, submission_url, updated_at
+           FROM engineering_tasks WHERE project_id = ?
+           ORDER BY position_order ASC, updated_at DESC""",
+        (project_id,),
+    ).fetchall()
+
+    try:
+        team = json.loads(proj.get("team_json") or "[]")
+    except Exception:
+        team = []
+    if not isinstance(team, list):
+        team = []
+
+    member_stats: dict[str, dict[str, Any]] = {}
+    for idx, m in enumerate(team):
+        mid = str(m.get("id") or f"mem-{idx+1}")
+        member_stats[mid] = {
+            "member_id": mid,
+            "name": str(m.get("name") or f"Thành viên {idx+1}"),
+            "role": str(m.get("role") or "Developer"),
+            "avatar": str(m.get("avatar") or ""),
+            "total_tasks": 0,
+            "done_tasks": 0,
+            "verified_tasks": 0,
+            "completed_points": 0,
+            "total_points": 0,
+            "dod_completed": 0,
+            "dod_total": 0,
+            "commits_count": 0,
+            "prs_count": 0,
+            "top_tasks": [],
+        }
+
+    total_done_points = 0
+    total_points = 0
+    done_tasks_total = 0
+    verified_tasks_total = 0
+    epics_seen: list[str] = []
+    recent_tasks: list[dict[str, Any]] = []
+
+    for t in task_rows:
+        td = row_dict(t) or {}
+        pts = int(td.get("points") or 0)
+        col = td.get("column_id") or "backlog"
+        epic = str(td.get("epic") or "Sprint Goal").strip()
+        if epic and epic not in epics_seen:
+            epics_seen.append(epic)
+        try:
+            assignee = json.loads(td.get("assignee_json") or "{}")
+        except Exception:
+            assignee = {}
+        try:
+            dods = json.loads(td.get("dod_json") or "[]")
+        except Exception:
+            dods = []
+
+        total_points += pts
+        is_done = col in ("done", "verified")
+        if is_done:
+            done_tasks_total += 1
+            total_done_points += pts
+        if col == "verified":
+            verified_tasks_total += 1
+
+        m_id = assignee.get("id")
+        matched_mid = m_id if (m_id and m_id in member_stats) else _match_member_by_name(assignee.get("name"), member_stats)
+        if matched_mid:
+            st = member_stats[matched_mid]
+            st["total_tasks"] += 1
+            st["total_points"] += pts
+            st["dod_total"] += len(dods)
+            st["dod_completed"] += sum(1 for d in dods if d.get("done"))
+            if is_done:
+                st["done_tasks"] += 1
+                st["completed_points"] += pts
+            if col == "verified":
+                st["verified_tasks"] += 1
+            if len(st["top_tasks"]) < 4:
+                st["top_tasks"].append(f"{td.get('code', 'TASK')}: {td.get('title', '')}")
+
+        if len(recent_tasks) < 10:
+            recent_tasks.append(
+                {
+                    "id": td["id"],
+                    "code": td.get("code") or "",
+                    "title": td.get("title") or "",
+                    "columnId": col,
+                    "points": pts,
+                    "epic": epic,
+                    "assigneeName": assignee.get("name") or "Chưa gán",
+                    "submissionUrl": td.get("submission_url") or "",
+                }
+            )
+
+    recent_commits = []
+    for c in commit_rows:
+        cd = row_dict(c) or {}
+        matched_mid = _match_member_by_name(cd.get("author_name"), member_stats)
+        if matched_mid:
+            member_stats[matched_mid]["commits_count"] += 1
+        if len(recent_commits) < 8:
+            recent_commits.append(
+                {
+                    "id": cd["id"],
+                    "sha": cd.get("sha") or "",
+                    "authorName": cd.get("author_name") or "",
+                    "branch": cd.get("branch") or "main",
+                    "taskCode": cd.get("task_code") or "",
+                    "message": cd.get("message") or "",
+                    "timeAgo": cd.get("time_ago_label") or "",
+                    "additions": int(cd.get("additions") or 0),
+                    "deletions": int(cd.get("deletions") or 0),
+                }
+            )
+
+    recent_prs = []
+    for pr in pr_rows:
+        pd = row_dict(pr) or {}
+        matched_mid = _match_member_by_name(pd.get("author_name"), member_stats)
+        if matched_mid:
+            member_stats[matched_mid]["prs_count"] += 1
+        if len(recent_prs) < 6:
+            recent_prs.append(
+                {
+                    "id": pd["id"],
+                    "prNumber": int(pd.get("pr_number") or 0),
+                    "title": pd.get("title") or "",
+                    "sourceBranch": pd.get("source_branch") or "",
+                    "targetBranch": pd.get("target_branch") or "main",
+                    "taskCode": pd.get("task_code") or "",
+                    "authorName": pd.get("author_name") or "",
+                    "status": pd.get("status") or "open",
+                    "aiReviewScore": int(pd.get("ai_review_score") or 90),
+                    "peerApproved": bool(pd.get("peer_approved")),
+                }
+            )
+
+    num_members = max(1, len(member_stats))
+    expected_share = 100.0 / num_members
+    member_metrics: list[dict[str, Any]] = []
+    for st in member_stats.values():
+        pct = round(
+            (st["completed_points"] / total_done_points * 100.0)
+            if total_done_points > 0
+            else expected_share,
+            1,
+        )
+        ratio = pct / expected_share if expected_share > 0 else 1.0
+        st["contribution_pct"] = pct
+        st["suggested_factor"] = round(max(0.7, min(1.15, ratio)), 2)
+        member_metrics.append(st)
+
+    pkg_row = conn.execute(
+        "SELECT * FROM project_defense_packages WHERE project_id = ?", (project_id,)
+    ).fetchone()
+    pkg = row_dict(pkg_row) if pkg_row else {}
+
+    eval_row = conn.execute(
+        "SELECT * FROM project_evaluations WHERE project_id = ? ORDER BY graded_at DESC LIMIT 1",
+        (project_id,),
+    ).fetchone()
+
+    sess_rows = conn.execute(
+        """SELECT ds.id, ds.round_number, ds.status, ds.final_defense_score,
+                  ds.transcript_json, ds.updated_at,
+                  COALESCE(NULLIF(u.full_name, ''), u.display_name) AS student_name,
+                  u.user_code AS student_code
+           FROM defense_sessions ds
+           LEFT JOIN users u ON u.id = ds.user_id
+           WHERE ds.project_id = ?
+           ORDER BY ds.updated_at DESC LIMIT 5""",
+        (project_id,),
+    ).fetchall()
+    practice_sessions = []
+    for sr in sess_rows:
+        sd = row_dict(sr) or {}
+        try:
+            tr = json.loads(sd.get("transcript_json") or "[]")
+        except Exception:
+            tr = []
+        practice_sessions.append(
+            {
+                "id": sd["id"],
+                "studentName": sd.get("student_name") or "Học viên",
+                "studentCode": sd.get("student_code") or "—",
+                "readinessScore": sd.get("final_defense_score"),
+                "status": sd.get("status") or "in_progress",
+                "roundNumber": int(sd.get("round_number") or 1),
+                "updatedAt": sd.get("updated_at") or "",
+                "transcriptCount": len(tr) if isinstance(tr, list) else 0,
+            }
+        )
+
+    demo_url = (pkg.get("demo_url") or "").strip()
+    slide_url = (pkg.get("slide_url") or "").strip()
+    report_url = (pkg.get("report_url") or "").strip()
+    video_url = (pkg.get("video_url") or "").strip()
+    repo_url = (repo.get("repo_url") or "").strip()
+
+    return {
+        "project": {
+            "id": proj["id"],
+            "code": proj.get("code") or "",
+            "name": proj.get("name") or "",
+            "client": proj.get("client") or "",
+            "course": proj.get("course") or "",
+            "status": proj.get("status") or "active",
+            "sprint": proj.get("sprint") or "",
+            "isFrozen": bool(proj.get("is_frozen")),
+            "leaderUserId": proj.get("leader_user_id") or "",
+            "instructorName": proj.get("instructor_name") or "",
+            "dueDate": proj.get("due_date") or "",
+            "storyPointsBudget": int(proj.get("story_points_budget") or 0),
+            "repoUrl": repo_url,
+            "repoSlug": repo.get("repo_slug") or "",
+            "targetBranch": repo.get("target_branch") or "main",
+            "totalTasks": len(task_rows),
+            "doneTasks": done_tasks_total,
+            "verifiedTasks": verified_tasks_total,
+            "totalPoints": total_points,
+            "completedPoints": total_done_points,
+            "commitsCount": len(commit_rows),
+            "prsCount": len(pr_rows),
+            "epics": epics_seen[:8],
+        },
+        "package": {
+            "demoUrl": demo_url,
+            "slideUrl": slide_url,
+            "reportUrl": report_url,
+            "videoUrl": video_url,
+            "repoUrl": repo_url,
+            "architectureSummary": (pkg.get("architecture_summary") or "").strip(),
+            "memberRolesSummary": (pkg.get("member_roles_summary") or "").strip(),
+            "submittedByName": (pkg.get("submitted_by_name") or "").strip(),
+            "updatedAt": pkg.get("updated_at") or "",
+            "isComplete": bool(demo_url and (slide_url or report_url)),
+        },
+        "memberMetrics": member_metrics,
+        "recentTasks": recent_tasks,
+        "recentCommits": recent_commits,
+        "recentPullRequests": recent_prs,
+        "practiceSessions": practice_sessions,
+        "officialEvaluation": _serialize_official_evaluation(eval_row),
+    }
+
+
+@router.get("/defense/projects/{project_id}/dossier", status_code=status.HTTP_200_OK)
+def get_project_defense_dossier(
+    project_id: str,
+    _: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Lấy toàn bộ hồ sơ dự án thực tế phục vụ luyện tập & Hội đồng chấm điểm trực tiếp."""
+    with db() as conn:
+        return _build_project_defense_dossier(conn, project_id)
+
+
+@router.put("/defense/projects/{project_id}/package", status_code=status.HTTP_200_OK)
+def save_project_defense_package(
+    project_id: str,
+    payload: DefensePackageIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Lưu Hồ sơ Bảo vệ Đồ án (Link Demo trực tiếp, Slide, Báo cáo, Video, Tóm tắt kiến trúc)."""
+    demo_url = _validate_optional_http_url(payload.demo_url, "Link Live Demo")
+    slide_url = _validate_optional_http_url(payload.slide_url, "Link Slide thuyết trình")
+    report_url = _validate_optional_http_url(payload.report_url, "Link Báo cáo đồ án")
+    video_url = _validate_optional_http_url(payload.video_url, "Link Video demo")
+    repo_url = _validate_optional_http_url(payload.repo_url, "Link GitHub Repository")
+
+    now = now_utc()
+    actor_name = user.get("full_name") or user.get("display_name") or "Thành viên"
+    with db() as conn:
+        proj = conn.execute("SELECT id, code, name FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
+        if not proj:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+
+        conn.execute(
+            """INSERT OR REPLACE INTO project_defense_packages(
+                   project_id, demo_url, slide_url, report_url, video_url,
+                   architecture_summary, member_roles_summary, submitted_by, submitted_by_name, updated_at
+               ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+            (
+                project_id,
+                demo_url,
+                slide_url,
+                report_url,
+                video_url,
+                (payload.architecture_summary or "").strip(),
+                (payload.member_roles_summary or "").strip(),
+                user["id"],
+                actor_name,
+                now,
+            ),
+        )
+        if repo_url:
+            repo_exists = conn.execute(
+                "SELECT project_id FROM git_repositories WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            if repo_exists:
+                conn.execute(
+                    "UPDATE git_repositories SET repo_url = ?, updated_at = ? WHERE project_id = ?",
+                    (repo_url, now, project_id),
+                )
+        conn.commit()
+        dossier = _build_project_defense_dossier(conn, project_id)
+
+    record_audit_log(
+        actor_name,
+        user["id"],
+        f"Cập nhật Hồ sơ Bảo vệ Đồ án {proj['code']}",
+        demo_url or slide_url or proj["name"],
+        log_type="project",
+        resource_type="defense_package",
+        resource_id=project_id,
+    )
+    return {"status": "saved", "package": dossier["package"], "dossier": dossier}
+
+
+def _normalize_practice_round(raw_item: Any, fallback_item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(raw_item, dict):
+        return fallback_item
+    out = dict(fallback_item)
+    for k in ("phaseTitle", "jurySpeakerId", "question", "evidenceRef", "placeholderExample", "mentorHint"):
+        val = str(raw_item.get(k) or "").strip()
+        if val:
+            out[k] = val
+    if out["jurySpeakerId"] not in ("jury-1", "jury-2", "jury-3"):
+        out["jurySpeakerId"] = fallback_item["jurySpeakerId"]
+    kws = raw_item.get("suggestedKeywords")
+    if isinstance(kws, list):
+        clean_kws = [str(x).strip() for x in kws if str(x).strip()][:5]
+        if clean_kws:
+            out["suggestedKeywords"] = clean_kws
+    samples = raw_item.get("sampleArguments")
+    if isinstance(samples, list) and len(samples) >= 2:
+        norm_samples = []
+        for idx, s in enumerate(samples[:3]):
+            if isinstance(s, dict) and str(s.get("text") or "").strip():
+                t_val = s.get("type")
+                if t_val not in ("optimal", "acceptable", "flawed"):
+                    t_val = ("optimal", "acceptable", "flawed")[min(idx, 2)]
+                norm_samples.append(
+                    {
+                        "id": str(s.get("id") or f"s-{out['roundNumber']}-{idx+1}"),
+                        "label": str(s.get("label") or f"Phương án {idx+1}"),
+                        "text": str(s.get("text")).strip(),
+                        "type": t_val,
+                    }
+                )
+        if len(norm_samples) >= 2:
+            out["sampleArguments"] = norm_samples
+    dd = raw_item.get("drillDownChallenge")
+    if isinstance(dd, dict):
+        fb_dd = fallback_item["drillDownChallenge"]
+        rebs = dd.get("rebuttalOptions")
+        norm_rebs = []
+        if isinstance(rebs, list):
+            for idx, r in enumerate(rebs[:3]):
+                if isinstance(r, dict) and str(r.get("answer") or "").strip():
+                    norm_rebs.append(
+                        {
+                            "id": str(r.get("id") or f"r-{out['roundNumber']}-{idx+1}"),
+                            "answer": str(r.get("answer")).strip(),
+                            "score": max(35, min(98, int(r.get("score") or (92 if idx == 0 else 74 if idx == 1 else 52)))),
+                            "feedback": str(r.get("feedback") or fb_dd["rebuttalOptions"][0]["feedback"]).strip(),
+                            "architectureImpact": str(r.get("architectureImpact") or fb_dd["rebuttalOptions"][0]["architectureImpact"]).strip(),
+                        }
+                    )
+        out["drillDownChallenge"] = {
+            "criticJuryId": str(dd.get("criticJuryId") or fb_dd["criticJuryId"]),
+            "criticName": str(dd.get("criticName") or fb_dd["criticName"]),
+            "challengeTitle": str(dd.get("challengeTitle") or fb_dd["challengeTitle"]),
+            "criticQuestion": str(dd.get("criticQuestion") or fb_dd["criticQuestion"]),
+            "rebuttalOptions": norm_rebs if len(norm_rebs) >= 2 else fb_dd["rebuttalOptions"],
+        }
+    return out
+
+
+def _build_deterministic_practice_rounds(dossier: dict[str, Any], student_name: str) -> list[dict[str, Any]]:
+    proj = dossier["project"]
+    pkg = dossier["package"]
+    tasks = dossier["recentTasks"]
+    commits = dossier["recentCommits"]
+    epics = proj.get("epics") or ["Kiến trúc cốt lõi"]
+
+    top_task = tasks[0] if tasks else {"code": proj["code"], "title": "Luồng nghiệp vụ chính", "epic": epics[0]}
+    second_task = tasks[1] if len(tasks) > 1 else top_task
+    top_commit = commits[0] if commits else {"sha": "main", "message": "Cấu trúc module hệ thống", "branch": proj["targetBranch"]}
+    demo_hint = pkg["demoUrl"] or f"môi trường demo {proj['code']}"
+    arch_hint = pkg["architectureSummary"] or f"kiến trúc dự án {proj['name']} ({', '.join(epics[:3])})"
+
+    ev1 = f"Căn cứ dự án {proj['code']}: {proj['doneTasks']}/{proj['totalTasks']} task · Epic {top_task['epic']}"
+    ev2 = f"Căn cứ code & Kanban: Task {top_task['code']} ({top_task['title']}) · {proj['commitsCount']} commits Git"
+    ev3 = f"Căn cứ Demo & Vận hành: {pkg['demoUrl'] or 'Chưa nộp link Demo'} · {proj['prsCount']} Pull Requests"
+
+    return [
+        {
+            "roundNumber": 1,
+            "phaseTitle": f"Vòng 1 (Mock): Kiến trúc & Dữ liệu thật dự án {proj['code']}",
+            "jurySpeakerId": "jury-1",
+            "evidenceRef": ev1,
+            "question": (
+                f"Trong đồ án '{proj['name']}', vì sao nhóm em chọn cấu trúc {arch_hint[:140]}? "
+                f"Khi phải mở rộng hoặc đổi công nghệ ở module '{top_task['epic']}', phần nào dễ bị ảnh hưởng dây chuyền nhất?"
+            ),
+            "suggestedKeywords": ["Phân tách tầng", "Contract API", "Khả năng mở rộng", "Trade-off"],
+            "placeholderExample": f"Thưa thầy, ở dự án {proj['code']} nhóm em tách rõ tầng giao tiếp, xử lý nghiệp vụ và truy xuất CSDL...",
+            "sampleArguments": [
+                {
+                    "id": "dyn-1a",
+                    "label": "Chuẩn kiến trúc: Nêu rõ phân tầng & đánh đổi",
+                    "text": f"Thưa Hội đồng, trong {proj['code']} nhóm em tách biệt tầng UI, tầng xử lý API/Business và CSDL quan hệ; khi mở rộng {top_task['epic']} chỉ cần cập nhật schema và service mà không vỡ hợp đồng dữ liệu.",
+                    "type": "optimal",
+                },
+                {
+                    "id": "dyn-1b",
+                    "label": "Trung bình: Mô tả chức năng, thiếu phân tích coupling",
+                    "text": f"Dạ nhóm em chia thư mục frontend và backend riêng để dễ làm task {top_task['code']}, khi thêm tính năng thì viết thêm API mới.",
+                    "type": "acceptable",
+                },
+                {
+                    "id": "dyn-1c",
+                    "label": "Yếu: Làm cho chạy, chưa rõ ranh giới module",
+                    "text": "Dạ phần nào chạy được thì nhóm em nối thẳng vào database cho nhanh ạ.",
+                    "type": "flawed",
+                },
+            ],
+            "drillDownChallenge": {
+                "criticJuryId": "jury-3",
+                "criticName": "KS. Nguyễn Bảo Long · Chuyên gia Kiến trúc",
+                "challengeTitle": f"Kiểm tra tình huống lỗi khi demo {proj['code']}",
+                "criticQuestion": f"Nếu ngay lúc demo tại {demo_hint}, API chính hoặc kết nối CSDL bị chậm/timeout thì màn hình đang chạy xử lý ra sao để không sập phiên trình diễn?",
+                "rebuttalOptions": [
+                    {
+                        "id": "reb-1-best",
+                        "answer": "Em bọc timeout, báo trạng thái lỗi rõ ràng cho người dùng kèm nút thử lại, giữ state giao diện an toàn và ghi log phía server để khoanh vùng nhanh.",
+                        "score": 93,
+                        "feedback": "Tư duy chịu lỗi tốt, giữ ổn định được buổi demo trực tiếp.",
+                        "architectureImpact": "+14 Readiness Kiến trúc & Chịu lỗi",
+                    },
+                    {
+                        "id": "reb-1-mid",
+                        "answer": "Em kiểm tra mã lỗi HTTP và hiện thông báo thất bại để tải lại trang.",
+                        "score": 74,
+                        "feedback": "Đạt mức cơ bản, nên bổ sung cơ chế retry/fallback cụ thể hơn khi bảo vệ thật.",
+                        "architectureImpact": "+7 Readiness Kiến trúc",
+                    },
+                    {
+                        "id": "reb-1-low",
+                        "answer": "Dạ thường chạy local nên ít bị lỗi đó, nếu lỗi thì em F5 lại ạ.",
+                        "score": 48,
+                        "feedback": "Hội đồng thật sẽ trừ điểm phần xử lý biên và độ tin cậy vận hành.",
+                        "architectureImpact": "-10 Readiness Vận hành",
+                    },
+                ],
+            },
+            "mentorHint": f"Gợi ý luyện tập cho {student_name}: Nói cụ thể module bạn trực tiếp phụ trách, đừng chỉ đọc lại tên công nghệ.",
+        },
+        {
+            "roundNumber": 2,
+            "phaseTitle": f"Vòng 2 (Mock): Truy vấn Code & Commit thật ({top_commit['sha'][:7]})",
+            "jurySpeakerId": "jury-2",
+            "evidenceRef": ev2,
+            "question": (
+                f"Thấy lịch sử có task '{top_task['code']} - {top_task['title']}' và commit '{top_commit['message'][:90]}'. "
+                f"Em hãy giải thích thuật toán/luồng dữ liệu cốt lõi bên trong phần code đó và các trường hợp biên đã test."
+            ),
+            "suggestedKeywords": ["Độ phức tạp", "Validate dữ liệu", "Edge case", "Đồng bộ trạng thái"],
+            "placeholderExample": f"Ở task {top_task['code']}, đầu vào đi qua bước kiểm tra hợp lệ, xử lý nghiệp vụ và cập nhật trạng thái...",
+            "sampleArguments": [
+                {
+                    "id": "dyn-2a",
+                    "label": "Nắm chắc code: Giải thích luồng + case biên",
+                    "text": f"Ở task {top_task['code']}, em kiểm tra chặt đầu vào, bảo vệ ràng buộc toàn vẹn dữ liệu ở tầng backend và có test kiểm chứng các case biên (rỗng, trùng lặp, sai quyền) trước khi merge PR vào nhánh {proj['targetBranch']}.",
+                    "type": "optimal",
+                },
+                {
+                    "id": "dyn-2b",
+                    "label": "Hiểu sơ bộ luồng chính, chưa rõ test biên",
+                    "text": f"Em xử lý logic cho {top_task['title']} bằng cách gửi request từ UI lên server lưu vào DB rồi trả kết quả về hiển thị.",
+                    "type": "acceptable",
+                },
+                {
+                    "id": "dyn-2c",
+                    "label": "Không nhớ rõ phần mình code",
+                    "text": "Phần này bữa nhóm ghép code chung nên em không nhớ chính xác từng hàm ạ.",
+                    "type": "flawed",
+                },
+            ],
+            "drillDownChallenge": {
+                "criticJuryId": "jury-2",
+                "criticName": "ThS. Lê Hoàng Yến · Phản biện Thuật toán",
+                "challengeTitle": "Thẩm định thực chất (Anti-Freerider)",
+                "criticQuestion": f"Nếu Hội đồng yêu cầu em mở IDE sửa trực tiếp một điều kiện lọc ở '{second_task['title']}' trong 2 phút ngay tại buổi bảo vệ, em sẽ sửa file nào và kiểm tra lại bằng cách nào?",
+                "rebuttalOptions": [
+                    {
+                        "id": "reb-2-best",
+                        "answer": "Em xác định đúng endpoint/service và component hiển thị tương ứng, sửa điều kiện ở cả backend lẫn schema validate, sau đó chạy test suite + kiểm tra network payload ngay trên trình duyệt.",
+                        "score": 94,
+                        "feedback": "Chứng minh làm chủ hoàn toàn mã nguồn do chính mình phát triển.",
+                        "architectureImpact": "+15 Readiness Làm chủ Codebase",
+                    },
+                    {
+                        "id": "reb-2-mid",
+                        "answer": "Em tìm theo tên component giao diện trước rồi lần ngược sang file gọi API để sửa lại điều kiện lọc.",
+                        "score": 76,
+                        "feedback": "Hợp lý, lưu ý kiểm tra thêm phân quyền/validate phía backend.",
+                        "architectureImpact": "+8 Readiness Làm chủ Codebase",
+                    },
+                    {
+                        "id": "reb-2-low",
+                        "answer": "Em phải nhờ bạn nhóm trưởng chỉ giúp file đó nằm ở thư mục nào ạ.",
+                        "score": 45,
+                        "feedback": "Cẩn thận! Nếu lên Hội đồng thật mà không tìm được file mình làm sẽ bị nghi ngại tỷ lệ đóng góp.",
+                        "architectureImpact": "-15 Cảnh báo Freerider",
+                    },
+                ],
+            },
+            "mentorHint": "Khi bảo vệ thật, thầy cô rất hay mở đúng file bạn commit nhiều nhất và hỏi tại sao viết dòng đó.",
+        },
+        {
+            "roundNumber": 3,
+            "phaseTitle": "Vòng 3 (Mock): Kịch bản Demo Trực tiếp & Phản biện Nhóm",
+            "jurySpeakerId": "jury-3",
+            "evidenceRef": ev3,
+            "question": (
+                f"Dự án hiện hoàn thành {proj['doneTasks']}/{proj['totalTasks']} task ({proj['completedPoints']} SP) với {proj['commitsCount']} commits. "
+                f"Trong 5 phút demo trực tiếp trước Hội đồng, em sẽ trình diễn kịch bản nào chứng minh hệ thống chạy thật chứ không phải mock?"
+            ),
+            "suggestedKeywords": ["End-to-End", "Dữ liệu thật DB", "Phân quyền", "Anti-Freerider"],
+            "placeholderExample": "Em sẽ demo luồng tạo dữ liệu thật, kiểm tra persistence sau khi F5 và minh chứng phân quyền giữa các vai trò...",
+            "sampleArguments": [
+                {
+                    "id": "dyn-3a",
+                    "label": "Kịch bản Demo thuyết phục (E2E + F5 + DB + RBAC)",
+                    "text": "Em demo trực tiếp luồng nghiệp vụ end-to-end từ tài khoản Học viên sang Giảng viên/Admin trên server đang chạy, nhấn F5 chứng minh dữ liệu lưu thật dưới MySQL, và cố tình gọi API trái quyền để Hội đồng thấy HTTP 403.",
+                    "type": "optimal",
+                },
+                {
+                    "id": "dyn-3b",
+                    "label": "Demo giao diện các màn hình chính",
+                    "text": "Em mở từng màn hình chính của hệ thống cho thầy cô xem giao diện hoạt động và số liệu hiển thị.",
+                    "type": "acceptable",
+                },
+                {
+                    "id": "dyn-3c",
+                    "label": "Chỉ chiếu slide chụp màn hình",
+                    "text": "Dạ máy em nay hơi lag nên nhóm em xin chiếu ảnh chụp trong slide thay demo ạ.",
+                    "type": "flawed",
+                },
+            ],
+            "drillDownChallenge": {
+                "criticJuryId": "jury-1",
+                "criticName": "TS. Trần Anh Tuấn · Chủ tịch Hội đồng",
+                "challengeTitle": "Chất vấn Kịch bản Dự phòng Demo",
+                "criticQuestion": "Nếu Hội đồng hỏi điểm hạn chế lớn nhất hiện tại của sản phẩm và hướng phát triển tiếp theo, nhóm em trả lời sao cho trung thực mà vẫn thuyết phục?",
+                "rebuttalOptions": [
+                    {
+                        "id": "reb-3-best",
+                        "answer": "Em nêu thẳng 1–2 giới hạn kỹ thuật có thật (ví dụ tải đồng thời / tự động CI CD / mở rộng container) kèm lộ trình nâng cấp cụ thể và lý do chọn ưu tiên phạm vi MVP hiện tại.",
+                        "score": 95,
+                        "feedback": "Trung thực, có tư duy kỹ sư và kiểm soát được phạm vi đồ án.",
+                        "architectureImpact": "+15 Readiness Sẵn sàng Hội đồng",
+                    },
+                    {
+                        "id": "reb-3-mid",
+                        "answer": "Sản phẩm hiện đáp ứng các chức năng chính và nhóm sẽ tối ưu thêm giao diện và tốc độ trong tương lai.",
+                        "score": 73,
+                        "feedback": "An toàn nhưng hơi chung chung; nên chỉ rõ giới hạn kỹ thuật cụ thể.",
+                        "architectureImpact": "+6 Readiness",
+                    },
+                    {
+                        "id": "reb-3-low",
+                        "answer": "Dạ sản phẩm của nhóm em đã hoàn thiện 100%, không còn nhược điểm nào ạ.",
+                        "score": 50,
+                        "feedback": "Tránh khẳng định tuyệt đối vì Hội đồng sẽ test biên để bắt lỗi ngay.",
+                        "architectureImpact": "-8 Readiness",
+                    },
+                ],
+            },
+            "mentorHint": "Chuẩn bị sẵn dữ liệu test sạch, mở sẵn 2 tab (Sinh viên & Giảng viên) để demo chuyển vai mượt mà.",
+        },
+    ]
+
+
+@router.post("/defense/projects/{project_id}/practice-questions", status_code=status.HTTP_200_OK)
+def generate_practice_questions(
+    project_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Sinh bộ câu hỏi Luyện tập Phản biện AI bám sát dữ liệu dự án thật từ MySQL."""
+    with db() as conn:
+        dossier = _build_project_defense_dossier(conn, project_id)
+        svc_row = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-defense'").fetchone()
+        service_active = bool(svc_row["active"]) if svc_row else True
+
+    student_name = user.get("full_name") or user.get("display_name") or "Học viên"
+    fallback_rounds = _build_deterministic_practice_rounds(dossier, student_name)
+    source = "project-evidence"
+
+    if service_active:
+        proj = dossier["project"]
+        pkg = dossier["package"]
+        task_lines = "; ".join(f"{t['code']} ({t['columnId']}): {t['title']}" for t in dossier["recentTasks"][:6]) or "Chưa có task"
+        commit_lines = "; ".join(f"{c['sha'][:7]} ({c['authorName']}): {c['message']}" for c in dossier["recentCommits"][:5]) or "Chưa có commit"
+        llm_res = generate_json(
+            prompt=(
+                f"Dự án: {proj['code']} - {proj['name']} ({proj['course']})\n"
+                f"Sinh viên luyện tập: {student_name}\n"
+                f"Link Demo: {pkg['demoUrl'] or 'Chưa nộp'} | Repo: {proj['repoUrl'] or 'Chưa gắn'}\n"
+                f"Tóm tắt kiến trúc: {pkg['architectureSummary'] or 'Chưa cập nhật'}\n"
+                f"Tiến độ Kanban: {proj['doneTasks']}/{proj['totalTasks']} task, {proj['completedPoints']} SP\n"
+                f"Một số task thật: {task_lines}\n"
+                f"Một số commit Git thật: {commit_lines}\n\n"
+                "Hãy tạo JSON object chứa khóa 'rounds' gồm đúng 3 vòng luyện tập phản biện đồ án sát với dự án này (KHÔNG bịa công nghệ không liên quan). "
+                "Mỗi vòng có: roundNumber (1..3), phaseTitle, jurySpeakerId ('jury-1'|'jury-2'|'jury-3'), evidenceRef, question, "
+                "suggestedKeywords (3-4 từ), sampleArguments (3 lựa chọn optimal/acceptable/flawed), "
+                "drillDownChallenge (criticJuryId, criticName, challengeTitle, criticQuestion, rebuttalOptions 3 mục score/answer/feedback/architectureImpact), mentorHint."
+            ),
+            system_instruction="Bạn là trợ lý luyện tập bảo vệ đồ án kỹ nghệ phần mềm. Trả JSON hợp lệ tiếng Việt, bám sát dữ liệu dự án được cung cấp.",
+            temperature=0.35,
+            max_output_tokens=1500,
+        )
+        if llm_res and isinstance(llm_res[0], dict) and isinstance(llm_res[0].get("rounds"), list):
+            parsed_rounds = llm_res[0]["rounds"]
+            meta = llm_res[1]
+            if len(parsed_rounds) >= 3:
+                fallback_rounds = [
+                    _normalize_practice_round(parsed_rounds[i], fallback_rounds[i])
+                    for i in range(3)
+                ]
+                source = f"gemini:{meta.get('model') or 'gemini'}"
+                with db() as conn:
+                    record_ai_usage(
+                        conn,
+                        "svc-defense",
+                        int(meta.get("input_tokens") or 750),
+                        int(meta.get("output_tokens") or 900),
+                    )
+                    conn.commit()
+
+    return {
+        "project_id": project_id,
+        "source": source,
+        "evidence_summary": {
+            "projectCode": dossier["project"]["code"],
+            "projectName": dossier["project"]["name"],
+            "doneTasks": dossier["project"]["doneTasks"],
+            "totalTasks": dossier["project"]["totalTasks"],
+            "commitsCount": dossier["project"]["commitsCount"],
+            "demoUrl": dossier["package"]["demoUrl"],
+            "hasArchitectureSummary": bool(dossier["package"]["architectureSummary"]),
+        },
+        "rounds": fallback_rounds,
+    }
+
+
+@router.post("/defense/projects/{project_id}/council-questions", status_code=status.HTTP_200_OK)
+def generate_council_questions(
+    project_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Trợ lý AI gợi ý câu hỏi hỏi-đáp trực tiếp cho Giảng viên / Hội đồng dựa trên hồ sơ & đóng góp Anti-Freerider."""
+    role = (user.get("role") or "student").lower()
+    if role not in ("instructor", "admin", "org_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chỉ Giảng viên hoặc Quản trị viên mới được dùng Trợ lý gợi ý câu hỏi Hội đồng.",
+        )
+
+    with db() as conn:
+        dossier = _build_project_defense_dossier(conn, project_id)
+        svc_row = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-defense'").fetchone()
+        service_active = bool(svc_row["active"]) if svc_row else True
+
+    proj = dossier["project"]
+    pkg = dossier["package"]
+    metrics = dossier["memberMetrics"]
+
+    project_probes = [
+        {
+            "category": "Demo Trực tiếp",
+            "question": f"Yêu cầu nhóm chạy trực tiếp luồng nghiệp vụ chính trên {pkg['demoUrl'] or 'ứng dụng'}, sau đó tải lại trang (F5) và kiểm tra dữ liệu lưu thực tế trong DB.",
+            "whatToVerify": "Không dùng dữ liệu giả tĩnh; luồng tạo/sửa/xóa đồng bộ từ giao diện xuống DB.",
+        },
+        {
+            "category": "Kiến trúc & Bảo mật",
+            "question": f"Kiểm tra phân quyền RBAC & xử lý lỗi biên của {proj['code']}: điều gì xảy ra nếu user gửi dữ liệu sai định dạng hoặc gọi API trái vai trò?",
+            "whatToVerify": "API trả HTTP 401/403/422 rõ ràng, giao diện không trắng màn hình.",
+        },
+        {
+            "category": "Git & Tiến độ",
+            "question": f"Đối chiếu lịch sử {proj['commitsCount']} commits / {proj['prsCount']} PRs với bảng Kanban ({proj['doneTasks']}/{proj['totalTasks']} task): vì sao có phần tập trung ở giai đoạn cuối?",
+            "whatToVerify": "Lịch sử làm việc đều đặn, không dồn code hoặc copy vào phút chót.",
+        },
+    ]
+
+    member_probes = []
+    for m in metrics:
+        top_t = "; ".join(m["top_tasks"][:2]) if m["top_tasks"] else "Chưa ghi nhận task hoàn thành cụ thể"
+        low_contrib = float(m.get("contribution_pct") or 0) < 22.0 or int(m.get("commits_count") or 0) == 0
+        member_probes.append(
+            {
+                "memberId": m["member_id"],
+                "memberName": m["name"],
+                "memberRole": m["role"],
+                "contributionPct": m["contribution_pct"],
+                "evidenceBasis": f"{m['completed_points']}/{m['total_points']} SP ({m['contribution_pct']}%) · {m['commits_count']} commits · {top_t}",
+                "question": (
+                    f"{m['name']} hãy giải thích chi tiết file code và thiết kế CSDL/API mà em trực tiếp cài đặt trong ({top_t}), đồng thời chỉ chỗ sẽ sửa nếu cần thêm điều kiện kiểm tra mới."
+                    if not low_contrib
+                    else f"{m['name']} (tỷ lệ {m['contribution_pct']}%, {m['commits_count']} commits): hãy mở đúng phần giao diện/hàm em tự viết và giải thích luồng chạy từ UI xuống API để Hội đồng xác nhận đóng góp thực."
+                ),
+                "whatToVerify": "Mở được đúng file code mình viết, hiểu rõ biến/hàm/luồng xử lý và giải thích được lý do thiết kế.",
+            }
+        )
+
+    source = "project-evidence"
+    if service_active and metrics:
+        member_summary = "\n".join(
+            f"- {m['name']} ({m['role']}): {m['completed_points']}/{m['total_points']} SP ({m['contribution_pct']}%), {m['commits_count']} commits, tasks: {', '.join(m['top_tasks'][:3])}"
+            for m in metrics
+        )
+        llm_res = generate_json(
+            prompt=(
+                f"Dự án: {proj['code']} - {proj['name']}\n"
+                f"Tóm tắt kiến trúc do nhóm nộp: {pkg['architectureSummary'] or 'Chưa có'}\n"
+                f"Phân công do nhóm khai báo: {pkg['memberRolesSummary'] or 'Chưa có'}\n"
+                f"Dữ liệu đóng góp thực tế (Anti-Freerider):\n{member_summary}\n\n"
+                "Hãy gợi ý JSON gồm:\n"
+                "- 'projectProbes': 3 câu hỏi kiểm chứng Demo & Kiến trúc (category, question, whatToVerify)\n"
+                "- 'memberProbes': mỗi thành viên ở trên 1 câu hỏi đích danh (memberId, question, whatToVerify)."
+            ),
+            system_instruction="Bạn là Chủ tịch Hội đồng bảo vệ đồ án đại học. Sinh câu hỏi thực tế, sắc bén giúp thầy cô kiểm tra demo thật và lọc freerider. Chỉ trả JSON thuần.",
+            temperature=0.35,
+            max_output_tokens=1100,
+        )
+        if llm_res and isinstance(llm_res[0], dict):
+            parsed, meta = llm_res
+            if isinstance(parsed.get("projectProbes"), list) and len(parsed["projectProbes"]) >= 2:
+                norm_pp = []
+                for idx, p in enumerate(parsed["projectProbes"][:3]):
+                    if isinstance(p, dict) and str(p.get("question") or "").strip():
+                        norm_pp.append(
+                            {
+                                "category": str(p.get("category") or f"Kiểm chứng #{idx+1}"),
+                                "question": str(p.get("question")).strip(),
+                                "whatToVerify": str(p.get("whatToVerify") or "Kiểm tra trực tiếp trên Demo/Repo").strip(),
+                            }
+                        )
+                if norm_pp:
+                    project_probes = norm_pp
+            if isinstance(parsed.get("memberProbes"), list):
+                by_id = {str(mp.get("memberId") or ""): mp for mp in parsed["memberProbes"] if isinstance(mp, dict)}
+                for idx, mp in enumerate(member_probes):
+                    cand = by_id.get(mp["memberId"]) or (parsed["memberProbes"][idx] if idx < len(parsed["memberProbes"]) else None)
+                    if isinstance(cand, dict) and str(cand.get("question") or "").strip():
+                        mp["question"] = str(cand.get("question")).strip()
+                        if str(cand.get("whatToVerify") or "").strip():
+                            mp["whatToVerify"] = str(cand.get("whatToVerify")).strip()
+            source = f"gemini:{meta.get('model') or 'gemini'}"
+            with db() as conn:
+                record_ai_usage(
+                    conn,
+                    "svc-defense",
+                    int(meta.get("input_tokens") or 520),
+                    int(meta.get("output_tokens") or 620),
+                )
+                conn.commit()
+
+    return {
+        "project_id": project_id,
+        "source": source,
+        "projectProbes": project_probes,
+        "memberProbes": member_probes,
+    }
+
+
+@router.post("/defense/projects/{project_id}/live-grade", status_code=status.HTTP_200_OK)
+def submit_live_council_grade(
+    project_id: str,
+    payload: LiveCouncilGradeIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Giảng viên / Hội đồng chấm điểm bảo vệ trực tiếp sau khi xem Demo & hỏi đáp."""
+    role = (user.get("role") or "student").lower()
+    if role not in ("instructor", "admin", "org_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chỉ Giảng viên hoặc Quản trị viên mới có quyền chốt điểm Hội đồng trực tiếp.",
+        )
+
+    verdict = (payload.verdict or "pass").strip().lower()
+    if verdict not in ("pass", "pass_with_revisions", "fail"):
+        raise HTTPException(
+            status_code=422,
+            detail="verdict phải là pass, pass_with_revisions hoặc fail",
+        )
+
+    final_score = round(
+        0.35 * payload.demo_score
+        + 0.25 * payload.architecture_score
+        + 0.15 * payload.process_score
+        + 0.25 * payload.defense_score,
+        2,
+    )
+    now = now_utc()
+    instructor_name = user.get("full_name") or user.get("display_name") or "Giảng viên Hội đồng"
+    council_members = (payload.council_members or "").strip() or instructor_name
+    eval_status = "redefense_required" if verdict == "fail" else "graded"
+
+    with db() as conn:
+        dossier = _build_project_defense_dossier(conn, project_id)
+        proj = dossier["project"]
+        existing = conn.execute(
+            "SELECT id FROM project_evaluations WHERE project_id = ? ORDER BY graded_at DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        eval_id = existing["id"] if existing else f"eval-{uid()[:8]}"
+
+        member_scores_data = [m.model_dump() for m in payload.member_scores]
+        if not member_scores_data:
+            member_scores_data = [
+                {
+                    "member_id": m["member_id"],
+                    "name": m["name"],
+                    "role": m["role"],
+                    "contribution_pct": m["contribution_pct"],
+                    "suggested_factor": m["suggested_factor"],
+                    "individual_score": round(min(10.0, max(0.0, final_score * m["suggested_factor"])), 1),
+                    "asked_question": "",
+                    "live_qa_note": "",
+                }
+                for m in dossier["memberMetrics"]
+            ]
+
+        council_notes = {
+            "verdict": verdict,
+            "council_members": council_members,
+            "demo_verified": payload.demo_verified,
+            "repo_verified": payload.repo_verified,
+            "frozen_verified": payload.frozen_verified,
+        }
+
+        if existing:
+            conn.execute(
+                """UPDATE project_evaluations
+                   SET instructor_id=?, group_score=?, demo_score=?, architecture_score=?,
+                       process_score=?, defense_score=?, final_score=?, feedback=?,
+                       member_scores_json=?, anti_freerider_metrics_json=?,
+                       council_notes_json=?, grader_name=?, defense_date=?, status=?, graded_at=?
+                   WHERE id=?""",
+                (
+                    user["id"],
+                    final_score,
+                    payload.demo_score,
+                    payload.architecture_score,
+                    payload.process_score,
+                    payload.defense_score,
+                    final_score,
+                    (payload.feedback or "").strip() or "Đã hoàn tất bảo vệ đồ án trực tiếp trước Hội đồng.",
+                    json.dumps(member_scores_data, ensure_ascii=False),
+                    json.dumps(dossier["memberMetrics"], ensure_ascii=False),
+                    json.dumps(council_notes, ensure_ascii=False),
+                    council_members,
+                    now,
+                    eval_status,
+                    now,
+                    eval_id,
+                ),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO project_evaluations(
+                       id, project_id, instructor_id, group_score, demo_score, architecture_score,
+                       process_score, defense_score, final_score, feedback,
+                       member_scores_json, anti_freerider_metrics_json,
+                       council_notes_json, grader_name, defense_date, status, graded_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    eval_id,
+                    project_id,
+                    user["id"],
+                    final_score,
+                    payload.demo_score,
+                    payload.architecture_score,
+                    payload.process_score,
+                    payload.defense_score,
+                    final_score,
+                    (payload.feedback or "").strip() or "Đã hoàn tất bảo vệ đồ án trực tiếp trước Hội đồng.",
+                    json.dumps(member_scores_data, ensure_ascii=False),
+                    json.dumps(dossier["memberMetrics"], ensure_ascii=False),
+                    json.dumps(council_notes, ensure_ascii=False),
+                    council_members,
+                    now,
+                    eval_status,
+                    now,
+                ),
+            )
+
+        if verdict == "fail":
+            conn.execute(
+                "UPDATE engineering_projects SET status='active', updated_at=? WHERE id=?",
+                (now, project_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE engineering_projects SET status='delivered', tl_color='done', updated_at=? WHERE id=?",
+                (now, project_id),
+            )
+            prof = conn.execute("SELECT user_id FROM student_profiles LIMIT 1").fetchone()
+            if prof:
+                conn.execute(
+                    "UPDATE student_profiles SET exp_points = exp_points + 150 WHERE user_id = ?",
+                    (prof["user_id"],),
+                )
+
+        conn.execute(
+            """INSERT INTO notifications(
+                   id, recipient_user_id, target_role, title, desc_text, category, is_read, action_url, created_at
+               ) VALUES(?,?,?,?,?,?,?,?,?)""",
+            (
+                f"notif-council-{uid()[:8]}",
+                None,
+                "student",
+                f"Biên bản Hội đồng đồ án {proj['code']}: {final_score}/10",
+                f"{council_members} vừa chốt điểm bảo vệ trực tiếp đồ án {proj['name']} đạt {final_score}/10.",
+                "defense",
+                0,
+                "/defense-room",
+                now,
+            ),
+        )
+        conn.commit()
+        updated_eval_row = conn.execute(
+            "SELECT * FROM project_evaluations WHERE id = ?", (eval_id,)
+        ).fetchone()
+        official_eval = _serialize_official_evaluation(updated_eval_row)
+
+    record_audit_log(
+        instructor_name,
+        user["id"],
+        f"Chốt điểm Hội đồng trực tiếp ({final_score}/10)",
+        f"{proj['code']} - {proj['name']}",
+        log_type="defense",
+        resource_type="project_evaluation",
+        resource_id=eval_id,
+    )
+    track_event(
+        user["id"],
+        None,
+        "live_council_graded",
+        {"project_id": project_id, "final_score": final_score, "verdict": verdict},
+    )
+    return {
+        "status": eval_status,
+        "eval_id": eval_id,
+        "final_score": final_score,
+        "officialEvaluation": official_eval,
     }

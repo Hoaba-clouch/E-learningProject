@@ -44,6 +44,7 @@ interface ChapterExerciseStudioProps {
   onSubmissionSaved?: (submission: StudentChapterSubmissionDto, totalXp?: number) => void;
   onEarnXp?: (xp: number) => void;
   onBackToLecture?: () => void;
+  onAskAiExercise?: (presetPrompt?: string) => void;
 }
 
 interface AutoGradeReport {
@@ -146,6 +147,7 @@ export default function ChapterExerciseStudio({
   onSubmissionSaved,
   onEarnXp,
   onBackToLecture,
+  onAskAiExercise,
 }: ChapterExerciseStudioProps) {
   const effectiveExerciseTitle = dbAssignment?.title?.trim() || exercise.title;
   const effectiveDescription =
@@ -382,15 +384,31 @@ export default function ChapterExerciseStudio({
               <span>+{effectiveXp} XP</span>
             </div>
 
-            {onBackToLecture && (
-              <button
-                onClick={onBackToLecture}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-              >
-                <BookOpen size={13} />
-                <span>Xem lại lý thuyết</span>
-              </button>
-            )}
+            <div className="flex items-center gap-3 flex-wrap justify-end">
+              {onAskAiExercise && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onAskAiExercise(
+                      `Gợi ý giúp mình bước tiếp cận đầu tiên cho bài tập "${effectiveExerciseTitle}" nhé!`
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-800 dark:text-slate-100 transition cursor-pointer"
+                >
+                  <Sparkles size={12} className="text-amber-500" />
+                  <span>Hỏi AI gợi ý</span>
+                </button>
+              )}
+              {onBackToLecture && (
+                <button
+                  onClick={onBackToLecture}
+                  className="text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                >
+                  <BookOpen size={13} />
+                  <span>Xem lại lý thuyết</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

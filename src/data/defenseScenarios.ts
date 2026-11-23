@@ -15,6 +15,7 @@ export interface DefenseRound {
   roundNumber: number;
   phaseTitle: string;
   jurySpeakerId: string;
+  evidenceRef?: string;
   question: string;
   contextCodeSnippet?: {
     lang: string;

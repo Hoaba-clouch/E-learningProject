@@ -851,6 +851,14 @@ export default function AdminDashboard({
 
     } else {
 
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.email.toLowerCase() === item.email.toLowerCase() && u.status === "pending"
+            ? { ...u, status: "suspended", lastActive: "Đã từ chối" }
+            : u
+        )
+      );
+
       notify(`Đã từ chối yêu cầu của ${item.name}.`);
 
       logAction("Từ chối yêu cầu ghi danh", `${item.name} (${item.classCode})`, "user");
@@ -885,32 +893,47 @@ export default function AdminDashboard({
 
     if (!target) return;
 
+    const wasPending = target.status === "pending";
+
     const nextStatus: AdminUserRecord["status"] =
+      target.status === "active" ? "suspended" : "active";
 
-      target.status === "suspended" ? "active" : "suspended";
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId
+          ? {
+              ...u,
+              status: nextStatus,
+              lastActive: wasPending && nextStatus === "active" ? "Vừa duyệt" : u.lastActive,
+            }
+          : u
+      )
+    );
 
-    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, status: nextStatus } : u)));
+    if (nextStatus === "active") {
+      setPendingApprovals((prev) =>
+        prev.filter((p) => p.email.toLowerCase() !== target.email.toLowerCase())
+      );
+    }
 
     await patchAdminUser(userId, { status: nextStatus });
 
     notify(
-
       nextStatus === "suspended"
-
         ? `Đã khóa tài khoản ${target.name}.`
-
+        : wasPending
+        ? `Đã duyệt cấp quyền vào học cho ${target.name}.`
         : `Đã mở khóa tài khoản ${target.name}.`
-
     );
 
     logAction(
-
-      nextStatus === "suspended" ? "Khóa tài khoản" : "Mở khóa tài khoản",
-
+      nextStatus === "suspended"
+        ? "Khóa tài khoản"
+        : wasPending
+        ? "Phê duyệt tài khoản học viên"
+        : "Mở khóa tài khoản",
       `${target.name} (${target.code})`,
-
       "user"
-
     );
 
   };
@@ -2344,9 +2367,21 @@ export default function AdminDashboard({
 
                             >
 
-                              {user.status === "suspended" ? <Unlock size={12} /> : <Lock size={12} />}
+                              {user.status === "pending" ? (
+                                <CheckCircle2 size={12} className="text-emerald-600" />
+                              ) : user.status === "suspended" ? (
+                                <Unlock size={12} />
+                              ) : (
+                                <Lock size={12} />
+                              )}
 
-                              <span>{user.status === "suspended" ? "Mở" : "Khóa"}</span>
+                              <span>
+                                {user.status === "pending"
+                                  ? "Duyệt"
+                                  : user.status === "suspended"
+                                  ? "Mở"
+                                  : "Khóa"}
+                              </span>
 
                             </button>
 

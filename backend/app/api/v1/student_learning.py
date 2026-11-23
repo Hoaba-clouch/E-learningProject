@@ -29,40 +29,41 @@ GITHUB_REPO_RE = re.compile(
     re.IGNORECASE,
 )
 
-SHOP_ITEM_COSTS: dict[tuple[str, str], int] = {
+SHOP_ITEM_UNLOCK_XP: dict[tuple[str, str], int] = {
     ("theme", "diagonal"): 0,
     ("theme", "blueprint"): 0,
     ("theme", "matrix"): 0,
     ("theme", "sunrise"): 0,
     ("theme", "graphite"): 0,
     ("avatar", "initials"): 0,
-    ("avatar", "pixel"): 220,
-    ("avatar", "coder"): 260,
-    ("avatar", "robot"): 320,
-    ("avatar", "silver"): 380,
+    ("avatar", "pixel"): 400,
+    ("avatar", "coder"): 800,
+    ("avatar", "robot"): 1500,
+    ("avatar", "silver"): 2500,
     ("mentor", "mino"): 0,
-    ("mentor", "nova"): 360,
-    ("mentor", "byte"): 360,
-    ("mentor", "sage"): 480,
-    ("mentor", "luna"): 800,
-    ("mentor", "kuro"): 950,
-    ("mentor", "ignis"): 1200,
-    ("mentor", "sylph"): 1500,
+    ("mentor", "nova"): 600,
+    ("mentor", "byte"): 900,
+    ("mentor", "sage"): 1400,
+    ("mentor", "luna"): 2000,
+    ("mentor", "kuro"): 2800,
+    ("mentor", "ignis"): 3800,
+    ("mentor", "sylph"): 4800,
     ("chat", "classic"): 0,
-    ("chat", "terminal"): 300,
-    ("chat", "neon"): 420,
-    ("chat", "paper"): 260,
+    ("chat", "paper"): 500,
+    ("chat", "terminal"): 1000,
+    ("chat", "neon"): 2200,
     ("map", "campaign"): 0,
-    ("map", "space"): 440,
-    ("map", "circuit"): 440,
-    ("map", "dungeon"): 520,
-    ("map", "route-blueprint"): 420,
+    ("map", "route-blueprint"): 700,
+    ("map", "space"): 1600,
+    ("map", "circuit"): 2400,
+    ("map", "dungeon"): 3500,
     ("badge", "streak"): 0,
-    ("badge", "quiz"): 240,
-    ("badge", "mindmap"): 240,
-    ("badge", "rookie"): 220,
-    ("badge", "explorer"): 320,
+    ("badge", "rookie"): 300,
+    ("badge", "quiz"): 700,
+    ("badge", "mindmap"): 1200,
+    ("badge", "explorer"): 2000,
 }
+SHOP_ITEM_COSTS = SHOP_ITEM_UNLOCK_XP
 
 ALL_THEME_IDS: list[str] = ["diagonal", "blueprint", "matrix", "sunrise", "graphite"]
 
@@ -1174,21 +1175,22 @@ def submit_chapter_exercise(
     }
 
 
+@router.post("/student/xp-shop/unlock")
 @router.post("/student/xp-shop/purchase")
-def purchase_xp_shop_item(
+def unlock_xp_shop_item(
     payload: XpShopPurchaseIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Mua hoặc kích hoạt vật phẩm trong XP Shop và lưu vào MySQL 8.0 (Giao diện nền luôn 0 XP)."""
+    """Mở khóa vật phẩm theo mốc XP tích lũy (không trừ XP) và lưu vào MySQL 8.0."""
     user_id = user["id"]
     is_free_theme = payload.category == "theme"
     item_key = (payload.category, payload.item_id)
     if is_free_theme:
-        actual_cost = 0
-    elif item_key in SHOP_ITEM_COSTS:
-        actual_cost = SHOP_ITEM_COSTS[item_key]
+        required_xp = 0
+    elif item_key in SHOP_ITEM_UNLOCK_XP:
+        required_xp = SHOP_ITEM_UNLOCK_XP[item_key]
     else:
-        actual_cost = max(200, min(payload.cost, 20000))
+        required_xp = max(200, min(payload.cost, 20000))
 
     with db() as conn:
         prof = _ensure_profile(conn, user_id)
@@ -1207,16 +1209,24 @@ def purchase_xp_shop_item(
                     (f"{mode_part}:{payload.item_id}", now_utc(), user_id),
                 )
         elif payload.item_id not in cat_list:
-            if xp < actual_cost:
-                raise HTTPException(status_code=400, detail="Không đủ XP để mở khóa vật phẩm này")
-            xp -= actual_cost
+            if xp < required_xp:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cần đạt mốc {required_xp:,} XP để mở khóa vật phẩm này (hiện có {xp:,} XP).",
+                )
+            # Mở khóa theo mốc XP tích lũy — giữ nguyên exp_points, không trừ XP
             cat_list.append(payload.item_id)
             conn.execute(
-                "UPDATE student_profiles SET exp_points=?, owned_items_json=? WHERE user_id=?",
-                (xp, json.dumps(owned), user_id),
+                "UPDATE student_profiles SET owned_items_json=? WHERE user_id=?",
+                (json.dumps(owned), user_id),
             )
 
-    return {"exp_points": xp, "owned_items": owned}
+    return {
+        "exp_points": xp,
+        "owned_items": owned,
+        "unlocked": True,
+        "required_xp": required_xp,
+    }
 
 
 @router.post("/student/xp-shop/claim-quest")

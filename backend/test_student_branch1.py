@@ -165,7 +165,7 @@ def test_student_branch1_full_learning_pipeline(monkeypatch: pytest.MonkeyPatch)
 
     # Free theme (0 XP server-side policy)
     buy_theme = client.post(
-        "/v1/student/xp-shop/purchase",
+        "/v1/student/xp-shop/unlock",
         json={"category": "theme", "item_id": "graphite", "cost": 0},
         headers=stu_headers,
     )
@@ -173,15 +173,33 @@ def test_student_branch1_full_learning_pipeline(monkeypatch: pytest.MonkeyPatch)
     assert buy_theme.json()["exp_points"] == 3720
     assert "graphite" in buy_theme.json()["owned_items"]["theme"]
 
-    # Paid XP Shop item (mentor luna costs 800 XP server-side)
-    buy_res = client.post(
-        "/v1/student/xp-shop/purchase",
-        json={"category": "mentor", "item_id": "luna", "cost": 800},
+    # XP Milestone Unlock (mentor luna requires 2000 XP <= 3720 XP, MUST NOT deduct XP)
+    unlock_luna = client.post(
+        "/v1/student/xp-shop/unlock",
+        json={"category": "mentor", "item_id": "luna"},
         headers=stu_headers,
     )
-    assert buy_res.status_code == 200, buy_res.text
-    assert buy_res.json()["exp_points"] == 2920
-    assert "luna" in buy_res.json()["owned_items"]["mentor"]
+    assert unlock_luna.status_code == 200, unlock_luna.text
+    assert unlock_luna.json()["exp_points"] == 3720
+    assert "luna" in unlock_luna.json()["owned_items"]["mentor"]
+
+    # Legacy /purchase alias also unlocks without deducting XP
+    unlock_pixel = client.post(
+        "/v1/student/xp-shop/purchase",
+        json={"category": "avatar", "item_id": "pixel", "cost": 400},
+        headers=stu_headers,
+    )
+    assert unlock_pixel.status_code == 200, unlock_pixel.text
+    assert unlock_pixel.json()["exp_points"] == 3720
+    assert "pixel" in unlock_pixel.json()["owned_items"]["avatar"]
+
+    # Locked milestone above current XP (mentor sylph requires 4800 XP > 3720 XP) -> 400
+    locked_sylph = client.post(
+        "/v1/student/xp-shop/unlock",
+        json={"category": "mentor", "item_id": "sylph"},
+        headers=stu_headers,
+    )
+    assert locked_sylph.status_code == 400, locked_sylph.text
 
     # 7. Cleanly restore demo DB state
     r_reset_final = client.post("/v1/admin/reset-demo", headers=adm_headers)

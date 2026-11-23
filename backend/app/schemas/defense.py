@@ -30,3 +30,38 @@ class DefenseCompleteIn(BaseModel):
 
 class ToggleCourseDefenseIn(BaseModel):
     ai_defense_enabled: bool
+
+
+class DefensePackageIn(BaseModel):
+    demo_url: str = Field(default="", max_length=500)
+    slide_url: str = Field(default="", max_length=500)
+    report_url: str = Field(default="", max_length=500)
+    video_url: str = Field(default="", max_length=500)
+    repo_url: str = Field(default="", max_length=500)
+    architecture_summary: str = Field(default="", max_length=4000)
+    member_roles_summary: str = Field(default="", max_length=4000)
+
+
+class LiveCouncilMemberScoreIn(BaseModel):
+    member_id: str
+    name: str
+    role: str = "Developer"
+    contribution_pct: float = 0.0
+    suggested_factor: float = 1.0
+    individual_score: float = Field(ge=0.0, le=10.0)
+    asked_question: str = Field(default="", max_length=1000)
+    live_qa_note: str = Field(default="", max_length=1000)
+
+
+class LiveCouncilGradeIn(BaseModel):
+    demo_score: float = Field(ge=0.0, le=10.0)
+    architecture_score: float = Field(ge=0.0, le=10.0)
+    process_score: float = Field(ge=0.0, le=10.0)
+    defense_score: float = Field(ge=0.0, le=10.0)
+    feedback: str = Field(default="", max_length=4000)
+    verdict: str = Field(default="pass", description="pass | pass_with_revisions | fail")
+    council_members: str = Field(default="", max_length=500)
+    demo_verified: bool = True
+    repo_verified: bool = True
+    frozen_verified: bool = False
+    member_scores: list[LiveCouncilMemberScoreIn] = Field(default_factory=list)

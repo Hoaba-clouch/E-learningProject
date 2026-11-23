@@ -327,12 +327,15 @@ def register(payload: UserRegisterIn, request: Request) -> dict[str, Any]:
             else f"2210{secrets.randbelow(900) + 100}"
         )
 
+        initial_status = "pending" if payload.role == "student" else "active"
+        initial_active_label = "Chờ Admin duyệt" if payload.role == "student" else "Vừa đăng ký"
+
         conn.execute(
             """INSERT INTO users(
                    id, email, password_hash, full_name, display_name, role, status,
                    locale, timezone, theme_preference, user_code, last_active_label, last_device,
                    created_at, updated_at
-               ) VALUES(?, ?, ?, ?, ?, ?, 'active', 'vi-VN', ?, 'one-dark', ?, 'Vừa đăng ký', ?, ?, ?)""",
+               ) VALUES(?, ?, ?, ?, ?, ?, ?, 'vi-VN', ?, 'one-dark', ?, ?, ?, ?, ?)""",
             (
                 user_id,
                 clean_email,
@@ -340,8 +343,10 @@ def register(payload: UserRegisterIn, request: Request) -> dict[str, Any]:
                 payload.full_name,
                 payload.full_name,
                 payload.role,
+                initial_status,
                 payload.timezone,
                 user_code,
+                initial_active_label,
                 device_info["device"],
                 timestamp,
                 timestamp,
@@ -366,6 +371,23 @@ def register(payload: UserRegisterIn, request: Request) -> dict[str, Any]:
                     "INSERT INTO consents(id, user_id, purpose, policy_version, granted, granted_at, updated_at) VALUES(?, ?, ?, '2026-08-01', 1, ?, ?)",
                     (uid(), user_id, purpose, timestamp, timestamp),
                 )
+            conn.execute(
+                """INSERT INTO pending_approvals(
+                       id, name, student_code, email, class_code, class_name,
+                       requested_role, risk_note, status, created_at
+                   ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
+                (
+                    f"apr-reg-{uid()[:8]}",
+                    payload.full_name,
+                    user_code,
+                    clean_email,
+                    "SELF-REG",
+                    "Đăng ký mới · Chờ cấp quyền vào học",
+                    "Học viên",
+                    "Học viên mới đăng ký tài khoản — tạm giới hạn ở trang Giới thiệu cho đến khi Quản trị viên phê duyệt.",
+                    timestamp,
+                ),
+            )
 
         user_row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
@@ -384,7 +406,7 @@ def register(payload: UserRegisterIn, request: Request) -> dict[str, Any]:
     record_audit_log(
         payload.full_name,
         user_id,
-        "Đăng ký tài khoản mới",
+        "Đăng ký học viên mới (Chờ duyệt)" if payload.role == "student" else "Đăng ký tài khoản mới",
         f"{clean_email} ({device_info['device']})",
         log_type="security",
         resource_type="user",
@@ -449,7 +471,7 @@ def login(payload: UserLoginIn, request: Request) -> dict[str, Any]:
                     outcome = "invalid_credentials"
             else:
                 outcome = "invalid_credentials"
-        elif user_row["status"] != "active":
+        elif user_row["status"] not in ("active", "pending"):
             outcome = "inactive"
             user_row_dict = row_dict(user_row) or {}
         else:
@@ -590,7 +612,7 @@ def verify_2fa_login(payload: Verify2FaIn, request: Request) -> dict[str, Any]:
             )
 
         user_row = conn.execute("SELECT * FROM users WHERE id=?", (challenge["user_id"],)).fetchone()
-        if not user_row or user_row["status"] != "active":
+        if not user_row or user_row["status"] not in ("active", "pending"):
             raise HTTPException(status_code=403, detail="Tài khoản không khả dụng")
 
         conn.execute("UPDATE security_otp_codes SET consumed=1 WHERE id=?", (challenge["id"],))
@@ -762,7 +784,7 @@ def refresh_token_endpoint(payload: RefreshTokenIn) -> dict[str, Any]:
         else:
             sess_row = None
 
-    if not user_row or user_row["status"] != "active":
+    if not user_row or user_row["status"] not in ("active", "pending"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tài khoản không tồn tại hoặc đã bị khóa")
 
     user_role = user_row["role"] or "student"

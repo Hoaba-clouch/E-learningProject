@@ -54,6 +54,7 @@ import {
   completeStudentLessonApi,
   getStoredUser,
   saveStudentVideoProgressApi,
+  type SocraticWorkspaceContext,
   type StudentLearningOverview,
   type StudentChapterSubmissionDto,
 } from "../api";
@@ -268,6 +269,7 @@ export default function LearningWorkspace({
   const [readingMode, setReadingMode] = useState<ReadingMode>("full");
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [tutorOpen, setTutorOpen] = useState<boolean>(false);
+  const [pendingTutorPrompt, setPendingTutorPrompt] = useState<string | null>(null);
   const [isCinemaMode, setIsCinemaMode] = useState<boolean>(false);
   const [copiedCodeIndex, setCopiedCodeIndex] = useState<number | null>(null);
 
@@ -793,6 +795,73 @@ export default function LearningWorkspace({
     ],
   };
   const mentor = mentorConfig[mentorMascot];
+
+  const aiWorkspaceContext = useMemo<SocraticWorkspaceContext>(() => {
+    const dbAssign = activeChapter.dbAssignment;
+    const activeTestCasesRaw =
+      (dbAssign?.testCases && dbAssign.testCases.length > 0
+        ? dbAssign.testCases.map((tc) =>
+            `${tc.title}${tc.input || tc.expectedOutput ? ` (In: ${tc.input || "—"} -> Out: ${tc.expectedOutput || "—"})` : ""}`
+          )
+        : (currentChapterExercise.testCases || []).map(
+            (tc) => `${tc.title} (In: ${tc.input || "—"} -> Out: ${tc.expected || "—"})`
+          )) || [];
+    const currentQ = activeQuizQuestions[quizIndex];
+    const submissionStatus = savedChapterSubmission
+      ? `Đã nộp (${savedChapterSubmission.repo_url}) · Điểm ${
+          savedChapterSubmission.instructor_grade ?? savedChapterSubmission.score
+        }/10`
+      : "Chưa nộp bài";
+
+    return {
+      view_mode: workspaceView === "catalog" ? "catalog" : tab,
+      subject_id: selectedSubjectId,
+      subject_code: currentMultiSubject?.code,
+      subject_name: currentMultiSubject?.name,
+      chapter_number: activeChapter.number,
+      chapter_title: activeCleanChapterTitle,
+      lesson_code: activeDisplayCode,
+      lesson_title: activeCleanLessonTitle,
+      lesson_summary: activeMultiLesson.lead || activeMultiLesson.reading?.slice(0, 450) || "",
+      lesson_takeaways: activeMultiLesson.keyTakeaways || [],
+      lesson_code_snippet: activeMultiLesson.codeSnippet?.code || "",
+      exercise_id: dbAssign?.id || currentChapterExercise.id,
+      exercise_title: dbAssign?.title?.trim() || currentChapterExercise.title,
+      exercise_language: currentChapterExercise.language,
+      exercise_objective: currentChapterExercise.objective,
+      exercise_problem:
+        dbAssign?.description?.trim() ||
+        currentChapterExercise.problemStatement ||
+        currentChapterExercise.objective,
+      exercise_requirements: currentChapterExercise.requirements || [],
+      exercise_hints: currentChapterExercise.hints || [],
+      exercise_test_cases: activeTestCasesRaw,
+      exercise_submission_status: submissionStatus,
+      quiz_index: activeQuizQuestions.length > 0 ? quizIndex + 1 : undefined,
+      quiz_total: activeQuizQuestions.length > 0 ? activeQuizQuestions.length : undefined,
+      quiz_question: currentQ?.q,
+      quiz_options: (currentQ?.options || []).map((opt) => `${opt.id.toUpperCase()}. ${opt.text}`),
+      quiz_selected_option: selectedOption ? selectedOption.toUpperCase() : undefined,
+      quiz_submitted: quizSubmitted,
+      quiz_explanation: quizSubmitted ? currentQ?.explanation : undefined,
+    };
+  }, [
+    workspaceView,
+    tab,
+    selectedSubjectId,
+    currentMultiSubject,
+    activeChapter,
+    activeCleanChapterTitle,
+    activeDisplayCode,
+    activeCleanLessonTitle,
+    activeMultiLesson,
+    currentChapterExercise,
+    savedChapterSubmission,
+    activeQuizQuestions,
+    quizIndex,
+    selectedOption,
+    quizSubmitted,
+  ]);
 
   // Reset Quiz state whenever switching course or lesson
   useEffect(() => {
@@ -1834,6 +1903,12 @@ export default function LearningWorkspace({
                 }}
                 onEarnXp={(xp) => setTotalXpEarned((prev) => prev + xp)}
                 onBackToLecture={() => setTab("lecture")}
+                onAskAiExercise={(prompt) => {
+                  setPendingTutorPrompt(
+                    prompt || "Gợi ý giúp mình các bước tiếp cận bài tập này nhé!"
+                  );
+                  setTutorOpen(true);
+                }}
               />
             </div>
           )}
@@ -1905,6 +1980,9 @@ export default function LearningWorkspace({
         activeTopic={activeMultiLesson.title}
         subjectId={selectedSubjectId}
         subjectName={currentMultiSubject?.name}
+        workspaceContext={aiWorkspaceContext}
+        initialPrompt={pendingTutorPrompt}
+        onInitialPromptConsumed={() => setPendingTutorPrompt(null)}
         currentUserName={
           learningOverview?.user?.name ||
           getStoredUser("student")?.full_name ||

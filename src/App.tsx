@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import Sidebar from "./components/Sidebar";
 import LoginScreen from "./screens/LoginScreen";
@@ -227,6 +227,11 @@ export default function App() {
     return (window.localStorage.getItem("code-mind-badge") as BadgeFrame | null) ?? "streak";
   });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [pendingStudentUser, setPendingStudentUser] = useState<any | null>(() => {
+    const u = getStoredUser("student");
+    return u && u.role === "student" && u.status === "pending" ? u : null;
+  });
+  const isPendingApproval = role === "student" && Boolean(pendingStudentUser);
 
   // Global Shortcut: Ctrl+K or Cmd+K
   useEffect(() => {
@@ -240,10 +245,12 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     window.localStorage.setItem("code-mind-theme", theme);
+    const effectiveTheme: Theme =
+      screen === "intro" || isPendingApproval ? "light" : theme;
     const root = document.documentElement;
-    if (theme === "dark") {
+    if (effectiveTheme === "dark") {
       root.classList.add("dark");
       document.body.classList.add("dark");
       root.setAttribute("data-theme", "dark");
@@ -252,26 +259,45 @@ export default function App() {
       document.body.classList.remove("dark");
       root.setAttribute("data-theme", "light");
     }
-  }, [theme]);
+    root.style.colorScheme = effectiveTheme;
+  }, [theme, screen, isPendingApproval]);
 
   useEffect(() => {
     window.localStorage.setItem("code-mind-background", backgroundTheme);
   }, [backgroundTheme]);
 
   useEffect(() => {
-    if (screen === "login" || screen === "intro") return;
+    if (screen === "login") return;
     let active = true;
-    fetchCurrentUser(role).then((u) => {
-      if (!active || !u?.background_theme) return;
-      const valid = ["diagonal", "blueprint", "matrix", "sunrise", "graphite"];
-      if (valid.includes(u.background_theme)) {
-        setBackgroundTheme(u.background_theme as BackgroundTheme);
+    fetchCurrentUser(role, { skipAutoDemo: true }).then((u) => {
+      if (!active || !u) return;
+      if (role === "student") {
+        if (u.role === "student" && u.status === "pending") {
+          setPendingStudentUser(u);
+          if (screen !== "intro") {
+            setScreen("intro");
+          }
+        } else if (u.status === "active") {
+          setPendingStudentUser(null);
+        }
+      }
+      if (screen !== "intro" && u.background_theme) {
+        const valid = ["diagonal", "blueprint", "matrix", "sunrise", "graphite"];
+        if (valid.includes(u.background_theme)) {
+          setBackgroundTheme(u.background_theme as BackgroundTheme);
+        }
       }
     });
     return () => {
       active = false;
     };
   }, [role, screen]);
+
+  useEffect(() => {
+    if (isPendingApproval && screen !== "login" && screen !== "intro") {
+      setScreen("intro");
+    }
+  }, [isPendingApproval, screen]);
 
   const handleApplyBackgroundTheme = (nextBg: BackgroundTheme) => {
     setBackgroundTheme(nextBg);
@@ -372,8 +398,25 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    setPendingStudentUser(null);
     void logoutUser(role);
     setScreen("login");
+  };
+
+  const handleRecheckPendingApproval = async (
+    targetScreen?: Screen
+  ): Promise<boolean> => {
+    const latest = await fetchCurrentUser("student", { skipAutoDemo: true });
+    if (latest && latest.status === "active") {
+      setPendingStudentUser(null);
+      setRole("student");
+      setScreen(targetScreen || "student-dashboard");
+      return true;
+    }
+    if (latest && latest.status === "suspended") {
+      handleLogout();
+    }
+    return false;
   };
 
   if (screen === "login") {
@@ -383,27 +426,65 @@ export default function App() {
           theme={theme}
           onToggleTheme={toggleTheme}
           onOpenIntro={() => setScreen("intro")}
-          onLogin={(r) => {
+          onLogin={(r, opts) => {
             setRole(r);
-            setScreen(r === "admin" ? "admin" : r === "instructor" ? "instructor" : "student-dashboard");
+            const isPending =
+              r === "student" &&
+              Boolean(opts?.pendingApproval || opts?.user?.status === "pending");
+            if (isPending) {
+              setPendingStudentUser(
+                opts?.user ||
+                  getStoredUser("student") || {
+                    role: "student",
+                    status: "pending",
+                  }
+              );
+              setScreen("intro");
+              return;
+            }
+            setPendingStudentUser(null);
+            if (opts?.isNewSignUp && r === "student") {
+              setScreen("intro");
+            } else {
+              setScreen(
+                r === "admin"
+                  ? "admin"
+                  : r === "instructor"
+                  ? "instructor"
+                  : "student-dashboard"
+              );
+            }
           }}
         />
       </div>
     );
   }
 
-  if (screen === "intro") {
+  if (screen === "intro" || isPendingApproval) {
     return (
-      <div className={`theme-${theme} ${theme === "dark" ? "dark" : ""}`}>
+      <div className="theme-light bg-white text-slate-900" data-theme="light">
         <Suspense
           fallback={
-            <div className="min-h-screen flex items-center justify-center p-10 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <div className="min-h-screen flex items-center justify-center p-10 text-xs font-semibold text-slate-500">
               Đang tải phân hệ...
             </div>
           }
         >
           <CodeMindIntroLandingPage
+            isPendingApproval={isPendingApproval}
+            pendingUserName={
+              pendingStudentUser?.full_name ||
+              pendingStudentUser?.display_name ||
+              pendingStudentUser?.email
+            }
+            pendingUserEmail={pendingStudentUser?.email}
+            onRecheckApproval={handleRecheckPendingApproval}
+            onLogout={handleLogout}
             onEnterPlatform={(targetScreen) => {
+              if (isPendingApproval) {
+                void handleRecheckPendingApproval(targetScreen);
+                return;
+              }
               setRole("student");
               setScreen(targetScreen || "student-dashboard");
             }}

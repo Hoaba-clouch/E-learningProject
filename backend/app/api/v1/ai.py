@@ -38,7 +38,14 @@ def socratic_chat(
             except Exception:
                 strict_refuse = True
 
-    res = ask_socratic_with_policy(payload.message, payload.code_context, strict_refuse=strict_refuse)
+    res = ask_socratic_with_policy(
+        payload.message,
+        payload.code_context,
+        strict_refuse=strict_refuse,
+        workspace_context=payload.workspace_context.model_dump() if payload.workspace_context else None,
+        history=[h.model_dump() for h in payload.history],
+        hint_level=payload.hint_level,
+    )
 
     in_tok = int(res.pop("input_tokens", 0) or 0)
     out_tok = int(res.pop("output_tokens", 0) or 0)

@@ -93,6 +93,8 @@ class UserOut(BaseModel):
     full_name: str
     display_name: str
     role: str
+    status: str = "active"
+    user_code: str | None = ""
     timezone: str
     theme_preference: str = "one-dark"
     created_at: str

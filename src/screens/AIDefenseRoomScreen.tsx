@@ -40,13 +40,16 @@ import {
   completeDefenseSession,
   decideDualSubmission,
   deleteDefenseSessionApi,
+  fetchDefenseProjectDossierApi,
   fetchDefenseWorkspaceApi,
+  generatePracticeQuestionsApi,
   respondDefenseRound,
   saveDefenseRubric,
   startDefenseSession,
   toggleCourseDefenseApi,
   type DefenseCourseToggleItem,
   type DefenseDualSubmissionItem,
+  type DefenseProjectDossier,
   type DefenseProjectOption,
   type DefenseSessionRecord,
   type DefenseTranscriptEntry,
@@ -56,10 +59,14 @@ import type { DefenseRubricConfig } from "../data/instructorData";
 import {
   DEFAULT_JURY,
   getDefenseRoundsForProject,
+  type DefenseRound,
 } from "../data/defenseScenarios";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import MarloTitle from "../components/MarloTitle";
 import MarloToast from "../components/MarloToast";
+import DefensePackagePanel from "../components/defense/DefensePackagePanel";
+import LiveCouncilCockpit from "../components/defense/LiveCouncilCockpit";
+import OfficialDefenseResultView from "../components/defense/OfficialDefenseResultView";
 
 interface Props {
   role?: Role;
@@ -71,8 +78,8 @@ interface Props {
   onOpenSchedule?: () => void;
 }
 
-type StudentTab = "room" | "history";
-type StaffTab = "courses" | "queue" | "sessions" | "rubric";
+type StudentTab = "room" | "official" | "history";
+type StaffTab = "council" | "courses" | "sessions" | "queue" | "rubric";
 
 const DEFAULT_RUBRIC: DefenseRubricConfig = {
   cicdWeightPct: 60,
@@ -87,28 +94,18 @@ function safeHttpUrl(url?: string | null): string | null {
   return /^https?:\/\//i.test(clean) ? clean : null;
 }
 
-function getSubmissionBadge(status: string): { label: string; cls: string } {
+function getSubmissionBadge(status: string): { label: string; cls: string; dotCls: string } {
+  const neutral =
+    "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700";
   switch (status) {
     case "flagged":
-      return {
-        label: "Cảnh báo lệch điểm",
-        cls: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-800",
-      };
+      return { label: "Cảnh báo lệch điểm", cls: neutral, dotCls: "bg-rose-500" };
     case "graded":
-      return {
-        label: "Đã duyệt điểm",
-        cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
-      };
+      return { label: "Đã duyệt điểm", cls: neutral, dotCls: "bg-emerald-500" };
     case "redefense_requested":
-      return {
-        label: "Yêu cầu bảo vệ lại",
-        cls: "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 dark:border-purple-800",
-      };
+      return { label: "Yêu cầu bảo vệ lại", cls: neutral, dotCls: "bg-purple-500" };
     default:
-      return {
-        label: "Chờ giảng viên duyệt",
-        cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800",
-      };
+      return { label: "Chờ giảng viên duyệt", cls: neutral, dotCls: "bg-amber-500" };
   }
 }
 
@@ -116,18 +113,18 @@ function formatRankLabel(avgOutOf10: number): { text: string; cls: string } {
   if (avgOutOf10 >= 8.5) {
     return {
       text: "XUẤT SẮC",
-      cls: "text-emerald-600 dark:text-emerald-400",
+      cls: "text-slate-900 dark:text-white",
     };
   }
   if (avgOutOf10 >= 7.0) {
     return {
       text: "KHÁ / ĐẠT CHUẨN",
-      cls: "text-amber-600 dark:text-amber-400",
+      cls: "text-slate-700 dark:text-slate-200",
     };
   }
   return {
     text: "CẦN CỦNG CỐ",
-    cls: "text-rose-600 dark:text-rose-400",
+    cls: "text-slate-600 dark:text-slate-300",
   };
 }
 
@@ -154,8 +151,11 @@ export default function AIDefenseRoomScreen({
   // Navigation tabs
   const [studentTab, setStudentTab] = useState<StudentTab>("room");
   const [staffTab, setStaffTab] = useState<StaffTab>(
-    role === "admin" ? "courses" : "queue"
+    role === "admin" ? "courses" : "council"
   );
+  const [studentDossier, setStudentDossier] = useState<DefenseProjectDossier | null>(null);
+  const [dynamicRounds, setDynamicRounds] = useState<DefenseRound[] | null>(null);
+  const [practiceEvidenceMeta, setPracticeEvidenceMeta] = useState<Record<string, any> | null>(null);
 
   // Shared search/filters for staff & history
   const [searchQuery, setSearchQuery] = useState("");
@@ -252,15 +252,28 @@ export default function AIDefenseRoomScreen({
   };
 
   useEffect(() => {
-    setStaffTab(role === "admin" ? "courses" : "queue");
+    setStaffTab(role === "admin" ? "courses" : "council");
     setStudentTab("room");
     setLiveDefenseId(null);
+    setDynamicRounds(null);
+    setPracticeEvidenceMeta(null);
     setHasScoredAnyRound(false);
     setScores({ architecture: 0, algorithm: 0, production: 0 });
     setCertificateData(null);
     setActionError(null);
     void loadWorkspace();
   }, [role]);
+
+  useEffect(() => {
+    if (role !== "student" || !selectedProjId) return;
+    let active = true;
+    fetchDefenseProjectDossierApi(selectedProjId, role).then((d) => {
+      if (active && d) setStudentDossier(d);
+    });
+    return () => {
+      active = false;
+    };
+  }, [role, selectedProjId]);
 
   const projects: DefenseProjectOption[] = workspace?.projects || [];
   const courses: DefenseCourseToggleItem[] = workspace?.courses || [];
@@ -273,8 +286,11 @@ export default function AIDefenseRoomScreen({
   );
 
   const rounds = useMemo(
-    () => getDefenseRoundsForProject(selectedProjId, activeProject?.name),
-    [selectedProjId, activeProject?.name]
+    () =>
+      dynamicRounds && dynamicRounds.length > 0
+        ? dynamicRounds
+        : getDefenseRoundsForProject(selectedProjId, activeProject?.name),
+    [dynamicRounds, selectedProjId, activeProject?.name]
   );
 
   const currentRound = rounds[currentRoundIdx] || rounds[0];
@@ -401,6 +417,8 @@ export default function AIDefenseRoomScreen({
         ? liveDefenseId
         : null;
     setLiveDefenseId(null);
+    setDynamicRounds(null);
+    setPracticeEvidenceMeta(null);
     setCurrentRoundIdx(0);
     setDefenseMode("oral");
     setStudentSpeech("");
@@ -425,24 +443,29 @@ export default function AIDefenseRoomScreen({
     if (!activeProject || isStartingSession || liveDefenseId) return;
     if (!activeProject.aiDefenseEnabled) {
       setActionError(
-        `Phòng Phản Biện AI cho học phần ${activeProject.courseCode} đang bị Quản trị viên tạm khóa.`
+        `Phòng Luyện tập AI cho học phần ${activeProject.courseCode} đang bị Quản trị viên tạm khóa.`
       );
       return;
     }
     setActionError(null);
     setIsStartingSession(true);
     try {
-      const res = await startDefenseSession(
-        activeProject.id,
-        activeProject.classId,
-        "student"
-      );
+      const [qRes, res] = await Promise.all([
+        generatePracticeQuestionsApi(activeProject.id, "student"),
+        startDefenseSession(activeProject.id, activeProject.classId, "student"),
+      ]);
       resetLocalDefenseState(false);
+      if (qRes && Array.isArray(qRes.rounds) && qRes.rounds.length > 0) {
+        setDynamicRounds(qRes.rounds as DefenseRound[]);
+        setPracticeEvidenceMeta(qRes.evidence_summary || null);
+      }
       setLiveDefenseId(res.defense_id);
-      showToast(`✓ Đã mở phiên phản biện ${res.defense_id} cho ${activeProject.code}.`);
+      showToast(
+        `✓ Đã mở phiên Luyện tập AI ${res.defense_id} sát dữ liệu ${activeProject.code} (Mock Readiness).`
+      );
       await loadWorkspace(true);
     } catch (err: any) {
-      setActionError(err?.message || "Không thể khởi tạo phiên phản biện.");
+      setActionError(err?.message || "Không thể khởi tạo phiên luyện tập.");
     } finally {
       setIsStartingSession(false);
     }
@@ -866,9 +889,9 @@ export default function AIDefenseRoomScreen({
           <button
             type="button"
             onClick={() => onOpenKanban(proj.id)}
-            className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
           >
-            <FolderKanban size={11} />
+            <FolderKanban size={11} className="text-amber-500" />
             <span>Bảng Kanban</span>
           </button>
         )}
@@ -876,9 +899,9 @@ export default function AIDefenseRoomScreen({
           <button
             type="button"
             onClick={() => onOpenGitHub(proj.id)}
-            className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
           >
-            <GitFork size={11} />
+            <GitFork size={11} className="text-blue-500" />
             <span>Git Hub</span>
           </button>
         )}
@@ -886,9 +909,9 @@ export default function AIDefenseRoomScreen({
           <button
             type="button"
             onClick={onOpenSchedule}
-            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
           >
-            <Clock size={11} />
+            <Clock size={11} className="text-emerald-500" />
             <span>Lịch Bảo vệ</span>
           </button>
         )}
@@ -912,7 +935,7 @@ export default function AIDefenseRoomScreen({
             key={t.id || idx}
             className={`p-3 rounded-xl border text-xs ${
               t.speaker === "student"
-                ? "bg-amber-50/70 dark:bg-amber-950/30 border-amber-200/80 dark:border-amber-800/60"
+                ? "bg-white dark:bg-[#14161F] border-slate-200 dark:border-slate-700"
                 : "bg-slate-50 dark:bg-slate-800/70 border-slate-200 dark:border-slate-700"
             }`}
           >
@@ -921,14 +944,14 @@ export default function AIDefenseRoomScreen({
                 {t.speakerLabel}
               </span>
               {typeof t.score === "number" && (
-                <span className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 font-mono text-[10.5px] font-bold border border-emerald-200 dark:border-emerald-800">
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono text-[10.5px] font-bold border border-slate-200 dark:border-slate-700">
                   {t.score}/100
                 </span>
               )}
             </div>
             <p className="text-slate-700 dark:text-slate-200 leading-relaxed">{t.text}</p>
             {t.evaluation && (
-              <p className="mt-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">
+              <p className="mt-1.5 text-[11px] text-slate-600 dark:text-slate-300 font-semibold">
                 Nhận xét Hội đồng: {t.evaluation}
               </p>
             )}
@@ -1063,7 +1086,7 @@ export default function AIDefenseRoomScreen({
                     mandatoryProbes: prev.mandatoryProbes.filter((p) => p.id !== probe.id),
                   }))
                 }
-                className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer shrink-0"
+                className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white cursor-pointer shrink-0"
                 title="Xóa câu hỏi"
               >
                 <Trash2 size={14} />
@@ -1165,8 +1188,9 @@ export default function AIDefenseRoomScreen({
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${st.cls}`}>
-                        {st.label}
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${st.cls}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${st.dotCls}`} />
+                        <span>{st.label}</span>
                       </span>
                       <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
                         {sub.classId}
@@ -1185,7 +1209,7 @@ export default function AIDefenseRoomScreen({
                       CI/CD: <b>{sub.passedTests}/{sub.totalTests}</b> · Commits:{" "}
                       <b>{sub.commitCount}</b>
                     </div>
-                    <div className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 font-mono text-amber-900 dark:text-amber-200">
+                    <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-white">
                       Điểm AI: <b>{sub.defenseScore}/100</b>
                     </div>
                   </div>
@@ -1201,9 +1225,9 @@ export default function AIDefenseRoomScreen({
                         href={repoHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-mono break-all"
+                        className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-200 hover:underline font-mono break-all"
                       >
-                        <FolderGit2 size={12} />
+                        <FolderGit2 size={12} className="text-slate-500" />
                         <span>{repoHref}</span>
                         <ExternalLink size={11} />
                       </a>
@@ -1216,7 +1240,7 @@ export default function AIDefenseRoomScreen({
                       onClick={() =>
                         setExpandedSubIds((p) => ({ ...p, [sub.id]: !isExpanded }))
                       }
-                      className="text-xs font-bold text-[#EE8420] hover:underline cursor-pointer"
+                      className="text-xs font-bold text-slate-800 dark:text-slate-200 hover:underline cursor-pointer"
                     >
                       {isExpanded
                         ? "Thu gọn biên bản hỏi đáp"
@@ -1267,7 +1291,7 @@ export default function AIDefenseRoomScreen({
                       type="button"
                       disabled={busyKey === `dec-${sub.id}`}
                       onClick={() => void handleDecideSubmission(sub, "redefense")}
-                      className="px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold cursor-pointer transition disabled:opacity-50"
+                      className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold cursor-pointer transition disabled:opacity-50"
                     >
                       Yêu cầu Bảo vệ lại
                     </button>
@@ -1313,23 +1337,26 @@ export default function AIDefenseRoomScreen({
                     <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                       {sess.projectCode}
                     </span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold ${
-                        sess.status === "completed"
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          sess.status === "completed"
+                            ? "bg-emerald-500"
+                            : sess.status === "flagged"
+                            ? "bg-rose-500"
+                            : "bg-amber-500"
+                        }`}
+                      />
+                      <span>
+                        {sess.status === "completed"
+                          ? "Đã hoàn tất"
                           : sess.status === "flagged"
-                          ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                      }`}
-                    >
-                      {sess.status === "completed"
-                        ? "Đã hoàn tất"
-                        : sess.status === "flagged"
-                        ? "Gắn cờ lệch điểm"
-                        : "Đang thực hiện"}
+                          ? "Gắn cờ lệch điểm"
+                          : "Đang thực hiện"}
+                      </span>
                     </span>
                     {avg10 && (
-                      <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
                         {avg10}/10
                       </span>
                     )}
@@ -1380,7 +1407,7 @@ export default function AIDefenseRoomScreen({
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteSessId(sess.id)}
-                        className="p-2 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                        className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-rose-600 cursor-pointer"
                         title="Xóa phiên bảo vệ"
                       >
                         <Trash2 size={14} />
@@ -1403,24 +1430,24 @@ export default function AIDefenseRoomScreen({
       ? {
           pill: "Quản trị viên / Khảo thí",
           pillCls:
-            "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-800",
-          title: "Quản Trị Hội Đồng AI & Kiểm Định Học Thuật",
-          sub: "Bật/tắt Phòng Phản Biện AI theo học phần, giám sát toàn bộ phiên bảo vệ, dọn dữ liệu và chuẩn hóa Rubric chấm kép.",
+            "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700",
+          title: "Quản Trị Hội Đồng Bảo Vệ Đồ Án & Luyện Tập AI",
+          sub: "Điều phối học phần mở phòng tập AI, tham gia Hội đồng chấm trực tiếp sau demo và kiểm soát Rubric đánh giá.",
         }
       : role === "instructor"
       ? {
-          pill: "Góc nhìn Giảng viên",
+          pill: "Hội đồng Bảo vệ Trực tiếp",
           pillCls:
-            "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800",
-          title: "Hội Đồng Chấm Kép & Thẩm Định Phản Biện AI",
-          sub: "Thẩm định biên bản hỏi đáp của sinh viên, đối chiếu điểm CI/CD và thiết lập bộ câu hỏi xoáy sâu bắt buộc.",
+            "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700",
+          title: "Hội Đồng Bảo Vệ Đồ Án Trực Tiếp & Minh Chứng",
+          sub: "Xem tổng quan Demo, Slide, GitHub, đóng góp Anti-Freerider từng thành viên và chốt điểm bảo vệ trực tiếp.",
         }
       : {
-          pill: "Học viên thực hiện",
+          pill: "Luyện tập AI · Không tính điểm chính thức",
           pillCls:
-            "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800",
-          title: "Phòng Phản Biện Kỹ Thuật Đồ Án 1:1 (Hội Đồng AI)",
-          sub: "Trình bày luận điểm bảo vệ trực tiếp theo từng đồ án thật và đối đáp chất vấn chuyên sâu từ Hội đồng.",
+            "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700",
+          title: "Hồ Sơ Bảo Vệ & Phòng Luyện Tập Phản Biện AI",
+          sub: "Nộp Link Demo / Slide / Báo cáo, tập dượt hỏi đáp sát dữ liệu dự án (Mock Readiness) và xem Kết quả Hội đồng chính thức.",
         };
 
   return (
@@ -1537,7 +1564,7 @@ export default function AIDefenseRoomScreen({
                 onClick={() => setAudioEnabled((v) => !v)}
                 className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
                   audioEnabled
-                    ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400"
+                    ? "bg-slate-900 dark:bg-white border-slate-900 dark:border-white text-white dark:text-slate-950"
                     : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
                 }`}
                 title={audioEnabled ? "Tắt đọc giọng nói AI" : "Bật đọc câu hỏi bằng giọng nói"}
@@ -1561,7 +1588,29 @@ export default function AIDefenseRoomScreen({
                     : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
-                Phòng Phản Biện
+                Hồ sơ & Luyện tập AI
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudentTab("official")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shrink-0 ${
+                  studentTab === "official"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span>Kết quả Hội đồng</span>
+                {activeProject?.isGraded && (
+                  <span
+                    className={`px-1.5 rounded-full text-[10px] ${
+                      studentTab === "official"
+                        ? "bg-white/20 text-white dark:bg-slate-900/15 dark:text-slate-950"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                    }`}
+                  >
+                    {activeProject.officialFinalScore?.toFixed(1)}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -1572,14 +1621,40 @@ export default function AIDefenseRoomScreen({
                     : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
-                <span>Lịch sử Của Tôi</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[10px]">
+                <span>Lịch sử Luyện tập</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    studentTab === "history"
+                      ? "bg-white/20 text-white dark:bg-slate-900/15 dark:text-slate-950"
+                      : "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                  }`}
+                >
                   {sessions.length}
                 </span>
               </button>
             </div>
           ) : (
             <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() => setStaffTab("council")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shrink-0 ${
+                  staffTab === "council"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span>Hội đồng Trực tiếp</span>
+                <span
+                  className={`px-1.5 rounded-full text-[10px] ${
+                    staffTab === "council"
+                      ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-950"
+                      : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                  }`}
+                >
+                  {projects.filter((p) => p.isGraded).length}/{projects.length}
+                </span>
+              </button>
               {role === "admin" && (
                 <button
                   type="button"
@@ -1594,28 +1669,14 @@ export default function AIDefenseRoomScreen({
                   <span
                     className={`px-1.5 rounded-full text-[10px] ${
                       staffTab === "courses"
-                        ? "bg-emerald-400/25 text-emerald-200 dark:bg-emerald-600/20 dark:text-emerald-900"
-                        : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                        ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-950"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
                     }`}
                   >
                     {courses.filter((c) => c.aiDefenseEnabled).length}/{courses.length}
                   </span>
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setStaffTab("queue")}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shrink-0 ${
-                  staffTab === "queue"
-                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
-                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
-              >
-                <span>Hàng đợi Chấm Kép</span>
-                <span className="px-1.5 rounded-full bg-amber-500 text-slate-950 text-[10px]">
-                  {dualSubmissions.length}
-                </span>
-              </button>
               <button
                 type="button"
                 onClick={() => setStaffTab("sessions")}
@@ -1625,7 +1686,7 @@ export default function AIDefenseRoomScreen({
                     : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
-                <span>Phiên Bảo Vệ</span>
+                <span>Lịch sử Luyện tập SV</span>
                 <span
                   className={`px-1.5 rounded-full text-[10px] ${
                     staffTab === "sessions"
@@ -1634,6 +1695,26 @@ export default function AIDefenseRoomScreen({
                   }`}
                 >
                   {sessions.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStaffTab("queue")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shrink-0 ${
+                  staffTab === "queue"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span>Chấm Kép Lab</span>
+                <span
+                  className={`px-1.5 rounded-full text-[10px] ${
+                    staffTab === "queue"
+                      ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-950"
+                      : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                  }`}
+                >
+                  {dualSubmissions.length}
                 </span>
               </button>
               <button
@@ -1656,26 +1737,18 @@ export default function AIDefenseRoomScreen({
                 {waveformBars.map((h, i) => (
                   <span
                     key={i}
-                    className={`w-1 rounded-full transition-all duration-200 ${
-                      stagePhase === "council_deliberating" ||
-                      stagePhase === "drilldown_evaluating"
-                        ? "bg-purple-500"
-                        : "bg-amber-500"
-                    }`}
+                    className="w-1 rounded-full transition-all duration-200 bg-slate-700 dark:bg-slate-300"
                     style={{ height: `${h}%` }}
                   />
                 ))}
               </div>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="font-bold text-slate-800 dark:text-slate-200">
                 Phiên: {liveDefenseId}
               </span>
-              <span
-                className={`font-black px-2 py-0.5 rounded-md ${
-                  defenseTimeRemaining < 30
-                    ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
-                }`}
-              >
+              <span className="font-black px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white inline-flex items-center gap-1.5">
+                {defenseTimeRemaining < 30 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                )}
                 {formatTimer(defenseTimeRemaining)}
               </span>
             </div>
@@ -1688,12 +1761,47 @@ export default function AIDefenseRoomScreen({
         <div className="space-y-6">
           {/* 4 Live KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#14161F] border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block">
+                Đồ án đã chấm Hội đồng
+              </span>
+              <b className="text-2xl font-bold text-slate-900 dark:text-white mt-1 block">
+                {workspace?.stats?.gradedProjectsCount ??
+                  projects.filter((p) => p.isGraded).length}
+                /{workspace?.stats?.totalProjectsCount ?? projects.length} đồ án
+              </b>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#14161F] border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block">
+                Đồ án chờ bảo vệ trực tiếp
+              </span>
+              <b className="text-2xl font-bold text-slate-900 dark:text-white mt-1 block">
+                {Math.max(
+                  0,
+                  (workspace?.stats?.totalProjectsCount ?? projects.length) -
+                    (workspace?.stats?.gradedProjectsCount ??
+                      projects.filter((p) => p.isGraded).length)
+                )}{" "}
+                đồ án
+              </b>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#14161F] border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block">
+                Phiên luyện tập AI của SV
+              </span>
+              <b className="text-2xl font-bold text-slate-900 dark:text-white mt-1 block">
+                {sessions.length} lượt tập
+              </b>
+            </div>
+
             {role === "admin" ? (
               <div className="p-4 rounded-2xl bg-white dark:bg-[#14161F] border border-slate-200/80 dark:border-slate-800 shadow-xs">
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block">
-                  Học phần bật Phòng AI
+                  Học phần mở Phòng tập AI
                 </span>
-                <b className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
+                <b className="text-2xl font-bold text-slate-900 dark:text-white mt-1 block">
                   {workspace?.stats?.enabledCoursesCount ?? 0}/
                   {workspace?.stats?.totalCoursesCount ?? courses.length} lớp
                 </b>
@@ -1701,41 +1809,28 @@ export default function AIDefenseRoomScreen({
             ) : (
               <div className="p-4 rounded-2xl bg-white dark:bg-[#14161F] border border-slate-200/80 dark:border-slate-800 shadow-xs">
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block">
-                  Tổng biên bản Chấm Kép
+                  Cần rà soát Chấm Kép Lab
                 </span>
                 <b className="text-2xl font-bold text-slate-900 dark:text-white mt-1 block">
-                  {dualSubmissions.length} hồ sơ
+                  {workspace?.stats?.pendingReviewsCount ?? 0} hồ sơ
                 </b>
               </div>
             )}
-
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#14161F] border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block">
-                Cảnh báo lệch điểm
-              </span>
-              <b className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1 block">
-                {workspace?.stats?.flaggedCount ?? 0} hồ sơ
-              </b>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#14161F] border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block">
-                Đang chờ thẩm định
-              </span>
-              <b className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1 block">
-                {workspace?.stats?.pendingReviewsCount ?? 0} hồ sơ
-              </b>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#14161F] border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block">
-                Điểm TB Phản biện AI
-              </span>
-              <b className="text-2xl font-bold text-slate-900 dark:text-white mt-1 block">
-                {workspace?.stats?.avgDefenseScore ?? 0}/100
-              </b>
-            </div>
           </div>
+
+          {staffTab === "council" && (
+            <LiveCouncilCockpit
+              projects={projects}
+              selectedProjectId={selectedProjId}
+              onSelectProject={setSelectedProjId}
+              role={role}
+              onNotify={showToast}
+              onGradedSuccess={() => void loadWorkspace(true)}
+              onOpenProjectDetail={onOpenProjectDetail}
+              onOpenKanban={onOpenKanban}
+              onOpenGitHub={onOpenGitHub}
+            />
+          )}
 
           {staffTab === "courses" && role === "admin" && (
             <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 space-y-3 shadow-xs">
@@ -1765,15 +1860,22 @@ export default function AIDefenseRoomScreen({
                       type="button"
                       disabled={busyKey === `course-${c.id}`}
                       onClick={() => void handleToggleCourse(c)}
-                      className={`px-3.5 py-2 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
+                      className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
                         c.aiDefenseEnabled
-                          ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                          : "bg-rose-100 text-rose-800 hover:bg-rose-200 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                          ? "bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-slate-950"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
                       }`}
                     >
-                      {c.aiDefenseEnabled
-                        ? "Đang MỞ Phòng AI (Bấm để khóa)"
-                        : "Đang KHÓA (Bấm để mở)"}
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          c.aiDefenseEnabled ? "bg-emerald-500" : "bg-rose-500"
+                        }`}
+                      />
+                      <span>
+                        {c.aiDefenseEnabled
+                          ? "Đang MỞ Phòng AI (Bấm để khóa)"
+                          : "Đang KHÓA (Bấm để mở)"}
+                      </span>
                     </button>
                   </div>
                 ))}
@@ -1785,6 +1887,13 @@ export default function AIDefenseRoomScreen({
           {staffTab === "sessions" && renderSessionsListPanel(true)}
           {staffTab === "rubric" && renderRubricPanel()}
         </div>
+      ) : studentTab === "official" ? (
+        <OfficialDefenseResultView
+          dossier={studentDossier}
+          practiceCount={sessions.length}
+          onGoToPractice={() => setStudentTab("room")}
+          onNotify={showToast}
+        />
       ) : studentTab === "history" ? (
         /* ── STUDENT HISTORY TAB ── */
         <div className="space-y-6">
@@ -1815,8 +1924,9 @@ export default function AIDefenseRoomScreen({
                       <b className="text-sm text-slate-900 dark:text-white">
                         {d.chapterTitle}
                       </b>
-                      <span className={`px-2.5 py-0.5 rounded-full font-bold border ${badge.cls}`}>
-                        {badge.label}
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-bold border ${badge.cls}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${badge.dotCls}`} />
+                        <span>{badge.label}</span>
                       </span>
                     </div>
                     <p className="text-slate-600 dark:text-slate-300">{d.coherenceSummary}</p>
@@ -1825,7 +1935,7 @@ export default function AIDefenseRoomScreen({
                       <b>{d.finalScore !== null ? `${d.finalScore}/100` : "Đang chờ GV duyệt"}</b>
                     </div>
                     {d.instructorFeedback && (
-                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200">
+                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
                         <b>Phản hồi của Giảng viên:</b> {d.instructorFeedback}
                       </div>
                     )}
@@ -1836,8 +1946,22 @@ export default function AIDefenseRoomScreen({
           </div>
         </div>
       ) : (
-        /* ── STUDENT DEFENSE ROOM TAB ── */
+        /* ── STUDENT DEFENSE ROOM TAB (PACKAGE + AI MOCK PRACTICE) ── */
         <div className="space-y-6">
+          {!liveDefenseId && (
+            <DefensePackagePanel
+              dossier={studentDossier}
+              role={role}
+              practiceCount={sessions.length}
+              onSaved={(next) => {
+                setStudentDossier(next);
+                void loadWorkspace(true);
+              }}
+              onNotify={showToast}
+              onOpenProjectDetail={onOpenProjectDetail}
+            />
+          )}
+
           {/* Responsive 3 Jury Cards (1 col < xl, 3 cols >= xl -> zero clipping at 871px) */}
           <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             {DEFAULT_JURY.map((jury) => {
@@ -1855,7 +1979,7 @@ export default function AIDefenseRoomScreen({
                   key={jury.id}
                   className={`rounded-2xl p-4 sm:p-5 border transition-all ${
                     isSpeaking
-                      ? "border-[#EE8420] bg-white dark:bg-[#14161F] shadow-sm"
+                      ? "border-slate-900 dark:border-slate-400 bg-white dark:bg-[#14161F] shadow-sm"
                       : "border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F]"
                   }`}
                 >
@@ -1883,7 +2007,7 @@ export default function AIDefenseRoomScreen({
                     <span
                       className={`whitespace-nowrap shrink-0 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide ${
                         isSpeaking
-                          ? "bg-amber-100 text-amber-900 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
                           : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                       }`}
                     >
@@ -1903,10 +2027,10 @@ export default function AIDefenseRoomScreen({
                     </p>
                     <div className="flex items-center justify-between text-[11px] font-bold">
                       <span className="text-slate-500 dark:text-slate-400">
-                        Mức thuyết phục
+                        Độ thuyết phục (Mock)
                       </span>
                       <span className="font-mono text-slate-900 dark:text-white">
-                        {livePct !== null ? `${livePct}%` : "Chưa chấm"}
+                        {livePct !== null ? `${livePct}%` : "Chưa tập"}
                       </span>
                     </div>
                     <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -1928,15 +2052,14 @@ export default function AIDefenseRoomScreen({
                 <div className="rounded-[28px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-6 sm:p-7 space-y-5 shadow-xs">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                        Hồ sơ Đồ án Chuẩn bị Bảo vệ
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+                        Phòng Luyện Tập Phản Biện AI (Mock Practice · Không tính điểm chính thức)
                       </span>
                       <h3 className="text-lg sm:text-xl font-black text-slate-950 dark:text-white mt-2">
                         {activeProject?.name || "Đồ án Kỹ nghệ Phần mềm"}
                       </h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        {activeProject?.course} · Tổng cộng {rounds.length} vòng phản biện
-                        chuyên sâu
+                        {activeProject?.course} · AI tự đọc Task Kanban & Commit thật của dự án để sinh {rounds.length} vòng luyện tập
                       </p>
                     </div>
                     {renderProjectLinks(activeProject)}
@@ -1962,34 +2085,37 @@ export default function AIDefenseRoomScreen({
                       </div>
                       <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
                         <span className="text-slate-500 dark:text-slate-400 block">
-                          Trọng số Rubric hiện hành
+                          Trạng thái Bảo vệ Chính thức
                         </span>
                         <b className="text-base font-bold text-slate-900 dark:text-white mt-0.5 block">
-                          {rubricDraft.cicdWeightPct}% CI / {rubricDraft.defenseWeightPct}% AI
+                          {activeProject.isGraded
+                            ? `${activeProject.officialFinalScore?.toFixed(2)} / 10 (Đã chấm)`
+                            : `Chờ chấm Hội đồng (${activeProject.practiceCount ?? 0} lượt tập)`}
                         </b>
                       </div>
                     </div>
                   )}
 
                   {activeProject && !activeProject.aiDefenseEnabled && (
-                    <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-xs font-semibold text-rose-800 dark:text-rose-200">
-                      <ShieldAlert size={16} className="shrink-0" />
+                    <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      <ShieldAlert size={16} className="text-rose-500 shrink-0" />
                       <span>
-                        Phòng Phản Biện AI cho học phần {activeProject.courseCode} đang được
+                        Phòng Luyện tập AI cho học phần {activeProject.courseCode} đang được
                         Quản trị viên tạm khóa. Hãy liên hệ Giảng viên hoặc chọn đồ án khác.
                       </span>
                     </div>
                   )}
 
                   {actionError && (
-                    <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 font-semibold">
-                      {actionError}
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 font-semibold flex items-center gap-2">
+                      <AlertTriangle size={14} className="text-rose-500 shrink-0" />
+                      <span>{actionError}</span>
                     </div>
                   )}
 
                   <div className="pt-2 flex items-center justify-between flex-wrap gap-3">
                     <span className="text-xs text-slate-500 dark:text-slate-400">
-                      Phiên chỉ được lưu lên MySQL sau khi bạn bấm Bắt đầu.
+                      Điểm AI chỉ đo Độ sẵn sàng trước khi lên Hội đồng trực tiếp.
                     </span>
                     <button
                       type="button"
@@ -2002,8 +2128,8 @@ export default function AIDefenseRoomScreen({
                       <Play size={16} />
                       <span>
                         {isStartingSession
-                          ? "Đang khởi tạo phiên..."
-                          : "Bắt đầu Phiên Phản Biện"}
+                          ? "Đang đọc dự án & sinh câu hỏi..."
+                          : "Bắt đầu Luyện tập Phản biện AI"}
                       </span>
                     </button>
                   </div>
@@ -2013,7 +2139,7 @@ export default function AIDefenseRoomScreen({
                   {/* Top Round & Phase Banner */}
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                         {currentRound.phaseTitle}
                       </span>
                       <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
@@ -2032,16 +2158,16 @@ export default function AIDefenseRoomScreen({
                     <button
                       type="button"
                       onClick={() => setShowMentorHint((v) => !v)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-200/70 dark:hover:bg-slate-700 cursor-pointer"
                     >
-                      <Sparkles size={13} />
+                      <Sparkles size={13} className="text-amber-500" />
                       <span>{showMentorHint ? "Ẩn gợi ý" : "Gợi ý Socratic"}</span>
                     </button>
                   </div>
 
                   {showMentorHint && (
-                    <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-950 dark:text-amber-200 flex items-start gap-2">
-                      <HelpCircle size={16} className="shrink-0 mt-0.5 text-amber-600" />
+                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 flex items-start gap-2">
+                      <HelpCircle size={16} className="shrink-0 mt-0.5 text-amber-500" />
                       <div>
                         <b>Gợi ý hướng bảo vệ:</b> {currentRound.mentorHint}
                       </div>
@@ -2051,11 +2177,11 @@ export default function AIDefenseRoomScreen({
                   {/* Question Statement */}
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-900 text-amber-400 dark:bg-amber-500 dark:text-slate-950 flex items-center justify-center font-black text-sm shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 flex items-center justify-center font-black text-sm shrink-0">
                         Q
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">
+                        <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                           {speakingJury.name} chất vấn:
                         </div>
                         <h3 className="text-base sm:text-lg font-extrabold text-slate-950 dark:text-white leading-relaxed">
@@ -2064,24 +2190,37 @@ export default function AIDefenseRoomScreen({
                       </div>
                     </div>
 
-                    {currentRound.contextCodeSnippet && (
-                      <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 text-slate-100 p-4 font-mono text-xs">
-                        <div className="text-[10.5px] text-slate-400 pb-2 mb-2 border-b border-slate-800 flex justify-between gap-2 flex-wrap">
-                          <span>{currentRound.contextCodeSnippet.caption}</span>
-                          <span className="text-amber-400">
-                            {currentRound.contextCodeSnippet.lang}
-                          </span>
-                        </div>
-                        <pre className="overflow-x-auto text-[11.5px] leading-relaxed">
-                          <code>{currentRound.contextCodeSnippet.code}</code>
-                        </pre>
+                    {currentRound.evidenceRef ? (
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 px-4 py-3 text-xs space-y-1">
+                        <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 block">
+                          Ngữ cảnh Dự án Thật AI đang đọc:
+                        </span>
+                        <p className="text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                          {currentRound.evidenceRef}
+                          {practiceEvidenceMeta?.demoUrl ? ` · Demo: ${practiceEvidenceMeta.demoUrl}` : ""}
+                        </p>
                       </div>
+                    ) : (
+                      currentRound.contextCodeSnippet && (
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 text-slate-100 p-4 font-mono text-xs">
+                          <div className="text-[10.5px] text-slate-400 pb-2 mb-2 border-b border-slate-800 flex justify-between gap-2 flex-wrap">
+                            <span>{currentRound.contextCodeSnippet.caption}</span>
+                            <span className="text-amber-400">
+                              {currentRound.contextCodeSnippet.lang}
+                            </span>
+                          </div>
+                          <pre className="overflow-x-auto text-[11.5px] leading-relaxed">
+                            <code>{currentRound.contextCodeSnippet.code}</code>
+                          </pre>
+                        </div>
+                      )
                     )}
                   </div>
 
                   {actionError && (
-                    <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 font-semibold">
-                      {actionError}
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 font-semibold flex items-center gap-2">
+                      <AlertTriangle size={14} className="text-rose-500 shrink-0" />
+                      <span>{actionError}</span>
                     </div>
                   )}
 
@@ -2121,10 +2260,13 @@ export default function AIDefenseRoomScreen({
                           onClick={handleToggleMic}
                           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer ${
                             isListeningMic
-                              ? "bg-rose-100 border-rose-300 text-rose-700 dark:bg-rose-950/60 dark:border-rose-700 dark:text-rose-300"
+                              ? "bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-slate-950"
                               : "bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
                           }`}
                         >
+                          {isListeningMic && (
+                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                          )}
                           {isListeningMic ? <MicOff size={13} /> : <Mic size={13} />}
                           <span>{isListeningMic ? "Đang nghe..." : "Nhập giọng nói"}</span>
                         </button>
@@ -2132,7 +2274,7 @@ export default function AIDefenseRoomScreen({
 
                       {defenseMode === "oral" ? (
                         <div className="space-y-3">
-                          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 p-4 focus-within:border-[#EE8420]">
+                          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 p-4 focus-within:border-slate-400">
                             <textarea
                               rows={4}
                               value={studentSpeech}
@@ -2153,7 +2295,7 @@ export default function AIDefenseRoomScreen({
                                   key={kw}
                                   type="button"
                                   onClick={() => handleInsertKeyword(kw)}
-                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-[#EE8420] cursor-pointer"
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                                 >
                                   + {kw}
                                 </button>
@@ -2187,13 +2329,13 @@ export default function AIDefenseRoomScreen({
                                 setStudentSpeech(arg.text);
                                 setDefenseMode("oral");
                               }}
-                              className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:border-[#EE8420] transition cursor-pointer"
+                              className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition cursor-pointer"
                             >
                               <div className="flex items-center justify-between gap-2 text-xs font-bold mb-1">
                                 <span className="text-slate-900 dark:text-white">
                                   {arg.label}
                                 </span>
-                                <span className="text-[#EE8420] text-[11px]">
+                                <span className="text-slate-600 dark:text-slate-300 text-[11px]">
                                   Nạp luận điểm →
                                 </span>
                               </div>
@@ -2208,8 +2350,8 @@ export default function AIDefenseRoomScreen({
                   )}
 
                   {stagePhase === "council_deliberating" && (
-                    <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center justify-center gap-2">
-                      <BrainCircuit size={18} className="animate-spin text-[#EE8420]" />
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-center text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2">
+                      <BrainCircuit size={18} className="animate-spin text-amber-500" />
                       <span>Hội đồng AI đang phân tích và chấm điểm luận điểm trên server...</span>
                     </div>
                   )}
@@ -2217,20 +2359,20 @@ export default function AIDefenseRoomScreen({
                   {/* STEP 2: DRILL-DOWN CHALLENGE */}
                   {(stagePhase === "drilldown_question" ||
                     stagePhase === "drilldown_evaluating") && (
-                    <div className="p-5 rounded-2xl border-2 border-purple-500/40 bg-purple-50/30 dark:bg-purple-950/20 space-y-4">
+                    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 space-y-4">
                       {lastEvaluation && (
                         <div className="p-3 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between flex-wrap gap-2">
                           <span className="text-slate-700 dark:text-slate-200">
                             <b>Đánh giá bước 1:</b> {lastEvaluation.feedback}
                           </span>
-                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          <span className="font-mono font-bold text-slate-900 dark:text-white px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
                             {lastEvaluation.roundScore}/100
                           </span>
                         </div>
                       )}
 
                       <div>
-                        <span className="text-[10.5px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 block">
+                        <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
                           {currentRound.drillDownChallenge.challengeTitle}
                         </span>
                         <h4 className="text-sm font-black text-slate-950 dark:text-white mt-0.5">
@@ -2238,7 +2380,7 @@ export default function AIDefenseRoomScreen({
                         </h4>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-white dark:bg-[#14161F] border border-purple-200 dark:border-purple-800 text-xs sm:text-sm text-slate-800 dark:text-slate-200 italic font-semibold">
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-200 italic font-semibold">
                         "{currentRound.drillDownChallenge.criticQuestion}"
                       </div>
 
@@ -2249,7 +2391,7 @@ export default function AIDefenseRoomScreen({
                             type="button"
                             disabled={stagePhase === "drilldown_evaluating"}
                             onClick={() => void handleSelectRebuttal(reb.id)}
-                            className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/70 hover:border-purple-500 transition flex items-start gap-3 cursor-pointer disabled:opacity-50"
+                            className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/70 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition flex items-start gap-3 cursor-pointer disabled:opacity-50"
                           >
                             <span className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center shrink-0">
                               {String.fromCharCode(65 + i)}
@@ -2265,18 +2407,19 @@ export default function AIDefenseRoomScreen({
 
                   {/* STEP 3: VERDICT */}
                   {stagePhase === "verdict" && lastEvaluation && (
-                    <div className="p-5 rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/20 dark:bg-emerald-950/20 space-y-4">
+                    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 space-y-4">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <h4 className="text-sm sm:text-base font-black text-slate-950 dark:text-white flex items-center gap-2">
-                          <Award size={18} className="text-[#EE8420]" />
+                          <Award size={18} className="text-amber-500" />
                           <span>Kết quả đánh giá Vòng {currentRoundIdx + 1}</span>
                         </h4>
-                        <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
-                          Điểm vòng: {lastEvaluation.roundScore}/100
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span>Điểm vòng: {lastEvaluation.roundScore}/100</span>
                         </span>
                       </div>
 
-                      <div className="p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs sm:text-sm font-semibold text-emerald-950 dark:text-emerald-200">
+                      <div className="p-3.5 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200">
                         {lastEvaluation.feedback}
                       </div>
 
@@ -2297,10 +2440,10 @@ export default function AIDefenseRoomScreen({
                         >
                           <span>
                             {currentRoundIdx < rounds.length - 1
-                              ? "Sang vòng chất vấn kế tiếp"
+                              ? "Sang vòng luyện tập kế tiếp"
                               : busyKey === "complete"
-                              ? "Đang chốt biên bản..."
-                              : "Hoàn tất & Xuất Biên Bản"}
+                              ? "Đang tổng hợp Readiness..."
+                              : "Hoàn tất Lượt Luyện Tập"}
                           </span>
                           <ArrowRight size={14} />
                         </button>
@@ -2318,7 +2461,7 @@ export default function AIDefenseRoomScreen({
                   <div className="flex items-center gap-2">
                     <Trophy size={16} className="text-[#EE8420]" />
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                      Bảng điểm Hội đồng
+                      Chỉ số Sẵn sàng (Mock)
                     </h4>
                   </div>
                   <span
@@ -2328,7 +2471,7 @@ export default function AIDefenseRoomScreen({
                         : "text-slate-400 dark:text-slate-500"
                     }`}
                   >
-                    {hasScoredAnyRound ? rankMeta.text : "CHƯA CHẤM"}
+                    {hasScoredAnyRound ? rankMeta.text : "CHƯA TẬP"}
                   </span>
                 </div>
 
@@ -2371,16 +2514,16 @@ export default function AIDefenseRoomScreen({
                 </div>
 
                 {activeProject && (
-                  <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/50 text-xs space-y-1">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">
                         Minh chứng Git thực tế:
                       </span>
-                      <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
                         {activeProject.commitsCount} commits · {activeProject.prsCount} PR
                       </span>
                     </div>
-                    <p className="text-[11px] text-emerald-700/90 dark:text-emerald-300/80">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       {activeProject.repoUrl
                         ? `Kho mã nguồn: ${activeProject.repoUrl}`
                         : "Chưa gắn kho GitHub cho đồ án này."}
@@ -2437,10 +2580,13 @@ export default function AIDefenseRoomScreen({
                   <CheckCircle2 size={28} />
                 </div>
                 <h3 className="text-xl font-black">
-                  Biên Bản Nghiệm Thu Phản Biện Đồ Án
+                  Báo Cáo Luyện Tập Phản Biện AI (Mock Readiness)
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                  Mã phiên: {certificateData.defenseId} · Biên bản: {certificateData.submissionId}
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Chỉ số Readiness giúp bạn tự kiểm tra lỗ hổng trước khi bảo vệ. Điểm chính thức do Hội đồng chấm tại buổi Demo trực tiếp.
+                </p>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  Mã phiên tập: {certificateData.defenseId}
                 </p>
               </div>
 
@@ -2456,19 +2602,9 @@ export default function AIDefenseRoomScreen({
                   <b className="text-right">{activeProject?.name}</b>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="text-slate-500 dark:text-slate-400">Điểm Hội đồng AI:</span>
-                  <b className="font-mono text-emerald-600 dark:text-emerald-400 text-sm">
-                    {(certificateData.finalDefenseScore / 10).toFixed(1)} / 10 (
-                    {certificateData.finalDefenseScore}/100)
-                  </b>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500 dark:text-slate-400">
-                    Điểm Chấm Kép tạm tính:
-                  </span>
-                  <b className="font-mono">
-                    {(certificateData.weightedScore / 10).toFixed(1)} / 10 (Tiến độ:{" "}
-                    {certificateData.cicdPct}%)
+                  <span className="text-slate-500 dark:text-slate-400">Độ sẵn sàng Phản biện (Mock):</span>
+                  <b className="font-mono text-slate-900 dark:text-white text-sm">
+                    {certificateData.finalDefenseScore}% (Chưa phải điểm chính thức)
                   </b>
                 </div>
                 <div className="pt-2 border-t border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
@@ -2479,19 +2615,22 @@ export default function AIDefenseRoomScreen({
               <div className="flex items-center gap-2.5 flex-wrap">
                 <button
                   type="button"
-                  onClick={handleDownloadCertificateHtml}
-                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 text-xs font-bold cursor-pointer"
+                  onClick={() => {
+                    setCertificateData(null);
+                    setStudentTab("official");
+                  }}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 text-xs font-bold cursor-pointer"
                 >
-                  <Download size={14} />
-                  <span>Tải Biên bản (.html)</span>
+                  <ShieldCheck size={14} />
+                  <span>Xem Kết quả Hội đồng Chính thức</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={handleDownloadCertificateHtml}
                   className="inline-flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                 >
-                  <Printer size={14} />
-                  <span>In / Lưu PDF</span>
+                  <Download size={14} />
+                  <span>Tải ghi chú (.html)</span>
                 </button>
                 <button
                   type="button"

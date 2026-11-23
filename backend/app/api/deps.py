@@ -150,7 +150,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Tài khoản người dùng không tồn tại trong hệ thống",
             )
-        if user["status"] != "active":
+        if user["status"] not in ("active", "pending"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Tài khoản của bạn đã bị khóa hoặc ngừng hoạt động",
@@ -171,6 +171,44 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
 
 # Bí danh tương thích ngược với mã nguồn hiện tại
 current_user = get_current_user
+
+
+def block_pending_student(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> None:
+    """
+    Router-level Guard: Chặn học viên mới đăng ký (status == 'pending') truy cập
+    vào các API học tập, đồ án, sandbox, AI, lịch học hoặc thông báo trước khi được Admin duyệt.
+    Không chặn yêu cầu chưa gửi token để các guard 401/public hoạt động bình thường.
+    """
+    if not credentials or not credentials.credentials:
+        return
+
+    raw_token = credentials.credentials
+    user_id: str | None = None
+
+    if raw_token in TOKENS:
+        token_data = TOKENS[raw_token]
+        user_id = token_data.get("id") or token_data.get("user_id")
+    else:
+        try:
+            payload = decode_token(raw_token)
+        except jwt.PyJWTError:
+            return
+        if payload.get("type") != "access":
+            return
+        user_id = payload.get("sub")
+
+    if not user_id:
+        return
+
+    with db() as conn:
+        row = conn.execute("SELECT status FROM users WHERE id=?", (user_id,)).fetchone()
+        if row and row["status"] == "pending":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tài khoản học viên đang chờ Quản trị viên phê duyệt cấp quyền vào học. Bạn hiện chỉ có thể xem trang giới thiệu.",
+            )
 
 
 # ============================================================================

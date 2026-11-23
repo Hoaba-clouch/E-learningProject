@@ -2302,10 +2302,16 @@ export default function KanbanBoard({
 
   const canManageCurrentProject =
     role === "admin" || role === "instructor" || Boolean(currentProject?.isLead);
+  const canFreezeCurrentProject = role === "admin" || role === "instructor";
+  const isCurrentProjectDelivered = currentProject?.status === "delivered";
 
   const [isSprintLocked, setIsSprintLocked] = useState<boolean>(() =>
     initialProjectId ? isProjectFrozen(initialProjectId) : false
   );
+
+  const canManageMembersCurrentProject =
+    canFreezeCurrentProject ||
+    (Boolean(currentProject?.isLead) && !isSprintLocked && !isCurrentProjectDelivered);
 
   useEffect(() => {
     setIsSprintLocked(currentProjectId ? isProjectFrozen(currentProjectId) : false);
@@ -2315,7 +2321,7 @@ export default function KanbanBoard({
   }, [currentProjectId]);
 
   const toggleSprintLock = async () => {
-    if (!currentProjectId || !canManageCurrentProject) return;
+    if (!currentProjectId || !canFreezeCurrentProject) return;
     const next = !isSprintLocked;
     const res = await updateWorkspaceProjectApi(currentProjectId, { is_frozen: next });
     if (!res) {
@@ -2324,7 +2330,7 @@ export default function KanbanBoard({
         taskId: "sprint-lock-err",
         taskCode: "ERR",
         taskTitle: "Không thể khóa Sprint",
-        customMessage: "⚠️ Không thể thay đổi trạng thái đóng băng Sprint (chỉ Nhóm trưởng / GVHD / Admin).",
+        customMessage: "⚠️ Không thể thay đổi trạng thái đóng băng Sprint (chỉ GVHD / Admin).",
         toastType: "warning",
         undone: false,
       });
@@ -4408,6 +4414,8 @@ export default function KanbanBoard({
 
   const handleRemoveMember = (memberId: string) => {
 
+    if (!canManageMembersCurrentProject) return;
+
     if (teamMembers.length <= 1) return;
 
     const nextTeam = teamMembers.filter((m) => m.id !== memberId);
@@ -5484,39 +5492,44 @@ export default function KanbanBoard({
 
 
 
-              {/* + Thêm việc mới Button (Student only: Disabled when sprint is locked by Admin) */}
+              {/* + Thêm việc mới Button (Student member only; disabled when frozen/delivered) */}
 
-              {role === "student" && (
-
-                <button
-
-                  type="button"
-
-                  disabled={isSprintLocked}
-
-                  onClick={() => setIsNewTaskModalOpen(true)}
-
-                  className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-97 transition cursor-pointer ${
-
-                    isSprintLocked
-
-                      ? "bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed"
-
-                      : "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950"
-
-                  }`}
-
-                  title={isSprintLocked ? "Sprint đang bị khóa bởi Ban Đào Tạo" : "Tạo công việc mới có checklist"}
-
-                >
-
-                  <Plus size={15} className="stroke-[2.5]" />
-
-                  <span>{isSprintLocked ? "Sprint Đã Khóa" : "Thêm việc mới"}</span>
-
-                </button>
-
-              )}
+              {role === "student" && (() => {
+                const isAddBlocked =
+                  isSprintLocked ||
+                  isCurrentProjectDelivered ||
+                  currentProject?.isMyProject === false;
+                return (
+                  <button
+                    type="button"
+                    disabled={isAddBlocked}
+                    onClick={() => setIsNewTaskModalOpen(true)}
+                    className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-97 transition cursor-pointer ${
+                      isAddBlocked
+                        ? "bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed"
+                        : "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950"
+                    }`}
+                    title={
+                      isCurrentProjectDelivered
+                        ? "Đồ án đã bảo vệ xong (Do GVHD chốt)"
+                        : isSprintLocked
+                        ? "Sprint đang bị khóa bởi Ban Đào Tạo"
+                        : currentProject?.isMyProject === false
+                        ? "Chỉ thành viên thuộc nhóm đồ án mới có quyền thêm việc"
+                        : "Tạo công việc mới có checklist"
+                    }
+                  >
+                    <Plus size={15} className="stroke-[2.5]" />
+                    <span>
+                      {isCurrentProjectDelivered
+                        ? "Đã bảo vệ xong"
+                        : isSprintLocked
+                        ? "Sprint Đã Khóa"
+                        : "Thêm việc mới"}
+                    </span>
+                  </button>
+                );
+              })()}
 
 
 
@@ -5552,31 +5565,21 @@ export default function KanbanBoard({
 
                 <div className="flex items-center gap-2">
 
-                  <button
-
-                    type="button"
-
-                    onClick={() => void toggleSprintLock()}
-
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs ${
-
-                      isSprintLocked
-
-                        ? "bg-rose-600 hover:bg-rose-700 text-white ring-2 ring-rose-500/30 animate-pulse"
-
-                        : "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 shadow-2xs"
-
-                    }`}
-
-                    title={isSprintLocked ? "Sprint đang bị đóng băng. Bấm để mở lại Sprint." : "Đóng băng toàn bộ hoạt động kéo thả task của sinh viên"}
-
-                  >
-
-                    {isSprintLocked ? <Lock size={14} className="stroke-[2.5]" /> : <Unlock size={14} className="stroke-[2.5]" />}
-
-                    <span>{isSprintLocked ? "Mở Khóa Sprint" : "Khóa Sprint"}</span>
-
-                  </button>
+                  {canFreezeCurrentProject && (
+                    <button
+                      type="button"
+                      onClick={() => void toggleSprintLock()}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs ${
+                        isSprintLocked
+                          ? "bg-rose-600 hover:bg-rose-700 text-white ring-2 ring-rose-500/30 animate-pulse"
+                          : "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 shadow-2xs"
+                      }`}
+                      title={isSprintLocked ? "Sprint đang bị đóng băng. Bấm để mở lại Sprint." : "Đóng băng toàn bộ hoạt động kéo thả task của sinh viên (chỉ GVHD / Admin)"}
+                    >
+                      {isSprintLocked ? <Lock size={14} className="stroke-[2.5]" /> : <Unlock size={14} className="stroke-[2.5]" />}
+                      <span>{isSprintLocked ? "Mở Khóa Sprint" : "Khóa Sprint"}</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -5919,7 +5922,7 @@ export default function KanbanBoard({
             </div>
           </div>
 
-          {canManageCurrentProject && (
+          {canFreezeCurrentProject && (
             <button
               type="button"
               onClick={() => void toggleSprintLock()}
@@ -6317,6 +6320,14 @@ export default function KanbanBoard({
                           <div className="mb-2 flex items-center gap-1.5 flex-wrap">
                             {task.gitActivity.latestPrNumber && (() => {
                               const stLow = (task.gitActivity.latestPrStatus || "open").toLowerCase();
+                              const chipBg =
+                                stLow === "merged"
+                                  ? "bg-emerald-500"
+                                  : stLow === "approved"
+                                  ? "bg-blue-500"
+                                  : stLow === "changes_requested"
+                                  ? "bg-rose-500"
+                                  : "bg-amber-500";
                               const stText =
                                 stLow === "merged"
                                   ? "Merged"
@@ -6332,10 +6343,14 @@ export default function KanbanBoard({
                                     e.stopPropagation();
                                     onOpenGitHub?.(currentProjectId, "prs");
                                   }}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border-0 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-semibold cursor-pointer hover:bg-slate-200/80 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition"
+                                  className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border-0 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-semibold cursor-pointer hover:bg-slate-200/80 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition"
                                   title="Mở Pull Request trên Git Project Hub"
                                 >
-                                  <GitPullRequest size={10} />
+                                  <span
+                                    className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-white shrink-0 ${chipBg}`}
+                                  >
+                                    <GitPullRequest size={9} strokeWidth={2.5} />
+                                  </span>
                                   <span>PR #{String(task.gitActivity.latestPrNumber).padStart(2, "0")} · {stText}</span>
                                 </button>
                               );
@@ -6950,7 +6965,7 @@ export default function KanbanBoard({
 
             <div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
 
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">
 
@@ -6958,9 +6973,9 @@ export default function KanbanBoard({
 
                 </h2>
 
-                <span className="rounded-full bg-rose-50 dark:bg-rose-950/50 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-800 border-0 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
 
-                  <Activity size={12} className="text-rose-600 dark:text-rose-400 animate-pulse" />
+                  <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />
 
                   Burndown Chart Đường Đỏ
 
@@ -6982,7 +6997,7 @@ export default function KanbanBoard({
 
                 onClick={() => setHandbookOpen(true)}
 
-                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/50 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 cursor-pointer"
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition"
 
               >
 
@@ -6997,7 +7012,7 @@ export default function KanbanBoard({
 
                   onClick={() => setMemberModalOpen(true)}
 
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition"
 
                 >
 
@@ -7020,7 +7035,13 @@ export default function KanbanBoard({
 
             <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs animate-cascade-2 hover:shadow-md transition-all">
 
-              <span className="text-[11px] font-medium text-slate-400 block mb-1">Tổng Điểm Sprint:</span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
+
+                <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+
+                Tổng Điểm Sprint:
+
+              </span>
 
               <div className="flex items-baseline gap-1.5">
 
@@ -7030,7 +7051,7 @@ export default function KanbanBoard({
 
                 </span>
 
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Story Points</span>
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Story Points</span>
 
               </div>
 
@@ -7040,19 +7061,25 @@ export default function KanbanBoard({
 
 
 
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-xs animate-cascade-3 hover:shadow-md transition-all">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs animate-cascade-3 hover:shadow-md transition-all">
 
-              <span className="text-[11px] font-medium text-emerald-700 block mb-1">Đã Hoàn Thành (Done):</span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
+
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+
+                Đã Hoàn Thành (Done):
+
+              </span>
 
               <div className="flex items-baseline gap-1.5">
 
-                <span className="text-2xl font-black text-emerald-700">
+                <span className="text-2xl font-black text-slate-900 dark:text-white">
 
                   <AnimatedNumber value={sprintStats.donePoints} trigger={analyticsAnimTrigger} key={`an-dp-${kanbanAnimKey}`} />
 
                 </span>
 
-                <span className="text-xs font-bold text-emerald-600">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
 
                   pts (<AnimatedNumber value={sprintStats.percentDone} trigger={analyticsAnimTrigger} suffix="%" key={`an-pcd-${kanbanAnimKey}`} />)
 
@@ -7060,7 +7087,7 @@ export default function KanbanBoard({
 
               </div>
 
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200/60">
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
 
                 <div
 
@@ -7076,45 +7103,65 @@ export default function KanbanBoard({
 
 
 
-            <div className="rounded-2xl border border-rose-200 bg-rose-50/40 p-4 shadow-xs animate-cascade-4 hover:shadow-md transition-all">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs animate-cascade-4 hover:shadow-md transition-all">
 
-              <span className="text-[11px] font-medium text-rose-700 block mb-1">Điểm Còn Lại (Remaining):</span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
+
+                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+
+                Điểm Còn Lại (Remaining):
+
+              </span>
 
               <div className="flex items-baseline gap-1.5">
 
-                <span className="text-2xl font-black text-rose-600">
+                <span className="text-2xl font-black text-slate-900 dark:text-white">
 
-                  <AnimatedNumber value={sprintStats.totalPoints - sprintStats.donePoints} trigger={analyticsAnimTrigger} key={`an-rp-${kanbanAnimKey}`} />
+                  <AnimatedNumber value={Math.max(0, sprintStats.totalPoints - sprintStats.donePoints)} trigger={analyticsAnimTrigger} key={`an-rp-${kanbanAnimKey}`} />
 
                 </span>
 
-                <span className="text-xs font-bold text-rose-600">pts (Đường Đỏ)</span>
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">pts (Đường Đỏ)</span>
 
               </div>
 
-              <p className="text-[10px] text-rose-600/80 mt-1">Cần hoàn tất trước hạn 15/11</p>
+              <p className="text-[10px] text-slate-400 mt-1">
+
+                {currentProject.dueDate
+
+                  ? `Cần hoàn tất trước hạn ${currentProject.dueDate}`
+
+                  : "Theo dõi khối lượng còn lại của Sprint"}
+
+              </p>
 
             </div>
 
 
 
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 shadow-xs animate-cascade-5 hover:shadow-md transition-all">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs animate-cascade-5 hover:shadow-md transition-all">
 
-              <span className="text-[11px] font-medium text-amber-700 block mb-1">Vận tốc Sprint (Velocity):</span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
+
+                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+
+                Vận tốc Sprint (Velocity):
+
+              </span>
 
               <div className="flex items-baseline gap-1.5">
 
-                <span className="text-2xl font-black text-amber-800">
+                <span className="text-2xl font-black text-slate-900 dark:text-white">
 
                   <AnimatedNumber value={36.5} decimals={1} trigger={analyticsAnimTrigger} key={`an-v-${kanbanAnimKey}`} />
 
                 </span>
 
-                <span className="text-xs font-bold text-amber-700">SP / Sprint</span>
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">SP / Sprint</span>
 
               </div>
 
-              <p className="text-[10px] text-amber-700/80 mt-1">Đạt năng suất chuẩn công nghiệp</p>
+              <p className="text-[10px] text-slate-400 mt-1">Đạt năng suất chuẩn công nghiệp</p>
 
             </div>
 
@@ -7128,7 +7175,7 @@ export default function KanbanBoard({
 
             {/* 1. SPRINT BURNDOWN CHART (7 cols) - REFINED CLASSIC */}
 
-            <div className="lg:col-span-7 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs flex flex-col justify-between">
+            <div className="lg:col-span-7 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs flex flex-col justify-between">
 
               {/* Header: Exact Classic Structure as requested */}
 
@@ -7136,15 +7183,15 @@ export default function KanbanBoard({
 
                 <div>
 
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
 
-                    <TrendingDown size={16} className="text-rose-600" />
+                    <TrendingDown size={16} className="text-rose-500" />
 
                     Biểu đồ Sprint Burndown Chart (Đường Cháy việc)
 
                   </h3>
 
-                  <p className="text-[11px] text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
 
                     Mô hình hóa sự suy giảm khối lượng công việc theo từng ngày thực tế
 
@@ -7162,7 +7209,7 @@ export default function KanbanBoard({
 
                     <span className="h-0.5 w-4 border-b-2 border-dashed border-slate-400" />
 
-                    <span className="text-slate-500">Lý tưởng (Ideal)</span>
+                    <span className="text-slate-500 dark:text-slate-400">Lý tưởng (Ideal)</span>
 
                   </div>
 
@@ -7170,7 +7217,7 @@ export default function KanbanBoard({
 
                     <span className="h-1 w-4 rounded-full bg-rose-500" />
 
-                    <span className="font-bold text-rose-600">Thực tế (Red Line)</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">Thực tế (Red Line)</span>
 
                   </div>
 
@@ -7182,7 +7229,7 @@ export default function KanbanBoard({
 
               {/* Refined SVG Chart with Clean Micro-Pills on Every Point */}
 
-              <div className="relative w-full overflow-hidden rounded-xl bg-slate-50/50 p-2.5 border border-slate-100">
+              <div className="relative w-full overflow-hidden rounded-xl bg-slate-50/50 dark:bg-slate-800/40 p-2.5 border border-slate-100 dark:border-slate-800">
 
                 <svg viewBox="0 0 500 215" className="w-full h-52 overflow-visible">
 
@@ -7462,23 +7509,25 @@ export default function KanbanBoard({
 
               {/* Status Ribbon below chart */}
 
-              <div className="mt-3 flex items-center justify-between text-xs rounded-xl bg-slate-50 border border-slate-100 px-3.5 py-2">
+              <div className="mt-3 flex items-center justify-between gap-2 flex-wrap text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 px-3.5 py-2">
 
-                <div className="flex items-center gap-2 text-slate-700">
+                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
 
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-xs shrink-0" />
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
 
                   <span className="font-medium text-[11px]">
 
-                    <strong className="text-slate-900">Đánh giá Sprint:</strong> Đường đỏ thực tế dốc đúng quỹ đạo, còn 15 Story Points cần đóng gói.
+                    <strong className="text-slate-900 dark:text-white">Đánh giá Sprint:</strong> Còn{" "}
+
+                    {Math.max(0, sprintStats.totalPoints - sprintStats.donePoints)} Story Points cần hoàn tất.
 
                   </span>
 
                 </div>
 
-                <span className="font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full text-[11px]">
+                <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-800 border-0 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
 
-                  Hiệu suất 94%
+                  Hoàn thành {sprintStats.percentDone}%
 
                 </span>
 
@@ -7494,21 +7543,21 @@ export default function KanbanBoard({
 
               {/* Biểu đồ tròn Donut Chart Đóng góp Thành viên (Anti-Freerider) */}
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs flex flex-col justify-between">
 
                 <div className="flex items-center justify-between mb-3.5">
 
                   <div>
 
-                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
 
-                      <PieChart size={14} className="text-blue-600" />
+                      <PieChart size={14} className="text-blue-500" />
 
                       Tỉ lệ Đóng góp Thành viên (Anti-Freerider)
 
                     </h4>
 
-                    <p className="text-[11px] text-slate-500 mt-0.5">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
 
                       Biểu đồ tròn đo lường mức độ gánh team & hoàn thành Story Points
 
@@ -7516,7 +7565,7 @@ export default function KanbanBoard({
 
                   </div>
 
-                  <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                  <span className="font-mono text-[10px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-0 px-2 py-0.5 rounded-md whitespace-nowrap">
 
                     Donut Chart
 
@@ -7546,11 +7595,11 @@ export default function KanbanBoard({
 
               {/* Epic Distribution */}
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
 
-                <h4 className="text-xs font-bold text-slate-900 mb-2.5 flex items-center gap-1.5">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white mb-2.5 flex items-center gap-1.5">
 
-                  <Layers size={14} className="text-purple-600" />
+                  <Layers size={14} className="text-purple-500" />
 
                   Cơ cấu Phân bổ Story Points theo Epic
 
@@ -7558,37 +7607,93 @@ export default function KanbanBoard({
 
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
 
-                  <div className="rounded-lg bg-blue-50/60 p-2 border border-blue-100">
+                  {(() => {
 
-                    <span className="text-blue-700 font-bold block">Architecture (H4)</span>
+                    const epicDots = [
 
-                    <span className="text-slate-500">10 pts (Done 100%)</span>
+                      "bg-blue-500",
 
-                  </div>
+                      "bg-purple-500",
 
-                  <div className="rounded-lg bg-purple-50/60 p-2 border border-purple-100">
+                      "bg-amber-500",
 
-                    <span className="text-purple-700 font-bold block">Documentation</span>
+                      "bg-emerald-500",
 
-                    <span className="text-slate-500">8 pts (Done 100%)</span>
+                    ];
 
-                  </div>
+                    const epicMap = new Map<string, { totalPts: number; donePts: number }>();
 
-                  <div className="rounded-lg bg-amber-50/60 p-2 border border-amber-100">
+                    for (const t of tasks) {
 
-                    <span className="text-amber-700 font-bold block">Code Grader Sandbox</span>
+                      const key = (t.epic || "Chung").trim() || "Chung";
 
-                    <span className="text-slate-500">5 pts (In Progress)</span>
+                      const entry = epicMap.get(key) || { totalPts: 0, donePts: 0 };
 
-                  </div>
+                      const pts = Number(t.points || 0);
 
-                  <div className="rounded-lg bg-teal-50/60 p-2 border border-teal-100">
+                      entry.totalPts += pts;
 
-                    <span className="text-teal-700 font-bold block">AI Defense Room</span>
+                      if (t.column === "done" || t.column === "verified") {
 
-                    <span className="text-slate-500">8 pts (Ready)</span>
+                        entry.donePts += pts;
 
-                  </div>
+                      }
+
+                      epicMap.set(key, entry);
+
+                    }
+
+                    const entries = Array.from(epicMap.entries()).slice(0, 6);
+
+                    if (entries.length === 0) {
+
+                      return (
+
+                        <div className="col-span-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-0 p-3 text-center text-slate-500 dark:text-slate-400">
+
+                          Chưa có Story Points nào được gán Epic trong Sprint này.
+
+                        </div>
+
+                      );
+
+                    }
+
+                    return entries.map(([epicName, stat], idx) => {
+
+                      const pct = stat.totalPts > 0 ? Math.round((stat.donePts / stat.totalPts) * 100) : 0;
+
+                      return (
+
+                        <div
+
+                          key={epicName}
+
+                          className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border-0 p-2.5"
+
+                        >
+
+                          <div className="flex items-center gap-1.5">
+
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${epicDots[idx % epicDots.length]}`} />
+
+                            <span className="text-slate-900 dark:text-white font-semibold truncate">{epicName}</span>
+
+                          </div>
+
+                          <span className="text-slate-500 dark:text-slate-400 block mt-0.5 pl-3.5 font-mono text-[10.5px]">
+
+                            {stat.donePts}/{stat.totalPts} pts ({pct}%)
+
+                          </span>
+
+                        </div>
+
+                      );
+
+                    });
+
+                  })()}
 
                 </div>
 
@@ -7602,19 +7707,19 @@ export default function KanbanBoard({
 
           {/* Bottom Section: Dynamic Anti-Freerider Member Cards */}
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs">
 
             <div className="mb-4 flex items-center justify-between">
 
               <div>
 
-                <h3 className="text-sm font-bold text-slate-900">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
 
                   Báo cáo Đóng góp Cá nhân (Thuật toán Anti-Freerider)
 
                 </h3>
 
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
 
                   Đánh giá minh bạch và khách quan hiệu quả làm việc của từng thành viên
 
@@ -7666,7 +7771,7 @@ export default function KanbanBoard({
 
                 return (
 
-                  <div key={member.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 shadow-xs">
+                  <div key={member.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-4 shadow-xs">
 
                     <div className="flex items-center gap-3 mb-3">
 
@@ -7678,9 +7783,9 @@ export default function KanbanBoard({
 
                       <div>
 
-                        <h4 className="font-bold text-slate-900 text-xs">{member.name}</h4>
+                        <h4 className="font-bold text-slate-900 dark:text-white text-xs">{member.name}</h4>
 
-                        <p className="text-[11px] text-slate-500">{member.role}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">{member.role}</p>
 
                       </div>
 
@@ -7688,35 +7793,35 @@ export default function KanbanBoard({
 
 
 
-                    <div className="space-y-2 border-t border-slate-200/70 pt-2.5 text-[11px]">
+                    <div className="space-y-2 border-t border-slate-200/70 dark:border-slate-700/70 pt-2.5 text-[11px]">
 
                       <div className="flex justify-between">
 
-                        <span className="text-slate-500">Tỷ lệ đóng góp:</span>
+                        <span className="text-slate-500 dark:text-slate-400">Tỷ lệ đóng góp:</span>
 
-                        <span className="font-bold text-slate-900"><AnimatedNumber value={percent} trigger={analyticsAnimTrigger} suffix="%" /></span>
+                        <span className="font-bold text-slate-900 dark:text-white"><AnimatedNumber value={percent} trigger={analyticsAnimTrigger} suffix="%" /></span>
 
                       </div>
 
                       <div className="flex justify-between">
 
-                        <span className="text-slate-500">Story Points hoàn thành:</span>
+                        <span className="text-slate-500 dark:text-slate-400">Story Points hoàn thành:</span>
 
-                        <span className="font-mono font-bold text-slate-900"><AnimatedNumber value={points} trigger={analyticsAnimTrigger} suffix=" pts" /></span>
-
-                      </div>
-
-                      <div className="flex justify-between">
-
-                        <span className="text-slate-500">Số task đã Done:</span>
-
-                        <span className="font-bold text-slate-900"><AnimatedNumber value={doneCount} trigger={analyticsAnimTrigger} suffix=" tasks" /></span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white"><AnimatedNumber value={points} trigger={analyticsAnimTrigger} suffix=" pts" /></span>
 
                       </div>
 
                       <div className="flex justify-between">
 
-                        <span className="text-slate-500">Đánh giá hệ thống:</span>
+                        <span className="text-slate-500 dark:text-slate-400">Số task đã Done:</span>
+
+                        <span className="font-bold text-slate-900 dark:text-white"><AnimatedNumber value={doneCount} trigger={analyticsAnimTrigger} suffix=" tasks" /></span>
+
+                      </div>
+
+                      <div className="flex justify-between">
+
+                        <span className="text-slate-500 dark:text-slate-400">Đánh giá hệ thống:</span>
 
                         <span className={`font-bold ${percent >= 25 ? "text-emerald-600" : "text-amber-600"}`}>
 
@@ -7816,7 +7921,7 @@ export default function KanbanBoard({
 
                   </div>
 
-                  {role === "student" && !isSprintLocked && teamMembers.length > 1 && (
+                  {canManageMembersCurrentProject && teamMembers.length > 1 && (
 
                     <button
 

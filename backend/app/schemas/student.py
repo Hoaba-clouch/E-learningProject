@@ -41,7 +41,7 @@ class ChapterExerciseSubmitIn(BaseModel):
 class XpShopPurchaseIn(BaseModel):
     category: str = Field(min_length=1, max_length=32)
     item_id: str = Field(min_length=1, max_length=64)
-    cost: int = Field(ge=0, le=20000)
+    cost: int = Field(default=0, ge=0, le=20000)
 
 
 class XpQuestClaimIn(BaseModel):

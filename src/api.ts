@@ -448,11 +448,16 @@ export async function refreshAccessToken(role?: SessionRole) {
   return data;
 }
 
-export async function fetchCurrentUser(role?: SessionRole) {
+export async function fetchCurrentUser(
+  role?: SessionRole,
+  opts?: { skipAutoDemo?: boolean }
+) {
   const targetRole = role || inferTabRole();
   const token =
     getToken(targetRole) ||
-    (role ? await ensureRoleSession(targetRole).catch(() => null) : null);
+    (!opts?.skipAutoDemo && role
+      ? await ensureRoleSession(targetRole).catch(() => null)
+      : null);
   if (!token) return null;
   const res = await fetch(`${API_BASE}/v1/users/me`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -461,6 +466,14 @@ export async function fetchCurrentUser(role?: SessionRole) {
   const user = await res.json();
   if (typeof window !== "undefined" && user && (!user.role || user.role === targetRole)) {
     window.localStorage.setItem(`${USER_INFO_KEY}.${targetRole}`, JSON.stringify(user));
+    if (inferTabRole() === targetRole) {
+      window.localStorage.setItem(USER_INFO_KEY, JSON.stringify(user));
+    }
+    window.dispatchEvent(
+      new CustomEvent("codemind-auth-updated", {
+        detail: { role: targetRole, user },
+      })
+    );
   }
   return user;
 }
@@ -629,6 +642,41 @@ export async function submitCodeToSandbox(
   }
 }
 
+export interface SocraticChatTurn {
+  role: "user" | "assistant" | "mentor";
+  text: string;
+}
+
+export interface SocraticWorkspaceContext {
+  view_mode?: "catalog" | "lecture" | "video" | "quiz" | "exercise" | "mindmap" | string;
+  subject_id?: string;
+  subject_code?: string;
+  subject_name?: string;
+  chapter_number?: number;
+  chapter_title?: string;
+  lesson_code?: string;
+  lesson_title?: string;
+  lesson_summary?: string;
+  lesson_takeaways?: string[];
+  lesson_code_snippet?: string;
+  exercise_id?: string;
+  exercise_title?: string;
+  exercise_language?: string;
+  exercise_objective?: string;
+  exercise_problem?: string;
+  exercise_requirements?: string[];
+  exercise_hints?: string[];
+  exercise_test_cases?: string[];
+  exercise_submission_status?: string;
+  quiz_index?: number;
+  quiz_total?: number;
+  quiz_question?: string;
+  quiz_options?: string[];
+  quiz_selected_option?: string;
+  quiz_submitted?: boolean;
+  quiz_explanation?: string;
+}
+
 export async function askSocraticTutor(
   messageOrOpts:
     | string
@@ -637,34 +685,44 @@ export async function askSocraticTutor(
         question: string;
         currentTopic?: string;
         chatSkin?: string;
+        workspaceContext?: SocraticWorkspaceContext;
+        history?: SocraticChatTurn[];
+        hintLevel?: number;
+        codeContext?: string;
       },
   codeContext?: string,
   sessionId: string = "demo-session"
 ): Promise<AIInteractionResponse & { answer: string }> {
-  const message =
-    typeof messageOrOpts === "string" ? messageOrOpts : messageOrOpts.question;
-  const ctx =
-    typeof messageOrOpts === "string"
-      ? codeContext
-      : `Môn ${messageOrOpts.subjectId || ""} — ${messageOrOpts.currentTopic || ""}`.trim();
-  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
+  const isObj = typeof messageOrOpts !== "string";
+  const message = isObj ? messageOrOpts.question : messageOrOpts;
+  const resolvedCodeContext = isObj ? messageOrOpts.codeContext : codeContext;
+  const workspaceContext = isObj ? messageOrOpts.workspaceContext : undefined;
+  const history = isObj ? messageOrOpts.history : undefined;
+  const hintLevel = isObj ? messageOrOpts.hintLevel : undefined;
+
   try {
     const endpoint =
       sessionId === "demo-session"
         ? `${API_BASE}/v1/ai/socratic-chat`
         : `${API_BASE}/v1/sessions/${sessionId}/ai-interactions`;
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    const res = await fetchWithAuthRetry(
+      endpoint,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message,
+          ...(resolvedCodeContext ? { code_context: resolvedCodeContext } : {}),
+          ...(workspaceContext ? { workspace_context: workspaceContext } : {}),
+          ...(history && history.length > 0 ? { history } : {}),
+          ...(hintLevel ? { hint_level: hintLevel } : {}),
+          idempotency_key: `ai-${Date.now()}`,
+        }),
       },
-      body: JSON.stringify({
-        message,
-        code_context: ctx,
-        idempotency_key: `ai-${Date.now()}`,
-      }),
-    });
+      "student"
+    );
     if (res.ok) {
       const data = await res.json();
       return {
@@ -676,17 +734,77 @@ export async function askSocraticTutor(
   } catch {
     const lower = message.toLowerCase();
     const isUnsafe =
-      lower.includes("đáp án") ||
-      lower.includes("lời giải") ||
-      lower.includes("giải hộ") ||
-      lower.includes("viết code") ||
+      lower.includes("đáp án hoàn chỉnh") ||
+      lower.includes("lời giải hoàn chỉnh") ||
       lower.includes("cho xin code") ||
       lower.includes("cho code") ||
-      lower.includes("copy");
+      lower.includes("giải hộ bài") ||
+      lower.includes("làm hộ bài");
+
+    if (workspaceContext) {
+      const viewMode = String(workspaceContext.view_mode || "lecture").toLowerCase();
+      const exTitle = workspaceContext.exercise_title || "";
+      const exHints = workspaceContext.exercise_hints || [];
+      const exReqs = workspaceContext.exercise_requirements || [];
+      const takeaways = workspaceContext.lesson_takeaways || [];
+
+      if (isUnsafe) {
+        const hint =
+          exHints[0] ||
+          (exReqs[0] ? `Bắt đầu từ yêu cầu: ${exReqs[0]}` : takeaways[0] || "Kiểm tra lại luồng xử lý cốt lõi.");
+        const text = `[Socratic Guardrail]: Mình không cung cấp code lời giải hoàn chỉnh để giữ tư duy tự giải. Gợi ý cho ${exTitle || workspaceContext.lesson_title || "phần hiện tại"}: ${hint}`;
+        return {
+          id: `ai-${Date.now()}`,
+          policy_decision: "refuse_answer",
+          assistant_message: text,
+          answer: text,
+        };
+      }
+
+      if (
+        viewMode === "exercise" ||
+        lower.includes("bài tập") ||
+        lower.includes("gợi ý") ||
+        lower.includes("hướng dẫn") ||
+        lower.includes("yêu cầu")
+      ) {
+        const idx = Math.min(Math.max((hintLevel || 1) - 1, 0), Math.max(0, exHints.length - 1));
+        const hintTxt =
+          exHints[idx] ||
+          exReqs[0] ||
+          workspaceContext.exercise_objective ||
+          "Hãy phân tích các đối tượng và đầu vào/đầu ra chính của bài tập.";
+        const text = `Bạn đang ở bài tập **${exTitle || "Thực hành chương"}**.\n- **Gợi ý Nấc ${hintLevel || 1}:** ${hintTxt}\nBạn thử phác thảo hướng xử lý phần này xem sao nhé?`;
+        return {
+          id: `ai-${Date.now()}`,
+          policy_decision: "question",
+          assistant_message: text,
+          answer: text,
+        };
+      }
+
+      if (viewMode === "quiz" && workspaceContext.quiz_question) {
+        const text = `Với câu quiz "${workspaceContext.quiz_question}", bạn hãy đối chiếu từng phương án với trọng tâm "${takeaways[0] || workspaceContext.lesson_title || "bài học"}" để loại dần phương án sai. Bạn đang phân vân lựa chọn nào?`;
+        return {
+          id: `ai-${Date.now()}`,
+          policy_decision: "question",
+          assistant_message: text,
+          answer: text,
+        };
+      }
+
+      const text = `Trong bài **${workspaceContext.lesson_title || "hiện tại"}**, ${takeaways[0] ? `ý cốt lõi là: ${takeaways[0]}. ` : ""}Bạn đang vướng ở khái niệm hay bước áp dụng cụ thể nào?`;
+      return {
+        id: `ai-${Date.now()}`,
+        policy_decision: "question",
+        assistant_message: text,
+        answer: text,
+      };
+    }
 
     if (isUnsafe) {
       const text =
-        "[Socratic Guardrail]: Hệ thống không cung cấp mã nguồn giải sẵn để đảm bảo tư duy phản biện. Gợi ý sư phạm: Hãy nhìn vào Ca kiểm thử số 5 (Edge Case). Khi người dùng truyền vào chuỗi rỗng \"\" hoặc khoảng trắng, hàm của bạn có đang vô tư gọi append() vào hàng đợi không?";
+        "[Socratic Guardrail]: Hệ thống không cung cấp mã nguồn giải sẵn để đảm bảo tư duy phản biện. Hãy cho mình biết bạn đang vướng ở bước nào để mình gợi ý từng nấc nhé.";
       return {
         id: `ai-${Date.now()}`,
         policy_decision: "refuse_answer",
@@ -697,7 +815,7 @@ export async function askSocraticTutor(
 
     if (lower.includes("test 5") || lower.includes("ca biên") || lower.includes("edge case") || lower.includes("rỗng")) {
       const text =
-        "Trong bài toán Bounded Page Tracker, một trang hợp lệ phải có độ dài > 0 và không chỉ toàn dấu cách trắng. Bạn cần đặt một câu lệnh điều kiện (Guard Clause) ở vị trí nào trong hàm visit() để ngăn chặn dữ liệu rác trước khi đẩy vào deque?";
+        "Trong bài toán Bounded Page Tracker, một trang hợp lệ phải có độ dài > 0 và không chỉ toàn dấu cách trắng. Bạn cần đặt Guard Clause ở vị trí nào trong visit() trước khi đẩy vào deque?";
       return {
         id: `ai-${Date.now()}`,
         policy_decision: "question",
@@ -708,7 +826,7 @@ export async function askSocraticTutor(
 
     if (lower.includes("deque") || lower.includes("maxlen") || lower.includes("fifo")) {
       const text =
-        "Cấu trúc deque(maxlen=3) tự động pop phần tử bên trái (cũ nhất) khi thêm phần tử mới ở bên phải với độ phức tạp O(1). Tuy nhiên, deque không có cơ chế tự lọc giá trị rỗng — trách nhiệm lọc thuộc về logic kiểm soát đầu vào của bạn. Bạn đã thử kiểm tra 'if not page:' chưa?";
+        "Cấu trúc deque(maxlen=3) tự động pop phần tử cũ nhất với O(1), nhưng không tự lọc chuỗi rỗng. Bạn đã kiểm tra điều kiện đầu vào trước history.append(page) chưa?";
       return {
         id: `ai-${Date.now()}`,
         policy_decision: "question",
@@ -718,7 +836,7 @@ export async function askSocraticTutor(
     }
 
     const fallbackText =
-      "Khi kiểm tra phương thức visit(page), hãy tự hỏi: Dữ liệu đầu vào có luôn là chuỗi chuẩn không? Điều gì xảy ra nếu ai đó truyền vào một chuỗi rỗng? Hãy đối chiếu với kết quả của Ca kiểm thử số 5.";
+      "Mình đã ghi nhận câu hỏi của bạn. Hiện kết nối tới máy chủ AI đang gián đoạn, bạn thử gửi lại hoặc nói rõ hơn bước bạn đang vướng nhé.";
     return {
       id: `ai-${Date.now()}`,
       policy_decision: "question",
@@ -1638,6 +1756,13 @@ export interface DefenseProjectOption {
   name: string;
   course: string;
   status: string;
+  isFrozen?: boolean;
+  hasDefensePackage?: boolean;
+  demoUrl?: string;
+  isGraded?: boolean;
+  officialFinalScore?: number | null;
+  officialGradedAt?: string | null;
+  practiceCount?: number;
   classId: string;
   courseCode: string;
   aiDefenseEnabled: boolean;
@@ -1715,6 +1840,8 @@ export interface DefenseWorkspaceBundle {
     pendingReviewsCount: number;
     enabledCoursesCount: number;
     totalCoursesCount: number;
+    gradedProjectsCount?: number;
+    totalProjectsCount?: number;
   };
 }
 
@@ -1864,6 +1991,288 @@ export async function toggleCourseDefenseApi(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "Không thể cập nhật trạng thái Phòng Phản Biện AI.");
+  }
+  return await res.json();
+}
+
+export interface DefensePackageData {
+  demoUrl: string;
+  slideUrl: string;
+  reportUrl: string;
+  videoUrl: string;
+  repoUrl: string;
+  architectureSummary: string;
+  memberRolesSummary: string;
+  submittedByName?: string;
+  updatedAt?: string;
+  isComplete?: boolean;
+}
+
+export interface DefenseMemberMetric {
+  member_id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  total_tasks: number;
+  done_tasks: number;
+  verified_tasks: number;
+  completed_points: number;
+  total_points: number;
+  dod_completed: number;
+  dod_total: number;
+  commits_count: number;
+  prs_count: number;
+  top_tasks: string[];
+  contribution_pct: number;
+  suggested_factor: number;
+}
+
+export interface OfficialMemberScoreRecord {
+  member_id: string;
+  name: string;
+  role: string;
+  contribution_pct: number;
+  suggested_factor: number;
+  individual_score: number;
+  asked_question?: string;
+  live_qa_note?: string;
+}
+
+export interface OfficialProjectEvaluation {
+  isGraded: boolean;
+  evalId?: string;
+  groupScore?: number;
+  demoScore?: number;
+  architectureScore?: number;
+  processScore?: number;
+  defenseScore?: number;
+  finalScore?: number;
+  feedback?: string;
+  verdict?: "pass" | "pass_with_revisions" | "fail" | string;
+  councilMembers?: string;
+  demoVerified?: boolean;
+  repoVerified?: boolean;
+  frozenVerified?: boolean;
+  graderName?: string;
+  defenseDate?: string;
+  gradedAt?: string;
+  status?: string;
+  memberScores?: OfficialMemberScoreRecord[];
+}
+
+export interface DefenseProjectDossier {
+  project: {
+    id: string;
+    code: string;
+    name: string;
+    client: string;
+    course: string;
+    status: string;
+    sprint: string;
+    isFrozen: boolean;
+    leaderUserId: string;
+    instructorName: string;
+    dueDate: string;
+    storyPointsBudget: number;
+    repoUrl: string;
+    repoSlug: string;
+    targetBranch: string;
+    totalTasks: number;
+    doneTasks: number;
+    verifiedTasks: number;
+    totalPoints: number;
+    completedPoints: number;
+    commitsCount: number;
+    prsCount: number;
+    epics: string[];
+  };
+  package: DefensePackageData;
+  memberMetrics: DefenseMemberMetric[];
+  recentTasks: Array<{
+    id: string;
+    code: string;
+    title: string;
+    columnId: string;
+    points: number;
+    epic: string;
+    assigneeName: string;
+    submissionUrl?: string;
+  }>;
+  recentCommits: Array<{
+    id: string;
+    sha: string;
+    authorName: string;
+    branch: string;
+    taskCode: string;
+    message: string;
+    timeAgo: string;
+    additions: number;
+    deletions: number;
+  }>;
+  recentPullRequests: Array<{
+    id: string;
+    prNumber: number;
+    title: string;
+    sourceBranch: string;
+    targetBranch: string;
+    taskCode: string;
+    authorName: string;
+    status: string;
+    aiReviewScore: number;
+    peerApproved: boolean;
+  }>;
+  practiceSessions: Array<{
+    id: string;
+    studentName: string;
+    studentCode: string;
+    readinessScore: number | null;
+    status: string;
+    roundNumber: number;
+    updatedAt: string;
+    transcriptCount: number;
+  }>;
+  officialEvaluation: OfficialProjectEvaluation;
+}
+
+export interface CouncilQuestionsResult {
+  project_id: string;
+  source: string;
+  projectProbes: Array<{
+    category: string;
+    question: string;
+    whatToVerify: string;
+  }>;
+  memberProbes: Array<{
+    memberId: string;
+    memberName: string;
+    memberRole: string;
+    contributionPct: number;
+    evidenceBasis: string;
+    question: string;
+    whatToVerify: string;
+  }>;
+}
+
+export interface LiveCouncilGradePayload {
+  demo_score: number;
+  architecture_score: number;
+  process_score: number;
+  defense_score: number;
+  feedback: string;
+  verdict: "pass" | "pass_with_revisions" | "fail";
+  council_members: string;
+  demo_verified: boolean;
+  repo_verified: boolean;
+  frozen_verified: boolean;
+  member_scores: OfficialMemberScoreRecord[];
+}
+
+export async function fetchDefenseProjectDossierApi(
+  projectId: string,
+  preferredRole?: SessionRole
+): Promise<DefenseProjectDossier | null> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/defense/projects/${encodeURIComponent(projectId)}/dossier`,
+      {},
+      preferredRole
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as DefenseProjectDossier;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveDefensePackageApi(
+  projectId: string,
+  payload: DefensePackageData,
+  preferredRole?: SessionRole
+): Promise<{ status: string; package: DefensePackageData; dossier: DefenseProjectDossier }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/defense/projects/${encodeURIComponent(projectId)}/package`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        demo_url: payload.demoUrl || "",
+        slide_url: payload.slideUrl || "",
+        report_url: payload.reportUrl || "",
+        video_url: payload.videoUrl || "",
+        repo_url: payload.repoUrl || "",
+        architecture_summary: payload.architectureSummary || "",
+        member_roles_summary: payload.memberRolesSummary || "",
+      }),
+    },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể lưu Hồ sơ Bảo vệ Đồ án.");
+  }
+  return await res.json();
+}
+
+export async function generatePracticeQuestionsApi(
+  projectId: string,
+  preferredRole: SessionRole = "student"
+): Promise<{
+  project_id: string;
+  source: string;
+  evidence_summary: Record<string, any>;
+  rounds: any[];
+} | null> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/defense/projects/${encodeURIComponent(projectId)}/practice-questions`,
+      { method: "POST" },
+      preferredRole
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function generateCouncilQuestionsApi(
+  projectId: string,
+  preferredRole?: SessionRole
+): Promise<CouncilQuestionsResult> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/defense/projects/${encodeURIComponent(projectId)}/council-questions`,
+    { method: "POST" },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tạo gợi ý câu hỏi Hội đồng.");
+  }
+  return await res.json();
+}
+
+export async function submitLiveCouncilGradeApi(
+  projectId: string,
+  payload: LiveCouncilGradePayload,
+  preferredRole?: SessionRole
+): Promise<{
+  status: string;
+  eval_id: string;
+  final_score: number;
+  officialEvaluation: OfficialProjectEvaluation;
+}> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/defense/projects/${encodeURIComponent(projectId)}/live-grade`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    preferredRole
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể lưu điểm bảo vệ trực tiếp.");
   }
   return await res.json();
 }
@@ -2502,28 +2911,50 @@ export async function submitStudentChapterExercise(payload: {
   }
 }
 
-export async function purchaseXpShopItem(payload: {
+export async function unlockXpRewardItem(payload: {
   category: string;
   item_id: string;
-  cost: number;
-}): Promise<{ exp_points?: number; owned_items?: Record<string, string[]>; error?: string }> {
+  required_xp?: number;
+}): Promise<{
+  exp_points?: number;
+  owned_items?: Record<string, string[]>;
+  unlocked?: boolean;
+  required_xp?: number;
+  error?: string;
+}> {
   const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
   try {
-    const res = await fetch(`${API_BASE}/v1/student/xp-shop/purchase`, {
+    const res = await fetch(`${API_BASE}/v1/student/xp-shop/unlock`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        category: payload.category,
+        item_id: payload.item_id,
+        cost: payload.required_xp ?? 0,
+      }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.detail || "Không thể mua vật phẩm" };
+    if (!res.ok) return { error: data.detail || "Không thể mở khóa vật phẩm" };
     dispatchXpUpdated();
     return data;
   } catch {
     return { error: "Lỗi kết nối Backend" };
   }
+}
+
+export async function purchaseXpShopItem(payload: {
+  category: string;
+  item_id: string;
+  cost: number;
+}): Promise<{ exp_points?: number; owned_items?: Record<string, string[]>; error?: string }> {
+  return unlockXpRewardItem({
+    category: payload.category,
+    item_id: payload.item_id,
+    required_xp: payload.cost,
+  });
 }
 
 export async function claimXpQuestApi(payload: {
