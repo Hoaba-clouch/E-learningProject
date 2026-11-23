@@ -13,12 +13,13 @@ import {
   Trophy,
   Zap,
   TrendingUp,
-  Clock
+  Clock,
+  AlertCircle
 } from "lucide-react";
 import type { AvatarStyle, BackgroundTheme, BadgeFrame, ChatSkin, MentorMascot, SkillMapSkin } from "../App";
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
-import { claimXpQuestApi, fetchStudentLearningOverview, purchaseXpShopItem } from "../api";
+import { claimXpQuestApi, fetchStudentLearningOverview, purchaseXpShopItem, equipXpShopItemApi } from "../api";
 
 interface Props {
   activeTheme: BackgroundTheme;
@@ -121,6 +122,12 @@ export default function XPShop({
 }: Props) {
   const [xp, setXp] = useState(0);
   const shopRef = useRef<HTMLDivElement>(null);
+  const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToastMsg({ text, type });
+    window.setTimeout(() => setToastMsg(null), 3500);
+  };
 
   const [category, setCategory] = useState<ShopCategory>("theme");
   const [subTab, setSubTab] = useState<"store" | "quests">("store");
@@ -161,6 +168,16 @@ export default function XPShop({
       if (Array.isArray(data.quests) && data.quests.length > 0) {
         setQuests(data.quests);
       }
+      // Đồng bộ các vật phẩm đã trang bị từ CSDL MySQL
+      const eq = data.profile.equipped_items;
+      if (eq) {
+        if (eq.theme && eq.theme !== activeTheme) onApplyTheme(eq.theme as BackgroundTheme);
+        if (eq.avatar && eq.avatar !== activeAvatar) onApplyAvatar(eq.avatar as AvatarStyle);
+        if (eq.mentor && eq.mentor !== activeMentor) onApplyMentor(eq.mentor as MentorMascot);
+        if (eq.chat && eq.chat !== activeChatSkin) onApplyChatSkin(eq.chat as ChatSkin);
+        if (eq.map && eq.map !== activeMapSkin) onApplyMapSkin(eq.map as SkillMapSkin);
+        if (eq.badge && eq.badge !== activeBadge) onApplyBadge(eq.badge as BadgeFrame);
+      }
     });
     return () => {
       active = false;
@@ -168,19 +185,23 @@ export default function XPShop({
   }, []);
 
   const apply = async (item: ShopItem) => {
-    if (item.category === "theme") {
-      onApplyTheme(item.id as BackgroundTheme);
-      return;
-    }
+    const isFreeTheme = item.category === "theme";
+    const isOwned = isFreeTheme || (owned[item.category] && owned[item.category].includes(item.id));
 
-    if (!owned[item.category].includes(item.id)) {
-      if (xp < item.cost) return;
+    if (!isOwned) {
+      if (xp < item.cost) {
+        showToast(`Không đủ XP! Cần ${item.cost} XP (Bạn đang có ${xp} XP).`, "error");
+        return;
+      }
       const res = await purchaseXpShopItem({
         category: item.category,
         item_id: item.id,
         cost: item.cost,
       });
-      if (res.error) return;
+      if (res.error) {
+        showToast(res.error, "error");
+        return;
+      }
       if (typeof res.exp_points === "number") {
         setXp(res.exp_points);
       } else {
@@ -195,14 +216,28 @@ export default function XPShop({
       } else {
         setOwned((value) => ({ ...value, [item.category]: [...value[item.category], item.id] }));
       }
+      showToast(`🎉 Mở khóa & trang bị thành công: ${item.name}! (-${item.cost} XP)`, "success");
       window.dispatchEvent(new Event("codemind-xp-updated"));
+    } else {
+      // Đã sở hữu -> gọi API trang bị và lưu xuống MySQL
+      const equipRes = await equipXpShopItemApi({
+        category: item.category,
+        item_id: item.id,
+      });
+      if (equipRes.error) {
+        showToast(equipRes.error, "error");
+        return;
+      }
+      showToast(`✨ Đã áp dụng giao diện: ${item.name}`, "success");
     }
 
+    if (item.category === "theme") onApplyTheme(item.id as BackgroundTheme);
     if (item.category === "avatar") onApplyAvatar(item.id as AvatarStyle);
     if (item.category === "mentor") onApplyMentor(item.id as MentorMascot);
     if (item.category === "chat") onApplyChatSkin(item.id as ChatSkin);
     if (item.category === "map") onApplyMapSkin(item.id as SkillMapSkin);
     if (item.category === "badge") onApplyBadge(item.id as BadgeFrame);
+    window.dispatchEvent(new Event("codemind-theme-updated"));
   };
 
   const claimQuestReward = async (questId: string, reward: number) => {
@@ -513,6 +548,16 @@ export default function XPShop({
             ))
             )}
           </div>
+        </div>
+      )}
+
+      {/* TOAST NOTIFICATION */}
+      {toastMsg && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl text-xs font-bold text-white transition-all transform animate-bounce ${
+          toastMsg.type === "success" ? "bg-emerald-600" : "bg-rose-600"
+        }`}>
+          {toastMsg.type === "success" ? <Check size={16} /> : <AlertCircle size={16} />}
+          {toastMsg.text}
         </div>
       )}
     </div>

@@ -19,6 +19,7 @@ from app.schemas.student import (
     VideoProgressIn,
     XpQuestClaimIn,
     XpShopPurchaseIn,
+    XpShopEquipIn,
 )
 from app.services.analytics import track_event
 
@@ -129,6 +130,37 @@ def _parse_claimed_quests(raw: str | None) -> list[str]:
         return []
 
 
+DEFAULT_EQUIPPED_ITEMS: dict[str, str] = {
+    "theme": "diagonal",
+    "avatar": "initials",
+    "mentor": "mino",
+    "chat": "classic",
+    "map": "campaign",
+    "badge": "streak",
+}
+
+
+def _parse_equipped_items(raw: Any) -> dict[str, str]:
+    base = dict(DEFAULT_EQUIPPED_ITEMS)
+    if not raw:
+        return base
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            if isinstance(v, str) and v.strip():
+                base[k] = v.strip()
+        return base
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, str) and v.strip():
+                    base[k] = v.strip()
+            return base
+    except Exception:
+        pass
+    return base
+
+
 def _ensure_profile(conn: Any, user_id: str) -> Any:
     prof = conn.execute("SELECT * FROM student_profiles WHERE user_id=?", (user_id,)).fetchone()
     if not prof:
@@ -136,9 +168,9 @@ def _ensure_profile(conn: Any, user_id: str) -> Any:
             """INSERT INTO student_profiles(
                    id, user_id, current_streak, longest_streak, exp_points, selected_title,
                    radar_algorithm, radar_debugging, radar_cleancode, radar_teamwork, radar_defense,
-                   owned_items_json, claimed_quests_json
-               ) VALUES(?, ?, 1, 1, 500, 'CodeMind Learner', 75.0, 68.0, 78.0, 72.0, 80.0, ?, '[]')""",
-            (uid(), user_id, json.dumps(DEFAULT_OWNED_ITEMS)),
+                   owned_items_json, claimed_quests_json, equipped_items_json
+               ) VALUES(?, ?, 1, 1, 500, 'CodeMind Learner', 75.0, 68.0, 78.0, 72.0, 80.0, ?, '[]', ?)""",
+            (uid(), user_id, json.dumps(DEFAULT_OWNED_ITEMS), json.dumps(DEFAULT_EQUIPPED_ITEMS)),
         )
         prof = conn.execute("SELECT * FROM student_profiles WHERE user_id=?", (user_id,)).fetchone()
     return prof
@@ -346,6 +378,7 @@ def _extract_date_key(raw: str | None) -> str | None:
 
 
 @router.get("/student/learning-overview")
+@router.get("/student/overview")
 def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     """Lấy toàn bộ dữ liệu đồng bộ MySQL 8.0 cho Học viên (Profile, XP, Quests, Achievements, Heatmap, Courses)."""
     user_id = user["id"]
@@ -361,6 +394,10 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
             bg_cand = raw_pref.split(":", 1)[1].strip().lower()
             if bg_cand in ALL_THEME_IDS:
                 bg_theme = bg_cand
+
+        equipped = _parse_equipped_items(prof.get("equipped_items_json"))
+        if bg_theme:
+            equipped["theme"] = bg_theme
 
         progress_rows = conn.execute(
             """SELECT subject_id, chapter_id, lesson_id, status, quiz_score, quiz_total, xp_earned, completed_at
@@ -591,7 +628,12 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
             "email": (u_row["email"] if u_row else None) or user.get("email"),
             "code": (u_row["user_code"] if u_row else None) or user.get("user_code") or "—",
             "role": user.get("role") or "student",
-            "background_theme": bg_theme,
+            "background_theme": equipped.get("theme", "diagonal"),
+            "avatar": equipped.get("avatar", "initials"),
+            "mentor": equipped.get("mentor", "mino"),
+            "chat_skin": equipped.get("chat", "classic"),
+            "map_skin": equipped.get("map", "campaign"),
+            "badge_frame": equipped.get("badge", "streak"),
         },
         "profile": {
             "exp_points": int(prof["exp_points"] or 0),
@@ -606,6 +648,7 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
                 "defense": float(prof["radar_defense"] or 90.0),
             },
             "owned_items": _parse_owned_items(prof["owned_items_json"]),
+            "equipped_items": equipped,
             "claimed_quests": claimed_list,
         },
         "quests": quests,
@@ -1179,7 +1222,7 @@ def purchase_xp_shop_item(
     payload: XpShopPurchaseIn,
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
-    """Mua hoặc kích hoạt vật phẩm trong XP Shop và lưu vào MySQL 8.0 (Giao diện nền luôn 0 XP)."""
+    """Mua hoặc kích hoạt vật phẩm trong XP Shop và lưu vào MySQL 8.0 (Tự động trang bị khi mua)."""
     user_id = user["id"]
     is_free_theme = payload.category == "theme"
     item_key = (payload.category, payload.item_id)
@@ -1194,10 +1237,12 @@ def purchase_xp_shop_item(
         prof = _ensure_profile(conn, user_id)
         owned = _parse_owned_items(prof["owned_items_json"])
         cat_list = owned.setdefault(payload.category, [])
+        equipped = _parse_equipped_items(prof.get("equipped_items_json"))
         xp = int(prof["exp_points"] or 0)
 
         if is_free_theme:
             owned["theme"] = list(dict.fromkeys([*ALL_THEME_IDS, payload.item_id]))
+            equipped["theme"] = payload.item_id
             if payload.item_id in ALL_THEME_IDS:
                 u_row = conn.execute("SELECT theme_preference FROM users WHERE id=?", (user_id,)).fetchone()
                 raw_pref = (u_row["theme_preference"] if u_row else "") or ""
@@ -1206,17 +1251,96 @@ def purchase_xp_shop_item(
                     "UPDATE users SET theme_preference=?, updated_at=? WHERE id=?",
                     (f"{mode_part}:{payload.item_id}", now_utc(), user_id),
                 )
+            conn.execute(
+                "UPDATE student_profiles SET owned_items_json=?, equipped_items_json=? WHERE user_id=?",
+                (json.dumps(owned, ensure_ascii=False), json.dumps(equipped, ensure_ascii=False), user_id),
+            )
         elif payload.item_id not in cat_list:
             if xp < actual_cost:
                 raise HTTPException(status_code=400, detail="Không đủ XP để mở khóa vật phẩm này")
             xp -= actual_cost
             cat_list.append(payload.item_id)
+            equipped[payload.category] = payload.item_id
             conn.execute(
-                "UPDATE student_profiles SET exp_points=?, owned_items_json=? WHERE user_id=?",
-                (xp, json.dumps(owned), user_id),
+                "UPDATE student_profiles SET exp_points=?, owned_items_json=?, equipped_items_json=? WHERE user_id=?",
+                (xp, json.dumps(owned, ensure_ascii=False), json.dumps(equipped, ensure_ascii=False), user_id),
+            )
+        else:
+            # Already owned -> just equip
+            equipped[payload.category] = payload.item_id
+            conn.execute(
+                "UPDATE student_profiles SET equipped_items_json=? WHERE user_id=?",
+                (json.dumps(equipped, ensure_ascii=False), user_id),
             )
 
-    return {"exp_points": xp, "owned_items": owned}
+    return {"exp_points": xp, "owned_items": owned, "equipped_items": equipped}
+
+
+@router.post("/student/xp-shop/equip")
+def equip_xp_shop_item(
+    payload: XpShopEquipIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Trang bị vật phẩm đã mở khóa (hoặc miễn phí) và đồng bộ lưu xuống MySQL 8.0."""
+    user_id = user["id"]
+    category = payload.category
+    item_id = payload.item_id
+
+    if category not in ("theme", "avatar", "mentor", "chat", "map", "badge"):
+        raise HTTPException(status_code=400, detail="Danh mục vật phẩm không hợp lệ")
+
+    with db() as conn:
+        prof = _ensure_profile(conn, user_id)
+        owned = _parse_owned_items(prof["owned_items_json"])
+        cat_owned = owned.get(category, [])
+
+        is_default = (category, item_id) in SHOP_ITEM_COSTS and SHOP_ITEM_COSTS[(category, item_id)] == 0
+        is_free_theme = category == "theme" and item_id in ALL_THEME_IDS
+
+        if not (is_default or is_free_theme or item_id in cat_owned):
+            raise HTTPException(status_code=400, detail="Bạn chưa sở hữu vật phẩm này để trang bị")
+
+        equipped = _parse_equipped_items(prof.get("equipped_items_json"))
+        equipped[category] = item_id
+
+        if category == "theme":
+            u_row = conn.execute("SELECT theme_preference FROM users WHERE id=?", (user_id,)).fetchone()
+            raw_pref = (u_row["theme_preference"] if u_row else "") or ""
+            mode_part = raw_pref.split(":", 1)[0] if ":" in raw_pref and raw_pref.split(":", 1)[0] in ("light", "dark") else "light"
+            conn.execute(
+                "UPDATE users SET theme_preference=?, updated_at=? WHERE id=?",
+                (f"{mode_part}:{item_id}", now_utc(), user_id),
+            )
+
+        conn.execute(
+            "UPDATE student_profiles SET equipped_items_json=? WHERE user_id=?",
+            (json.dumps(equipped, ensure_ascii=False), user_id),
+        )
+
+    return {
+        "success": True,
+        "category": category,
+        "equipped_id": item_id,
+        "equipped_items": equipped,
+    }
+
+
+@router.get("/student/xp-shop/inventory")
+def get_xp_shop_inventory(
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Lấy số dư XP, danh sách vật phẩm đã sở hữu và trạng thái trang bị từ MySQL 8.0."""
+    user_id = user["id"]
+    with db() as conn:
+        prof = _ensure_profile(conn, user_id)
+        xp = int(prof["exp_points"] or 0)
+        owned = _parse_owned_items(prof["owned_items_json"])
+        equipped = _parse_equipped_items(prof.get("equipped_items_json"))
+    return {
+        "exp_points": xp,
+        "owned_items": owned,
+        "equipped_items": equipped,
+    }
 
 
 @router.post("/student/xp-shop/claim-quest")

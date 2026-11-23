@@ -5,7 +5,15 @@ import LoginScreen from "./screens/LoginScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
 import MarloCommandPalette from "./components/MarloCommandPalette";
 import MarloGlobalHeader from "./components/MarloGlobalHeader";
-import { fetchCurrentUser, getStoredUser, logoutUser, setTabSessionRole, updateUserPreferencesApi } from "./api";
+import {
+  fetchCurrentUser,
+  fetchStudentLearningOverview,
+  equipXpShopItemApi,
+  getStoredUser,
+  logoutUser,
+  setTabSessionRole,
+  updateUserPreferencesApi,
+} from "./api";
 
 const StudentDashboard = lazy(() => import("./screens/StudentDashboard"));
 const LearningWorkspace = lazy(() => import("./screens/LearningWorkspace"));
@@ -261,13 +269,42 @@ export default function App() {
   useEffect(() => {
     if (screen === "login" || screen === "intro") return;
     let active = true;
-    fetchCurrentUser(role).then((u) => {
-      if (!active || !u?.background_theme) return;
-      const valid = ["diagonal", "blueprint", "matrix", "sunrise", "graphite"];
-      if (valid.includes(u.background_theme)) {
-        setBackgroundTheme(u.background_theme as BackgroundTheme);
-      }
-    });
+
+    // Tải cấu hình người dùng & các vật phẩm đã trang bị trực tiếp từ MySQL Backend
+    fetchStudentLearningOverview()
+      .then((data) => {
+        if (!active || !data) return;
+        const equipped = (data.profile?.equipped_items as Record<string, string> | undefined) || {};
+        const u = data.user || {};
+
+        const themeVal = equipped.theme || u.background_theme;
+        if (themeVal && ["diagonal", "blueprint", "matrix", "sunrise", "graphite"].includes(themeVal)) {
+          setBackgroundTheme(themeVal as BackgroundTheme);
+          window.localStorage.setItem("code-mind-background", themeVal);
+        }
+        if (equipped.avatar && ["initials", "pixel", "coder", "robot", "silver"].includes(equipped.avatar)) {
+          setAvatarStyle(equipped.avatar as AvatarStyle);
+          window.localStorage.setItem("code-mind-avatar", equipped.avatar);
+        }
+        if (equipped.mentor && ["mino", "nova", "byte", "sage", "luna", "kuro", "ignis", "sylph"].includes(equipped.mentor)) {
+          setMentorMascot(equipped.mentor as MentorMascot);
+          window.localStorage.setItem("code-mind-mentor", equipped.mentor);
+        }
+        if (equipped.chat && ["classic", "terminal", "neon", "paper"].includes(equipped.chat)) {
+          setChatSkin(equipped.chat as ChatSkin);
+          window.localStorage.setItem("code-mind-chat-skin", equipped.chat);
+        }
+        if (equipped.map && ["campaign", "space", "circuit", "dungeon", "route-blueprint"].includes(equipped.map)) {
+          setSkillMapSkin(equipped.map as SkillMapSkin);
+          window.localStorage.setItem("code-mind-map-skin", equipped.map);
+        }
+        if (equipped.badge && ["streak", "quiz", "mindmap", "rookie", "explorer"].includes(equipped.badge)) {
+          setBadgeFrame(equipped.badge as BadgeFrame);
+          window.localStorage.setItem("code-mind-badge", equipped.badge);
+        }
+      })
+      .catch(() => {});
+
     return () => {
       active = false;
     };
@@ -275,7 +312,39 @@ export default function App() {
 
   const handleApplyBackgroundTheme = (nextBg: BackgroundTheme) => {
     setBackgroundTheme(nextBg);
+    window.localStorage.setItem("code-mind-background", nextBg);
     void updateUserPreferencesApi({ background_theme: nextBg, color_mode: theme }, role);
+    void equipXpShopItemApi({ category: "theme", item_id: nextBg });
+  };
+
+  const handleApplyAvatar = (nextAvatar: AvatarStyle) => {
+    setAvatarStyle(nextAvatar);
+    window.localStorage.setItem("code-mind-avatar", nextAvatar);
+    void equipXpShopItemApi({ category: "avatar", item_id: nextAvatar });
+  };
+
+  const handleApplyMentor = (nextMentor: MentorMascot) => {
+    setMentorMascot(nextMentor);
+    window.localStorage.setItem("code-mind-mentor", nextMentor);
+    void equipXpShopItemApi({ category: "mentor", item_id: nextMentor });
+  };
+
+  const handleApplyChatSkin = (nextChat: ChatSkin) => {
+    setChatSkin(nextChat);
+    window.localStorage.setItem("code-mind-chat-skin", nextChat);
+    void equipXpShopItemApi({ category: "chat", item_id: nextChat });
+  };
+
+  const handleApplyMapSkin = (nextMap: SkillMapSkin) => {
+    setSkillMapSkin(nextMap);
+    window.localStorage.setItem("code-mind-map-skin", nextMap);
+    void equipXpShopItemApi({ category: "map", item_id: nextMap });
+  };
+
+  const handleApplyBadge = (nextBadge: BadgeFrame) => {
+    setBadgeFrame(nextBadge);
+    window.localStorage.setItem("code-mind-badge", nextBadge);
+    void equipXpShopItemApi({ category: "badge", item_id: nextBadge });
   };
 
   useEffect(() => {
@@ -483,11 +552,11 @@ export default function App() {
           activeMapSkin={skillMapSkin}
           activeBadge={badgeFrame}
           onApplyTheme={handleApplyBackgroundTheme}
-          onApplyAvatar={setAvatarStyle}
-          onApplyMentor={setMentorMascot}
-          onApplyChatSkin={setChatSkin}
-          onApplyMapSkin={setSkillMapSkin}
-          onApplyBadge={setBadgeFrame}
+          onApplyAvatar={handleApplyAvatar}
+          onApplyMentor={handleApplyMentor}
+          onApplyChatSkin={handleApplyChatSkin}
+          onApplyMapSkin={handleApplyMapSkin}
+          onApplyBadge={handleApplyBadge}
         />
       );
       case "admin":
