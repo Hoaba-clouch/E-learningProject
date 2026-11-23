@@ -44,6 +44,11 @@ class XpShopPurchaseIn(BaseModel):
     cost: int = Field(ge=0, le=20000)
 
 
+class XpShopEquipIn(BaseModel):
+    category: str = Field(min_length=1, max_length=32)
+    item_id: str = Field(min_length=1, max_length=64)
+
+
 class XpQuestClaimIn(BaseModel):
     quest_id: str = Field(min_length=1, max_length=64)
     reward: int = Field(ge=1, le=500)
