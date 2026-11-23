@@ -15,6 +15,8 @@ from app.core.timezone import now_utc
 from app.schemas.student import (
     ChapterExerciseSubmitIn,
     LessonCompleteIn,
+    StudentProfilePreferencesIn,
+    StudentUpdateTitleIn,
     VideoNoteCreateIn,
     VideoProgressIn,
     XpQuestClaimIn,
@@ -379,6 +381,8 @@ def _extract_date_key(raw: str | None) -> str | None:
 
 @router.get("/student/learning-overview")
 @router.get("/student/overview")
+@router.get("/students/profile")
+@router.get("/student/profile")
 def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     """Lấy toàn bộ dữ liệu đồng bộ MySQL 8.0 cho Học viên (Profile, XP, Quests, Achievements, Heatmap, Courses)."""
     user_id = user["id"]
@@ -1367,3 +1371,55 @@ def claim_xp_quest(
             (new_xp, json.dumps(claimed), user_id),
         )
     return {"exp_points": new_xp, "claimed_quests": claimed}
+
+
+@router.post("/student/profile/title")
+@router.patch("/student/profile/title")
+def update_student_title(
+    payload: StudentUpdateTitleIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Cập nhật danh hiệu hiện tại (selected_title) và lưu trực tiếp xuống MySQL 8.0."""
+    user_id = user["id"]
+    clean_title = payload.title.strip()
+    if not clean_title:
+        raise HTTPException(status_code=400, detail="Danh hiệu không được để trống")
+    with db() as conn:
+        _ensure_profile(conn, user_id)
+        conn.execute("UPDATE student_profiles SET selected_title=? WHERE user_id=?", (clean_title, user_id))
+    return {
+        "success": True,
+        "selected_title": clean_title,
+        "message": f"Đã áp dụng danh hiệu: {clean_title}",
+    }
+
+
+@router.post("/student/profile/preferences")
+@router.patch("/student/profile/preferences")
+def update_student_profile_preferences(
+    payload: StudentProfilePreferencesIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Cập nhật toàn diện cấu hình giao diện cá nhân (Theme, Avatar, Badge, Title) lưu xuống MySQL 8.0."""
+    user_id = user["id"]
+    with db() as conn:
+        prof = _ensure_profile(conn, user_id)
+        equipped = _parse_equipped_items(prof.get("equipped_items_json"))
+        if payload.theme:
+            equipped["theme"] = payload.theme
+            conn.execute("UPDATE users SET theme_preference=? WHERE id=?", (f"light:{payload.theme}", user_id))
+        if payload.avatar:
+            equipped["avatar"] = payload.avatar
+        if payload.badge:
+            equipped["badge"] = payload.badge
+        conn.execute("UPDATE student_profiles SET equipped_items_json=? WHERE user_id=?", (json.dumps(equipped), user_id))
+
+        if payload.title:
+            conn.execute("UPDATE student_profiles SET selected_title=? WHERE user_id=?", (payload.title.strip(), user_id))
+    return {
+        "success": True,
+        "equipped_items": equipped,
+        "selected_title": payload.title or prof.get("selected_title"),
+        "message": "Đã lưu cấu hình giao diện cá nhân thành công",
+    }
+

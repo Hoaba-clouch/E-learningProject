@@ -523,8 +523,8 @@ export default function App() {
             badgeFrame={badgeFrame}
             backgroundTheme={backgroundTheme}
             onApplyBackgroundTheme={handleApplyBackgroundTheme}
-            onApplyAvatar={setAvatarStyle}
-            onApplyBadge={setBadgeFrame}
+            onApplyAvatar={handleApplyAvatar}
+            onApplyBadge={handleApplyBadge}
             onOpenSecurity={() => setScreen("security")}
           />
         );

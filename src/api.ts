@@ -2324,6 +2324,65 @@ export async function fetchStudentLearningOverview(): Promise<StudentLearningOve
   }
 }
 
+export async function fetchStudentProfileApi(): Promise<StudentLearningOverview | null> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/students/profile`,
+      {},
+      "student"
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateStudentTitleApi(title: string): Promise<{ success: boolean; selected_title: string; message: string } | null> {
+  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(`${API_BASE}/v1/student/profile/title`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    dispatchXpUpdated();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateStudentProfilePreferencesApi(payload: {
+  theme?: string;
+  avatar?: string;
+  badge?: string;
+  title?: string;
+}): Promise<{ success: boolean; equipped_items: Record<string, string>; selected_title?: string; message: string } | null> {
+  const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(`${API_BASE}/v1/student/profile/preferences`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    dispatchXpUpdated();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export async function completeStudentLessonApi(payload: {
   subject_id: string;
   chapter_id: string;
