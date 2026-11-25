@@ -15,6 +15,7 @@ import {
   LayoutGrid,
   LogOut,
   Moon,
+  Plug,
   ServerCog,
   Shield,
   ShieldCheck,
@@ -41,6 +42,7 @@ interface Props {
   badgeFrame: BadgeFrame;
   onToggleTheme: (trigger?: any) => void;
   onNavigate: (s: Screen) => void;
+  onPrefetch?: (s: Screen) => void;
   onLogout: () => void;
   onOpenCommandPalette?: () => void;
 }
@@ -84,7 +86,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: "student-dashboard", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["student"] },
       { id: "instructor", label: "Overview", icon: <LayoutGrid size={18} strokeWidth={1.85} />, roles: ["instructor"] },
-      { id: "workspace", label: "Tasks", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["student"] },
+      { id: "workspace", label: "Courses", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["student"] },
       { id: "instructor-courses", label: "Courses", icon: <BookOpen size={18} strokeWidth={1.85} />, roles: ["instructor"] },
       { id: "instructor-grading", label: "Grading & AI", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["instructor"] },
       { id: "instructor-students", label: "Students", icon: <Users size={18} strokeWidth={1.85} />, roles: ["instructor"] },
@@ -101,13 +103,14 @@ const navGroups: NavGroup[] = [
       { id: "intro", label: "Roadmap", icon: <Compass size={18} strokeWidth={1.85} />, roles: ["student", "instructor"], badge: "Intro" },
       { id: "defense-room", label: "Bảo vệ Đồ án", icon: <ShieldCheck size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
       { id: "github", label: "Git", icon: <GitFork size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
+      { id: "mcp-hub", label: "MCP Hub", icon: <Plug size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
       { id: "xp-shop", label: "Mốc XP", icon: <Award size={18} strokeWidth={1.85} />, roles: ["student"] },
     ],
   },
   {
     label: "Account",
     items: [
-      { id: "profile", label: "Profile", icon: <UserRound size={18} strokeWidth={1.85} />, roles: ["student"] },
+      { id: "profile", label: "Profile", icon: <UserRound size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
       { id: "security", label: "Security", icon: <Shield size={18} strokeWidth={1.85} />, roles: ["student", "instructor", "admin"] },
     ],
   },
@@ -121,6 +124,7 @@ export default function Sidebar({
   badgeFrame,
   onToggleTheme,
   onNavigate,
+  onPrefetch,
   onLogout,
   onOpenCommandPalette,
 }: Props) {
@@ -182,16 +186,7 @@ export default function Sidebar({
     }))
     .filter((g) => g.items.length > 0);
   const visible = visibleGroups.flatMap((g) => g.items);
-  const [collapsed, setCollapsed] = useState(screen === "workspace");
-
-  // Tự động thu gọn thanh điều hướng (navbar) khi vào phần học để không gian bài học hiển thị tối đa
-  useEffect(() => {
-    if (screen === "workspace") {
-      setCollapsed(true);
-    } else {
-      setCollapsed(false);
-    }
-  }, [screen]);
+  const [collapsed, setCollapsed] = useState(false);
 
   // Lắng nghe sự kiện tuỳ biến collapse-sidebar (ví dụ khi vào / ra player học tập trong LearningWorkspace)
   useEffect(() => {
@@ -291,6 +286,7 @@ export default function Sidebar({
             {/* Logo & Brand title */}
             <div
               onClick={() => onNavigate(role === "admin" ? "admin" : role === "instructor" ? "instructor" : "student-dashboard")}
+              onMouseEnter={() => onPrefetch?.(role === "admin" ? "admin" : role === "instructor" ? "instructor" : "student-dashboard")}
               className="flex items-center gap-2.5 min-w-0 cursor-pointer group"
               title="CodeMind AI • Learning OS"
             >
@@ -362,7 +358,12 @@ export default function Sidebar({
                   data-active={active ? "true" : undefined}
                   aria-current={active ? "page" : undefined}
                   onClick={(e) => handleItemClick(e, item.id)}
-                  onMouseEnter={(e) => showTip(item.label, e, item.badge)}
+                  onMouseEnter={(e) => {
+                    onPrefetch?.(item.id);
+                    showTip(item.label, e, item.badge);
+                  }}
+                  onFocus={() => onPrefetch?.(item.id)}
+                  onPointerDown={() => onPrefetch?.(item.id)}
                   onMouseLeave={hideTip}
                   className={`sidebar-nav-item relative z-10 overflow-hidden flex items-center cursor-pointer outline-none focus:outline-none select-none transition-colors duration-200 active:scale-[0.98] ${
                     collapsed

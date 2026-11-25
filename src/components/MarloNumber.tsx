@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 interface MarloNumberProps {
   value: number;
@@ -11,70 +11,89 @@ interface MarloNumberProps {
 }
 
 /**
- * 🏷️ MarloNumber Component
- * Replicates Marlo's smooth tabular numerical counting and ease (expo.out / power4.out)
- * Prevents horizontal layout jumping using tabular-nums
+ * MarloNumber Component
+ * Direct-DOM requestAnimationFrame counting with expo.out easing:
+ * - Zero per-frame React re-renders during mount/filter updates
+ * - Smoothly eases from previous rendered value to new target without resetting to 0
  */
 export default function MarloNumber({
   value,
-  durationMs = 1200,
+  durationMs = 750,
   decimals = 0,
   prefix = "",
   suffix = "",
   className = "",
   delayMs = 0,
 }: MarloNumberProps) {
-  const [displayValue, setDisplayValue] = useState(0);
-  const startTimeRef = useRef<number | null>(null);
-  const animIdRef = useRef<number>(0);
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const currentValRef = useRef<number>(value);
+  const hasMountedRef = useRef<boolean>(false);
+
+  const formatNum = (val: number) => {
+    const rounded = decimals > 0 ? parseFloat(val.toFixed(decimals)) : Math.round(val);
+    const numStr =
+      decimals > 0
+        ? rounded.toLocaleString("en-US", {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          })
+        : rounded.toLocaleString("en-US");
+    return `${prefix}${numStr}${suffix}`;
+  };
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    const el = spanRef.current;
+    if (!el) return;
 
-    const startAnimation = () => {
-      startTimeRef.current = null;
+    const fromVal = hasMountedRef.current ? currentValRef.current : 0;
+    hasMountedRef.current = true;
+    const targetVal = Number.isFinite(value) ? value : 0;
 
+    if (fromVal === targetVal) {
+      el.textContent = formatNum(targetVal);
+      currentValRef.current = targetVal;
+      return;
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let animId = 0;
+    let startTime: number | null = null;
+    const duration = Math.max(120, durationMs);
+
+    const run = () => {
       const step = (now: number) => {
-        if (!startTimeRef.current) startTimeRef.current = now;
-        const elapsed = now - startTimeRef.current;
-        const progress = Math.min(elapsed / durationMs, 1);
-
-        // Marlo's signature expo.out ease: 1 - Math.pow(2, -10 * progress)
+        if (startTime === null) startTime = now;
+        const progress = Math.min((now - startTime) / duration, 1);
         const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-        const current = ease * value;
-        const nextVal = decimals > 0 ? parseFloat(current.toFixed(decimals)) : Math.round(current);
-
-        setDisplayValue((prev) => (prev !== nextVal ? nextVal : prev));
-
+        const nextVal = fromVal + (targetVal - fromVal) * ease;
+        currentValRef.current = nextVal;
+        el.textContent = formatNum(nextVal);
         if (progress < 1) {
-          animIdRef.current = requestAnimationFrame(step);
+          animId = requestAnimationFrame(step);
+        } else {
+          currentValRef.current = targetVal;
+          el.textContent = formatNum(targetVal);
         }
       };
-
-      animIdRef.current = requestAnimationFrame(step);
+      animId = requestAnimationFrame(step);
     };
 
     if (delayMs > 0) {
-      timeoutId = setTimeout(startAnimation, delayMs);
+      el.textContent = formatNum(fromVal);
+      timeoutId = setTimeout(run, delayMs);
     } else {
-      startAnimation();
+      run();
     }
 
     return () => {
-      clearTimeout(timeoutId);
-      cancelAnimationFrame(animIdRef.current);
+      if (timeoutId) clearTimeout(timeoutId);
+      cancelAnimationFrame(animId);
     };
-  }, [value, durationMs, decimals, delayMs]);
-
-  const formatted = decimals > 0
-    ? displayValue.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-    : displayValue.toLocaleString("en-US");
+  }, [value, durationMs, decimals, delayMs, prefix, suffix]);
 
   return (
-    <span className={`marlo-num font-mono ${className}`}>
-      {prefix}
-      {formatted}
-      {suffix}
+    <span ref={spanRef} className={`marlo-num font-mono ${className}`}>
+      {formatNum(currentValRef.current)}
     </span>
   );
 }

@@ -76,23 +76,34 @@ body.dark {
   --radius: 12px;
 }
 
-* {
-  box-sizing: border-box;
-}
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  background: #FAF9F6;
-  color: #1E1D1B;
-  font-size: 14px;
-  font-family: var(--font);
-  font-variant-numeric: tabular-nums;
-  -webkit-font-smoothing: antialiased;
-}
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #FAF9F6;
+    color: #1E1D1B;
+    font-size: 14px;
+    font-family: var(--font);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
 
-button, input, select, textarea {
-  font-family: inherit;
+  button, input, select, textarea {
+    font: inherit;
+    font-family: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
 }
 
 .pc-app-bg {
@@ -111,18 +122,6 @@ button, input, select, textarea {
 
 /* Selection */
 ::selection { background: rgba(242, 155, 35, 0.22); color: #1c1304; }
-
-button, input, textarea {
-  font: inherit;
-}
-
-button {
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: not-allowed;
-}
 
 .surface {
   background: #ffffff;
@@ -2164,33 +2163,32 @@ html:not(.dark) .sidebar-nav-item[aria-current="page"]:hover span {
    MARLO KINETIC TYPOGRAPHY, NUMBERS & ITEM TRANSITION SYSTEM
    ========================================================================== */
 
-/* 1. Kinetic Typography (Marlo oo & ao character split) */
+/* 1. Kinetic Typography (Clean GPU glide, zero rotation wobble) */
 @keyframes marloCharIn {
   0% {
     opacity: 0;
-    transform: translate3d(0, 115%, 0) rotate(6deg);
+    transform: translate3d(0, 14px, 0);
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) rotate(0deg);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 .marlo-word {
   display: inline-block;
   vertical-align: top;
-  padding-top: 0.18em;
-  margin-top: -0.18em;
-  padding-bottom: 0.18em;
-  margin-bottom: -0.18em;
+  padding-top: 0.14em;
+  margin-top: -0.14em;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
   overflow: hidden;
   white-space: nowrap;
 }
 
 .marlo-ch {
   display: inline-block;
-  animation: marloCharIn 0.65s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-  transform: translateZ(0);
+  animation: marloCharIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 /* 2. Marlo Numbers (Tabular figures, smooth counting) */
@@ -2226,18 +2224,22 @@ html:not(.dark) .sidebar-nav-item[aria-current="page"]:hover span {
   transform: scale(0.97);
 }
 
+/* Disable CSS transitions while GSAP entrance stagger controls transform/opacity */
+[data-marlo-entering="1"] {
+  transition: none !important;
+}
+
 .marlo-item-interactive {
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+  transition: box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
               background-color 0.18s ease,
               border-color 0.18s ease;
 }
 
-.marlo-item-interactive:hover {
+.marlo-item-interactive:not([data-marlo-entering="1"]):hover {
   transform: translate3d(0, -2px, 0);
 }
 
-.marlo-item-interactive:active {
+.marlo-item-interactive:not([data-marlo-entering="1"]):active {
   transform: scale(0.985);
 }
 
@@ -2814,6 +2816,50 @@ html.dark .trello-slot-unfurl,
   animation: marloDropdownOut 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
   transform-origin: top right;
   will-change: transform, opacity;
+}
+
+/* MarloSelect anchored pop-in (never transitions top/left/bottom) */
+@keyframes marloSelectInBottom {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, -4px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes marloSelectInTop {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, 4px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+.marlo-select-in-bottom {
+  animation: marloSelectInBottom 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top left;
+  transition: none !important;
+  will-change: transform, opacity;
+}
+
+.marlo-select-in-top {
+  animation: marloSelectInTop 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: bottom left;
+  transition: none !important;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marlo-select-in-bottom,
+  .marlo-select-in-top {
+    animation: none;
+  }
 }
 
 @keyframes marloItemStaggerIn {
@@ -3804,24 +3850,28 @@ html.dark .themesw span.is-on {
   color: #94a3b8 !important;
 }
 
-.seg button:hover:not([aria-pressed="true"]),
-.marlo-seg button:hover:not([aria-pressed="true"]) {
+.seg button:hover:not([aria-pressed="true"]):not([data-seg-active="true"]),
+.marlo-seg button:hover:not([aria-pressed="true"]):not([data-seg-active="true"]) {
   color: #000000 !important;
 }
 
-.dark .seg button:hover:not([aria-pressed="true"]),
-.dark .marlo-seg button:hover:not([aria-pressed="true"]) {
+.dark .seg button:hover:not([aria-pressed="true"]):not([data-seg-active="true"]),
+.dark .marlo-seg button:hover:not([aria-pressed="true"]):not([data-seg-active="true"]) {
   color: #ffffff !important;
 }
 
 .seg button[aria-pressed="true"],
-.marlo-seg button[aria-pressed="true"] {
+.marlo-seg button[aria-pressed="true"],
+.seg button[data-seg-active="true"],
+.marlo-seg button[data-seg-active="true"] {
   color: #ffffff !important;
   font-weight: 700;
 }
 
 .dark .seg button[aria-pressed="true"],
-.dark .marlo-seg button[aria-pressed="true"] {
+.dark .marlo-seg button[aria-pressed="true"],
+.dark .seg button[data-seg-active="true"],
+.dark .marlo-seg button[data-seg-active="true"] {
   color: #0f172a !important;
   font-weight: 700;
 }
@@ -4250,15 +4300,14 @@ html.dark .themesw span.is-on {
   display: flex;
   text-decoration: none;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.22s ease, border-color 0.22s ease;
   position: relative;
 }
 .dark .pcard {
   background: #1E1E22;
   border-color: rgba(255, 255, 255, 0.1);
 }
-.pcard:hover {
-  transform: translateY(-4px);
+.pcard:not([data-marlo-entering="1"]):hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 .pcard__top {
@@ -4368,8 +4417,9 @@ html.dark .themesw span.is-on {
   height: 24px;
   font-size: 11.5px;
   white-space: nowrap;
-  background: var(--card-3, #E1E2E5);
-  color: var(--ink-2, #393B3F);
+  background: #F8FAFC;
+  color: #334155;
+  box-shadow: inset 0 0 0 1px #E2E8F0;
   border-radius: 99px;
   align-items: center;
   gap: 6px;
@@ -4377,9 +4427,15 @@ html.dark .themesw span.is-on {
   font-weight: 600;
   display: inline-flex;
 }
+.dark .pcard__meta .pill,
+.dark .pill {
+  background: rgba(30, 41, 59, 0.85);
+  color: #E2E8F0;
+  box-shadow: inset 0 0 0 1px #334155;
+}
 .pill:before {
   content: "";
-  background: currentColor;
+  background: var(--pill-dot, #64748B);
   border-radius: 50%;
   width: 6px;
   height: 6px;
@@ -4392,57 +4448,25 @@ html.dark .themesw span.is-on {
 }
 .pill--good,
 .pill.tone-green {
-  background: rgba(30, 130, 80, 0.13) !important;
-  color: #1C7046 !important;
-}
-.dark .pill--good,
-.dark .pill.tone-green {
-  background: rgba(127, 214, 162, 0.15) !important;
-  color: #7FD6A2 !important;
+  --pill-dot: #10B981;
 }
 .pill--bad,
 .pill.tone-red {
-  background: rgba(200, 60, 40, 0.12) !important;
-  color: #AD3622 !important;
-}
-.dark .pill--bad,
-.dark .pill.tone-red {
-  background: rgba(245, 155, 134, 0.15) !important;
-  color: #F59B86 !important;
+  --pill-dot: #EF4444;
 }
 .pill--warn,
 .pill--accent,
 .pill.tone-amber,
 .pill.tone-warm {
-  background: rgba(242, 155, 35, 0.16) !important;
-  color: #8F5404 !important;
-}
-.dark .pill--warn,
-.dark .pill--accent,
-.dark .pill.tone-amber,
-.dark .pill.tone-warm {
-  background: rgba(244, 164, 58, 0.16) !important;
-  color: #F6B95E !important;
+  --pill-dot: #F59E0B;
 }
 .pill--info,
 .pill.tone-blue {
-  background: rgba(40, 100, 170, 0.12) !important;
-  color: #285B91 !important;
-}
-.dark .pill--info,
-.dark .pill.tone-blue {
-  background: rgba(159, 196, 238, 0.14) !important;
-  color: #9FC4EE !important;
+  --pill-dot: #0EA5E9;
 }
 .pill--plain,
 .pill.tone-gray {
-  background: #F1F0EB !important;
-  color: #62656B !important;
-}
-.dark .pill--plain,
-.dark .pill.tone-gray {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #A0A3A9 !important;
+  --pill-dot: #64748B;
 }
 .pcard__burn {
   font-size: 12.5px;
@@ -4648,7 +4672,7 @@ html.dark .themesw span.is-on {
   border-radius: 22px;
   border: 1px solid var(--line, #EBE8E2);
   box-shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 14px 32px -22px rgba(20, 22, 26, 0.28);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.22s ease, border-color 0.22s ease;
 }
 
 .dark .agenda__day {
@@ -4657,8 +4681,7 @@ html.dark .themesw span.is-on {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.7);
 }
 
-.agenda__day:hover {
-  transform: translateY(-3px);
+.agenda__day:not([data-marlo-entering="1"]):hover {
   box-shadow: 0 2px 6px rgba(20, 22, 26, 0.08), 0 24px 48px -20px rgba(20, 22, 26, 0.32);
 }
 
@@ -4693,7 +4716,7 @@ html.dark .themesw span.is-on {
   border: 1px solid var(--line, #EBE8E2);
   box-shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 14px 32px -22px rgba(20, 22, 26, 0.28);
   padding: 18px 22px 20px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.22s ease, border-color 0.22s ease;
   position: relative;
 }
 .dark .agenda__day {
@@ -4701,8 +4724,7 @@ html.dark .themesw span.is-on {
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.7);
 }
-.agenda__day:hover {
-  transform: translateY(-3px);
+.agenda__day:not([data-marlo-entering="1"]):hover {
   box-shadow: 0 2px 6px rgba(20, 22, 26, 0.08), 0 24px 48px -20px rgba(20, 22, 26, 0.32);
 }
 .dark .agenda__day:hover {

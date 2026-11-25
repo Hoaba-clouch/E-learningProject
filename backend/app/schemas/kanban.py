@@ -55,6 +55,9 @@ class WorkspaceProjectPatchIn(BaseModel):
     sprint: str | None = None
     due_date: str | None = None
     instructor: str | None = None
+    instructor_id: str | None = None
+    reviewer: str | None = None
+    reviewer_id: str | None = None
     team: list[dict[str, Any]] | None = None
 
 

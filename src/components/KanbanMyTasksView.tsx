@@ -23,47 +23,47 @@ const getStatusBadge = (column: ColumnId) => {
   switch (column) {
     case "in-progress":
       return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-[#faeedb] text-[#8a5214] border border-[#f3d4a6] dark:bg-[#3d2e1b] dark:text-[#fcd34d] dark:border-amber-800/50 shadow-2xs whitespace-nowrap shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#d97706] inline-block shrink-0" />
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-800/80 dark:text-slate-200 dark:border-slate-700 shadow-2xs whitespace-nowrap shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block shrink-0" />
           Đang làm
         </span>
       );
     case "ready":
       return (
-        <span className="inline-flex items-center text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/60 shadow-2xs whitespace-nowrap shrink-0">
+        <span className="inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-2xs whitespace-nowrap shrink-0">
           Cần làm
         </span>
       );
     case "backlog":
       return (
-        <span className="inline-flex items-center text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/50 dark:border-slate-700/60 shadow-2xs whitespace-nowrap shrink-0">
+        <span className="inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700 shadow-2xs whitespace-nowrap shrink-0">
           Backlog
         </span>
       );
     case "done":
       return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/50 shadow-2xs whitespace-nowrap shrink-0">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs whitespace-nowrap shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block shrink-0" />
           Chờ nghiệm thu
         </span>
       );
     case "verified":
       return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-[#e6f7ed] dark:bg-[#1a3828] text-[#136c38] dark:text-[#86efac] border border-[#b2e2c5] dark:border-emerald-800/50 shadow-2xs whitespace-nowrap shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a] inline-block shrink-0" />
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs whitespace-nowrap shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />
           Đã nghiệm thu
         </span>
       );
     case "fail":
       return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/60 shadow-2xs whitespace-nowrap shrink-0">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs whitespace-nowrap shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block shrink-0" />
           Cần sửa lại
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-2xs whitespace-nowrap shrink-0">
+        <span className="inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-2xs whitespace-nowrap shrink-0">
           Cần làm
         </span>
       );

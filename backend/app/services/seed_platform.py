@@ -262,6 +262,150 @@ def _build_dual_submissions_seed() -> list[dict[str, Any]]:
     ]
 
 
+PLATFORM_USER_PROFILES: dict[str, dict[str, Any]] = {
+    "usr-adm-01": {
+        "headline": "Quản trị Hệ thống & Điều phối Học vụ CodeMind Campus",
+        "department": "Trung tâm Hạ tầng Số & Đào tạo Kỹ sư",
+        "office_location": "Văn phòng Điều hành A1-102 · Giờ hành chính",
+        "bio": "Quản trị phân quyền RBAC, phê duyệt học viên, giám sát cụm Docker Sandbox và ngân sách AI Campus.",
+        "skills": ["RBAC & Security", "MySQL 8 Operations", "Docker Infrastructure", "Academic Ops"],
+        "github_url": "https://github.com/codemind-campus",
+        "website_url": "https://codemind.edu.vn",
+        "phone": "028 3899 0101",
+    },
+    "usr-gv-01": {
+        "headline": "Giảng viên Chính · Kiến trúc Phần mềm & Trình biên dịch",
+        "department": "Khoa CNTT · Bộ môn Kỹ nghệ Phần mềm",
+        "office_location": "Phòng Lab A3-201 · Tiếp SV: Thứ 3 & 5 (14:00–17:00)",
+        "bio": "Giảng viên hướng dẫn đồ án chuyên ngành và thành viên Hội đồng Phản biện CodeMind Campus. Tập trung vào Clean Architecture, quản lý bộ nhớ C++20, React 19 và quy trình Git/Kanban chuẩn doanh nghiệp.",
+        "skills": ["C++20 & OOP", "Compiler AST", "Clean Architecture", "React 19", "Code Review & CI/CD"],
+        "github_url": "https://github.com/tran-thi-b-codemind",
+        "website_url": "https://codemind.edu.vn/faculty/tran-thi-b",
+        "phone": "0903 812 401",
+    },
+    "usr-gv-02": {
+        "headline": "Giảng viên · Hệ thống Phân tán, Backend & DevOps",
+        "department": "Khoa CNTT · Bộ môn Hệ thống Thông tin & Cloud",
+        "office_location": "Phòng Lab B2-304 · Tiếp SV: Thứ 4 & 6 (09:00–11:30)",
+        "bio": "Phụ trách các học phần FastAPI, Kiến trúc Hệ thống Phân tán (Kafka/Redis), AI-Native Web App và Docker CI/CD. Đồng hành cùng các nhóm đồ án tối ưu hiệu năng và triển khai thực tế.",
+        "skills": ["FastAPI & Python", "Distributed Systems", "Kafka & Redis", "Docker & CI/CD", "AI-Native RAG"],
+        "github_url": "https://github.com/nguyen-phuoc-codemind",
+        "website_url": "https://codemind.edu.vn/faculty/nguyen-phuoc",
+        "phone": "0908 441 209",
+    },
+    "usr-gv-03": {
+        "headline": "Giảng viên · Kiến trúc Máy tính, Mạng & Di động Đa nền tảng",
+        "department": "Khoa CNTT · Bộ môn Mạng Máy tính & Mobile",
+        "office_location": "Phòng Lab B2-105 · Tiếp SV: Thứ 2 & 4 (13:30–16:30)",
+        "bio": "Phụ trách học phần Hệ điều hành, Giao thức TCP/IP (CS205) và Phát triển Ứng dụng Di động Flutter/Dart (CS306).",
+        "skills": ["TCP/IP & OS", "Socket Programming", "Wireshark", "Flutter & Dart", "Mobile UX"],
+        "github_url": "https://github.com/tran-minh-quan-codemind",
+        "website_url": "https://codemind.edu.vn/faculty/tran-minh-quan",
+        "phone": "0909 512 303",
+    },
+    "usr-gv-04": {
+        "headline": "Giảng viên · An toàn Thông tin & Quản trị Dự án Agile",
+        "department": "Khoa CNTT · Bộ môn An ninh Mạng & Công nghệ Phần mềm",
+        "office_location": "Phòng Lab C1-208 · Tiếp SV: Thứ 3 & 6 (14:00–17:00)",
+        "bio": "Chuyên gia kiểm thử bảo mật ứng dụng Web (OWASP Top 10) và cố vấn quy trình Agile Scrum / Kanban chuẩn doanh nghiệp.",
+        "skills": ["OWASP Top 10", "AppSec & JWT", "Agile Scrum", "Code Audit", "Risk Governance"],
+        "github_url": "https://github.com/dang-quoc-bao-codemind",
+        "website_url": "https://codemind.edu.vn/faculty/dang-quoc-bao",
+        "phone": "0914 708 404",
+    },
+    "usr-gv-05": {
+        "headline": "Tiến sĩ · Trí tuệ Nhân tạo & Hạ tầng Đám mây Kubernetes",
+        "department": "Khoa CNTT · Bộ môn AI Engineering & Cloud Native",
+        "office_location": "Phòng Nghiên cứu A2-401 · Tiếp SV: Thứ 5 (08:30–11:30)",
+        "bio": "Giảng dạy Học máy ứng dụng (CS410) và Triển khai Cloud Kubernetes / Terraform (CS415), hướng dẫn nghiên cứu mô hình AI.",
+        "skills": ["Deep Learning", "PyTorch & Attention", "Kubernetes", "Terraform Cloud", "MLOps"],
+        "github_url": "https://github.com/le-hoang-mai-codemind",
+        "website_url": "https://codemind.edu.vn/faculty/le-hoang-mai",
+        "phone": "0906 921 505",
+    },
+    "usr-sv-01": {
+        "headline": "Nhóm trưởng Đồ án · Fullstack & AI RAG Engineer",
+        "department": "Lớp K22-KTPM01 · Chuyên ngành Kỹ thuật Phần mềm",
+        "office_location": "Khu thực hành Lab A3 · Bàn nhóm 01",
+        "bio": "Đam mê thiết kế giao diện React/TypeScript kết hợp kiến trúc AI-Native và hệ thống chấm bài tự động.",
+        "skills": ["React 19", "TypeScript", "FastAPI", "C++20", "AI RAG"],
+        "github_url": "https://github.com/hoabn",
+        "website_url": "",
+        "phone": "0912 308 801",
+    },
+    "usr-sv-02": {
+        "headline": "Sinh viên Năm 4 · Systems C++ & Compiler Engineer",
+        "department": "Lớp K22-KHMT02 · Chuyên ngành Khoa học Máy tính",
+        "office_location": "Khu thực hành Lab A3 · Bàn nhóm 02",
+        "bio": "Tập trung phát triển Trình biên dịch Mini C++ với AST Visualizer, tối ưu bộ nhớ Valgrind và tư duy Clean Code trong các đồ án kỹ nghệ.",
+        "skills": ["C++20", "AST & Compiler", "Algorithms", "Git Workflow", "TypeScript"],
+        "github_url": "https://github.com/nguyenvana",
+        "website_url": "",
+        "phone": "0915 221 842",
+    },
+    "usr-sv-03": {
+        "headline": "Sinh viên Năm 4 · Backend & Thuật toán Tối ưu",
+        "department": "Lớp K22-KHMT01 · Chuyên ngành Khoa học Máy tính",
+        "office_location": "Khu thực hành Lab B2 · Nhóm Đồ thị & Microservices",
+        "bio": "Quan tâm đến cấu trúc dữ liệu hiệu năng cao, thuật toán đồ thị quy mô lớn và kiến trúc Microservices chịu lỗi.",
+        "skills": ["C++ Algorithms", "Python", "Kafka", "PostgreSQL", "Docker"],
+        "github_url": "https://github.com/huyvn",
+        "website_url": "",
+        "phone": "0917 884 150",
+    },
+    "usr-sv-04": {
+        "headline": "Sinh viên Năm 4 · Bảo mật API & Kiến trúc 3 tầng",
+        "department": "Lớp K22-KTPM02 · Chuyên ngành Kỹ thuật Phần mềm",
+        "office_location": "Khu thực hành Lab B2 · Nhóm Bảo mật & Web",
+        "bio": "Xây dựng các hệ thống FastAPI RBAC, JWT rotation và phòng thủ lỗ hổng OWASP cho đồ án doanh nghiệp.",
+        "skills": ["FastAPI Security", "RBAC & JWT", "MySQL 8", "TypeScript", "Pytest"],
+        "github_url": "https://github.com/nghipd",
+        "website_url": "",
+        "phone": "0934 510 829",
+    },
+    "usr-sv-05": {
+        "headline": "Sinh viên Năm 3 · AI & Retrieval Systems",
+        "department": "Lớp K23-AI01 · Chuyên ngành Trí tuệ Nhân tạo",
+        "office_location": "Phòng tự học Tòa C",
+        "bio": "Đang hoàn thiện nền tảng lập trình hướng đối tượng C++ và tìm hiểu embedding vector với pgvector.",
+        "skills": ["Python", "C++ OOP", "pgvector", "SQL"],
+        "github_url": "https://github.com/khoinm",
+        "website_url": "",
+        "phone": "0971 204 866",
+    },
+    "usr-sv-06": {
+        "headline": "Sinh viên · Lập trình Hệ thống Cơ bản",
+        "department": "Lớp K23-CNTT03",
+        "office_location": "Phòng tự học Tòa C",
+        "bio": "Học viên khoa CNTT đang bảo lưu tạm thời.",
+        "skills": ["C++", "Git"],
+        "github_url": "",
+        "website_url": "",
+        "phone": "",
+    },
+    "usr-sv-07": {
+        "headline": "Sinh viên Năm 4 · Frontend & Interactive UI",
+        "department": "Lớp K22-KTPM01 · Chuyên ngành Kỹ thuật Phần mềm",
+        "office_location": "Khu thực hành Lab A3 · Nhóm DevNet",
+        "bio": "Tập trung thiết kế trải nghiệm người dùng mượt mà với React, GSAP animation và trực quan hóa cây dữ liệu.",
+        "skills": ["React 19", "Tailwind CSS", "GSAP", "C++ OOP"],
+        "github_url": "https://github.com/havn",
+        "website_url": "",
+        "phone": "0988 312 851",
+    },
+    "usr-sv-08": {
+        "headline": "Sinh viên Năm 4 · AI Agent & Semantic Search",
+        "department": "Lớp K22-AI01 · Chuyên ngành Trí tuệ Nhân tạo",
+        "office_location": "Khu thực hành Lab B2 · Nhóm AI Socratic",
+        "bio": "Nghiên cứu pipeline RAG, tinh chỉnh ngưỡng cosine similarity và đánh giá chất lượng phản hồi LLM.",
+        "skills": ["Python", "RAG Pipeline", "Embeddings", "FastAPI"],
+        "github_url": "https://github.com/tuantm",
+        "website_url": "",
+        "phone": "0909 742 877",
+    },
+}
+
+
 def seed_platform_data(conn: sqlite3.Connection, force_reseed: bool = False) -> None:
     """
     Seed dữ liệu đồng bộ cho cả 3 vai trò (Student, Instructor, Admin).
@@ -278,8 +422,11 @@ def seed_platform_data(conn: sqlite3.Connection, force_reseed: bool = False) -> 
     default_pwd_hash = hash_password("hasib123")
     platform_users = [
         ("usr-adm-01", "admin@codemind.ai", default_pwd_hash, "Admin AIO", "admin", "active", "ADM-01", "Đang trực tuyến", "Workstation · Chrome 126", 6),
-        ("usr-gv-01", "lananh.gv@codemind.ai", default_pwd_hash, "Cô Trần Thị B", "instructor", "active", "GV-2026-01", "Vừa xong", "MacBook Pro · Chrome 126", 3),
-        ("usr-gv-02", "phuoc.gv@codemind.ai", default_pwd_hash, "Thầy Nguyễn Phước", "instructor", "active", "GV-2026-02", "12 phút trước", "Windows 11 · Edge 125", 3),
+        ("usr-gv-01", "lananh.gv@codemind.ai", default_pwd_hash, "Cô Trần Thị B", "instructor", "active", "GV-2026-01", "Vừa xong", "MacBook Pro · Chrome 126", 5),
+        ("usr-gv-02", "phuoc.gv@codemind.ai", default_pwd_hash, "Thầy Nguyễn Phước", "instructor", "active", "GV-2026-02", "12 phút trước", "Windows 11 · Edge 125", 5),
+        ("usr-gv-03", "quan.gv@codemind.ai", default_pwd_hash, "Thầy Trần Minh Quân", "instructor", "active", "GV-2026-03", "18 phút trước", "ThinkPad X1 · Ubuntu 24.04", 2),
+        ("usr-gv-04", "bao.gv@codemind.ai", default_pwd_hash, "Thầy Đặng Quốc Bảo", "instructor", "active", "GV-2026-04", "25 phút trước", "MacBook Air M2 · Chrome", 2),
+        ("usr-gv-05", "mai.gv@codemind.ai", default_pwd_hash, "TS. Lê Hoàng Mai", "instructor", "active", "GV-2026-05", "9 phút trước", "Workstation Linux · Chrome", 2),
         ("usr-sv-01", "hoa.nb@student.edu.vn", default_pwd_hash, "Nguyễn Bá Hòa", "student", "active", "2210801", "4 phút trước", "MacBook Air M3 · Safari", 4),
         ("usr-sv-02", "hasib@gmail.com", default_pwd_hash, "Nguyễn Văn A", "student", "active", "2210842", "Vừa xong", "Windows 11 · Chrome 126", 4),
         ("usr-sv-03", "huy.vn@student.edu.vn", default_pwd_hash, "Võ Nhật Huy", "student", "active", "2210815", "18 phút trước", "Ubuntu 24.04 · Firefox", 3),
@@ -300,16 +447,31 @@ def seed_platform_data(conn: sqlite3.Connection, force_reseed: bool = False) -> 
     default_claimed_json = json.dumps(["q3"])
 
     for u_id, email, pwd_hash, full_name, role, st, code, last_act, dev, cls_cnt in platform_users:
-        existing = conn.execute("SELECT id FROM users WHERE id=? OR lower(email)=?", (u_id, email)).fetchone()
+        existing = conn.execute("SELECT id, headline, bio FROM users WHERE id=? OR lower(email)=?", (u_id, email)).fetchone()
+        p_prof = PLATFORM_USER_PROFILES.get(u_id, {})
+        p_headline = p_prof.get("headline", "")
+        p_bio = p_prof.get("bio", "")
+        p_department = p_prof.get("department", "")
+        p_office = p_prof.get("office_location", "")
+        p_skills_json = json.dumps(p_prof.get("skills", []), ensure_ascii=False)
+        p_github = p_prof.get("github_url", "")
+        p_website = p_prof.get("website_url", "")
+        p_phone = p_prof.get("phone", "")
         is_primary_student = u_id == "usr-sv-02"
         target_xp = 3240 if is_primary_student else 1250
         target_streak = 14 if is_primary_student else 4
         if not existing:
             conn.execute(
                 """INSERT INTO users(id, email, password_hash, full_name, display_name, role, status, locale, timezone,
-                                     theme_preference, user_code, last_active_label, last_device, classes_count, created_at, updated_at)
-                   VALUES(?, ?, ?, ?, ?, ?, ?, 'vi-VN', 'Asia/Ho_Chi_Minh', 'one-dark', ?, ?, ?, ?, ?, ?)""",
-                (u_id, email, pwd_hash, full_name, full_name, role, st, code, last_act, dev, cls_cnt, now, now),
+                                     theme_preference, user_code, last_active_label, last_device, classes_count,
+                                     headline, bio, department, office_location, skills_json, github_url, website_url, phone,
+                                     created_at, updated_at)
+                   VALUES(?, ?, ?, ?, ?, ?, ?, 'vi-VN', 'Asia/Ho_Chi_Minh', 'one-dark', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    u_id, email, pwd_hash, full_name, full_name, role, st, code, last_act, dev, cls_cnt,
+                    p_headline, p_bio, p_department, p_office, p_skills_json, p_github, p_website, p_phone,
+                    now, now,
+                ),
             )
             m_role = "org_admin" if role == "admin" else role
             conn.execute(
@@ -332,8 +494,16 @@ def seed_platform_data(conn: sqlite3.Connection, force_reseed: bool = False) -> 
                     )
         elif force_reseed:
             conn.execute(
-                "UPDATE users SET role=?, status=?, user_code=?, last_active_label=?, last_device=?, classes_count=?, updated_at=? WHERE id=?",
-                (role, st, code, last_act, dev, cls_cnt, now, existing["id"]),
+                """UPDATE users
+                   SET full_name=?, display_name=?, role=?, status=?, user_code=?, last_active_label=?, last_device=?, classes_count=?,
+                       headline=?, bio=?, department=?, office_location=?, skills_json=?, github_url=?, website_url=?, phone=?,
+                       two_factor_enabled=0, failed_login_attempts=0, locked_until=NULL, updated_at=?
+                   WHERE id=?""",
+                (
+                    full_name, full_name, role, st, code, last_act, dev, cls_cnt,
+                    p_headline, p_bio, p_department, p_office, p_skills_json, p_github, p_website, p_phone,
+                    now, existing["id"],
+                ),
             )
             if role == "student":
                 conn.execute(
@@ -344,6 +514,14 @@ def seed_platform_data(conn: sqlite3.Connection, force_reseed: bool = False) -> 
                            owned_items_json=?, claimed_quests_json=?
                        WHERE user_id=?""",
                     (target_streak, target_streak, target_xp, default_owned_json, default_claimed_json, existing["id"]),
+                )
+        else:
+            if not (existing.get("headline") or "").strip() and not (existing.get("bio") or "").strip() and p_prof:
+                conn.execute(
+                    """UPDATE users
+                       SET headline=?, bio=?, department=?, office_location=?, skills_json=?, github_url=?, website_url=?, phone=?, updated_at=?
+                       WHERE id=?""",
+                    (p_headline, p_bio, p_department, p_office, p_skills_json, p_github, p_website, p_phone, now, existing["id"]),
                 )
 
     # Đảm bảo học viên usr-sv-02 trên DB đã tồn tại từ trước có hồ sơ XP Shop & tiến độ Nhánh 1 đồng bộ
@@ -375,25 +553,211 @@ def seed_platform_data(conn: sqlite3.Connection, force_reseed: bool = False) -> 
                 (uid(), "usr-sv-02", subj, ch_id, l_id, l_st, qs, qt, xp_val, now),
             )
 
-    # 2. Seed Courses (dùng chung cho Student, Instructor & Admin)
-    existing_courses = conn.execute("SELECT COUNT(*) c FROM courses").fetchone()["c"]
-    if existing_courses < 16 or force_reseed:
-        if force_reseed:
-            conn.execute("DELETE FROM courses")
-        for c in _build_courses_seed():
+    # 2. Seed Courses, Class Sections & Enrollments (Phương án A: Lộ trình -> Môn học -> Lớp học phần -> Ghi danh)
+    stage_titles_map = {
+        1: "Cơ sở cốt lõi",
+        2: "Giao diện & Trải nghiệm",
+        3: "Kiến trúc Nền tảng",
+        4: "Trí tuệ Nhân tạo Ứng dụng",
+        5: "Chuyên sâu & Tốt nghiệp",
+    }
+    course_stage_map = {
+        "CS201": (1, 4),
+        "CS202": (1, 4),
+        "CS205": (1, 3),
+        "CS210": (2, 3),
+        "CS215": (2, 3),
+        "CS306": (2, 3),
+        "CS304": (3, 4),
+        "CS308": (3, 3),
+        "CS315": (3, 4),
+        "CS312": (3, 3),
+        "CS410": (4, 4),
+        "CS420": (4, 4),
+        "CS405": (5, 3),
+        "CS415": (5, 3),
+        "CS401": (5, 3),
+        "CS499": (5, 6),
+    }
+    teacher_to_instructor_id = {
+        "Cô Trần Thị B": "usr-gv-01",
+        "Thầy Nguyễn Phước": "usr-gv-02",
+        "Thầy Trần Minh Quân": "usr-gv-03",
+        "Thầy Đặng Quốc Bảo": "usr-gv-04",
+        "TS. Lê Hoàng Mai": "usr-gv-05",
+    }
+    fixed_student_owners = {
+        "CS215": ("Cô Trần Thị B", "usr-gv-01"),
+        "CS306": ("Thầy Trần Minh Quân", "usr-gv-03"),
+        "CS401": ("Thầy Đặng Quốc Bảo", "usr-gv-04"),
+    }
+
+    if force_reseed:
+        conn.execute("DELETE FROM class_enrollments")
+        conn.execute("DELETE FROM class_sections")
+        conn.execute("DELETE FROM courses")
+
+    for c in _build_courses_seed():
+        stage_no, creds = course_stage_map.get(c["code"], (1, 3))
+        stage_title = stage_titles_map.get(stage_no, "Cơ sở cốt lõi")
+        inst_id = c.get("instructor_id") or teacher_to_instructor_id.get(c["teacher_name"], "")
+        exists_course = conn.execute("SELECT id FROM courses WHERE id=? OR code=?", (c["id"], c["code"])).fetchone()
+        if not exists_course:
             conn.execute(
-                """INSERT OR REPLACE INTO courses(
-                       id, subject_id, code, name, semester, teacher_name, student_count, avg_progress_pct,
+                """INSERT INTO courses(
+                       id, subject_id, code, name, stage_number, stage_title, semester, credits,
+                       instructor_id, teacher_name, student_count, avg_progress_pct,
                        pending_dual_reviews, health, room, docker_image, sandbox_enabled, ai_defense_enabled,
                        chapters_json, updated_at
-                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    c["id"], c["subject_id"], c["code"], c["name"], c["semester"], c["teacher_name"],
+                    c["id"], c["subject_id"], c["code"], c["name"], stage_no, stage_title,
+                    c["semester"], creds, inst_id or None, c["teacher_name"],
                     c["student_count"], c["avg_progress_pct"], c["pending_dual_reviews"], c["health"], c["room"],
                     c["docker_image"], c["sandbox_enabled"], c["ai_defense_enabled"],
                     json.dumps(c["chapters"], ensure_ascii=False), now,
                 ),
             )
+
+    # Sửa idempotent dữ liệu học viên đứng tên chủ lớp & chuẩn hóa instructor_id + stage_number
+    for code, (real_teacher, real_inst_id) in fixed_student_owners.items():
+        conn.execute(
+            """UPDATE courses
+               SET teacher_name=?, instructor_id=?, updated_at=?
+               WHERE code=? AND (teacher_name IN ('Phan Đình Nghị', 'Nguyễn Bá Hòa') OR instructor_id IS NULL OR instructor_id='')""",
+            (real_teacher, real_inst_id, now, code),
+        )
+    for t_name, inst_id in teacher_to_instructor_id.items():
+        conn.execute(
+            "UPDATE courses SET instructor_id=? WHERE (instructor_id IS NULL OR instructor_id='') AND teacher_name=?",
+            (inst_id, t_name),
+        )
+    for code, (stage_no, creds) in course_stage_map.items():
+        stage_title = stage_titles_map.get(stage_no, "Cơ sở cốt lõi")
+        if stage_no != 1 or creds != 3:
+            conn.execute(
+                """UPDATE courses
+                   SET stage_number=?, stage_title=?, credits=?
+                   WHERE code=? AND stage_number=1 AND stage_title='Cơ sở cốt lõi'""",
+                (stage_no, stage_title, creds, code),
+            )
+
+    # Seed class_sections N01 (id = course["id"] để tương thích ngược dual_submissions / defense_sessions)
+    all_courses_rows = conn.execute("SELECT * FROM courses").fetchall()
+    for c_row in all_courses_rows:
+        sec_id = c_row["id"]
+        sec_code = f"{c_row['code']}-N01"
+        resolved_inst_id = c_row.get("instructor_id") or teacher_to_instructor_id.get(c_row["teacher_name"], "") or None
+        existing_sec = conn.execute(
+            "SELECT id, teacher_name, instructor_id FROM class_sections WHERE id=? OR section_code=?",
+            (sec_id, sec_code),
+        ).fetchone()
+        if not existing_sec:
+            conn.execute(
+                """INSERT INTO class_sections(
+                       id, course_id, section_code, semester, instructor_id, teacher_name, room, max_students,
+                       docker_image, sandbox_enabled, ai_defense_enabled, avg_progress_pct,
+                       pending_dual_reviews, health, status, created_at, updated_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    sec_id, c_row["id"], sec_code, c_row["semester"], resolved_inst_id, c_row["teacher_name"],
+                    c_row.get("room") or "Lab A3-201", max(45, int(c_row.get("student_count") or 40)),
+                    c_row["docker_image"], c_row["sandbox_enabled"], c_row["ai_defense_enabled"],
+                    c_row["avg_progress_pct"], c_row["pending_dual_reviews"], c_row["health"], "active", now, now,
+                ),
+            )
+        else:
+            if (existing_sec.get("teacher_name") in ("Phan Đình Nghị", "Nguyễn Bá Hòa")) or not (existing_sec.get("instructor_id") or "").strip():
+                conn.execute(
+                    "UPDATE class_sections SET teacher_name=?, instructor_id=?, updated_at=? WHERE id=?",
+                    (c_row["teacher_name"], resolved_inst_id, now, existing_sec["id"]),
+                )
+
+    # Seed class_enrollments thực tế khi chưa có bản ghi nào (giữ nguyên chỉnh sửa thủ công của Admin về sau)
+    existing_enrollments_cnt = conn.execute("SELECT COUNT(*) c FROM class_enrollments").fetchone()["c"]
+    valid_student_ids = {r["id"] for r in conn.execute("SELECT id FROM users WHERE role='student'").fetchall()}
+    code_to_section_id = {
+        r["code"]: r["id"]
+        for r in conn.execute(
+            """SELECT c.code, cs.id
+               FROM class_sections cs
+               JOIN courses c ON c.id = cs.course_id
+               ORDER BY cs.created_at ASC"""
+        ).fetchall()
+    }
+    if existing_enrollments_cnt == 0 or force_reseed:
+        starter_enrollments: dict[str, list[str]] = {
+            "usr-sv-02": ["CS201", "CS202", "CS205", "CS210", "CS304", "CS308", "CS420", "CS405", "CS499"],
+            "usr-sv-01": ["CS201", "CS202", "CS210", "CS304", "CS308", "CS499"],
+            "usr-sv-03": ["CS202", "CS205", "CS304", "CS315", "CS405", "CS499"],
+            "usr-sv-04": ["CS205", "CS215", "CS304", "CS312", "CS401"],
+            "usr-sv-05": ["CS201", "CS420"],
+            "usr-sv-07": ["CS201", "CS210", "CS215", "CS306", "CS499"],
+            "usr-sv-08": ["CS410", "CS420", "CS415", "CS499"],
+            "student-demo": ["CS201", "CS202", "CS210", "CS304", "CS420"],
+        }
+        for stu_id, course_codes in starter_enrollments.items():
+            if stu_id not in valid_student_ids:
+                continue
+            for code in course_codes:
+                sec_id = code_to_section_id.get(code)
+                if not sec_id:
+                    continue
+                conn.execute(
+                    """INSERT IGNORE INTO class_enrollments(id, section_id, student_id, status, enrolled_at)
+                       VALUES(?,?,?,?,?)""",
+                    (f"enr-{sec_id}-{stu_id}", sec_id, stu_id, "active", now),
+                )
+        # Đảm bảo học viên có dual_submissions luôn được ghi danh vào lớp tương ứng
+        for sub_row in conn.execute("SELECT DISTINCT class_id, user_id FROM dual_submissions").fetchall():
+            if sub_row["user_id"] in valid_student_ids and conn.execute(
+                "SELECT id FROM class_sections WHERE id=?", (sub_row["class_id"],)
+            ).fetchone():
+                conn.execute(
+                    """INSERT IGNORE INTO class_enrollments(id, section_id, student_id, status, enrolled_at)
+                       VALUES(?,?,?,?,?)""",
+                    (f"enr-{sub_row['class_id']}-{sub_row['user_id']}", sub_row["class_id"], sub_row["user_id"], "active", now),
+                )
+        # Đảm bảo lớp nào chưa có học viên nào thì có ít nhất cặp học viên đại diện để GV test được ngay
+        for c_row in all_courses_rows:
+            sec_id = c_row["id"]
+            cnt_row = conn.execute(
+                "SELECT COUNT(*) c FROM class_enrollments WHERE section_id=? AND status='active'",
+                (sec_id,),
+            ).fetchone()
+            if (cnt_row["c"] if cnt_row else 0) == 0:
+                for fallback_stu in ("usr-sv-01", "usr-sv-03"):
+                    if fallback_stu in valid_student_ids:
+                        conn.execute(
+                            """INSERT IGNORE INTO class_enrollments(id, section_id, student_id, status, enrolled_at)
+                               VALUES(?,?,?,?,?)""",
+                            (f"enr-{sec_id}-{fallback_stu}", sec_id, fallback_stu, "active", now),
+                        )
+
+    # Đồng bộ sĩ số thật lên courses.student_count và users.classes_count
+    conn.execute(
+        """UPDATE courses
+           SET student_count = COALESCE((
+               SELECT COUNT(*)
+               FROM class_enrollments ce
+               JOIN class_sections cs ON cs.id = ce.section_id
+               WHERE cs.course_id = courses.id AND ce.status = 'active'
+           ), 0)"""
+    )
+    conn.execute(
+        """UPDATE users
+           SET classes_count = COALESCE((
+               SELECT COUNT(*) FROM class_sections cs WHERE cs.instructor_id = users.id AND cs.status = 'active'
+           ), 0)
+           WHERE role = 'instructor'"""
+    )
+    conn.execute(
+        """UPDATE users
+           SET classes_count = COALESCE((
+               SELECT COUNT(*) FROM class_enrollments ce WHERE ce.student_id = users.id AND ce.status = 'active'
+           ), 0)
+           WHERE role = 'student'"""
+    )
 
     # 3. Seed Dual Submissions
     existing_subs = conn.execute("SELECT COUNT(*) c FROM dual_submissions").fetchone()["c"]
@@ -462,7 +826,7 @@ def seed_platform_data(conn: sqlite3.Connection, force_reseed: bool = False) -> 
             "guardrailRefuseAnswer": True,
             "rateLimit20PerHour": True,
             "dockerNetworkNone": True,
-            "require2FA": True,
+            "require2FA": False,
             "blockConcurrentIP": True,
             "autoLockFailedAttempts": True,
         }

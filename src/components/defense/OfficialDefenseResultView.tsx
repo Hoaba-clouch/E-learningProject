@@ -3,6 +3,7 @@ import {
   Award,
   CheckCircle2,
   Clock,
+  FileText,
   Printer,
   ShieldCheck,
   Users,
@@ -12,6 +13,7 @@ import type { DefenseProjectDossier } from "../../api";
 interface Props {
   dossier: DefenseProjectDossier | null;
   practiceCount?: number;
+  onGoToDossier?: () => void;
   onGoToPractice?: () => void;
   onNotify?: (msg: string) => void;
 }
@@ -19,6 +21,7 @@ interface Props {
 export default function OfficialDefenseResultView({
   dossier,
   practiceCount = 0,
+  onGoToDossier,
   onGoToPractice,
   onNotify,
 }: Props) {
@@ -129,16 +132,28 @@ export default function OfficialDefenseResultView({
           ))}
         </div>
 
-        {onGoToPractice && (
-          <div>
-            <button
-              type="button"
-              onClick={onGoToPractice}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 px-4 py-2 text-xs font-bold hover:opacity-90 transition cursor-pointer"
-            >
-              <ShieldCheck size={14} />
-              <span>Quay lại Hồ sơ Bảo vệ & Phòng tập AI</span>
-            </button>
+        {(onGoToDossier || onGoToPractice) && (
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {onGoToDossier && (
+              <button
+                type="button"
+                onClick={onGoToDossier}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-4 py-2 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <FileText size={14} />
+                <span>Mở Hồ sơ Bảo vệ</span>
+              </button>
+            )}
+            {onGoToPractice && (
+              <button
+                type="button"
+                onClick={onGoToPractice}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 px-4 py-2 text-xs font-bold hover:opacity-90 transition cursor-pointer"
+              >
+                <ShieldCheck size={14} />
+                <span>Vào Luyện tập AI</span>
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -25,7 +25,11 @@ def test_live_defense_council_workflow() -> None:
     adm_headers = {"Authorization": f"Bearer {r_adm.json()['access_token']}"}
     assert client.post("/v1/admin/reset-demo", headers=adm_headers).status_code == 200
 
-    r_stu = client.post("/v1/auth/login", json={"email": "hasib@gmail.com", "password": "hasib123"})
+    r_non_member = client.post("/v1/auth/login", json={"email": "hasib@gmail.com", "password": "hasib123"})
+    assert r_non_member.status_code == 200, r_non_member.text
+    non_member_headers = {"Authorization": f"Bearer {r_non_member.json()['access_token']}"}
+
+    r_stu = client.post("/v1/auth/login", json={"email": "hoa.nb@student.edu.vn", "password": "hasib123"})
     assert r_stu.status_code == 200, r_stu.text
     stu_headers = {"Authorization": f"Bearer {r_stu.json()['access_token']}"}
 
@@ -33,7 +37,32 @@ def test_live_defense_council_workflow() -> None:
     assert r_inst.status_code == 200, r_inst.text
     inst_headers = {"Authorization": f"Bearer {r_inst.json()['access_token']}"}
 
-    # 1. Invalid URL rejected 422
+    # 0. RBAC: Non-member & delivered project students see read-only dossier and get 403 on package save
+    nm_dossier = client.get("/v1/defense/projects/prj-codemind/dossier", headers=non_member_headers)
+    assert nm_dossier.status_code == 200, nm_dossier.text
+    assert nm_dossier.json()["project"]["isMyProject"] is False
+    assert nm_dossier.json()["project"]["canEditPackage"] is False
+
+    nm_put = client.put(
+        "/v1/defense/projects/prj-codemind/package",
+        json={"demo_url": "https://codemind-demo.vercel.app"},
+        headers=non_member_headers,
+    )
+    assert nm_put.status_code == 403, nm_put.text
+
+    delivered_put = client.put(
+        "/v1/defense/projects/prj-compiler/package",
+        json={"demo_url": "https://compiler-demo.vercel.app"},
+        headers=non_member_headers,
+    )
+    assert delivered_put.status_code == 403, delivered_put.text
+
+    # 1. Project member checks editable dossier and invalid URL rejected 422
+    mem_dossier = client.get("/v1/defense/projects/prj-codemind/dossier", headers=stu_headers)
+    assert mem_dossier.status_code == 200, mem_dossier.text
+    assert mem_dossier.json()["project"]["isMyProject"] is True
+    assert mem_dossier.json()["project"]["canEditPackage"] is True
+
     bad_pkg = client.put(
         "/v1/defense/projects/prj-codemind/package",
         json={"demo_url": "localhost:8443/no-scheme"},
@@ -147,3 +176,6 @@ def test_live_defense_council_workflow() -> None:
     assert ev["demoScore"] == 9.2
     assert ev["councilMembers"] == "Cô Lan Anh, Thầy Minh Tuấn"
     assert ev["memberScores"][0]["asked_question"] == "Giải thích luồng RBAC & chống lộ token?"
+
+    # Clean up back to baseline demo state
+    assert client.post("/v1/admin/reset-demo", headers=adm_headers).status_code == 200

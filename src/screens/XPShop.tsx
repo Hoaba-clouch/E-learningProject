@@ -20,6 +20,7 @@ import {
 import type { AvatarStyle, BackgroundTheme, BadgeFrame, ChatSkin, MentorMascot, SkillMapSkin } from "../App";
 import MarloTitle from "../components/MarloTitle";
 import MarloNumber from "../components/MarloNumber";
+import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import { claimXpQuestApi, fetchStudentLearningOverview, unlockXpRewardItem } from "../api";
 
 interface Props {
@@ -329,52 +330,41 @@ export default function XPShop({
         </div>
       </header>
 
-      {/* SUBTABS BAR */}
-      <div className="flex bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 rounded-xl w-fit">
-        <button
-          onClick={() => setSubTab("store")}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-            subTab === "store"
-              ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
-              : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
-          }`}
-        >
-          <Award size={14} />
-          Kho mở khóa theo XP
-        </button>
-        <button
-          onClick={() => setSubTab("quests")}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-            subTab === "quests"
-              ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
-              : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
-          }`}
-        >
-          <Zap size={14} />
-          Nhiệm vụ tích lũy XP
-          {hasClaimableQuest && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
-        </button>
+      {/* SUBTABS BAR (Marlo Liquid Elastic Pill) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1.5 rounded-xl w-fit shadow-2xs">
+        <MarloSegmentedControl<"store" | "quests">
+          value={subTab}
+          onChange={(val) => setSubTab(val)}
+          label="Phân khu Kho XP"
+          tone="dark"
+          options={[
+            { id: "store", label: "Kho mở khóa theo XP", icon: <Award size={14} /> },
+            {
+              id: "quests",
+              label: "Nhiệm vụ tích lũy XP",
+              icon: <Zap size={14} />,
+              dotClassName: hasClaimableQuest ? "bg-emerald-500" : undefined,
+            },
+          ]}
+        />
       </div>
 
       {/* SUBTAB 1: MILESTONE REWARDS */}
       {subTab === "store" && (
         <div className="space-y-4">
-          {/* CATEGORIES BUTTONS */}
-          <div className="shop-category-bar bg-slate-100 dark:bg-slate-900/70 rounded-2xl p-1.5 flex gap-1 overflow-x-auto border border-slate-200 dark:border-slate-800 scrollbar-none">
-            {(Object.keys(categoryMeta) as ShopCategory[]).map((id) => (
-              <button
-                key={id}
-                onClick={() => setCategory(id)}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-200 cursor-pointer shrink-0 ${
-                  category === id
-                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-2xs"
-                    : "bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/60"
-                }`}
-              >
-                {categoryMeta[id].icon}
-                {categoryMeta[id].label}
-              </button>
-            ))}
+          {/* CATEGORIES BAR (Marlo Liquid Elastic Pill) */}
+          <div className="shop-category-bar bg-white dark:bg-slate-900 rounded-2xl p-1.5 border border-slate-200 dark:border-slate-800 shadow-2xs w-fit max-w-full overflow-x-auto scrollbar-none">
+            <MarloSegmentedControl<ShopCategory>
+              value={category}
+              onChange={(val) => setCategory(val)}
+              label="Danh mục phần thưởng XP"
+              tone="dark"
+              options={(Object.keys(categoryMeta) as ShopCategory[]).map((id) => ({
+                id,
+                label: categoryMeta[id].label,
+                icon: categoryMeta[id].icon,
+              }))}
+            />
           </div>
 
           {/* ACTIVE EQUIPPED ITEM */}

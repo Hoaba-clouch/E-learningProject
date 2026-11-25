@@ -108,11 +108,11 @@ function ChapterLessonGroup({
       ref={containerRef}
       className="relative animate-accordion-expand bg-slate-50/70 dark:bg-slate-950/40 p-2 flex flex-col gap-1.5 rounded-xl"
     >
-      {/* 🏷️ Marlo Elastic Active Pill */}
+      {/* 🏷️ Marlo Elastic Active Pill - Light Airy Elevation */}
       <div
         ref={pillRef}
         aria-hidden="true"
-        className="pointer-events-none opacity-0 absolute z-0 rounded-[14px] bg-[#141619] dark:bg-[#F4F4F6] shadow-[0_4px_16px_rgba(0,0,0,0.14)]"
+        className="pointer-events-none opacity-0 absolute z-0 rounded-[14px] bg-white dark:bg-slate-800/95 border border-amber-300/90 dark:border-amber-500/45 shadow-[0_2px_10px_rgba(15,23,42,0.06)] ring-1 ring-amber-400/15"
       />
 
       {chapter.lessons.map((lesson, lIdx) => {
@@ -135,8 +135,8 @@ function ChapterLessonGroup({
             }}
             className={`lesson-nav-item outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
               isActive
-                ? "text-white dark:text-[#141619] font-bold"
-                : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
+                ? "text-slate-950 dark:text-white font-bold"
+                : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-white/75 dark:hover:bg-[#1E202B] hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             {/* 🌊 Hiệu ứng lan nước khi click (Water Ripple & Crest Ring) */}
@@ -170,7 +170,7 @@ function ChapterLessonGroup({
               <div
                 className={`p-1.5 rounded-lg shrink-0 transition-all duration-200 ${
                   isActive
-                    ? "bg-white/20 dark:bg-black/15 text-white dark:text-[#141619]"
+                    ? "bg-amber-100/90 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-500/30"
                     : lesson.status === "done"
                     ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600"
                     : "bg-slate-100 dark:bg-slate-800 text-slate-500"
@@ -189,7 +189,7 @@ function ChapterLessonGroup({
                 <span
                   className={`text-sm leading-snug block truncate transition-colors duration-150 ${
                     isActive
-                      ? "text-white dark:text-[#141619] font-bold"
+                      ? "text-slate-950 dark:text-white font-bold"
                       : "text-slate-900 dark:text-slate-100 font-semibold"
                   }`}
                 >
@@ -198,7 +198,7 @@ function ChapterLessonGroup({
                 <div
                   className={`flex items-center gap-2.5 text-xs mt-1 transition-colors duration-150 ${
                     isActive
-                      ? "text-white/70 dark:text-slate-600"
+                      ? "text-slate-600 dark:text-slate-300"
                       : "text-slate-500 dark:text-slate-400"
                   }`}
                 >
@@ -206,7 +206,7 @@ function ChapterLessonGroup({
                   <span
                     className={`font-bold whitespace-nowrap transition-colors duration-150 ${
                       isActive
-                        ? "text-amber-300 dark:text-amber-700 font-mono"
+                        ? "text-amber-600 dark:text-amber-400 font-mono"
                         : "text-amber-600 dark:text-amber-400"
                     }`}
                   >
@@ -223,7 +223,7 @@ function ChapterLessonGroup({
                   size={16}
                   className={`transition-colors duration-150 ${
                     isActive
-                      ? "text-emerald-300 dark:text-emerald-700"
+                      ? "text-emerald-600 dark:text-emerald-400"
                       : "text-emerald-500"
                   }`}
                 />
@@ -249,8 +249,8 @@ function ChapterLessonGroup({
         }}
         className={`lesson-nav-item outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
           activeKey === `exercise-${chapter.id}`
-            ? "text-white dark:text-[#141619] font-bold"
-            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
+            ? "text-slate-950 dark:text-white font-bold"
+            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-white/75 dark:hover:bg-[#1E202B] hover:text-slate-900 dark:hover:text-white"
         }`}
       >
         {ripples
@@ -272,7 +272,7 @@ function ChapterLessonGroup({
           <div
             className={`p-1.5 rounded-lg shrink-0 transition-colors duration-200 ${
               activeKey === `exercise-${chapter.id}`
-                ? "bg-white/20 dark:bg-black/15 text-white dark:text-[#141619]"
+                ? "bg-emerald-100/90 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-500/30"
                 : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400"
             }`}
           >
@@ -282,7 +282,7 @@ function ChapterLessonGroup({
             <span
               className={`text-xs leading-tight block truncate ${
                 activeKey === `exercise-${chapter.id}`
-                  ? "text-white dark:text-[#141619] font-bold"
+                  ? "text-slate-950 dark:text-white font-bold"
                   : "text-slate-900 dark:text-slate-100 font-semibold"
               }`}
             >
@@ -291,7 +291,7 @@ function ChapterLessonGroup({
             <span
               className={`text-[11px] font-medium block truncate mt-0.5 ${
                 activeKey === `exercise-${chapter.id}`
-                  ? "text-white/70 dark:text-slate-600"
+                  ? "text-slate-600 dark:text-slate-300"
                   : "text-slate-500 dark:text-slate-400"
               }`}
             >
@@ -302,11 +302,11 @@ function ChapterLessonGroup({
         <span
           className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 border-0 outline-none ring-0 ${
             activeKey === `exercise-${chapter.id}`
-              ? "bg-[#EE8420] text-white"
+              ? "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300"
               : "bg-amber-100/70 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300"
           }`}
         >
-          +100 XP
+          +{((chapter as any).dbAssignment?.points ?? 100)} XP
         </span>
       </button>
 
@@ -319,8 +319,8 @@ function ChapterLessonGroup({
         }}
         className={`lesson-nav-item outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 select-none relative z-10 overflow-hidden w-full flex items-center justify-between p-2.5 rounded-[14px] text-left cursor-pointer transition-colors duration-150 active:scale-[0.98] ${
           activeKey === `mindmap-${chapter.id}`
-            ? "text-white dark:text-[#141619] font-bold"
-            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-[#F0F1F3] dark:hover:bg-[#1E202B] hover:text-[#141619] dark:hover:text-white"
+            ? "text-slate-950 dark:text-white font-bold"
+            : "text-[#3B404D] dark:text-[#C4C7D0] font-medium hover:bg-white/75 dark:hover:bg-[#1E202B] hover:text-slate-900 dark:hover:text-white"
         }`}
       >
         {ripples
@@ -342,8 +342,8 @@ function ChapterLessonGroup({
           <div
             className={`p-1.5 rounded-lg shrink-0 transition-colors duration-200 ${
               activeKey === `mindmap-${chapter.id}`
-                ? "bg-white/20 dark:bg-black/15 text-white dark:text-[#141619]"
-                : "bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400"
+                ? "bg-amber-100/90 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-500/30"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
             }`}
           >
             <GitBranch size={14} />
@@ -352,7 +352,7 @@ function ChapterLessonGroup({
             <span
               className={`text-xs leading-tight block truncate ${
                 activeKey === `mindmap-${chapter.id}`
-                  ? "text-white dark:text-[#141619] font-bold"
+                  ? "text-slate-950 dark:text-white font-bold"
                   : "text-slate-900 dark:text-slate-100 font-semibold"
               }`}
             >
@@ -361,7 +361,7 @@ function ChapterLessonGroup({
             <span
               className={`text-[11px] font-medium block truncate mt-0.5 ${
                 activeKey === `mindmap-${chapter.id}`
-                  ? "text-white/70 dark:text-slate-600"
+                  ? "text-slate-600 dark:text-slate-300"
                   : "text-slate-500 dark:text-slate-400"
               }`}
             >
@@ -372,8 +372,8 @@ function ChapterLessonGroup({
         <span
           className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 border-0 outline-none ring-0 ${
             activeKey === `mindmap-${chapter.id}`
-              ? "bg-[#EE8420] text-white"
-              : "bg-purple-100/70 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300"
+              ? "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
           }`}
         >
           Toàn chương

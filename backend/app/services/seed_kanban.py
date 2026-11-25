@@ -17,13 +17,13 @@ def _default_dod(is_done: bool = False) -> list[dict[str, Any]]:
 
 
 MEMBERS_META: dict[str, dict[str, Any]] = {
-    "bhoa": {"id": "m1", "name": "Nguyễn Bá Hòa", "avatar": "H", "initials": "BH", "role": "Leader & Architect", "color": "bg-[#14161a] dark:bg-slate-700", "bg": "#C7D2FE", "textColor": "#312E81"},
-    "vhuy": {"id": "m2", "name": "Võ Nhật Huy", "avatar": "H", "initials": "VH", "role": "Frontend & AI Dev", "color": "bg-amber-500", "bg": "#FCD34D", "textColor": "#78350F"},
-    "dnghi": {"id": "m3", "name": "Phan Đình Nghị", "avatar": "N", "initials": "PN", "role": "Backend & Database", "color": "bg-slate-600 dark:bg-slate-500", "bg": "#FED7AA", "textColor": "#7C2D12"},
-    "tuan": {"id": "e1", "name": "Trần Minh Tuấn", "avatar": "T", "initials": "TT", "role": "Backend Lead", "color": "bg-amber-600", "bg": "#A7F3D0", "textColor": "#064E3B"},
-    "ha": {"id": "e2", "name": "Lê Thị Hà", "avatar": "H", "initials": "LH", "role": "DevOps & Cloud", "color": "bg-slate-700 dark:bg-slate-600", "bg": "#E9D5FF", "textColor": "#581C87"},
-    "nam": {"id": "a1", "name": "Hoàng Trọng Nam", "avatar": "N", "initials": "HN", "role": "AI Research Lead", "color": "bg-[#14161a] dark:bg-slate-700", "bg": "#CCFBF1", "textColor": "#115E59"},
-    "linh": {"id": "a2", "name": "Đỗ Mỹ Linh", "avatar": "L", "initials": "ML", "role": "Data Scientist", "color": "bg-amber-500", "bg": "#FFE4E6", "textColor": "#9F1239"},
+    "bhoa": {"id": "usr-sv-01", "name": "Nguyễn Bá Hòa", "email": "hoa.nb@student.edu.vn", "avatar": "H", "initials": "BH", "role": "Leader & Architect", "color": "bg-[#14161a] dark:bg-slate-700", "bg": "#C7D2FE", "textColor": "#312E81"},
+    "vhuy": {"id": "usr-sv-03", "name": "Võ Nhật Huy", "email": "huy.vn@student.edu.vn", "avatar": "H", "initials": "VH", "role": "Frontend & AI Dev", "color": "bg-amber-500", "bg": "#FCD34D", "textColor": "#78350F"},
+    "dnghi": {"id": "usr-sv-04", "name": "Phan Đình Nghị", "email": "nghi.pd@student.edu.vn", "avatar": "N", "initials": "PN", "role": "Backend & Database", "color": "bg-slate-600 dark:bg-slate-500", "bg": "#FED7AA", "textColor": "#7C2D12"},
+    "tuan": {"id": "usr-sv-08", "name": "Trần Minh Tuấn", "email": "tuan.tm@student.edu.vn", "avatar": "T", "initials": "TT", "role": "Backend Lead", "color": "bg-amber-600", "bg": "#A7F3D0", "textColor": "#064E3B"},
+    "ha": {"id": "usr-sv-07", "name": "Võ Ngọc Hà", "email": "ha.vn@student.edu.vn", "avatar": "H", "initials": "VH", "role": "DevOps & Cloud", "color": "bg-slate-700 dark:bg-slate-600", "bg": "#E9D5FF", "textColor": "#581C87"},
+    "nam": {"id": "usr-sv-07", "name": "Võ Ngọc Hà", "email": "ha.vn@student.edu.vn", "avatar": "H", "initials": "VH", "role": "AI Research Lead", "color": "bg-[#14161a] dark:bg-slate-700", "bg": "#CCFBF1", "textColor": "#115E59"},
+    "linh": {"id": "usr-sv-08", "name": "Trần Minh Tuấn", "email": "tuan.tm@student.edu.vn", "avatar": "T", "initials": "TT", "role": "Data Scientist", "color": "bg-amber-500", "bg": "#FFE4E6", "textColor": "#9F1239"},
     "vana": {"id": "usr-sv-02", "name": "Nguyễn Văn A", "email": "hasib@gmail.com", "avatar": "A", "initials": "NA", "role": "Thành viên Frontend", "color": "bg-emerald-600", "bg": "#D1FAE5", "textColor": "#065F46"},
 }
 
@@ -89,10 +89,12 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "client": "AI-301 · Thị giác Máy tính & Học sâu",
             "course": "CS420 · AI-Native Web App & RAG Agents",
             "course_id": "class-ai",
-            "instructor_id": "usr-gv-04",
+            "instructor_id": "usr-gv-05",
             "instructor_name": "TS. Lê Hoàng Mai",
             "instructor_label": "TS. Lê Hoàng Mai (GV Hướng dẫn)",
-            "leader_user_id": "a1",
+            "reviewer_id": "usr-gv-02",
+            "reviewer_name": "Thầy Nguyễn Phước",
+            "leader_user_id": "usr-sv-07",
             "sprint": "Sprint 1 (Tuần 1 - 3)",
             "kind": "AI / COMPUTER VISION",
             "status": "active",
@@ -161,9 +163,11 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "client": "SEC-305 · An toàn & An ninh Mạng Máy tính",
             "course": "CS312 · An toàn Thông tin & OWASP Top 10",
             "course_id": "class-security",
-            "instructor_id": "usr-gv-05",
+            "instructor_id": "usr-gv-04",
             "instructor_name": "Thầy Đặng Quốc Bảo",
             "instructor_label": "Thầy Đặng Quốc Bảo (GV Hướng dẫn)",
+            "reviewer_id": "usr-gv-03",
+            "reviewer_name": "Thầy Trần Minh Quân",
             "leader_user_id": "usr-sv-01",
             "sprint": "Sprint 2 (Tuần 4 - 6)",
             "kind": "CYBERSECURITY",
@@ -185,9 +189,11 @@ def _build_seed_projects() -> list[dict[str, Any]]:
             "client": "CS-315 · Ứng dụng Di động & IoT Thông minh",
             "course": "CS410 · Trí tuệ Nhân tạo & Machine Learning",
             "course_id": "class-ai-ml",
-            "instructor_id": "usr-gv-04",
+            "instructor_id": "usr-gv-05",
             "instructor_name": "TS. Lê Hoàng Mai",
             "instructor_label": "TS. Lê Hoàng Mai (GV Hướng dẫn)",
+            "reviewer_id": "usr-gv-04",
+            "reviewer_name": "Thầy Đặng Quốc Bảo",
             "leader_user_id": "usr-sv-03",
             "sprint": "Sprint 2 (Tuần 3 - 5)",
             "kind": "EDGE AI & IOT",
@@ -721,6 +727,7 @@ def _build_seed_tasks() -> list[dict[str, Any]]:
             "Hệ thống bình luận, Fork snippet và đánh giá sao Star",
             "Cho phép lập trình viên tạo bản sao (Fork) của snippet để sửa đổi và thảo luận theo từng dòng code.",
             "ready", "medium", "should", 5, a_huy, 6, "28/11/2026", "Social Graph", "bg-emerald-50 text-emerald-700 border-emerald-200",
+            depends_on="dev-1",
             checklist=[
                 {"id": "d-c3", "text": "Thiết kế schema cơ sở dữ liệu quan hệ Fork Tree", "done": False},
             ],
@@ -772,6 +779,24 @@ def _reconcile_seed_project_leaders(conn: sqlite3.Connection) -> None:
                     "UPDATE engineering_projects SET team_json=? WHERE id=?",
                     (json.dumps(comp_team, ensure_ascii=False), "prj-compiler"),
                 )
+    dev_row = conn.execute(
+        "SELECT team_json FROM engineering_projects WHERE id='prj-devnet'"
+    ).fetchone()
+    if dev_row:
+        try:
+            dev_team = json.loads(dev_row["team_json"] or "[]")
+        except Exception:
+            dev_team = []
+        if isinstance(dev_team, list):
+            cleaned_dev = [tm for tm in dev_team if str(tm.get("id") or "") != "usr-sv-02"]
+            if len(cleaned_dev) != len(dev_team):
+                conn.execute(
+                    "UPDATE engineering_projects SET team_json=? WHERE id='prj-devnet'",
+                    (json.dumps(cleaned_dev, ensure_ascii=False),),
+                )
+    conn.execute(
+        "UPDATE engineering_tasks SET depends_on = 'dev-1' WHERE id = 'dev-2' AND (depends_on IS NULL OR depends_on = '')"
+    )
 
 
 def seed_kanban_workspace(conn: sqlite3.Connection, force_reseed: bool = False) -> None:

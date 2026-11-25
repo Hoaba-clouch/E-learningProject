@@ -1,28 +1,46 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { flushSync } from "react-dom";
 import Sidebar from "./components/Sidebar";
 import LoginScreen from "./screens/LoginScreen";
+import StudentDashboard from "./screens/StudentDashboard";
+import XPShop from "./screens/XPShop";
+import StudentProfile from "./screens/StudentProfile";
+import MarloProjectsScreen from "./screens/MarloProjectsScreen";
+import SecurityDevicesScreen from "./screens/SecurityDevicesScreen";
+import MarloProjectDetailScreen from "./screens/MarloProjectDetailScreen";
+import MarloTeamScreen from "./screens/MarloTeamScreen";
+import MarloPersonDetailScreen from "./screens/MarloPersonDetailScreen";
+import MCPHubScreen from "./screens/MCPHubScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
 import MarloCommandPalette from "./components/MarloCommandPalette";
 import MarloGlobalHeader from "./components/MarloGlobalHeader";
-import { fetchCurrentUser, getStoredUser, logoutUser, setTabSessionRole, updateUserPreferencesApi } from "./api";
+import {
+  equipXpShopItemApi,
+  fetchCurrentUser,
+  getStoredUser,
+  hasStoredSession,
+  logoutUser,
+  setTabSessionRole,
+  updateUserPreferencesApi,
+} from "./api";
 
-const StudentDashboard = lazy(() => import("./screens/StudentDashboard"));
-const LearningWorkspace = lazy(() => import("./screens/LearningWorkspace"));
-const GitProjectHub = lazy(() => import("./screens/GitProjectHub"));
-const XPShop = lazy(() => import("./screens/XPShop"));
-const StudentProfile = lazy(() => import("./screens/StudentProfile"));
-const AdminDashboard = lazy(() => import("./screens/AdminDashboard"));
-const InstructorPanel = lazy(() => import("./screens/InstructorPanel"));
-const KanbanBoard = lazy(() => import("./screens/KanbanBoard"));
-const EngineeringScheduleRota = lazy(() => import("./screens/EngineeringScheduleRota"));
-const MarloProjectsScreen = lazy(() => import("./screens/MarloProjectsScreen"));
-const CodeMindIntroLandingPage = lazy(() => import("./screens/CodeMindIntroLandingPage"));
-const AIDefenseRoomScreen = lazy(() => import("./screens/AIDefenseRoomScreen"));
-const SecurityDevicesScreen = lazy(() => import("./screens/SecurityDevicesScreen"));
-const MarloProjectDetailScreen = lazy(() => import("./screens/MarloProjectDetailScreen"));
-const MarloTeamScreen = lazy(() => import("./screens/MarloTeamScreen"));
-const MarloPersonDetailScreen = lazy(() => import("./screens/MarloPersonDetailScreen"));
+const loadLearningWorkspace = () => import("./screens/LearningWorkspace");
+const loadGitProjectHub = () => import("./screens/GitProjectHub");
+const loadAdminDashboard = () => import("./screens/AdminDashboard");
+const loadInstructorPanel = () => import("./screens/InstructorPanel");
+const loadKanbanBoard = () => import("./screens/KanbanBoard");
+const loadEngineeringScheduleRota = () => import("./screens/EngineeringScheduleRota");
+const loadCodeMindIntroLandingPage = () => import("./screens/CodeMindIntroLandingPage");
+const loadAIDefenseRoomScreen = () => import("./screens/AIDefenseRoomScreen");
+
+const LearningWorkspace = lazy(loadLearningWorkspace);
+const GitProjectHub = lazy(loadGitProjectHub);
+const AdminDashboard = lazy(loadAdminDashboard);
+const InstructorPanel = lazy(loadInstructorPanel);
+const KanbanBoard = lazy(loadKanbanBoard);
+const EngineeringScheduleRota = lazy(loadEngineeringScheduleRota);
+const CodeMindIntroLandingPage = lazy(loadCodeMindIntroLandingPage);
+const AIDefenseRoomScreen = lazy(loadAIDefenseRoomScreen);
 
 export type Screen =
   | "login"
@@ -30,6 +48,7 @@ export type Screen =
   | "student-dashboard"
   | "workspace"
   | "github"
+  | "mcp-hub"
   | "xp-shop"
   | "profile"
   | "security"
@@ -51,6 +70,45 @@ export type Screen =
   | "team"
   | "person-detail"
   | "defense-room";
+
+const preloadedChunks = new Set<string>();
+
+export function preloadScreen(target: Screen): void {
+  let chunkKey: string | null = null;
+  let loader: (() => Promise<unknown>) | null = null;
+
+  if (target.startsWith("admin")) {
+    chunkKey = "admin";
+    loader = loadAdminDashboard;
+  } else if (target.startsWith("instructor")) {
+    chunkKey = "instructor";
+    loader = loadInstructorPanel;
+  } else if (target === "workspace") {
+    chunkKey = "workspace";
+    loader = loadLearningWorkspace;
+  } else if (target === "github") {
+    chunkKey = "github";
+    loader = loadGitProjectHub;
+  } else if (target === "kanban") {
+    chunkKey = "kanban";
+    loader = loadKanbanBoard;
+  } else if (target === "schedule") {
+    chunkKey = "schedule";
+    loader = loadEngineeringScheduleRota;
+  } else if (target === "intro") {
+    chunkKey = "intro";
+    loader = loadCodeMindIntroLandingPage;
+  } else if (target === "defense-room") {
+    chunkKey = "defense-room";
+    loader = loadAIDefenseRoomScreen;
+  }
+
+  if (!chunkKey || !loader || preloadedChunks.has(chunkKey)) return;
+  preloadedChunks.add(chunkKey);
+  void loader().catch(() => {
+    preloadedChunks.delete(chunkKey);
+  });
+}
 
 export type WorkspaceTabTarget = "video" | "lecture" | "quiz" | "mindmap" | "exercise";
 
@@ -76,9 +134,26 @@ export default function App() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const s = params.get("screen");
-      if (s === "courses" || s === "learning") return "workspace";
-      if (s === "instructor-evidence") return "instructor";
-      if (s) return s as Screen;
+      if (s === "login" || s === "intro") return s;
+      if (s) {
+        const mapped =
+          s === "courses" || s === "learning"
+            ? "workspace"
+            : s === "instructor-evidence"
+            ? "instructor"
+            : s;
+        const reqRole: Role = mapped.startsWith("admin")
+          ? "admin"
+          : mapped.startsWith("instructor")
+          ? "instructor"
+          : ((params.get("role") as Role) || "student");
+        if (
+          hasStoredSession(reqRole) ||
+          (reqRole === "instructor" && hasStoredSession("admin"))
+        ) {
+          return mapped as Screen;
+        }
+      }
     }
     return "login";
   });
@@ -103,12 +178,10 @@ export default function App() {
     "topology" | "prs" | "gitdiagram" | "analytics" | "gitflow" | undefined
   >(undefined);
   const mainRef = useRef<HTMLElement>(null);
+  const [isNavigating, startNavTransition] = useTransition();
 
   const setScreen = (nextScreen: Screen) => {
-    setScreenState(nextScreen);
-    if (nextScreen !== "github") {
-      setGitHubInitialTab(undefined);
-    }
+    preloadScreen(nextScreen);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("screen", nextScreen);
@@ -120,31 +193,37 @@ export default function App() {
       }
       window.history.replaceState({}, "", url.toString());
     }
-    mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    startNavTransition(() => {
+      setScreenState(nextScreen);
+      if (nextScreen !== "github") {
+        setGitHubInitialTab(undefined);
+      }
+    });
   };
 
   const openGitHubForProject = (
     projectId?: string,
     tab?: "topology" | "prs" | "gitdiagram" | "analytics" | "gitflow"
   ) => {
-    if (projectId) {
-      setSelectedKanbanProjectId(projectId);
-      setSelectedMarloProjectId(projectId);
-    }
-    setGitHubInitialTab(tab);
-    setScreenState("github");
+    preloadScreen("github");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("screen", "github");
       window.history.replaceState({}, "", url.toString());
     }
-    mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    startNavTransition(() => {
+      if (projectId) {
+        setSelectedKanbanProjectId(projectId);
+        setSelectedMarloProjectId(projectId);
+      }
+      setGitHubInitialTab(tab);
+      setScreenState("github");
+    });
   };
 
   const openWorkspaceTarget = (opts: Omit<WorkspaceLaunchTarget, "nonce">) => {
+    preloadScreen("workspace");
     const nextLaunch: WorkspaceLaunchTarget = { ...opts, nonce: Date.now() };
-    setWorkspaceLaunch(nextLaunch);
-    setScreenState("workspace");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("screen", "workspace");
@@ -158,8 +237,17 @@ export default function App() {
       else url.searchParams.delete("tutor");
       window.history.replaceState({}, "", url.toString());
     }
-    mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    startNavTransition(() => {
+      setWorkspaceLaunch(nextLaunch);
+      setScreenState("workspace");
+    });
   };
+  const getCosmeticStorageKey = (base: string, targetRole: Role): string => {
+    if (typeof window === "undefined") return base;
+    const u = getStoredUser(targetRole);
+    return u?.id ? `${base}:${u.id}` : base;
+  };
+
   const [role, setRoleState] = useState<Role>(() => {
     let initial: Role = "student";
     if (typeof window !== "undefined") {
@@ -177,6 +265,14 @@ export default function App() {
         if (stored === "instructor" || stored === "admin" || stored === "student") {
           initial = stored as Role;
         }
+      }
+      if (
+        !hasStoredSession(initial) &&
+        !(initial === "instructor" && hasStoredSession("admin"))
+      ) {
+        if (hasStoredSession("student")) initial = "student";
+        else if (hasStoredSession("instructor")) initial = "instructor";
+        else if (hasStoredSession("admin")) initial = "admin";
       }
       setTabSessionRole(initial);
     }
@@ -198,6 +294,26 @@ export default function App() {
     setSelectedKanbanProjectId("");
     setSelectedMarloProjectId("");
   }, [role]);
+
+  // Enforce authenticated session & strict role/screen boundaries
+  useEffect(() => {
+    if (screen === "login" || screen === "intro") return;
+    if (
+      !hasStoredSession(role) &&
+      !(role === "instructor" && hasStoredSession("admin"))
+    ) {
+      setScreen("login");
+      return;
+    }
+    if (screen.startsWith("admin") && role !== "admin") {
+      setScreen(role === "instructor" ? "instructor" : "student-dashboard");
+      return;
+    }
+    if (screen.startsWith("instructor") && role === "student") {
+      setScreen("student-dashboard");
+    }
+  }, [role, screen]);
+
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("code-mind-theme") as Theme | null) ?? "light";
@@ -208,30 +324,40 @@ export default function App() {
   });
   const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>(() => {
     if (typeof window === "undefined") return "initials";
-    return (window.localStorage.getItem("code-mind-avatar") as AvatarStyle | null) ?? "initials";
+    return (window.localStorage.getItem(getCosmeticStorageKey("code-mind-avatar", role)) as AvatarStyle | null) ?? "initials";
   });
   const [mentorMascot, setMentorMascot] = useState<MentorMascot>(() => {
     if (typeof window === "undefined") return "mino";
-    return (window.localStorage.getItem("code-mind-mentor") as MentorMascot | null) ?? "mino";
+    return (window.localStorage.getItem(getCosmeticStorageKey("code-mind-mentor", role)) as MentorMascot | null) ?? "mino";
   });
   const [chatSkin, setChatSkin] = useState<ChatSkin>(() => {
     if (typeof window === "undefined") return "classic";
-    return (window.localStorage.getItem("code-mind-chat-skin") as ChatSkin | null) ?? "classic";
+    return (window.localStorage.getItem(getCosmeticStorageKey("code-mind-chat-skin", role)) as ChatSkin | null) ?? "classic";
   });
   const [skillMapSkin, setSkillMapSkin] = useState<SkillMapSkin>(() => {
     if (typeof window === "undefined") return "campaign";
-    return (window.localStorage.getItem("code-mind-map-skin") as SkillMapSkin | null) ?? "campaign";
+    return (window.localStorage.getItem(getCosmeticStorageKey("code-mind-map-skin", role)) as SkillMapSkin | null) ?? "campaign";
   });
   const [badgeFrame, setBadgeFrame] = useState<BadgeFrame>(() => {
     if (typeof window === "undefined") return "streak";
-    return (window.localStorage.getItem("code-mind-badge") as BadgeFrame | null) ?? "streak";
+    return (window.localStorage.getItem(getCosmeticStorageKey("code-mind-badge", role)) as BadgeFrame | null) ?? "streak";
   });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [pendingStudentUser, setPendingStudentUser] = useState<any | null>(() => {
-    const u = getStoredUser("student");
-    return u && u.role === "student" && u.status === "pending" ? u : null;
+    const u = getStoredUser(role);
+    return u && (u.role === "student" || u.role === "instructor") && u.status === "pending" ? u : null;
   });
-  const isPendingApproval = role === "student" && Boolean(pendingStudentUser);
+  const isPendingApproval = (role === "student" || role === "instructor") && Boolean(pendingStudentUser);
+
+  // Sync per-user cosmetic slots whenever active role/session changes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setAvatarStyle((window.localStorage.getItem(getCosmeticStorageKey("code-mind-avatar", role)) as AvatarStyle | null) ?? "initials");
+    setMentorMascot((window.localStorage.getItem(getCosmeticStorageKey("code-mind-mentor", role)) as MentorMascot | null) ?? "mino");
+    setChatSkin((window.localStorage.getItem(getCosmeticStorageKey("code-mind-chat-skin", role)) as ChatSkin | null) ?? "classic");
+    setSkillMapSkin((window.localStorage.getItem(getCosmeticStorageKey("code-mind-map-skin", role)) as SkillMapSkin | null) ?? "campaign");
+    setBadgeFrame((window.localStorage.getItem(getCosmeticStorageKey("code-mind-badge", role)) as BadgeFrame | null) ?? "streak");
+  }, [role]);
 
   // Global Shortcut: Ctrl+K or Cmd+K
   useEffect(() => {
@@ -268,11 +394,12 @@ export default function App() {
 
   useEffect(() => {
     if (screen === "login") return;
+    if (!hasStoredSession(role) && !(role === "instructor" && hasStoredSession("admin"))) return;
     let active = true;
     fetchCurrentUser(role, { skipAutoDemo: true }).then((u) => {
       if (!active || !u) return;
-      if (role === "student") {
-        if (u.role === "student" && u.status === "pending") {
+      if (role === "student" || role === "instructor") {
+        if ((u.role === "student" || u.role === "instructor") && u.status === "pending") {
           setPendingStudentUser(u);
           if (screen !== "intro") {
             setScreen("intro");
@@ -286,6 +413,14 @@ export default function App() {
         if (valid.includes(u.background_theme)) {
           setBackgroundTheme(u.background_theme as BackgroundTheme);
         }
+      }
+      const eq = (u as any).equipped_items;
+      if (eq && typeof eq === "object") {
+        if (eq.avatar) setAvatarStyle(eq.avatar as AvatarStyle);
+        if (eq.mentor) setMentorMascot(eq.mentor as MentorMascot);
+        if (eq.chat_skin) setChatSkin(eq.chat_skin as ChatSkin);
+        if (eq.map_skin) setSkillMapSkin(eq.map_skin as SkillMapSkin);
+        if (eq.badge) setBadgeFrame(eq.badge as BadgeFrame);
       }
     });
     return () => {
@@ -304,25 +439,124 @@ export default function App() {
     void updateUserPreferencesApi({ background_theme: nextBg, color_mode: theme }, role);
   };
 
-  useEffect(() => {
-    window.localStorage.setItem("code-mind-avatar", avatarStyle);
-  }, [avatarStyle]);
+  const handleApplyAvatar = (nextAvatar: AvatarStyle) => {
+    const prev = avatarStyle;
+    setAvatarStyle(nextAvatar);
+    if (role === "student") {
+      void equipXpShopItemApi("avatar", nextAvatar, role).then((res) => {
+        if (res.error) setAvatarStyle(prev);
+      });
+    }
+  };
+
+  const handleApplyMentor = (nextMentor: MentorMascot) => {
+    const prev = mentorMascot;
+    setMentorMascot(nextMentor);
+    if (role === "student") {
+      void equipXpShopItemApi("mentor", nextMentor, role).then((res) => {
+        if (res.error) setMentorMascot(prev);
+      });
+    }
+  };
+
+  const handleApplyChatSkin = (nextSkin: ChatSkin) => {
+    const prev = chatSkin;
+    setChatSkin(nextSkin);
+    if (role === "student") {
+      void equipXpShopItemApi("chat_skin", nextSkin, role).then((res) => {
+        if (res.error) setChatSkin(prev);
+      });
+    }
+  };
+
+  const handleApplyMapSkin = (nextMap: SkillMapSkin) => {
+    const prev = skillMapSkin;
+    setSkillMapSkin(nextMap);
+    if (role === "student") {
+      void equipXpShopItemApi("map_skin", nextMap, role).then((res) => {
+        if (res.error) setSkillMapSkin(prev);
+      });
+    }
+  };
+
+  const handleApplyBadge = (nextBadge: BadgeFrame) => {
+    const prev = badgeFrame;
+    setBadgeFrame(nextBadge);
+    if (role === "student") {
+      void equipXpShopItemApi("badge", nextBadge, role).then((res) => {
+        if (res.error) setBadgeFrame(prev);
+      });
+    }
+  };
 
   useEffect(() => {
-    window.localStorage.setItem("code-mind-mentor", mentorMascot);
-  }, [mentorMascot]);
+    window.localStorage.setItem(getCosmeticStorageKey("code-mind-avatar", role), avatarStyle);
+  }, [avatarStyle, role]);
 
   useEffect(() => {
-    window.localStorage.setItem("code-mind-chat-skin", chatSkin);
-  }, [chatSkin]);
+    window.localStorage.setItem(getCosmeticStorageKey("code-mind-mentor", role), mentorMascot);
+  }, [mentorMascot, role]);
 
   useEffect(() => {
-    window.localStorage.setItem("code-mind-map-skin", skillMapSkin);
-  }, [skillMapSkin]);
+    window.localStorage.setItem(getCosmeticStorageKey("code-mind-chat-skin", role), chatSkin);
+  }, [chatSkin, role]);
 
   useEffect(() => {
-    window.localStorage.setItem("code-mind-badge", badgeFrame);
-  }, [badgeFrame]);
+    window.localStorage.setItem(getCosmeticStorageKey("code-mind-map-skin", role), skillMapSkin);
+  }, [skillMapSkin, role]);
+
+  useEffect(() => {
+    window.localStorage.setItem(getCosmeticStorageKey("code-mind-badge", role), badgeFrame);
+  }, [badgeFrame, role]);
+
+  const screenContainerKey = screen.startsWith("admin")
+    ? "admin-shell"
+    : screen.startsWith("instructor")
+    ? "instructor-shell"
+    : screen;
+
+  // Scroll to top after the transitioned screen commits
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [screenContainerKey]);
+
+  // Role-aware idle background prefetching so switching heavy screens never flashes fallback
+  useEffect(() => {
+    if (screen === "login" || screen === "intro" || isPendingApproval) return;
+    const queue: Screen[] =
+      role === "instructor"
+        ? ["instructor", "kanban", "github", "defense-room", "schedule"]
+        : role === "admin"
+        ? ["admin", "kanban", "github", "defense-room", "schedule"]
+        : ["workspace", "kanban", "github", "defense-room", "schedule"];
+
+    const timers: number[] = [];
+    const idleIds: number[] = [];
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    const startTimer = window.setTimeout(() => {
+      queue.forEach((target, idx) => {
+        const t = window.setTimeout(() => {
+          if (typeof win.requestIdleCallback === "function") {
+            const idleId = win.requestIdleCallback(() => preloadScreen(target), { timeout: 1200 });
+            idleIds.push(idleId);
+          } else {
+            preloadScreen(target);
+          }
+        }, idx * 220);
+        timers.push(t);
+      });
+    }, 600);
+    timers.push(startTimer);
+
+    return () => {
+      timers.forEach((id) => window.clearTimeout(id));
+      idleIds.forEach((id) => win.cancelIdleCallback?.(id));
+    };
+  }, [role, screen, isPendingApproval]);
 
   const toggleTheme = (trigger?: HTMLElement | React.MouseEvent | any) => {
     const nextTheme = theme === "light" ? "dark" : "light";
@@ -399,6 +633,11 @@ export default function App() {
 
   const handleLogout = () => {
     setPendingStudentUser(null);
+    setAvatarStyle("initials");
+    setMentorMascot("mino");
+    setChatSkin("classic");
+    setSkillMapSkin("campaign");
+    setBadgeFrame("streak");
     void logoutUser(role);
     setScreen("login");
   };
@@ -406,11 +645,18 @@ export default function App() {
   const handleRecheckPendingApproval = async (
     targetScreen?: Screen
   ): Promise<boolean> => {
-    const latest = await fetchCurrentUser("student", { skipAutoDemo: true });
+    const checkRole: Role =
+      pendingStudentUser?.role === "instructor" || role === "instructor"
+        ? "instructor"
+        : "student";
+    const latest = await fetchCurrentUser(checkRole, { skipAutoDemo: true });
     if (latest && latest.status === "active") {
       setPendingStudentUser(null);
-      setRole("student");
-      setScreen(targetScreen || "student-dashboard");
+      setRole(checkRole);
+      setScreen(
+        targetScreen ||
+          (checkRole === "instructor" ? "instructor" : "student-dashboard")
+      );
       return true;
     }
     if (latest && latest.status === "suspended") {
@@ -429,13 +675,13 @@ export default function App() {
           onLogin={(r, opts) => {
             setRole(r);
             const isPending =
-              r === "student" &&
+              (r === "student" || r === "instructor") &&
               Boolean(opts?.pendingApproval || opts?.user?.status === "pending");
             if (isPending) {
               setPendingStudentUser(
                 opts?.user ||
-                  getStoredUser("student") || {
-                    role: "student",
+                  getStoredUser(r) || {
+                    role: r,
                     status: "pending",
                   }
               );
@@ -485,8 +731,17 @@ export default function App() {
                 void handleRecheckPendingApproval(targetScreen);
                 return;
               }
-              setRole("student");
-              setScreen(targetScreen || "student-dashboard");
+              if (hasStoredSession(role)) {
+                setScreen(
+                  role === "admin"
+                    ? "admin"
+                    : role === "instructor"
+                    ? "instructor"
+                    : targetScreen || "student-dashboard"
+                );
+              } else {
+                setScreen("login");
+              }
             }}
             onLogin={() => setScreen("login")}
           />
@@ -531,13 +786,20 @@ export default function App() {
       case "profile":
         return (
           <StudentProfile
+            role={role}
             avatarStyle={avatarStyle}
             badgeFrame={badgeFrame}
             backgroundTheme={backgroundTheme}
             onApplyBackgroundTheme={handleApplyBackgroundTheme}
-            onApplyAvatar={setAvatarStyle}
-            onApplyBadge={setBadgeFrame}
+            onApplyAvatar={handleApplyAvatar}
+            onApplyBadge={handleApplyBadge}
             onOpenSecurity={() => setScreen("security")}
+            onNavigate={setScreen}
+            onOpenProject={(projectId) => {
+              setSelectedMarloProjectId(projectId);
+              setSelectedKanbanProjectId(projectId);
+              setScreen("project-detail");
+            }}
           />
         );
       case "security":
@@ -564,11 +826,11 @@ export default function App() {
           activeMapSkin={skillMapSkin}
           activeBadge={badgeFrame}
           onApplyTheme={handleApplyBackgroundTheme}
-          onApplyAvatar={setAvatarStyle}
-          onApplyMentor={setMentorMascot}
-          onApplyChatSkin={setChatSkin}
-          onApplyMapSkin={setSkillMapSkin}
-          onApplyBadge={setBadgeFrame}
+          onApplyAvatar={handleApplyAvatar}
+          onApplyMentor={handleApplyMentor}
+          onApplyChatSkin={handleApplyChatSkin}
+          onApplyMapSkin={handleApplyMapSkin}
+          onApplyBadge={handleApplyBadge}
         />
       );
       case "admin":
@@ -681,6 +943,7 @@ export default function App() {
           personId={selectedMarloPersonId}
           role={role}
           onNavigateBack={() => setScreen("team")}
+          onEditMyProfile={() => setScreen("profile")}
           onNavigateToProject={(prjId) => {
             setSelectedMarloProjectId(prjId);
             setSelectedKanbanProjectId(prjId);
@@ -707,15 +970,10 @@ export default function App() {
           onOpenSchedule={() => setScreen("schedule")}
         />
       );
+      case "mcp-hub": return <MCPHubScreen role={role} onNavigate={setScreen} />;
       default: return <StudentDashboard avatarStyle={avatarStyle} skillMapSkin={skillMapSkin} badgeFrame={badgeFrame} onNavigate={setScreen} />;
     }
   };
-
-  const screenContainerKey = screen.startsWith("admin")
-    ? "admin-shell"
-    : screen.startsWith("instructor")
-    ? "instructor-shell"
-    : screen;
 
   return (
     <div className={`theme-${theme} ${theme === "dark" ? "dark text-slate-100" : "text-slate-900"} bg-theme-${backgroundTheme} pc-app-bg flex h-screen overflow-hidden`}>
@@ -728,6 +986,7 @@ export default function App() {
           badgeFrame={badgeFrame}
           onToggleTheme={toggleTheme}
           onNavigate={setScreen}
+          onPrefetch={preloadScreen}
           onLogout={handleLogout}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
@@ -747,19 +1006,25 @@ export default function App() {
           onLogout={handleLogout}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
-        <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto relative flex flex-col scroll-smooth">
+        <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden relative flex flex-col scroll-smooth">
+          {isNavigating && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute top-0 inset-x-0 h-[2px] z-50 bg-amber-500/90 animate-pulse"
+            />
+          )}
           <ErrorBoundary>
-            <div key={screenContainerKey} className="min-h-full flex-1">
-              <Suspense
-                fallback={
-                  <div className="flex-1 min-h-[240px] flex items-center justify-center p-10 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Đang tải phân hệ...
-                  </div>
-                }
-              >
+            <Suspense
+              fallback={
+                <div className="flex-1 min-h-[240px] flex items-center justify-center p-10 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Đang tải phân hệ...
+                </div>
+              }
+            >
+              <div key={screenContainerKey} className="min-h-full flex-1 min-w-0">
                 {renderScreen()}
-              </Suspense>
-            </div>
+              </div>
+            </Suspense>
           </ErrorBoundary>
         </main>
       </div>
@@ -769,8 +1034,15 @@ export default function App() {
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={setScreen}
+        onOpenWorkspace={openWorkspaceTarget}
         onToggleTheme={toggleTheme}
+        onStartTimer={() =>
+          window.dispatchEvent(
+            new CustomEvent("codemind-pomodoro-start", { detail: { minutes: 25 } })
+          )
+        }
         theme={theme}
+        role={role}
       />
     </div>
   );

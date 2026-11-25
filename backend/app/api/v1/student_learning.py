@@ -9,6 +9,7 @@ import urllib.request
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import current_user, record_audit_log
+from app.api.v1.auth import serialize_shared_profile_fields
 from app.core.database import db
 from app.core.security import sha256, uid
 from app.core.timezone import now_utc
@@ -18,6 +19,7 @@ from app.schemas.student import (
     VideoNoteCreateIn,
     VideoProgressIn,
     XpQuestClaimIn,
+    XpShopEquipIn,
     XpShopPurchaseIn,
 )
 from app.services.analytics import track_event
@@ -130,6 +132,64 @@ def _parse_claimed_quests(raw: str | None) -> list[str]:
         return []
 
 
+DEFAULT_EQUIPPED_ITEMS: dict[str, str] = {
+    "avatar": "initials",
+    "mentor": "mino",
+    "chat_skin": "classic",
+    "map_skin": "campaign",
+    "badge": "streak",
+}
+
+
+def _parse_equipped_items(raw: str | None) -> dict[str, str]:
+    base = dict(DEFAULT_EQUIPPED_ITEMS)
+    if not raw or raw.strip() in ("", "{}"):
+        return base
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            for k in base:
+                val = str(data.get(k) or "").strip()
+                if val:
+                    base[k] = val
+    except Exception:
+        pass
+    return base
+
+
+def _require_student_course_enrollment(
+    conn: Any, user: dict[str, Any], subject_or_course_id: str
+) -> tuple[Any | None, Any | None]:
+    raw_key = (subject_or_course_id or "").strip()
+    mapped_class = SUBJECT_TO_CLASS_ID.get(raw_key, raw_key)
+    course = conn.execute(
+        "SELECT * FROM courses WHERE id = ? OR subject_id = ? OR code = ? LIMIT 1",
+        (mapped_class, raw_key, raw_key),
+    ).fetchone()
+    if not course:
+        return None, None
+    has_any_section = conn.execute(
+        "SELECT id FROM class_sections WHERE course_id = ? AND status = 'active' LIMIT 1",
+        (course["id"],),
+    ).fetchone()
+    if not has_any_section:
+        return course, None
+    enrolled_sec = conn.execute(
+        """SELECT cs.*
+           FROM class_enrollments ce
+           JOIN class_sections cs ON cs.id = ce.section_id
+           WHERE ce.student_id = ? AND cs.course_id = ? AND ce.status = 'active'
+           LIMIT 1""",
+        (user["id"], course["id"]),
+    ).fetchone()
+    if str(user.get("role") or "").lower() == "student" and not enrolled_sec:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Bạn chưa ghi danh vào lớp học phần của môn {course['code']} ({course['name']}). Vui lòng nhấn 'Ghi danh học phần' trước khi học và nộp bài.",
+        )
+    return course, enrolled_sec
+
+
 def _ensure_profile(conn: Any, user_id: str) -> Any:
     prof = conn.execute("SELECT * FROM student_profiles WHERE user_id=?", (user_id,)).fetchone()
     if not prof:
@@ -218,10 +278,44 @@ def _recalculate_pending_dual_reviews(conn: Any, class_id: str) -> None:
         "SELECT COUNT(*) AS c FROM dual_submissions WHERE class_id=? AND status IN ('pending', 'flagged')",
         (class_id,),
     ).fetchone()
+    pending_val = int(cnt["c"] or 0) if cnt else 0
     conn.execute(
         "UPDATE courses SET pending_dual_reviews = ? WHERE id = ?",
-        (int(cnt["c"] or 0) if cnt else 0, class_id),
+        (pending_val, class_id),
     )
+    conn.execute(
+        "UPDATE class_sections SET pending_dual_reviews = ? WHERE id = ? OR course_id = ?",
+        (pending_val, class_id, class_id),
+    )
+
+
+def _build_student_course_payload(
+    course_row: Any,
+    section_rows: list[Any],
+    enrolled_section_ids: set[str],
+) -> dict[str, Any]:
+    """Đóng gói thông tin môn học kèm lớp học phần tương ứng và trạng thái ghi danh của học viên."""
+    matching_secs = [s for s in section_rows if s["course_id"] == course_row["id"]]
+    enrolled_sec = next((s for s in matching_secs if s["id"] in enrolled_section_ids), None)
+    display_sec = enrolled_sec or (matching_secs[0] if matching_secs else None)
+    return {
+        "id": course_row["id"],
+        "subjectId": course_row["subject_id"],
+        "code": course_row["code"],
+        "name": course_row["name"],
+        "stageNumber": int(course_row.get("stage_number") or 1),
+        "stageTitle": course_row.get("stage_title") or "Cơ sở cốt lõi",
+        "credits": int(course_row.get("credits") or 3),
+        "enrolled": enrolled_sec is not None,
+        "sectionId": display_sec["id"] if display_sec else course_row["id"],
+        "sectionCode": display_sec["section_code"] if display_sec else f"{course_row['code']}-N01",
+        "semester": display_sec["semester"] if display_sec else course_row["semester"],
+        "room": display_sec["room"] if display_sec else (course_row.get("room") or "Lab A3-201"),
+        "teacher": display_sec["teacher_name"] if display_sec else course_row["teacher_name"],
+        "sandboxEnabled": bool(display_sec["sandbox_enabled"] if display_sec else course_row["sandbox_enabled"]),
+        "aiDefenseEnabled": bool(display_sec["ai_defense_enabled"] if display_sec else course_row["ai_defense_enabled"]),
+        "chapters": json.loads(course_row["chapters_json"] or "[]"),
+    }
 
 
 def _lookup_lesson_xp(conn: Any, subject_id: str, lesson_id: str, fallback_xp: int) -> int:
@@ -355,7 +449,15 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
 
     with db() as conn:
         prof = _ensure_profile(conn, user_id)
-        u_row = conn.execute("SELECT theme_preference, user_code, email FROM users WHERE id=?", (user_id,)).fetchone()
+        u_row = conn.execute(
+            """SELECT theme_preference, user_code, email, full_name, avatar_url,
+                      headline, bio, department, office_location, skills_json,
+                      github_url, website_url, phone
+               FROM users WHERE id=?""",
+            (user_id,),
+        ).fetchone()
+        if u_row and u_row.get("full_name"):
+            student_name = str(u_row["full_name"]).strip() or student_name
         raw_pref = (u_row["theme_preference"] if u_row else None) or "light:diagonal"
         bg_theme = "diagonal"
         if ":" in raw_pref:
@@ -378,7 +480,15 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
                WHERE user_id=? ORDER BY submitted_at DESC""",
             (user_id,),
         ).fetchall()
-        course_rows = conn.execute("SELECT * FROM courses ORDER BY code ASC").fetchall()
+        course_rows = conn.execute("SELECT * FROM courses ORDER BY stage_number ASC, code ASC").fetchall()
+        section_rows = conn.execute(
+            "SELECT * FROM class_sections WHERE status='active' ORDER BY created_at ASC"
+        ).fetchall()
+        enrollment_rows = conn.execute(
+            "SELECT section_id FROM class_enrollments WHERE student_id=? AND status='active'",
+            (user_id,),
+        ).fetchall()
+        enrolled_section_ids = {r["section_id"] for r in enrollment_rows}
         defense_rows = conn.execute(
             "SELECT id, project_id, status, final_defense_score, created_at FROM defense_sessions WHERE user_id=?",
             (user_id,),
@@ -434,6 +544,7 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
         (sub_rows[0]["repo_url"] if sub_rows and sub_rows[0]["repo_url"] else None)
         or (dual_rows[0]["repo_url"] if dual_rows and dual_rows[0]["repo_url"] else None)
         or (repo_row["repo_url"] if repo_row else None)
+        or (u_row.get("github_url") if u_row and u_row.get("github_url") else None)
         or ""
     )
     defense_completed_count = sum(
@@ -593,6 +704,7 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
             "code": (u_row["user_code"] if u_row else None) or user.get("user_code") or "—",
             "role": user.get("role") or "student",
             "background_theme": bg_theme,
+            **serialize_shared_profile_fields(dict(u_row) if u_row else None),
         },
         "profile": {
             "exp_points": int(prof["exp_points"] or 0),
@@ -607,6 +719,7 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
                 "defense": float(prof["radar_defense"] or 90.0),
             },
             "owned_items": _parse_owned_items(prof["owned_items_json"]),
+            "equipped_items": _parse_equipped_items(prof.get("equipped_items_json")),
             "claimed_quests": claimed_list,
         },
         "quests": quests,
@@ -616,7 +729,7 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
             "commits_count": commits_count,
             "clean_code_pct": clean_code_pct,
             "plagiarism_flags": plagiarism_flags,
-            "enrolled_courses_count": len(course_rows),
+            "enrolled_courses_count": len(enrolled_section_ids),
             "defense_completed_count": defense_completed_count,
         },
         "activity_heatmap": {
@@ -640,16 +753,7 @@ def get_student_learning_overview(user: dict[str, Any] = Depends(current_user)) 
         ],
         "chapter_submissions": [_serialize_chapter_submission(r) for r in sub_rows],
         "courses": [
-            {
-                "id": c["id"],
-                "subjectId": c["subject_id"],
-                "code": c["code"],
-                "name": c["name"],
-                "teacher": c["teacher_name"],
-                "sandboxEnabled": bool(c["sandbox_enabled"]),
-                "aiDefenseEnabled": bool(c["ai_defense_enabled"]),
-                "chapters": json.loads(c["chapters_json"] or "[]"),
-            }
+            _build_student_course_payload(c, section_rows, enrolled_section_ids)
             for c in course_rows
         ],
     }
@@ -723,9 +827,61 @@ def complete_student_lesson(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Đánh dấu hoàn thành bài học hoặc lưu điểm Quiz; tự động cộng XP chuẩn server (chống cộng trùng)."""
+    if payload.quiz_score < 0 or payload.quiz_total < 0 or payload.quiz_score > payload.quiz_total:
+        raise HTTPException(
+            status_code=422,
+            detail="Điểm Quiz không hợp lệ (quiz_score không thể lớn hơn quiz_total hoặc nhỏ hơn 0).",
+        )
+    if payload.quiz_total > 0 and (payload.quiz_score / payload.quiz_total) < 0.6:
+        raise HTTPException(
+            status_code=422,
+            detail="Cần trả lời đúng tối thiểu 60% câu hỏi Checkpoint Quiz để hoàn thành bài học.",
+        )
     user_id = user["id"]
     now = now_utc()
     with db() as conn:
+        course, _ = _require_student_course_enrollment(conn, user, payload.subject_id)
+        if course:
+            try:
+                chapters = json.loads(course.get("chapters_json") or "[]")
+            except Exception:
+                chapters = []
+            if chapters:
+                matched_lesson = None
+                for c_idx, ch in enumerate(chapters):
+                    for l_idx, ls in enumerate(ch.get("lessons") or []):
+                        disp_code = f"{c_idx + 1}.{l_idx + 1}"
+                        ls_title = str(ls.get("title") or "").strip()
+                        if (
+                            ls.get("id") == payload.lesson_id
+                            or disp_code == payload.lesson_id
+                            or ls_title.startswith(f"{payload.lesson_id} ")
+                            or ls_title.startswith(f"{payload.lesson_id}:")
+                        ):
+                            if ch.get("status") == "Bản nháp" or ls.get("status") == "Bản nháp":
+                                raise HTTPException(
+                                    status_code=403,
+                                    detail="Bài học hoặc chương này đang ở trạng thái Bản nháp, chưa phát hành cho học viên.",
+                                )
+                            matched_lesson = ls
+                            break
+                    if matched_lesson:
+                        break
+                if matched_lesson is None:
+                    static_code_match = re.fullmatch(r"(\d+)\.(\d+)", payload.lesson_id.strip())
+                    if static_code_match:
+                        ch_num = int(static_code_match.group(1))
+                        ls_num = int(static_code_match.group(2))
+                        if not (1 <= ch_num <= 12 and 1 <= ls_num <= 12):
+                            raise HTTPException(
+                                status_code=404,
+                                detail=f"Không tìm thấy bài học '{payload.lesson_id}' trong giáo trình môn học.",
+                            )
+                    else:
+                        raise HTTPException(
+                            status_code=404,
+                            detail=f"Không tìm thấy bài học '{payload.lesson_id}' trong giáo trình môn học.",
+                        )
         prof = _ensure_profile(conn, user_id)
         existing = conn.execute(
             "SELECT * FROM student_lesson_progress WHERE user_id=? AND subject_id=? AND lesson_id=?",
@@ -901,8 +1057,6 @@ def submit_chapter_exercise(
     owner, repo_name = m.group(1), m.group(2)
     class_id = SUBJECT_TO_CLASS_ID.get(payload.subject_id, f"class-{payload.subject_id}")
 
-    gh_info = _verify_github_repo(owner, repo_name)
-
     with db() as conn:
         prof = _ensure_profile(conn, user_id)
         docker_svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-docker'").fetchone()
@@ -912,21 +1066,43 @@ def submit_chapter_exercise(
                 detail="Docker CI/CD Isolated Sandbox Pool hiện đang bảo trì bởi Quản trị viên.",
             )
 
-        course = conn.execute("SELECT * FROM courses WHERE id=? OR subject_id=?", (class_id, payload.subject_id)).fetchone()
+        course, active_sec = _require_student_course_enrollment(conn, user, payload.subject_id)
         if course:
-            class_id = course["id"]
-        if course and not course["sandbox_enabled"]:
+            if not active_sec:
+                active_sec = conn.execute(
+                    "SELECT * FROM class_sections WHERE course_id=? AND status='active' ORDER BY created_at ASC LIMIT 1",
+                    (course["id"],),
+                ).fetchone()
+            class_id = active_sec["id"] if active_sec else course["id"]
+        sandbox_ok = (bool(course["sandbox_enabled"]) if course else True) and (
+            bool(active_sec["sandbox_enabled"]) if active_sec else True
+        )
+        if course and not sandbox_ok:
             raise HTTPException(
                 status_code=403,
                 detail=f"Quản trị viên đã tạm khóa Docker Sandbox cho học phần {course['code']}.",
             )
 
+        gh_info = _verify_github_repo(owner, repo_name)
+
         configured_cases: list[dict[str, Any]] = []
         if course:
             chapters = json.loads(course["chapters_json"] or "[]")
-            idx = payload.chapter_number - 1
-            if 0 <= idx < len(chapters):
-                assigns = chapters[idx].get("assignments") or []
+            matched_chap = None
+            for ch in chapters:
+                assigns = ch.get("assignments") or []
+                if assigns and str(assigns[0].get("id") or "") == payload.exercise_id:
+                    matched_chap = ch
+                    break
+            if not matched_chap:
+                pub_chapters = [ch for ch in chapters if ch.get("status") != "Bản nháp"]
+                idx = payload.chapter_number - 1
+                if 0 <= idx < len(pub_chapters):
+                    matched_chap = pub_chapters[idx]
+                elif 0 <= idx < len(chapters):
+                    matched_chap = chapters[idx]
+            if matched_chap:
+                assigns = matched_chap.get("assignments") or []
                 if assigns and assigns[0].get("testCases"):
                     configured_cases = assigns[0]["testCases"]
 
@@ -1186,11 +1362,13 @@ def unlock_xp_shop_item(
     is_free_theme = payload.category == "theme"
     item_key = (payload.category, payload.item_id)
     if is_free_theme:
+        if payload.item_id not in ALL_THEME_IDS:
+            raise HTTPException(status_code=422, detail=f"Chủ đề giao diện '{payload.item_id}' không hợp lệ.")
         required_xp = 0
     elif item_key in SHOP_ITEM_UNLOCK_XP:
         required_xp = SHOP_ITEM_UNLOCK_XP[item_key]
     else:
-        required_xp = max(200, min(payload.cost, 20000))
+        raise HTTPException(status_code=422, detail=f"Vật phẩm '{payload.category}:{payload.item_id}' không tồn tại trong XP Shop.")
 
     with db() as conn:
         prof = _ensure_profile(conn, user_id)
@@ -1246,6 +1424,37 @@ def claim_xp_quest(
         if payload.quest_id in claimed:
             raise HTTPException(status_code=400, detail="Nhiệm vụ này đã được nhận thưởng trước đó")
 
+        if payload.quest_id == "q1":
+            if int(prof.get("current_streak") or 0) < 3:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Bạn cần duy trì chuỗi học tập liên tiếp tối thiểu 3 ngày để nhận nhiệm vụ này.",
+                )
+        elif payload.quest_id == "q2":
+            ch_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM student_chapter_submissions WHERE user_id=?", (user_id,)).fetchone()["c"] or 0)
+            def_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM defense_sessions WHERE user_id=? AND status IN ('completed', 'flagged')", (user_id,)).fetchone()["c"] or 0)
+            if ch_cnt < 1 and def_cnt < 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Bạn cần hoàn thành ít nhất 1 bài nộp Lab Chương hoặc 1 phiên Phản biện AI trước khi nhận thưởng.",
+                )
+        elif payload.quest_id == "q3":
+            ch_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM student_chapter_submissions WHERE user_id=?", (user_id,)).fetchone()["c"] or 0)
+            u_name = (user.get("full_name") or user.get("display_name") or "").strip()
+            git_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM git_commits WHERE lower(author_name)=lower(?)", (u_name,)).fetchone()["c"] or 0) if u_name else 0
+            if ch_cnt < 1 and git_cnt < 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Bạn cần đóng góp ít nhất 1 Git Commit hoặc nộp 1 Repository bài tập thực hành trước khi nhận thưởng.",
+                )
+        elif payload.quest_id == "q4":
+            ls_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM student_lesson_progress WHERE user_id=?", (user_id,)).fetchone()["c"] or 0)
+            if ls_cnt < 5:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Bạn cần hoàn thành tối thiểu 5 bài học (hiện tại: {ls_cnt}/5) để nhận nhiệm vụ này.",
+                )
+
         claimed.append(payload.quest_id)
         new_xp = int(prof["exp_points"] or 0) + actual_reward
         conn.execute(
@@ -1253,3 +1462,162 @@ def claim_xp_quest(
             (new_xp, json.dumps(claimed), user_id),
         )
     return {"exp_points": new_xp, "claimed_quests": claimed}
+
+
+@router.patch("/student/xp-shop/equip")
+def equip_xp_shop_item(
+    payload: XpShopEquipIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Trang bị vật phẩm thẩm mỹ đã sở hữu trong XP Shop vào hồ sơ CSDL của học viên."""
+    user_id = user["id"]
+    raw_cat = payload.category.strip().lower()
+    item_id = payload.item_id.strip()
+
+    slot_map = {
+        "avatar": ("avatar", "avatar"),
+        "mentor": ("mentor", "mentor"),
+        "chat": ("chat", "chat_skin"),
+        "chat_skin": ("chat", "chat_skin"),
+        "map": ("map", "map_skin"),
+        "map_skin": ("map", "map_skin"),
+        "badge": ("badge", "badge"),
+    }
+    if raw_cat not in slot_map:
+        raise HTTPException(status_code=422, detail="Nhóm vật phẩm trang bị không hợp lệ.")
+    owned_cat, equip_slot = slot_map[raw_cat]
+
+    with db() as conn:
+        prof = _ensure_profile(conn, user_id)
+        owned = _parse_owned_items(prof["owned_items_json"])
+        allowed_items = set(owned.get(owned_cat, [])) | set(DEFAULT_OWNED_ITEMS.get(owned_cat, []))
+        if item_id not in allowed_items:
+            raise HTTPException(
+                status_code=403,
+                detail="Bạn chưa mở khóa vật phẩm này trong XP Shop nên không thể trang bị.",
+            )
+        equipped = _parse_equipped_items(prof.get("equipped_items_json"))
+        equipped[equip_slot] = item_id
+        conn.execute(
+            "UPDATE student_profiles SET equipped_items_json = ? WHERE user_id = ?",
+            (json.dumps(equipped, ensure_ascii=False), user_id),
+        )
+
+    return {"equipped_items": equipped}
+
+
+@router.post("/student/courses/{course_or_section_id}/enroll", status_code=status.HTTP_200_OK)
+def enroll_student_course(
+    course_or_section_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Học viên tự ghi danh vào lớp học phần đang mở của môn học."""
+    if str(user.get("role") or "").lower() != "student":
+        raise HTTPException(status_code=403, detail="Chỉ tài khoản Học viên mới dùng chức năng ghi danh học phần.")
+    user_id = user["id"]
+    raw_key = course_or_section_id.strip()
+    mapped_class = SUBJECT_TO_CLASS_ID.get(raw_key, raw_key)
+    now = now_utc()
+
+    with db() as conn:
+        sec = conn.execute(
+            """SELECT cs.*, c.code AS course_code, c.name AS course_name, c.subject_id
+               FROM class_sections cs
+               JOIN courses c ON c.id = cs.course_id
+               WHERE (cs.id = ? OR cs.section_code = ?) AND cs.status = 'active'
+               LIMIT 1""",
+            (raw_key, raw_key),
+        ).fetchone()
+        if not sec:
+            sec = conn.execute(
+                """SELECT cs.*, c.code AS course_code, c.name AS course_name, c.subject_id
+                   FROM class_sections cs
+                   JOIN courses c ON c.id = cs.course_id
+                   WHERE (c.id = ? OR c.subject_id = ? OR c.code = ?) AND cs.status = 'active'
+                   ORDER BY cs.created_at ASC
+                   LIMIT 1""",
+                (mapped_class, raw_key, raw_key),
+            ).fetchone()
+        if not sec:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lớp học phần đang mở cho môn học này.")
+
+        existing_in_course = conn.execute(
+            """SELECT ce.id, ce.section_id, cs.section_code
+               FROM class_enrollments ce
+               JOIN class_sections cs ON cs.id = ce.section_id
+               WHERE ce.student_id = ? AND cs.course_id = ? AND ce.status = 'active'
+               LIMIT 1""",
+            (user_id, sec["course_id"]),
+        ).fetchone()
+        if existing_in_course:
+            return {
+                "enrolled": True,
+                "sectionId": existing_in_course["section_id"],
+                "sectionCode": existing_in_course["section_code"],
+                "courseId": sec["course_id"],
+                "subjectId": sec["subject_id"],
+                "courseCode": sec["course_code"],
+                "message": f"Bạn đã ghi danh lớp {existing_in_course['section_code']}.",
+            }
+
+        cnt_row = conn.execute(
+            "SELECT COUNT(*) AS c FROM class_enrollments WHERE section_id = ? AND status = 'active'",
+            (sec["id"],),
+        ).fetchone()
+        cur_students = int(cnt_row["c"] or 0) if cnt_row else 0
+        max_students = int(sec["max_students"] or 45)
+        if cur_students >= max_students:
+            raise HTTPException(status_code=400, detail=f"Lớp {sec['section_code']} đã đủ sĩ số tối đa ({max_students} HV).")
+
+        existing_row = conn.execute(
+            "SELECT id FROM class_enrollments WHERE section_id = ? AND student_id = ? LIMIT 1",
+            (sec["id"], user_id),
+        ).fetchone()
+        if existing_row:
+            conn.execute(
+                "UPDATE class_enrollments SET status = 'active', enrolled_at = ? WHERE id = ?",
+                (now, existing_row["id"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO class_enrollments(id, section_id, student_id, status, enrolled_at) VALUES(?, ?, ?, 'active', ?)",
+                (f"enr-{uid()[:10]}", sec["id"], user_id, now),
+            )
+
+        conn.execute(
+            """UPDATE courses
+               SET student_count = COALESCE((
+                   SELECT COUNT(*) FROM class_enrollments ce
+                   JOIN class_sections cs ON cs.id = ce.section_id
+                   WHERE cs.course_id = courses.id AND ce.status = 'active'
+               ), 0)
+               WHERE id = ?""",
+            (sec["course_id"],),
+        )
+        conn.execute(
+            """UPDATE users
+               SET classes_count = COALESCE((
+                   SELECT COUNT(*) FROM class_enrollments ce WHERE ce.student_id = users.id AND ce.status = 'active'
+               ), 0)
+               WHERE id = ?""",
+            (user_id,),
+        )
+
+    record_audit_log(
+        user.get("full_name") or user.get("display_name") or "Học viên",
+        user_id,
+        f"Ghi danh lớp học phần {sec['section_code']}",
+        f"{sec['course_code']} - {sec['course_name']}",
+        log_type="class",
+        resource_type="class_enrollment",
+        resource_id=sec["id"],
+    )
+    return {
+        "enrolled": True,
+        "sectionId": sec["id"],
+        "sectionCode": sec["section_code"],
+        "courseId": sec["course_id"],
+        "subjectId": sec["subject_id"],
+        "courseCode": sec["course_code"],
+        "message": f"Đã ghi danh thành công vào lớp {sec['section_code']} ({sec['course_name']}).",
+    }

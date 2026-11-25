@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import MarloSelect from "../components/MarloSelect";
 import gsap from "gsap";
 import {
   Calendar,
@@ -35,6 +36,7 @@ import {
   createScheduleApi,
   deleteScheduleApi,
   fetchSchedulesBundleApi,
+  getStoredUser,
   updateBookingStatusApi,
   updateScheduleApi,
   type AcademicScheduleItem,
@@ -297,34 +299,19 @@ export default function EngineeringScheduleRota({
   const rotaRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
 
-  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
-  useLayoutEffect(() => {
-    const el = rotaRef.current;
-    if (!el) return;
-
-    const ctx = gsap.context(() => {
-      // 1. Stage container slides in smoothly with expo.out (identical to MarloProjectsScreen)
-      gsap.fromTo(
-        el,
-        { y: 16, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.65,
-          ease: "expo.out",
-          clearProps: "transform,opacity",
-        }
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (ZERO DOUBLE-OPACITY FADE) ───
+  useMarloPageEntrance(
+    rotaRef,
+    (el) => {
+      const chromeCards = el.querySelectorAll(
+        ".marlo-card:not([data-rota-stage] .marlo-card), .tabs, .toolbar"
       );
-
-      // 2. Cascade header, filters, and schedule cards
-      const cards = el.querySelectorAll(".marlo-card, .agenda__day, [data-schedule-card]");
-      if (cards.length > 0) {
-        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
+      if (chromeCards.length > 0) {
+        animateMarloCards(chromeCards, { y: 18, stagger: 0.045, duration: 0.65 });
       }
-    }, el);
-
-    return () => ctx.revert();
-  }, [role]);
+    },
+    [role]
+  );
 
   useLayoutEffect(() => {
     if (!tabsNavRef.current || !tabLineRef.current) return;
@@ -369,24 +356,22 @@ export default function EngineeringScheduleRota({
     setDisplayedTab(nextTab);
   };
 
-  useLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    gsap.killTweensOf(stage);
-    gsap.fromTo(
-      stage,
-      { opacity: 0, y: 16 },
-      { opacity: 1, y: 0, duration: 0.65, ease: "expo.out", clearProps: "transform,opacity" }
-    );
-    const dayCards = stage.querySelectorAll<HTMLElement>(".agenda__day");
-    if (dayCards.length > 0) {
-      animateMarloCards(dayCards, { y: 22, stagger: 0.035, duration: 0.75 });
-    }
-    const agendaRows = stage.querySelectorAll<HTMLElement>(".agenda__row");
-    if (agendaRows.length > 0) {
-      animateMarloRows(agendaRows, { y: 10, stagger: 0.025, delay: 0.2, duration: 0.5 });
-    }
-  }, [displayedTab]);
+  useMarloPageEntrance(
+    stageRef,
+    (stage) => {
+      const dayCards = stage.querySelectorAll<HTMLElement>(
+        ".agenda__day, .card, .marlo-card, .wk__grid, [data-schedule-card]"
+      );
+      if (dayCards.length > 0) {
+        animateMarloCards(dayCards, { y: 24, stagger: 0.05, duration: 0.72 });
+      }
+      const agendaRows = stage.querySelectorAll<HTMLElement>(".agenda__row");
+      if (agendaRows.length > 0) {
+        animateMarloRows(agendaRows, { y: 10, stagger: 0.028, delay: 0.22, duration: 0.5 });
+      }
+    },
+    [displayedTab]
+  );
 
   // ESC key closes Student Booking Modal
   useEffect(() => {
@@ -411,12 +396,16 @@ export default function EngineeringScheduleRota({
     currentEnd: number;
   } | null>(null);
 
+  const currentStaffUserId = getStoredUser(role)?.id || "";
+  const canManageScheduleItem = (sch?: AcademicScheduleItem | null) =>
+    role === "admin" || (role === "instructor" && sch != null && sch.instructor_id === currentStaffUserId);
+
   const handleBarPointerDown = (
     e: React.PointerEvent,
     sch: AcademicScheduleItem,
     mode: "move" | "resize-left" | "resize-right"
   ) => {
-    if (!isStaff || Boolean(sch.is_locked)) return;
+    if (!canManageScheduleItem(sch) || Boolean(sch.is_locked)) return;
     e.stopPropagation();
     didDragMoveRef.current = false;
     try {
@@ -935,7 +924,7 @@ export default function EngineeringScheduleRota({
           title: "Điều Phối Lịch Khảo Thí & Học Vụ",
           badge: "Quản trị viên / Khảo thí",
           badgeCls:
-            "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/70",
+            "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700",
           sub: "Quản lý toàn bộ ca thi, hội đồng phản biện, khóa sổ đăng ký theo phòng và giám sát yêu cầu cố vấn toàn khóa.",
         }
       : role === "instructor"
@@ -943,14 +932,14 @@ export default function EngineeringScheduleRota({
           title: "Lịch Giảng Dạy & Hội Đồng Đồ Án",
           badge: "Góc nhìn Giảng viên",
           badgeCls:
-            "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/70",
+            "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700",
           sub: "Quản lý ca thi phòng Lab, hội đồng chấm bảo vệ AI, kéo chỉnh giờ linh hoạt và phê duyệt lịch hẹn 1-1.",
         }
       : {
           title: "Lịch Học Vụ & Cố Vấn Học Tập",
           badge: "Học viên thực hiện",
           badgeCls:
-            "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200/80 dark:border-blue-800/70",
+            "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700",
           sub: "Theo dõi lịch thi định kỳ, hội đồng phản biện đồ án và đăng ký khung giờ cố vấn 1-1 với Giảng viên.",
         };
 
@@ -969,8 +958,8 @@ export default function EngineeringScheduleRota({
           <span>{sch.project_code || sch.project_id}</span>
         </span>
         {frozen && (
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 text-[10px] font-bold">
-            <Lock size={9} />
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-bold">
+            <Lock size={9} className="text-rose-500" />
             <span>Đóng băng</span>
           </span>
         )}
@@ -987,9 +976,9 @@ export default function EngineeringScheduleRota({
           <button
             type="button"
             onClick={() => onOpenKanban(sch.project_id!)}
-            className="px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 text-[10.5px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
+            className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-[10.5px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
           >
-            <FolderKanban size={10} />
+            <FolderKanban size={10} className="text-amber-500" />
             <span>Kanban</span>
           </button>
         )}
@@ -997,9 +986,9 @@ export default function EngineeringScheduleRota({
           <button
             type="button"
             onClick={() => onOpenGitHub(sch.project_id!)}
-            className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10.5px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
+            className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-[10.5px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
           >
-            <GitFork size={10} />
+            <GitFork size={10} className="text-blue-500" />
             <span>Git Hub</span>
           </button>
         )}
@@ -1167,7 +1156,7 @@ export default function EngineeringScheduleRota({
       </nav>
 
       {/* ─── MAIN STAGE ─── */}
-      <div ref={stageRef} className="w-full">
+      <div ref={stageRef} data-rota-stage="1" className="w-full">
         {displayedTab === "exams" && isStaff ? (
           /* ─── TAB 3: CA THI & HỘI ĐỒNG (DYNAMIC KPI + FULL CRUD) ─── */
           <div className="w-full space-y-5">
@@ -1238,7 +1227,7 @@ export default function EngineeringScheduleRota({
                   tone="dark"
                 />
 
-                <select
+                <MarloSelect
                   value={selectedRoomFilter}
                   onChange={(e) => setSelectedRoomFilter(e.target.value)}
                   className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none"
@@ -1249,7 +1238,7 @@ export default function EngineeringScheduleRota({
                       {r}
                     </option>
                   ))}
-                </select>
+                </MarloSelect>
               </div>
 
               <button
@@ -1358,56 +1347,60 @@ export default function EngineeringScheduleRota({
                             </button>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={() => void handleToggleLockSchedule(sch)}
-                            className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1 transition cursor-pointer"
-                          >
-                            {isLocked ? <Unlock size={12} /> : <Lock size={12} />}
-                            <span>{isLocked ? "Mở khóa" : "Khóa"}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setRoomModalState({
-                                isOpen: true,
-                                mode: "edit",
-                                editing: sch,
-                              })
-                            }
-                            className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1 transition cursor-pointer"
-                          >
-                            <Pencil size={12} />
-                            <span>Sửa / Đổi phòng</span>
-                          </button>
-
-                          {confirmDeleteId === sch.id ? (
-                            <div className="flex items-center gap-1">
+                          {canManageScheduleItem(sch) && (
+                            <>
                               <button
                                 type="button"
-                                onClick={() => void handleDeleteSchedule(sch)}
-                                className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+                                onClick={() => void handleToggleLockSchedule(sch)}
+                                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1 transition cursor-pointer"
                               >
-                                Xác nhận xóa
+                                {isLocked ? <Unlock size={12} /> : <Lock size={12} />}
+                                <span>{isLocked ? "Mở khóa" : "Khóa"}</span>
                               </button>
+
                               <button
                                 type="button"
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="px-2 py-1.5 rounded-xl text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                                onClick={() =>
+                                  setRoomModalState({
+                                    isOpen: true,
+                                    mode: "edit",
+                                    editing: sch,
+                                  })
+                                }
+                                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1 transition cursor-pointer"
                               >
-                                Thôi
+                                <Pencil size={12} />
+                                <span>Sửa / Đổi phòng</span>
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(sch.id)}
-                              className="p-2 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
-                              title="Xóa ca lịch này"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+
+                              {confirmDeleteId === sch.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeleteSchedule(sch)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+                                  >
+                                    Xác nhận xóa
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    className="px-2 py-1.5 rounded-xl text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                                  >
+                                    Thôi
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(sch.id)}
+                                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-950 dark:hover:text-white transition cursor-pointer"
+                                  title="Xóa ca lịch này"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -1421,12 +1414,12 @@ export default function EngineeringScheduleRota({
           /* ─── TAB 4: STUDENT MY BOOKINGS VS STAFF BOOKINGS QUEUE ─── */
           isStaff ? (
             <div className="w-full space-y-5">
-              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <b className="text-sm font-bold text-amber-900 dark:text-amber-200 block">
-                    Danh Sách Đăng Ký & Yêu Cầu Cố Vấn 1-1 Toàn Khóa
+                  <b className="text-sm font-bold text-slate-900 dark:text-white block">
+                    Danh Sách Đăng Ký &amp; Yêu Cầu Cố Vấn 1-1 Toàn Khóa
                   </b>
-                  <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Phê duyệt, chuyển sang phòng Meet trực tuyến, từ chối hoàn chỗ hoặc đánh dấu hoàn thành trực tiếp vào MySQL.
                   </p>
                 </div>
@@ -1585,7 +1578,7 @@ export default function EngineeringScheduleRota({
                                         "Vui lòng đăng ký khung giờ khác phù hợp hơn."
                                     )
                                   }
-                                  className="px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-semibold cursor-pointer transition"
+                                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer transition"
                                 >
                                   Từ chối
                                 </button>
@@ -1660,9 +1653,9 @@ export default function EngineeringScheduleRota({
                               <button
                                 type="button"
                                 onClick={() => void handleCancelStudentBooking(bk.id)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold cursor-pointer self-start sm:self-center"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-950 dark:hover:text-white text-xs font-semibold cursor-pointer self-start sm:self-center transition"
                               >
-                                <Trash2 size={13} />
+                                <Trash2 size={13} className="text-slate-500" />
                                 <span>Hủy đăng ký</span>
                               </button>
                             )}
@@ -1670,7 +1663,7 @@ export default function EngineeringScheduleRota({
 
                         <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 text-xs space-y-1.5">
                           <div>
-                            <b className="text-amber-700 dark:text-amber-400">Nội dung đăng ký:</b>{" "}
+                            <b className="text-slate-700 dark:text-slate-200">Nội dung đăng ký:</b>{" "}
                             <span className="text-slate-800 dark:text-slate-100">{bk.topic}</span>
                           </div>
                           {bk.student_note && (
@@ -1691,7 +1684,7 @@ export default function EngineeringScheduleRota({
                             </a>
                           )}
                           {bk.instructor_reply && (
-                            <div className="p-2.5 mt-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200">
+                            <div className="p-2.5 mt-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
                               <b>Phản hồi của Giảng viên:</b> {bk.instructor_reply}
                             </div>
                           )}
@@ -1773,7 +1766,7 @@ export default function EngineeringScheduleRota({
                 <button
                   type="button"
                   onClick={() => setSelectedDate(todayStr)}
-                  className="px-3 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-bold cursor-pointer"
+                  className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition"
                 >
                   Về hôm nay ({todayStr.split("-").reverse().slice(0, 2).join("/")})
                 </button>
@@ -1896,7 +1889,7 @@ export default function EngineeringScheduleRota({
 
             {/* Main Timeline Table */}
             <div key={`${displayedTab}_${selectedDate}`} className="marlo-card bg-white dark:bg-slate-900/90 rounded-xl border border-[#EBE8E2] dark:border-slate-800 p-5 shadow-xs">
-              <div className="overflow-x-auto pt-4">
+              <div className="overflow-x-auto pt-7">
                 <div className="min-w-[980px]">
                   {/* Table Header: Hours */}
                   <div className="grid grid-cols-12 gap-0 text-center border-b border-[#EBE8E2] dark:border-slate-800 pb-2.5 text-xs font-semibold text-[#9E9B94] dark:text-slate-400 relative">
@@ -1916,10 +1909,10 @@ export default function EngineeringScheduleRota({
                         nowHour >= MIN_HOUR &&
                         nowHour <= MAX_HOUR && (
                           <div
-                            className="absolute -top-5 z-30 pointer-events-none -translate-x-1/2"
+                            className="absolute -top-6 z-30 pointer-events-none -translate-x-1/2"
                             style={{ left: getLeftPct(nowHour) }}
                           >
-                            <div className="flex items-center gap-1 bg-gradient-to-r from-[#F8BD57] to-[#EE8420] text-[#1C1304] text-[10px] font-mono px-2 py-0.5 rounded-full shadow-sm font-bold">
+                            <div className="flex items-center gap-1 whitespace-nowrap leading-tight bg-gradient-to-r from-[#F8BD57] to-[#EE8420] text-[#1C1304] text-[10px] font-mono px-2 py-0.5 rounded-full shadow-sm font-bold">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#1C1304]" />
                               <span>{nowClockStr}</span>
                             </div>
@@ -2201,11 +2194,13 @@ export default function EngineeringScheduleRota({
           openStudentBookingModal(sch);
         }}
         onCancelStudentBooking={handleCancelStudentBooking}
-        onEditSchedule={(sch) =>
-          setRoomModalState({ isOpen: true, mode: "edit", editing: sch })
+        onEditSchedule={
+          canManageScheduleItem(drawerSchedule)
+            ? (sch) => setRoomModalState({ isOpen: true, mode: "edit", editing: sch })
+            : undefined
         }
-        onToggleLock={handleToggleLockSchedule}
-        onDeleteSchedule={handleDeleteSchedule}
+        onToggleLock={canManageScheduleItem(drawerSchedule) ? handleToggleLockSchedule : undefined}
+        onDeleteSchedule={canManageScheduleItem(drawerSchedule) ? handleDeleteSchedule : undefined}
         onReviewBooking={(bId, st, rep, online) =>
           handleReviewBooking(bId, st, rep, online)
         }
@@ -2253,7 +2248,7 @@ export default function EngineeringScheduleRota({
                   <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1.5">
                     Chọn ca lịch / khung giờ Giảng viên đang mở:
                   </label>
-                  <select
+                  <MarloSelect
                     value={bookingScheduleId}
                     onChange={(e) => {
                       const nextId = e.target.value;
@@ -2268,7 +2263,7 @@ export default function EngineeringScheduleRota({
                         if (mp?.repo_url) setBookingRepoUrl(mp.repo_url);
                       }
                     }}
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#E5A023]/30"
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none"
                   >
                     {openStudentBookableSlots.length === 0 ? (
                       <option value="">Hiện không có ca nào mở đăng ký</option>
@@ -2284,14 +2279,14 @@ export default function EngineeringScheduleRota({
                         </option>
                       ))
                     )}
-                  </select>
+                  </MarloSelect>
                 </div>
 
                 <div>
                   <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1.5">
                     Gắn Đồ án & Link GitHub đính kèm (tùy chọn):
                   </label>
-                  <select
+                  <MarloSelect
                     value={bookingProjectId}
                     onChange={(e) => {
                       const pid = e.target.value;
@@ -2299,7 +2294,7 @@ export default function EngineeringScheduleRota({
                       const found = projects.find((p) => p.id === pid);
                       setBookingRepoUrl(found?.repo_url || "");
                     }}
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#E5A023]/30 mb-2"
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none mb-2"
                   >
                     <option value="">Không gắn đồ án cụ thể</option>
                     {projects.map((p) => (
@@ -2307,7 +2302,7 @@ export default function EngineeringScheduleRota({
                         {p.code} · {p.name}
                       </option>
                     ))}
-                  </select>
+                  </MarloSelect>
                   <input
                     type="url"
                     value={bookingRepoUrl}
@@ -2348,8 +2343,9 @@ export default function EngineeringScheduleRota({
                 </div>
 
                 {bookingError && (
-                  <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 font-semibold">
-                    {bookingError}
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 font-semibold flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                    <span>{bookingError}</span>
                   </div>
                 )}
 

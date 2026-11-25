@@ -1,0 +1,55 @@
+PROPRIETARY SOFTWARE LICENSE — ALL RIGHTS RESERVED
+
+Copyright (c) 2026 Nguyễn Bá Hòa (GitHub: @Hoaba-clouch). All Rights Reserved.
+
+Project: CodeMind AI — Learning OS
+Official Repository: https://github.com/Hoaba-clouch/E-learningProject
+Author Contact: Nguyễn Bá Hòa <bahoa12346@gmail.com>
+
+------------------------------------------------------------------------
+THÔNG BÁO BẢN QUYỀN (TIẾNG VIỆT)
+------------------------------------------------------------------------
+
+Bản quyền (c) 2026 thuộc về Nguyễn Bá Hòa (GitHub: @Hoaba-clouch).
+Mọi quyền được bảo lưu (All Rights Reserved).
+
+1. Mục đích công khai:
+   Kho mã nguồn CodeMind AI — Learning OS tại
+   https://github.com/Hoaba-clouch/E-learningProject chỉ được công khai tạm thời
+   phục vụ công tác chấm điểm học phần, phản biện và đánh giá của Giảng viên /
+   Hội đồng chuyên môn.
+
+2. Giới hạn quyền (Không cấp giấy phép mã nguồn mở):
+   Không có bất kỳ giấy phép mã nguồn mở nào được cấp kèm theo mã nguồn này.
+   Theo Điều khoản Dịch vụ của GitHub, người xem chỉ được phép đọc mã nguồn
+   trên nền tảng phục vụ việc xem xét/đánh giá.
+
+3. Các hành vi nghiêm cấm:
+   Nghiêm cấm mọi hành vi sao chép, chỉnh sửa, đổi tên tác giả, phân phối lại,
+   nộp lại dưới tên cá nhân/nhóm khác, triển khai công khai (deploy) hoặc sử
+   dụng cho mục đích thương mại toàn bộ hay một phần mã nguồn, kiến trúc, dữ
+   liệu mẫu và giao diện của dự án nếu chưa có sự đồng ý trước bằng văn bản
+   của tác giả.
+
+------------------------------------------------------------------------
+COPYRIGHT NOTICE (ENGLISH)
+------------------------------------------------------------------------
+
+This repository ("CodeMind AI — Learning OS", hosted at
+https://github.com/Hoaba-clouch/E-learningProject) is proprietary software.
+NO OPEN-SOURCE LICENSE IS GRANTED.
+
+1. Permitted Viewing Scope:
+   Public visibility is enabled strictly for academic grading, instructor
+   inspection, and defense council evaluation.
+
+2. Restrictions:
+   Without prior written permission from the copyright holder (Nguyễn Bá Hòa,
+   bahoa12346@gmail.com), you may NOT copy, reproduce, modify, merge, publish,
+   distribute, sublicense, re-submit as academic work, deploy, or sell copies
+   of this software, in whole or in part.
+
+3. Ownership Verification:
+   Original authorship and chronological development history are recorded in
+   the official repository commit log and author metadata (`package.json`,
+   `README.md`, and verified Git commit history under @Hoaba-clouch).

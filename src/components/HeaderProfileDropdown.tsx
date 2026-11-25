@@ -110,6 +110,9 @@ export function HeaderProfileDropdown({
       const cached = getStoredUser(role);
       if (cached) {
         setCurrentUser(cached);
+        fetchCurrentUser(role, { skipAutoDemo: true }).then((u) => {
+          if (active && u) setCurrentUser(u);
+        }).catch(() => {});
         return;
       }
       ensureRoleSession(role).then(() => {
@@ -117,10 +120,13 @@ export function HeaderProfileDropdown({
         const freshCached = getStoredUser(role);
         if (freshCached) {
           setCurrentUser(freshCached);
-        } else {
-          fetchCurrentUser(role).then((u) => {
+          fetchCurrentUser(role, { skipAutoDemo: true }).then((u) => {
             if (active && u) setCurrentUser(u);
-          });
+          }).catch(() => {});
+        } else {
+          fetchCurrentUser(role, { skipAutoDemo: true }).then((u) => {
+            if (active && u) setCurrentUser(u);
+          }).catch(() => {});
         }
       });
     };
@@ -189,9 +195,17 @@ export function HeaderProfileDropdown({
       >
         {/* User Avatar with status indicator */}
         <div className="relative shrink-0">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 shadow-2xs font-mono">
-            {userInitials}
-          </span>
+          {currentUser?.avatar_url ? (
+            <img
+              src={currentUser.avatar_url}
+              alt={userName}
+              className="h-9 w-9 rounded-full object-cover shadow-2xs ring-1 ring-slate-200/80 dark:ring-slate-700"
+            />
+          ) : (
+            <span className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 shadow-2xs font-mono">
+              {userInitials}
+            </span>
+          )}
           <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-[#1b1c1e]" />
         </div>
 
@@ -319,11 +333,7 @@ export function HeaderProfileDropdown({
           <button
             type="button"
             role="menuitem"
-            onClick={() =>
-              closeDropdown(() =>
-                onNavigate?.(role === "instructor" ? "instructor" : role === "admin" ? "admin" : "profile")
-              )
-            }
+            onClick={() => closeDropdown(() => onNavigate?.("profile"))}
             className="w-full h-[36px] px-3 rounded-xl flex items-center gap-2.5 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100/90 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
           >
             <UserRound size={16} className="text-slate-400 dark:text-slate-400 shrink-0" />

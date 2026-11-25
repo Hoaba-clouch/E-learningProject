@@ -41,6 +41,7 @@ export default function MarloActivityRing({
   className = "",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevArcLensRef = useRef<number[]>([]);
 
   const total = segments.reduce((sum, s) => sum + s.value, 0) || 100;
   // Radius 52 in 140x140 viewBox matches Marlo's exact proportions (strokeWidth 18)
@@ -60,28 +61,31 @@ export default function MarloActivityRing({
     return item;
   });
 
-  // Authentic Marlo GSAP entrance animation for donut arcs
+  // Authentic Marlo GSAP entrance & project-switch morph for donut arcs
   useLayoutEffect(() => {
     if (!containerRef.current) return;
     const arcs = containerRef.current.querySelectorAll<SVGCircleElement>(".marlo-donut-arc");
     if (arcs.length === 0) return;
 
+    const isInitialDraw = prevArcLensRef.current.length === 0;
     const ctx = gsap.context(() => {
       arcs.forEach((arc, i) => {
         const targetLen = computedArcs[i]?.len || 0;
+        const fromLen = isInitialDraw ? 0 : (prevArcLensRef.current[i] ?? 0);
         gsap.fromTo(
           arc,
-          { strokeDasharray: `0 ${circumference}` },
+          { strokeDasharray: `${fromLen} ${circumference}` },
           {
             strokeDasharray: `${targetLen} ${circumference}`,
-            duration: 1.0,
-            delay: 0.25 + i * 0.14,
+            duration: isInitialDraw ? 0.65 : 0.45,
+            delay: isInitialDraw ? 0.08 + i * 0.05 : 0,
             ease: "power3.out",
           }
         );
       });
     }, containerRef);
 
+    prevArcLensRef.current = computedArcs.map((a) => a.len);
     return () => ctx.revert();
   }, [segments.map((s) => s.value).join(",")]);
 

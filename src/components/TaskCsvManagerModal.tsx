@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   TableProperties
 } from "lucide-react";
+import MarloSelect from "./MarloSelect";
 import type { KanbanTask, TeamMember, ColumnId } from "../screens/KanbanBoard";
 
 export const TEACHER_CSV_TEMPLATE = `STT,Ngày (*),Sprint,Tên task (*),Mô tả / yêu cầu,Điểm (*),Yêu cầu nộp,Bonus
@@ -556,7 +557,7 @@ export default function TaskCsvManagerModal({
                       <label className="text-[11px] font-medium text-slate-600 block mb-0.5">
                         Số ngày mỗi Sprint (nếu cột Sprint trống):
                       </label>
-                      <select
+                      <MarloSelect
                         value={daysPerSprint}
                         onChange={(e) => setDaysPerSprint(Number(e.target.value))}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs text-slate-800 focus:outline-hidden"
@@ -564,13 +565,13 @@ export default function TaskCsvManagerModal({
                         <option value={7}>7 ngày / Sprint (Scrum chuẩn)</option>
                         <option value={10}>10 ngày / Sprint</option>
                         <option value={14}>14 ngày / Sprint (2 tuần)</option>
-                      </select>
+                      </MarloSelect>
                     </div>
                     <div>
                       <label className="text-[11px] font-medium text-slate-600 block mb-0.5">
                         Cột đích đưa task vào:
                       </label>
-                      <select
+                      <MarloSelect
                         value={targetColumn}
                         onChange={(e) => setTargetColumn(e.target.value as ColumnId)}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs text-slate-800 focus:outline-hidden"
@@ -581,13 +582,13 @@ export default function TaskCsvManagerModal({
                         <option value="done">Hoàn thành (Done)</option>
                         <option value="verified">Đã nghiệm thu (Thầy duyệt)</option>
                         <option value="fail">Fail (Chưa đạt)</option>
-                      </select>
+                      </MarloSelect>
                     </div>
                     <div>
                       <label className="text-[11px] font-medium text-slate-600 block mb-0.5">
                         Phân bổ người thực hiện:
                       </label>
-                      <select
+                      <MarloSelect
                         value={assignmentMode}
                         onChange={(e) => setAssignmentMode(e.target.value)}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs text-slate-800 focus:outline-hidden"
@@ -598,20 +599,20 @@ export default function TaskCsvManagerModal({
                             Gán cho {m.name} ({m.role})
                           </option>
                         ))}
-                      </select>
+                      </MarloSelect>
                     </div>
                     <div>
                       <label className="text-[11px] font-medium text-slate-600 block mb-0.5">
                         Chế độ ghi vào Đồ án:
                       </label>
-                      <select
+                      <MarloSelect
                         value={importMode}
                         onChange={(e) => setImportMode(e.target.value as "append" | "replace")}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs text-slate-800 focus:outline-hidden"
                       >
                         <option value="append">Nối thêm vào danh sách hiện tại ({tasks.length} task)</option>
                         <option value="replace">Thay thế toàn bộ task cũ của đồ án</option>
-                      </select>
+                      </MarloSelect>
                     </div>
                     <label className="flex items-center gap-1.5 pt-1 text-[11px] text-slate-700 cursor-pointer">
                       <input

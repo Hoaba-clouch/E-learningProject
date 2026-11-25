@@ -5,6 +5,7 @@ interface MarloTitleProps {
   className?: string;
   as?: "h1" | "h2" | "h3" | "h4" | "span" | "div";
   delayMs?: number;
+  staggerMs?: number;
 }
 
 /**
@@ -13,16 +14,17 @@ interface MarloTitleProps {
  * - Splits heading into words & individual characters
  * - Each word has overflow: hidden
  * - Characters rotate 6deg & slide up from 115% baseline with 0.85s expo.out easing
- * - Staggered at 22ms per character
+ * - Staggered at staggerMs per character (default 22ms)
  */
 export default function MarloTitle({
   text,
   className = "",
   as: Component = "h1",
   delayMs = 0,
+  staggerMs = 22,
 }: MarloTitleProps) {
   const words = useMemo(() => {
-    return text.trim().split(" ");
+    return text.trim().split(/\s+/).filter(Boolean);
   }, [text]);
 
   let charCounter = 0;
@@ -42,7 +44,7 @@ export default function MarloTitle({
                     key={`${char}-${cIdx}`}
                     className="marlo-ch"
                     style={{
-                      animationDelay: `${delayMs + currentIdx * 22}ms`,
+                      animationDelay: `${delayMs + currentIdx * staggerMs}ms`,
                     }}
                   >
                     {char}

@@ -28,7 +28,7 @@ api_v1_router.include_router(student_learning_router, dependencies=_active_learn
 api_v1_router.include_router(submissions_router, dependencies=_active_learning_deps)
 api_v1_router.include_router(ai_router, dependencies=_active_learning_deps)
 api_v1_router.include_router(defense_router, dependencies=_active_learning_deps)
-api_v1_router.include_router(instructor_router)
+api_v1_router.include_router(instructor_router, dependencies=_active_learning_deps)
 api_v1_router.include_router(admin_router)
 api_v1_router.include_router(kanban_router, dependencies=_active_learning_deps)
 api_v1_router.include_router(git_hub_router, dependencies=_active_learning_deps)

@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 
 from app.api.deps import current_user, get_optional_current_user, record_audit_log
-from app.api.v1.kanban import is_user_in_project, is_user_project_leader
+from app.api.v1.kanban import is_project_advisor, is_user_in_project, is_user_project_leader
 from app.core.database import db
 from app.core.security import sha256, uid
 from app.core.timezone import now_utc
@@ -47,11 +47,18 @@ def _ensure_git_project_access(
     *,
     require_leader: bool = False,
     check_frozen: bool = False,
-) -> Any | None:
+) -> Any:
     proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
     if not proj:
-        return None
-    if user and str(user.get("role") or "").strip().lower() == "student":
+        raise HTTPException(status_code=404, detail="Không tìm thấy dự án kỹ thuật.")
+    u_role = str((user or {}).get("role") or "").strip().lower()
+    if user and u_role == "instructor":
+        if (require_leader or check_frozen) and not is_project_advisor(user, proj):
+            raise HTTPException(
+                status_code=403,
+                detail="Chỉ Giảng viên Hướng dẫn của đồ án này hoặc Quản trị viên mới có quyền cập nhật/thẩm định trên Git Project Hub.",
+            )
+    if user and u_role == "student":
         if not is_user_in_project(user, proj):
             raise HTTPException(
                 status_code=403,
@@ -62,10 +69,16 @@ def _ensure_git_project_access(
                 status_code=403,
                 detail="Chỉ Nhóm trưởng hoặc Giảng viên/Admin mới có quyền thay đổi cấu hình đồ án.",
             )
-        if check_frozen and bool(dict(proj).get("is_frozen")):
+    if check_frozen:
+        if bool(dict(proj).get("is_frozen")):
             raise HTTPException(
                 status_code=403,
-                detail="Đồ án đã bị đóng băng nộp bài, không thể thao tác Git Commit / Pull Request / Merge.",
+                detail="Đồ án đã bị đóng băng nộp bài, không thể thao tác Git Commit / Pull Request / Merge. Vui lòng mở khóa đóng băng trước.",
+            )
+        if str(proj["status"] or "").strip().lower() in ("delivered", "done", "completed"):
+            raise HTTPException(
+                status_code=403,
+                detail="Đồ án đã hoàn tất bảo vệ nghiệm thu, kho mã nguồn hiện ở chế độ lưu trữ chỉ đọc.",
             )
     return proj
 
@@ -217,9 +230,7 @@ def _resolve_author_meta(conn: Any, project_id: str, requested_name: str | None,
 def _ensure_project_and_repo(conn: Any, project_id: str) -> tuple[Any, Any]:
     proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
     if not proj:
-        proj = conn.execute("SELECT * FROM engineering_projects ORDER BY rowid ASC LIMIT 1").fetchone()
-    if not proj:
-        raise HTTPException(status_code=404, detail="Chưa có dự án kỹ nghệ nào trong hệ thống.")
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy dự án kỹ thuật '{project_id}'.")
     pid = proj["id"]
     repo = conn.execute("SELECT * FROM git_repositories WHERE project_id=?", (pid,)).fetchone()
     if not repo:
@@ -535,13 +546,16 @@ def _compute_analytics_and_metrics(
 @router.get("/workspace")
 def get_git_hub_workspace(
     project_id: str = Query(default="prj-codemind"),
-    user: dict[str, Any] | None = Depends(get_optional_current_user),
+    user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Lấy trọn gói dữ liệu Git Project Hub đồng bộ CSDL: Repo, Commits Graph, Pull Requests, Tasks & Team Analytics."""
     with db() as conn:
-        projects_rows = conn.execute(
+        all_projects_rows = conn.execute(
             "SELECT * FROM engineering_projects ORDER BY created_at DESC, rowid ASC"
         ).fetchall()
+        if project_id and all_projects_rows and all(p["id"] != project_id for p in all_projects_rows):
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy dự án kỹ thuật '{project_id}'.")
+        projects_rows = all_projects_rows
         if user and str(user.get("role") or "").strip().lower() == "student":
             projects_rows = [p for p in projects_rows if is_user_in_project(user, p)]
 
@@ -600,6 +614,12 @@ def get_git_hub_workspace(
                 "sprint": p["sprint"],
                 "isFrozen": bool(dict(p).get("is_frozen")),
                 "isLead": is_user_project_leader(user, p) if user else False,
+                "isAdvisor": is_project_advisor(user, p) if user else False,
+                "canEditRepo": bool(
+                    str(user.get("role") or "").lower() in ("admin", "org_admin")
+                    or is_project_advisor(user, p)
+                    or (str(user.get("role") or "").lower() == "student" and is_user_project_leader(user, p))
+                ) if user else False,
             }
             for p in projects_rows
         ],
@@ -630,7 +650,7 @@ def update_project_repo(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Lưu URL GitHub Repository, nhánh nộp bài chính và chiến lược Merge vào CSDL."""
-    _require_roles(user, ("student", "admin"), "cập nhật cấu hình Git Repository")
+    _require_roles(user, ("student", "instructor", "admin"), "cập nhật cấu hình Git Repository")
     clean_url = payload.repo_url.strip()
     if not (clean_url.startswith("http://") or clean_url.startswith("https://")):
         raise HTTPException(
@@ -747,7 +767,8 @@ def push_git_commit(
         ).fetchone()
         next_cx = int(stats_row["max_cx"] or 70) + 85
         next_pos = int(stats_row["max_pos"] if stats_row["max_pos"] is not None else -1) + 1
-        author = _resolve_author_meta(conn, pid, payload.author_name, user)
+        safe_author_in = None if str(user.get("role") or "").lower() == "student" else payload.author_name
+        author = _resolve_author_meta(conn, pid, safe_author_in, user)
         commit_id = f"c-{uid()[:8]}"
         short_sha = sha256(f"{pid}:{clean_msg}:{now}:{commit_id}")[:7]
         date_label = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
@@ -828,7 +849,15 @@ def create_pull_request(
             (pid,),
         ).fetchone()
         next_num = int(num_row["max_num"] or 0) + 1
-        author = _resolve_author_meta(conn, pid, payload.author_name, user)
+        safe_author_in = None if str(user.get("role") or "").lower() == "student" else payload.author_name
+        author = _resolve_author_meta(conn, pid, safe_author_in, user)
+        from app.api.deps import load_system_policies
+        svc_aigc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-aigc'").fetchone()
+        policies = load_system_policies(conn)
+        budget_cap = float(policies.get("budgetCap", 500.0) or 500.0)
+        cost_row = conn.execute("SELECT COALESCE(SUM(estimated_cost), 0) AS total_cost FROM ai_service_units").fetchone()
+        total_cost = float(cost_row["total_cost"] or 0.0) if cost_row else 0.0
+        allow_llm = bool((not svc_aigc or svc_aigc["active"]) and total_cost < budget_cap)
         usage_meta: dict[str, int] = {}
         score, pr_status, blast_radius, summary, findings, diff_preview, questions = _run_ai_ast_scanner(
             clean_title,
@@ -836,11 +865,13 @@ def create_pull_request(
             payload.source_branch,
             task_code,
             payload.code_snippet,
-            use_llm=True,
+            use_llm=allow_llm,
             usage_meta=usage_meta,
         )
         if usage_meta.get("input_tokens") or usage_meta.get("output_tokens"):
             record_ai_usage(conn, "svc-aigc", usage_meta.get("input_tokens", 0), usage_meta.get("output_tokens", 0))
+        elif allow_llm:
+            conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id = 'svc-aigc'")
         pr_id = f"pr-{uid()[:8]}"
         conn.execute(
             """INSERT INTO git_pull_requests(
@@ -883,13 +914,6 @@ def create_pull_request(
                 None,
             ),
         )
-        conn.execute(
-            """UPDATE ai_service_units
-               SET requests = requests + 1,
-                   input_tokens = input_tokens + 620,
-                   output_tokens = output_tokens + 310
-               WHERE id = 'svc-aigc'"""
-        )
         repo_base = str(repo["repo_url"] or "https://github.com/Hoaba-clouch/E-learningProject").rstrip("/")
         linked_task_updated = _auto_advance_task_on_git_activity(
             conn,
@@ -911,7 +935,9 @@ def apply_pr_ai_fix(
     """Áp dụng bản vá 1-Click từ CodeMind AI Senior Reviewer để xử lý toàn bộ cảnh báo AST trên PR."""
     _require_roles(user, ("student",), "áp dụng bản vá 1-Click AI")
     now = now_utc()
+    from app.api.deps import assert_ai_service_active
     with db() as conn:
+        assert_ai_service_active(conn, "svc-aigc", "AI Code Reviewer & 1-Click Fix")
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
         if not pr:
             raise HTTPException(status_code=404, detail="Không tìm thấy Pull Request")
@@ -986,7 +1012,7 @@ def peer_approve_pr(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Lớp 2 (Peer / Giảng viên Review): Kiểm tra chéo & ký Approve PR."""
-    role = _require_roles(user, ("student", "instructor"), "phê duyệt Pull Request")
+    role = _require_roles(user, ("student", "instructor", "admin"), "phê duyệt Pull Request")
     with db() as conn:
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
         if not pr:
@@ -1006,29 +1032,23 @@ def peer_approve_pr(
                 detail="Không thể Peer Approve khi còn cảnh báo bảo mật AST mức Critical chưa được khắc phục.",
             )
 
-        if role == "instructor":
+        if role in ("instructor", "admin"):
             reviewer = (
-                (payload.reviewer_name or "").strip()
-                or user.get("full_name")
+                user.get("full_name")
                 or user.get("display_name")
-                or "TS. Nguyễn Lan Anh"
+                or ("Quản trị viên" if role == "admin" else "Giảng viên Hướng dẫn")
             )
         else:
-            reviewer = (
-                (payload.reviewer_name or "").strip()
-                or user.get("full_name")
-                or user.get("display_name")
-                or ""
-            )
-            if not reviewer or reviewer.strip().lower() == str(pr["author_name"] or "").strip().lower():
+            reviewer = (user.get("full_name") or user.get("display_name") or "").strip()
+            if not reviewer or reviewer.lower() == str(pr["author_name"] or "").strip().lower():
                 raise HTTPException(
                     status_code=422,
-                    detail="Tác giả PR không thể tự Peer Approve. Hãy chọn một thành viên khác trong nhóm làm Reviewer hoặc chờ Giảng viên thẩm định.",
+                    detail="Tác giả PR không thể tự Peer Approve. Hãy để một thành viên khác đăng nhập làm Reviewer hoặc chờ Giảng viên hướng dẫn thẩm định.",
                 )
 
         comment_text = payload.comment.strip() or (
-            "Giảng viên đã thẩm định DoD & kiến trúc — Đạt yêu cầu."
-            if role == "instructor"
+            "Giảng viên/Admin đã thẩm định DoD & kiến trúc — Đạt yêu cầu."
+            if role in ("instructor", "admin")
             else "LGTM — Đạt chuẩn Clean Code & Kiến trúc 3 tầng."
         )
         conn.execute(
@@ -1058,7 +1078,7 @@ def request_changes_pr(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Gửi yêu cầu chỉnh sửa (Request Changes) trả PR về trạng thái cần sửa lại."""
-    role = _require_roles(user, ("student", "instructor"), "yêu cầu chỉnh sửa Pull Request")
+    role = _require_roles(user, ("student", "instructor", "admin"), "yêu cầu chỉnh sửa Pull Request")
     with db() as conn:
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
         if not pr:
@@ -1070,24 +1090,18 @@ def request_changes_pr(
                 detail="Pull Request đã được merge, không thể yêu cầu sửa lại.",
             )
 
-        if role == "instructor":
+        if role in ("instructor", "admin"):
             reviewer = (
-                (payload.reviewer_name or "").strip()
-                or user.get("full_name")
+                user.get("full_name")
                 or user.get("display_name")
-                or "TS. Nguyễn Lan Anh"
+                or ("Quản trị viên" if role == "admin" else "Giảng viên Hướng dẫn")
             )
         else:
-            reviewer = (
-                (payload.reviewer_name or "").strip()
-                or user.get("full_name")
-                or user.get("display_name")
-                or ""
-            )
-            if not reviewer or reviewer.strip().lower() == str(pr["author_name"] or "").strip().lower():
+            reviewer = (user.get("full_name") or user.get("display_name") or "").strip()
+            if not reviewer or reviewer.lower() == str(pr["author_name"] or "").strip().lower():
                 raise HTTPException(
                     status_code=422,
-                    detail="Tác giả PR không thể tự gửi Request Changes trên PR của chính mình. Hãy chọn thành viên khác làm Reviewer.",
+                    detail="Tác giả PR không thể tự gửi Request Changes trên PR của chính mình. Hãy để thành viên khác đăng nhập làm Reviewer.",
                 )
 
         conn.execute(
@@ -1117,7 +1131,7 @@ def merge_pull_request(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Thực hiện Squash/Rebase Merge, cấp con dấu SHA-256 DoD, đồng bộ Task Kanban & Dual Grading."""
-    _require_roles(user, ("student",), "thực hiện Merge Pull Request")
+    _require_roles(user, ("student", "instructor", "admin"), "thực hiện Merge Pull Request")
     now = now_utc()
     with db() as conn:
         pr = conn.execute("SELECT * FROM git_pull_requests WHERE id=?", (pr_id,)).fetchone()
@@ -1234,13 +1248,27 @@ def merge_pull_request(
         ).fetchone()
         course_row = None
         if proj_meta:
+            c_code_prefix = (proj_meta["course"] or "").split("·")[0].strip()
             course_row = conn.execute(
                 "SELECT id FROM courses WHERE id=? OR subject_id=? OR code=? LIMIT 1",
-                (proj_meta["course_id"] or "", proj_meta["course_id"] or "", proj_meta["course"] or ""),
+                (proj_meta["course_id"] or "", proj_meta["course_id"] or "", c_code_prefix),
             ).fetchone()
         if not course_row:
             course_row = conn.execute("SELECT id FROM courses LIMIT 1").fetchone()
-        resolved_class_id = course_row["id"] if course_row else "class-web"
+        resolved_course_id = course_row["id"] if course_row else "class-web"
+        enr_sec = conn.execute(
+            """SELECT cs.id FROM class_enrollments ce
+               JOIN class_sections cs ON cs.id = ce.section_id
+               WHERE ce.student_id = ? AND cs.course_id = ? AND ce.status = 'active'
+               LIMIT 1""",
+            (user["id"], resolved_course_id),
+        ).fetchone()
+        if not enr_sec:
+            enr_sec = conn.execute(
+                "SELECT id FROM class_sections WHERE course_id = ? AND status = 'active' ORDER BY created_at ASC LIMIT 1",
+                (resolved_course_id,),
+            ).fetchone()
+        resolved_class_id = enr_sec["id"] if enr_sec else resolved_course_id
 
         user_row = conn.execute(
             "SELECT user_code FROM users WHERE id=?",
@@ -1299,6 +1327,19 @@ def merge_pull_request(
                 "",
                 now,
             ),
+        )
+        cnt_row = conn.execute(
+            "SELECT COUNT(*) AS c FROM dual_submissions WHERE class_id=? AND status IN ('pending', 'flagged')",
+            (resolved_class_id,),
+        ).fetchone()
+        pending_val = int(cnt_row["c"] or 0) if cnt_row else 0
+        conn.execute(
+            "UPDATE courses SET pending_dual_reviews = ? WHERE id IN (?, ?)",
+            (pending_val, resolved_class_id, resolved_course_id),
+        )
+        conn.execute(
+            "UPDATE class_sections SET pending_dual_reviews = ? WHERE id = ? OR course_id = ?",
+            (pending_val, resolved_class_id, resolved_course_id),
         )
 
         xp_awarded = 0
@@ -1578,7 +1619,7 @@ def sync_github_live(
     Đồng bộ dữ liệu thời gian thực từ GitHub REST API công khai về CSDL SQLite/MySQL `codemind_ai`.
     Kéo commits thật, PRs thật, cập nhật topology cây Metro-line và sơ đồ kiến trúc động.
     """
-    _require_roles(user, ("student", "admin"), "đồng bộ GitHub Repository")
+    _require_roles(user, ("student", "instructor", "admin"), "đồng bộ GitHub Repository")
     with db() as conn:
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
@@ -1948,7 +1989,7 @@ def sync_github_live(
 @router.get("/projects/{project_id}/architecture")
 def get_project_architecture(
     project_id: str,
-    user: dict[str, Any] | None = Depends(get_optional_current_user),
+    user: dict[str, Any] = Depends(current_user),
 ):
     """
     Lấy sơ đồ kiến trúc phân tầng động từ CSDL MySQL/SQLite `project_architectures`.
@@ -1956,7 +1997,9 @@ def get_project_architecture(
     """
     with db() as conn:
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
-        if project and user and str(user.get("role") or "").strip().lower() == "student" and not is_user_in_project(user, project):
+        if not project:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dự án.")
+        if user and str(user.get("role") or "").strip().lower() == "student" and not is_user_in_project(user, project):
             raise HTTPException(status_code=403, detail="Chỉ thành viên trong nhóm đồ án này mới có quyền xem sơ đồ kiến trúc.")
         project_name = project["name"] if project else "Hệ thống Phần mềm Đồ án"
         repo = conn.execute("SELECT * FROM git_repositories WHERE project_id = ?", (project_id,)).fetchone()
@@ -2000,7 +2043,7 @@ def save_project_architecture(
     """
     Lưu cập nhật sơ đồ kiến trúc phân tầng (Nodes, Edges, Subsystems, Flows) vào MySQL `project_architectures`.
     """
-    _require_roles(user, ("student", "instructor"), "lưu sơ đồ kiến trúc")
+    _require_roles(user, ("student", "instructor", "admin"), "lưu sơ đồ kiến trúc")
     with db() as conn:
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
@@ -2039,8 +2082,10 @@ def generate_project_architecture(
     """
     AI Scanner: Trích xuất và tự động tái cấu trúc sơ đồ kiến trúc phân tầng từ Repo GitHub và lưu vào MySQL.
     """
-    _require_roles(user, ("student", "instructor"), "tái cấu trúc sơ đồ kiến trúc bằng AI")
+    _require_roles(user, ("student", "instructor", "admin"), "tái cấu trúc sơ đồ kiến trúc bằng AI")
+    from app.api.deps import assert_ai_service_active
     with db() as conn:
+        assert_ai_service_active(conn, "svc-aigc", "AI Architecture Scanner")
         project = conn.execute("SELECT * FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án.")

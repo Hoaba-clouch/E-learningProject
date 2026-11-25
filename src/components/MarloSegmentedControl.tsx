@@ -6,6 +6,7 @@ export interface MarloSegmentOption<T extends string = string> {
   id: T;
   label: string;
   icon?: React.ReactNode;
+  dotClassName?: string;
   badge?: string | number;
   badgeColor?: string;
   title?: string;
@@ -128,6 +129,7 @@ export default function MarloSegmentedControl<T extends string = string>({
           >
             <span className="marlo-seg-content flex items-center justify-center gap-1.5 pointer-events-none w-full">
               {opt.icon && <span className="shrink-0 inline-flex items-center justify-center">{opt.icon}</span>}
+              {opt.dotClassName && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${opt.dotClassName}`} />}
               <span className="truncate text-center">{opt.label}</span>
               {opt.badge !== undefined && (
                 <span

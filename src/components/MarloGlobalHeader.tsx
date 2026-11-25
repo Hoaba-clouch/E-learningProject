@@ -80,9 +80,11 @@ export default function MarloGlobalHeader({
       });
     };
     loadNotifs();
+    window.addEventListener("codemind-notifications-updated", loadNotifs);
     const timer = setInterval(loadNotifs, 15000);
     return () => {
       active = false;
+      window.removeEventListener("codemind-notifications-updated", loadNotifs);
       clearInterval(timer);
     };
   }, [role]);
@@ -94,16 +96,22 @@ export default function MarloGlobalHeader({
     let active = true;
     const loadInstructorCounts = () => {
       fetchInstructorCourses().then((courses) => {
-        if (active && courses && courses.length > 0) {
+        if (active && Array.isArray(courses)) {
           setInstructorCoursesCount(courses.length);
         }
       });
-      fetchInstructorChapterSubmissions().then((ov) => {
-        if (active && ov?.summary) {
-          setInstructorPendingCount(
-            (ov.summary.pendingCount || 0) + (ov.summary.flaggedCount || 0)
-          );
+      fetchNavigationCountsApi("instructor").then((nav) => {
+        if (active && nav && typeof nav.pending_dual_reviews === "number") {
+          setInstructorPendingCount(nav.pending_dual_reviews);
+          return;
         }
+        fetchInstructorChapterSubmissions().then((ov) => {
+          if (active && ov?.summary) {
+            setInstructorPendingCount(
+              (ov.summary.pendingCount || 0) + (ov.summary.flaggedCount || 0)
+            );
+          }
+        });
       });
     };
     loadInstructorCounts();
@@ -252,10 +260,10 @@ export default function MarloGlobalHeader({
               type="button"
               onClick={() => onNavigate("instructor-courses")}
               className="inline-flex h-11 sm:h-12 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] px-3.5 text-xs font-bold font-mono text-slate-700 dark:border-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs shrink-0 whitespace-nowrap transition cursor-pointer"
-              title={`Quản lý ${instructorCoursesCount} Môn học CNTT`}
+              title={`Quản lý ${instructorCoursesCount} Lớp học phần được phân công`}
             >
               <BookOpen size={15} className="text-slate-500 dark:text-slate-400 shrink-0" />
-              <span className="whitespace-nowrap">{instructorCoursesCount} Môn học</span>
+              <span className="whitespace-nowrap">{instructorCoursesCount} Lớp học phần</span>
             </button>
             <button
               type="button"
@@ -315,7 +323,6 @@ export default function MarloGlobalHeader({
             type="button"
             onClick={() => {
               setIsNotifOpen((prev) => !prev);
-              if (unreadCount > 0) setUnreadCount(0);
             }}
             className="relative flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-slate-200/90 bg-white dark:bg-[#18191c] text-slate-600 dark:text-slate-300 shadow-xs transition hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 dark:border-slate-800 cursor-pointer"
             title="Thông báo hệ thống"
@@ -330,7 +337,7 @@ export default function MarloGlobalHeader({
 
           {/* Notification Popover Dropdown */}
           {isNotifOpen && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-88 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl backdrop-blur-md dark:border-slate-800 dark:bg-slate-900 animate-in fade-in zoom-in-95 duration-150 z-50">
+            <div className="absolute right-0 mt-2 w-80 sm:w-88 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl backdrop-blur-md dark:border-slate-800 dark:bg-slate-900 marlo-dropdown-in z-50">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2 dark:border-slate-800">
                 <div className="flex items-center gap-1.5">
                   <Bell size={14} className="text-amber-500" />
@@ -355,11 +362,40 @@ export default function MarloGlobalHeader({
                     <div
                       key={n.id}
                       onClick={async () => {
-                        await markNotificationReadApi(n.id, role);
-                        setNotificationsList((prev) =>
-                          prev.map((item) => (item.id === n.id ? { ...item, is_read: 1 } : item))
-                        );
-                        setUnreadCount((c) => Math.max(0, c - 1));
+                        if (!n.is_read) {
+                          await markNotificationReadApi(n.id, role);
+                          setNotificationsList((prev) =>
+                            prev.map((item) => (item.id === n.id ? { ...item, is_read: 1 } : item))
+                          );
+                          setUnreadCount((c) => Math.max(0, c - 1));
+                        }
+                        const rawUrl = String(n.action_url || "").trim().toLowerCase();
+                        let targetScreen: Screen | null = null;
+                        if (rawUrl.includes("defense")) {
+                          targetScreen = "defense-room";
+                        } else if (rawUrl.includes("schedule") || rawUrl.includes("calendar")) {
+                          targetScreen = "schedule";
+                        } else if (rawUrl.includes("kanban")) {
+                          targetScreen = "kanban";
+                        } else if (rawUrl.includes("project")) {
+                          targetScreen = "projects";
+                        } else if (rawUrl.includes("git")) {
+                          targetScreen = "github";
+                        } else if (rawUrl.includes("grading")) {
+                          targetScreen = role === "instructor" ? "instructor-grading" : role === "admin" ? "admin" : "workspace";
+                        } else if (rawUrl.includes("workspace") || rawUrl.includes("course")) {
+                          targetScreen = role === "instructor" ? "instructor-courses" : role === "admin" ? "admin-classes" : "workspace";
+                        } else if (rawUrl.includes("security") || rawUrl.includes("session")) {
+                          targetScreen = role === "admin" ? "admin-sessions" : "security";
+                        } else if (rawUrl.includes("xp-shop") || rawUrl.includes("shop")) {
+                          targetScreen = role === "student" ? "xp-shop" : null;
+                        } else if (rawUrl.includes("dashboard") || rawUrl === "/") {
+                          targetScreen = role === "instructor" ? "instructor" : role === "admin" ? "admin" : "student-dashboard";
+                        }
+                        if (targetScreen) {
+                          setIsNotifOpen(false);
+                          onNavigate(targetScreen);
+                        }
                       }}
                       className={`flex flex-col gap-0.5 rounded-xl p-2.5 transition cursor-pointer ${
                         !n.is_read

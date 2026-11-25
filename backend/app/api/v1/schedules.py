@@ -48,11 +48,16 @@ def _validate_date(schedule_date: str) -> str:
     return val
 
 
-def _validate_hours(start_hour: float, end_hour: float) -> None:
+def _validate_hours(start_hour: float, end_hour: float, break_hour: float = 0.0) -> None:
     if not (0.0 <= start_hour < end_hour <= 24.0) or (end_hour - start_hour) < 0.25:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Giờ kết thúc phải lớn hơn giờ bắt đầu ít nhất 15 phút (trong khung 00:00 - 24:00).",
+        )
+    if break_hour < 0.0 or break_hour >= (end_hour - start_hour):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Thời gian nghỉ giải lao phải >= 0 và nhỏ hơn tổng thời lượng của ca lịch.",
         )
 
 
@@ -83,6 +88,39 @@ def _check_room_conflict(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 f"Phòng '{room_or_link}' đã có ca '{c['title']}' vào khung "
+                f"{_fmt_hour(c['start_hour'])} - {_fmt_hour(c['end_hour'])} ngày {schedule_date}."
+            ),
+        )
+
+
+def _check_instructor_conflict(
+    conn: Any,
+    instructor_id: str | None,
+    schedule_date: str,
+    start_hour: float,
+    end_hour: float,
+    exclude_id: str | None = None,
+) -> None:
+    inst_clean = (instructor_id or "").strip()
+    if not inst_clean:
+        return
+    sql = (
+        "SELECT id, title, start_hour, end_hour, room_or_link FROM academic_schedules "
+        "WHERE schedule_date = ? AND instructor_id = ? "
+        "AND COALESCE(status, 'confirmed') != 'cancelled' "
+        "AND start_hour < ? AND end_hour > ?"
+    )
+    params: list[Any] = [schedule_date, inst_clean, end_hour, start_hour]
+    if exclude_id:
+        sql += " AND id != ?"
+        params.append(exclude_id)
+    hit = conn.execute(sql, tuple(params)).fetchone()
+    if hit:
+        c = row_dict(hit)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Giảng viên phụ trách đã có lịch trùng '{c['title']}' ({c['room_or_link']}) vào khung "
                 f"{_fmt_hour(c['start_hour'])} - {_fmt_hour(c['end_hour'])} ngày {schedule_date}."
             ),
         )
@@ -138,7 +176,10 @@ def _enrich_schedule(
     )
 
     sch_id = s["id"]
-    if role in ("instructor", "admin"):
+    is_owner_or_admin = role in ("admin", "org_admin") or (
+        role == "instructor" and str(s.get("instructor_id") or "") == str(user_id)
+    )
+    if is_owner_or_admin:
         b_rows = conn.execute(
             "SELECT * FROM schedule_bookings WHERE schedule_id = ? ORDER BY created_at DESC",
             (sch_id,),
@@ -148,6 +189,10 @@ def _enrich_schedule(
         s["pending_bookings_count"] = sum(
             1 for b in bookings if b.get("booking_status") == "pending"
         )
+        s["my_booking"] = None
+    elif role == "instructor":
+        s["bookings"] = []
+        s["pending_bookings_count"] = 0
         s["my_booking"] = None
     else:
         b_rows = conn.execute(
@@ -300,7 +345,7 @@ def create_schedule(
             detail=f"Loại lịch không hợp lệ. Chỉ chấp nhận: {', '.join(sorted(ALLOWED_CATEGORIES))}.",
         )
     schedule_date = _validate_date(payload.schedule_date)
-    _validate_hours(payload.start_hour, payload.end_hour)
+    _validate_hours(payload.start_hour, payload.end_hour, payload.break_hour)
     if payload.max_capacity < 1:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -315,15 +360,21 @@ def create_schedule(
     timestamp = now_utc()
 
     with db() as conn:
-        if role == "admin" and payload.instructor_id and not payload.instructor_name:
+        if role == "admin" and payload.instructor_id:
             inst_row = conn.execute(
-                "SELECT display_name FROM users WHERE id = ?",
+                "SELECT id, full_name, display_name, role, status FROM users WHERE id = ?",
                 (instructor_id,),
             ).fetchone()
-            if inst_row:
-                instructor_name = row_dict(inst_row).get("display_name") or default_name
+            if not inst_row or (inst_row["role"] or "").lower() not in ("instructor", "admin") or (inst_row.get("status") or "active") != "active":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Không tìm thấy tài khoản Giảng viên đang hoạt động hợp lệ để phân công lịch.",
+                )
+            if not payload.instructor_name:
+                instructor_name = row_dict(inst_row).get("full_name") or row_dict(inst_row).get("display_name") or default_name
 
         _check_room_conflict(conn, room_or_link, schedule_date, payload.start_hour, payload.end_hour)
+        _check_instructor_conflict(conn, instructor_id, schedule_date, payload.start_hour, payload.end_hour)
 
         conn.execute(
             """INSERT INTO academic_schedules (
@@ -402,6 +453,11 @@ def update_schedule(
                 detail="Không tìm thấy ca lịch cần cập nhật.",
             )
         cur = row_dict(existing_row)
+        if role == "instructor" and cur.get("instructor_id") != user["id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn chỉ có quyền chỉnh sửa ca lịch do chính mình phụ trách.",
+            )
 
         next_course_id = payload.course_id.strip() if "course_id" in fields_set and payload.course_id else cur["course_id"]
         if "project_id" in fields_set:
@@ -427,9 +483,9 @@ def update_schedule(
         next_date = _validate_date(payload.schedule_date) if "schedule_date" in fields_set and payload.schedule_date is not None else cur["schedule_date"]
         next_start = float(payload.start_hour) if "start_hour" in fields_set and payload.start_hour is not None else float(cur["start_hour"])
         next_end = float(payload.end_hour) if "end_hour" in fields_set and payload.end_hour is not None else float(cur["end_hour"])
-        _validate_hours(next_start, next_end)
-
         next_break = float(payload.break_hour) if "break_hour" in fields_set and payload.break_hour is not None else float(cur.get("break_hour") or 0.0)
+        _validate_hours(next_start, next_end, next_break)
+
         next_max = int(payload.max_capacity) if "max_capacity" in fields_set and payload.max_capacity is not None else int(cur["max_capacity"])
         current_booked = int(cur.get("current_booked") or 0)
         if next_max < 1 or next_max < current_booked:
@@ -447,10 +503,28 @@ def update_schedule(
             )
 
         next_note = payload.note.strip() if "note" in fields_set and payload.note is not None else (cur.get("note") or "")
-        next_inst_id = (payload.instructor_id or "").strip() if "instructor_id" in fields_set and payload.instructor_id else cur["instructor_id"]
-        next_inst_name = (payload.instructor_name or "").strip() if "instructor_name" in fields_set and payload.instructor_name else cur["instructor_name"]
+        if role == "admin":
+            next_inst_id = (payload.instructor_id or "").strip() if "instructor_id" in fields_set and payload.instructor_id else cur["instructor_id"]
+            if "instructor_id" in fields_set and payload.instructor_id:
+                inst_row = conn.execute(
+                    "SELECT id, full_name, display_name, role, status FROM users WHERE id = ?",
+                    (next_inst_id,),
+                ).fetchone()
+                if not inst_row or (inst_row["role"] or "").lower() not in ("instructor", "admin") or (inst_row.get("status") or "active") != "active":
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Không tìm thấy tài khoản Giảng viên đang hoạt động hợp lệ để phân công lịch.",
+                    )
+                next_inst_name = (payload.instructor_name or "").strip() if "instructor_name" in fields_set and payload.instructor_name else (row_dict(inst_row).get("full_name") or row_dict(inst_row).get("display_name") or cur["instructor_name"])
+            else:
+                next_inst_name = (payload.instructor_name or "").strip() if "instructor_name" in fields_set and payload.instructor_name else cur["instructor_name"]
+        else:
+            next_inst_id = cur["instructor_id"]
+            next_inst_name = cur["instructor_name"]
 
-        _check_room_conflict(conn, next_room, next_date, next_start, next_end, exclude_id=schedule_id)
+        if next_status != "cancelled":
+            _check_room_conflict(conn, next_room, next_date, next_start, next_end, exclude_id=schedule_id)
+            _check_instructor_conflict(conn, next_inst_id, next_date, next_start, next_end, exclude_id=schedule_id)
 
         timestamp = now_utc()
         conn.execute(
@@ -561,10 +635,10 @@ def book_schedule_slot(
                 detail="Ca lịch này đã bị khóa, không nhận thêm đăng ký.",
             )
 
-        if sch.get("status") in ("completed", "cancelled"):
+        if sch.get("status", "confirmed") != "confirmed":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ca lịch này đã kết thúc hoặc bị hủy.",
+                detail="Ca lịch này chưa xác nhận mở, đã kết thúc hoặc đã bị hủy.",
             )
 
         if int(sch.get("current_booked") or 0) >= int(sch.get("max_capacity") or 30):
@@ -590,6 +664,7 @@ def book_schedule_slot(
                JOIN academic_schedules s ON s.id = sb.schedule_id
                WHERE sb.student_id = ?
                  AND sb.booking_status IN ('pending', 'confirmed')
+                 AND COALESCE(s.status, 'confirmed') != 'cancelled'
                  AND s.id != ?
                  AND s.schedule_date = ?
                  AND s.start_hour < ?
@@ -704,6 +779,11 @@ def update_booking_status(
                 detail="Không tìm thấy ca lịch gốc.",
             )
         sch = row_dict(sch_row)
+        if role == "instructor" and sch.get("instructor_id") != user["id"] and booking.get("instructor_id") != user["id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn chỉ có quyền duyệt lịch hẹn thuộc ca lịch do mình phụ trách.",
+            )
 
         prev_status = booking.get("booking_status")
         next_status = payload.status
@@ -717,10 +797,34 @@ def update_booking_status(
                 (timestamp, sch["id"]),
             )
         elif prev_status == "rejected" and next_status in ("confirmed", "completed"):
+            if sch.get("status") == "cancelled":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Ca lịch gốc đã bị hủy, không thể khôi phục lịch hẹn này.",
+                )
             if int(sch.get("current_booked") or 0) >= int(sch.get("max_capacity") or 30):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Ca lịch hiện đã đủ sĩ số tối đa, không thể khôi phục lịch hẹn này.",
+                )
+            overlap_restore = conn.execute(
+                """SELECT s.title, s.schedule_date, s.start_hour, s.end_hour
+                   FROM schedule_bookings sb
+                   JOIN academic_schedules s ON s.id = sb.schedule_id
+                   WHERE sb.student_id = ?
+                     AND sb.booking_status IN ('pending', 'confirmed')
+                     AND COALESCE(s.status, 'confirmed') != 'cancelled'
+                     AND s.id != ?
+                     AND s.schedule_date = ?
+                     AND s.start_hour < ?
+                     AND s.end_hour > ?""",
+                (booking["student_id"], sch["id"], sch["schedule_date"], sch["end_hour"], sch["start_hour"]),
+            ).fetchone()
+            if overlap_restore:
+                ov = row_dict(overlap_restore)
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Học viên đang có lịch trùng '{ov['title']}' vào khung {_fmt_hour(ov['start_hour'])} - {_fmt_hour(ov['end_hour'])}.",
                 )
             conn.execute(
                 "UPDATE academic_schedules SET current_booked = current_booked + 1, updated_at = ? WHERE id = ?",
@@ -824,6 +928,15 @@ def cancel_booking(
             (booking["schedule_id"],),
         ).fetchone()
         sch = row_dict(sch_row) if sch_row else None
+        if (
+            role == "instructor"
+            and (sch or {}).get("instructor_id") != user_id
+            and booking.get("instructor_id") != user_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không có quyền hủy lịch hẹn thuộc ca lịch của giảng viên khác.",
+            )
 
         if booking.get("booking_status") in ("pending", "confirmed") and sch:
             conn.execute(
@@ -895,6 +1008,11 @@ def delete_schedule(
                 detail="Không tìm thấy ca lịch để xóa.",
             )
         sch = row_dict(sch_row)
+        if role == "instructor" and sch.get("instructor_id") != user["id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn chỉ có quyền hủy ca lịch do chính mình phụ trách.",
+            )
 
         active_students = conn.execute(
             "SELECT DISTINCT student_id FROM schedule_bookings WHERE schedule_id = ? AND booking_status IN ('pending', 'confirmed')",
@@ -914,6 +1032,7 @@ def delete_schedule(
                 ),
             )
 
+        conn.execute("DELETE FROM schedule_bookings WHERE schedule_id = ?", (schedule_id,))
         conn.execute("DELETE FROM academic_schedules WHERE id = ?", (schedule_id,))
         conn.commit()
 

@@ -292,7 +292,7 @@ export default function KanbanTeamScrumView({
                   : "Phân Vai Kỹ Thuật & Đóng Góp Chi Tiết Từng Thành Viên"}
               </span>
               {role === "instructor" && (
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-slate-200/80 dark:border-slate-800">
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700">
                   Góc nhìn Thẩm định
                 </span>
               )}
@@ -304,8 +304,8 @@ export default function KanbanTeamScrumView({
             </p>
           </div>
           {role === "instructor" || role === "admin" ? (
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-slate-200/80 dark:border-slate-800 text-xs font-semibold shadow-2xs">
-              <ShieldCheck size={14} className="text-amber-600 dark:text-amber-400" />
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 text-xs font-semibold shadow-2xs">
+              <ShieldCheck size={14} className="text-amber-500" />
               <span>Hội đồng Thẩm định: Giám sát công bằng</span>
             </div>
           ) : !isSprintLocked ? (
@@ -361,7 +361,7 @@ export default function KanbanTeamScrumView({
                       </div>
                     </div>
 
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       Đang hoạt động
                     </span>
@@ -514,7 +514,7 @@ export default function KanbanTeamScrumView({
                   Kiến trúc hệ thống & Thiết kế 3 lớp
                 </td>
                 <td className="py-2.5">
-                  <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 font-bold text-[10px]">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-[10px]">
                     Chịu trách nhiệm (A)
                   </span>
                 </td>
@@ -537,12 +537,12 @@ export default function KanbanTeamScrumView({
                   Phân hệ Giao diện & Luồng Tương tác Nghiệp vụ
                 </td>
                 <td className="py-2.5">
-                  <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 font-bold text-[10px]">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-[10px]">
                     Chịu trách nhiệm (A)
                   </span>
                 </td>
                 <td className="py-2.5">
-                  <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-bold text-[10px]">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-[10px]">
                     Thực thi chính (R)
                   </span>
                 </td>
@@ -570,7 +570,7 @@ export default function KanbanTeamScrumView({
                   </span>
                 </td>
                 <td className="py-2.5">
-                  <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 font-bold text-[10px]">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-[10px]">
                     Thực thi chính (R)
                   </span>
                 </td>
@@ -593,7 +593,7 @@ export default function KanbanTeamScrumView({
                   </span>
                 </td>
                 <td className="py-2.5">
-                  <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 font-bold text-[10px]">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-[10px]">
                     Thực thi chính (R)
                   </span>
                 </td>

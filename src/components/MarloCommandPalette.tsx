@@ -22,13 +22,16 @@ import {
   ArrowRight,
   CornerDownLeft,
   History,
+  Plug,
 } from "lucide-react";
-import type { Screen, Theme } from "../App";
+import type { Role, Screen, Theme, WorkspaceLaunchTarget } from "../App";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (screen: Screen) => void;
+  onOpenWorkspace?: (opts: Omit<WorkspaceLaunchTarget, "nonce">) => void;
+  role?: Role;
   onToggleTheme?: () => void;
   theme?: Theme;
   onStartTimer?: () => void;
@@ -41,6 +44,7 @@ interface CommandItem {
   category: "Điều hướng" | "Khóa học" | "Thao tác nhanh";
   icon: React.ReactNode;
   shortcut?: string;
+  roles?: Role[];
   action: () => void;
 }
 
@@ -48,6 +52,8 @@ export default function MarloCommandPalette({
   isOpen,
   onClose,
   onNavigate,
+  onOpenWorkspace,
+  role = "student",
   onToggleTheme,
   theme,
   onStartTimer,
@@ -91,6 +97,7 @@ export default function MarloCommandPalette({
       title: "Tổng quan Dashboard",
       subtitle: "Bảng điều khiển học tập, chuỗi ngày streak & XP",
       category: "Điều hướng",
+      roles: ["student"],
       icon: <LayoutDashboard size={16} className="text-blue-500" />,
       action: () => { onNavigate("student-dashboard"); onClose(); },
     },
@@ -115,6 +122,7 @@ export default function MarloCommandPalette({
       title: "Không gian học & Bài giảng",
       subtitle: "Lý thuyết OOP, Video tương tác F8 & Trắc nghiệm",
       category: "Điều hướng",
+      roles: ["student"],
       icon: <BookOpen size={16} className="text-indigo-500" />,
       action: () => { onNavigate("workspace"); onClose(); },
     },
@@ -133,6 +141,14 @@ export default function MarloCommandPalette({
       category: "Điều hướng",
       icon: <GitFork size={16} className="text-purple-500" />,
       action: () => { onNavigate("github"); onClose(); },
+    },
+    {
+      id: "nav-mcp-hub",
+      title: "MCP Hub — Model Context Protocol",
+      subtitle: "Kết nối Claude/Cursor, Playground 11 Tools, Resources & RBAC Audit",
+      category: "Điều hướng",
+      icon: <Plug size={16} className="text-amber-500" />,
+      action: () => { onNavigate("mcp-hub"); onClose(); },
     },
     {
       id: "nav-profile",
@@ -155,6 +171,7 @@ export default function MarloCommandPalette({
       title: "Mốc XP - Mở khóa Phần thưởng",
       subtitle: "Đạt mốc XP tích lũy để mở khóa Mascot, avatar & giao diện (không trừ XP)",
       category: "Điều hướng",
+      roles: ["student"],
       icon: <Award size={16} className="text-amber-500" />,
       action: () => { onNavigate("xp-shop"); onClose(); },
     },
@@ -163,6 +180,7 @@ export default function MarloCommandPalette({
       title: "Tổng quan Giảng dạy",
       subtitle: "Bảng điều khiển lớp học, tiến độ hoàn thành & cảnh báo học viên",
       category: "Điều hướng",
+      roles: ["instructor", "admin"],
       icon: <GraduationCap size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("instructor"); onClose(); },
     },
@@ -171,6 +189,7 @@ export default function MarloCommandPalette({
       title: "Quản lý Học phần & Test Cases",
       subtitle: "Soạn giáo trình AIGC, cấu hình Docker Sandbox Test Cases & Xem thử học viên",
       category: "Điều hướng",
+      roles: ["instructor", "admin"],
       icon: <BookOpen size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("instructor-courses"); onClose(); },
     },
@@ -179,6 +198,7 @@ export default function MarloCommandPalette({
       title: "Chấm điểm Kép CI/CD & Phản biện AI",
       subtitle: "Đối chiếu kết quả Auto-Test Docker, biên bản vấn đáp 3D AI & Rubric",
       category: "Điều hướng",
+      roles: ["instructor", "admin"],
       icon: <ShieldCheck size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("instructor-grading"); onClose(); },
     },
@@ -187,14 +207,25 @@ export default function MarloCommandPalette({
       title: "Quản lý & Thống kê Học viên",
       subtitle: "Theo dõi tiến độ bài học, điểm thực hành, XP & gửi nhắc nhở Socratic",
       category: "Điều hướng",
+      roles: ["instructor", "admin"],
       icon: <UserRound size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("instructor-students"); onClose(); },
+    },
+    {
+      id: "nav-inst-mindmap",
+      title: "Master Mindmap & Đối chiếu Năng lực Lớp",
+      subtitle: "Soạn cây tri thức chương & đối chiếu tỷ lệ nắm vững thực tế theo lớp",
+      category: "Điều hướng",
+      roles: ["instructor", "admin"],
+      icon: <GitFork size={16} className="text-slate-600 dark:text-slate-300" />,
+      action: () => { onNavigate("instructor-mindmap"); onClose(); },
     },
     {
       id: "nav-admin-overview",
       title: "Trung tâm Điều hành Admin",
       subtitle: "Tổng quan học viện, xét duyệt lớp & giám sát hạ tầng AI & Docker Sandbox",
       category: "Điều hướng",
+      roles: ["admin"],
       icon: <LayoutDashboard size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("admin"); onClose(); },
     },
@@ -203,6 +234,7 @@ export default function MarloCommandPalette({
       title: "Quản lý Người dùng & Phân quyền RBAC",
       subtitle: "Quản trị tài khoản Học viên, Giảng viên, khóa/mở quyền & xuất CSV",
       category: "Điều hướng",
+      roles: ["admin"],
       icon: <UserRound size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("admin-users"); onClose(); },
     },
@@ -211,6 +243,7 @@ export default function MarloCommandPalette({
       title: "Quản trị AI Guardrail & Docker Sandbox",
       subtitle: "Kiểm soát ngân sách token AI, chính sách refuse_answer & cụm Docker",
       category: "Điều hướng",
+      roles: ["admin"],
       icon: <Sparkles size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("admin-ai"); onClose(); },
     },
@@ -219,6 +252,7 @@ export default function MarloCommandPalette({
       title: "An ninh Phiên JWT & Nhật ký Kiểm toán",
       subtitle: "Thu hồi phiên bất thường, chính sách 2FA, Audit Log & Reset Demo",
       category: "Điều hướng",
+      roles: ["admin"],
       icon: <Shield size={16} className="text-slate-600 dark:text-slate-300" />,
       action: () => { onNavigate("admin-audit"); onClose(); },
     },
@@ -229,24 +263,39 @@ export default function MarloCommandPalette({
       title: "CS201 • Lập trình Hướng đối tượng C++ & OOP",
       subtitle: "Con trỏ, vtable, Virtual Methods & Dynamic Dispatch",
       category: "Khóa học",
+      roles: ["student"],
       icon: <Code2 size={16} className="text-blue-600" />,
-      action: () => { onNavigate("workspace"); onClose(); },
+      action: () => {
+        if (onOpenWorkspace) onOpenWorkspace({ subjectId: "oop" });
+        else onNavigate("workspace");
+        onClose();
+      },
     },
     {
       id: "course-api",
       title: "CS304 • Kiến trúc Web API & Microservices",
       subtitle: "RESTful, SQLAlchemy, JWT Authentication & Docker",
       category: "Khóa học",
+      roles: ["student"],
       icon: <Code2 size={16} className="text-emerald-600" />,
-      action: () => { onNavigate("workspace"); onClose(); },
+      action: () => {
+        if (onOpenWorkspace) onOpenWorkspace({ subjectId: "web" });
+        else onNavigate("workspace");
+        onClose();
+      },
     },
     {
       id: "course-dsa",
-      title: "CS102 • Cấu trúc dữ liệu & Giải thuật nâng cao",
+      title: "CS202 • Cấu trúc dữ liệu & Giải thuật nâng cao",
       subtitle: "Đồ thị Dijkstra, DSU, Segment Tree & Big-O",
       category: "Khóa học",
+      roles: ["student"],
       icon: <Code2 size={16} className="text-amber-600" />,
-      action: () => { onNavigate("workspace"); onClose(); },
+      action: () => {
+        if (onOpenWorkspace) onOpenWorkspace({ subjectId: "dsa" });
+        else onNavigate("workspace");
+        onClose();
+      },
     },
 
     // Quick Actions
@@ -263,20 +312,23 @@ export default function MarloCommandPalette({
       title: "Bật đồng hồ tập trung Pomodoro (25 phút)",
       subtitle: "Khởi động phiên học tập trung không phân tâm",
       category: "Thao tác nhanh",
+      roles: ["student"],
       icon: <Timer size={16} className="text-amber-500" />,
       shortcut: "P",
       action: () => { onStartTimer?.(); onClose(); },
     },
   ];
 
+  const roleCommands = commands.filter((c) => !c.roles || c.roles.includes(role));
+
   // Filter commands
   const filtered = query.trim()
-    ? commands.filter((c) =>
+    ? roleCommands.filter((c) =>
         c.title.toLowerCase().includes(query.toLowerCase()) ||
         c.subtitle?.toLowerCase().includes(query.toLowerCase()) ||
         c.category.toLowerCase().includes(query.toLowerCase())
       )
-    : commands;
+    : roleCommands;
 
   // Reset index when query changes
   useEffect(() => {

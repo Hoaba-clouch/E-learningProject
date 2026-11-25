@@ -1,4 +1,5 @@
 import { useState } from "react";
+import MarloNumber from "./MarloNumber";
 
 export interface CapacityItem {
   id: string;
@@ -41,7 +42,7 @@ export default function MarloCapacityBar({
         </div>
         <div className="text-right">
           <span className="text-sm font-black font-mono text-slate-900 dark:text-white">
-            {total}
+            <MarloNumber value={total} durationMs={750} delayMs={160} />
           </span>
           <span className="text-[10px] text-slate-400 ml-1 font-medium">{totalLabel}</span>
         </div>
@@ -64,10 +65,10 @@ export default function MarloCapacityBar({
                 width: `${widthPercent}%`,
                 animationDelay: `${0.1 + idx * 0.06}s`,
               }}
-              className="cap__seg relative h-full rounded-lg transition-all duration-200 cursor-pointer group"
+              className="cap__seg relative h-full rounded-lg cursor-pointer group"
             >
               <div
-                className={`w-full h-full rounded-lg transition-all ${
+                className={`w-full h-full rounded-lg transition-[filter,box-shadow] duration-150 ${
                   isHovered ? "brightness-110 shadow-sm scale-y-110" : "hover:brightness-105"
                 } ${item.color === "#14161a" ? "bg-[#14161a] dark:bg-white" : ""}`}
                 style={item.color !== "#14161a" ? { backgroundColor: item.color } : undefined}

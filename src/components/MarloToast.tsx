@@ -16,7 +16,7 @@ export function MarloToast({
   message,
   onUndo,
   showUndo = true,
-  type = "success",
+  type,
   onClose,
 }: MarloToastProps) {
   const [mounted, setMounted] = useState(false);
@@ -27,8 +27,15 @@ export function MarloToast({
 
   if (!mounted || typeof document === "undefined") return null;
 
+  const hasWarningPrefix =
+    typeof message === "string" && /^\s*⚠️\s*/.test(message);
+  const resolvedType: MarloToastType =
+    type ?? (hasWarningPrefix ? "warning" : "success");
+  const normalizedMessage =
+    typeof message === "string" ? message.replace(/^\s*⚠️\s*/, "") : message;
+
   const renderIcon = () => {
-    switch (type) {
+    switch (resolvedType) {
       case "warning":
         return <AlertCircle size={18} className="text-amber-500 dark:text-amber-400 stroke-[2.2] shrink-0" />;
       case "error":
@@ -46,7 +53,7 @@ export function MarloToast({
       <div className="toast-slide-up pointer-events-auto flex items-center gap-3 bg-[#F4F4F3] dark:bg-[#232326] text-[#1E1D1B] dark:text-[#E8E8E8] px-4 py-2.5 sm:px-5 sm:py-3 rounded-[18px] shadow-[0_12px_36px_rgba(0,0,0,0.28)] border border-black/[0.08] dark:border-white/10 backdrop-blur-md text-[13px] sm:text-sm font-medium select-none max-w-[94vw] sm:max-w-2xl">
         {renderIcon()}
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="min-w-0 flex-1 leading-snug break-words">{message}</div>
+          <div className="min-w-0 flex-1 leading-snug break-words">{normalizedMessage}</div>
           {showUndo && onUndo && (
             <button
               type="button"

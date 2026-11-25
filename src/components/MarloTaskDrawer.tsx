@@ -18,17 +18,20 @@ import {
   Lock,
 } from "lucide-react";
 import MarloSegmentedControl from "./MarloSegmentedControl";
+import MarloSelect from "./MarloSelect";
 import type { KanbanTask, ColumnId, TeamMember } from "../screens/KanbanBoard";
 import type { ProjectGitRepoSummary } from "../api";
 
 interface Props {
   task: KanbanTask | null;
+  availableTasks?: KanbanTask[];
   teamMembers?: TeamMember[];
   projectGitRepo?: ProjectGitRepoSummary | null;
   role?: "student" | "instructor" | "admin";
   isSprintLocked?: boolean;
   onClose: () => void;
   onUpdateTask?: (updated: KanbanTask) => void;
+  onChangeDependsOn?: (task: KanbanTask, parentTaskId: string) => Promise<string | null>;
   onSaveSubmissionUrl?: (task: KanbanTask, url: string) => Promise<string | null>;
   onOpenGitHub?: (tab?: "topology" | "prs") => void;
   onDeleteTask?: (task: KanbanTask) => void;
@@ -70,12 +73,14 @@ function computeDueStatusLabel(dueDate?: string, column?: ColumnId): { text: str
 
 export default function MarloTaskDrawer({
   task,
+  availableTasks = [],
   teamMembers,
   projectGitRepo,
   role = "student",
   isSprintLocked = false,
   onClose,
   onUpdateTask,
+  onChangeDependsOn,
   onSaveSubmissionUrl,
   onOpenGitHub,
   onDeleteTask,
@@ -86,6 +91,8 @@ export default function MarloTaskDrawer({
   const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
   const [revisionNote, setRevisionNote] = useState("");
   const [showRevisionInput, setShowRevisionInput] = useState(false);
+  const [h2Error, setH2Error] = useState<string | null>(null);
+  const [h2Saving, setH2Saving] = useState(false);
   const [submissionUrlDraft, setSubmissionUrlDraft] = useState(task?.submissionUrl || "");
   const [submissionUrlError, setSubmissionUrlError] = useState<string | null>(null);
   const [submissionUrlSuccess, setSubmissionUrlSuccess] = useState<string | null>(null);
@@ -107,6 +114,11 @@ export default function MarloTaskDrawer({
       setRevisionNote("");
     }, 260);
   };
+
+  useEffect(() => {
+    setH2Error(null);
+    setH2Saving(false);
+  }, [task?.id]);
 
   useEffect(() => {
     if (!task) return;
@@ -274,8 +286,8 @@ export default function MarloTaskDrawer({
         {/* Rubber Stamp Slam for Verified Task */}
         {isVerified && (
           <div className="absolute right-14 top-16 pointer-events-none select-none z-30 rubber-stamp-slam">
-            <div className="border-[3px] border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-300 font-mono font-black text-xs tracking-[0.18em] px-3 py-1 rounded-xl uppercase shadow-md bg-emerald-50/95 dark:bg-emerald-950/90 backdrop-blur-xs flex items-center gap-1.5 -rotate-6">
-              <CheckCheck size={15} className="stroke-[3]" />
+            <div className="border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-mono font-black text-xs tracking-[0.16em] px-3 py-1 rounded-xl uppercase shadow-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs flex items-center gap-1.5 -rotate-6">
+              <CheckCheck size={15} className="stroke-[3] text-emerald-600 dark:text-emerald-400" />
               <span>ĐÃ NGHIỆM THU • +{task.points * 10} XP</span>
             </div>
           </div>
@@ -285,15 +297,16 @@ export default function MarloTaskDrawer({
         <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold text-[11px]">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 font-mono font-bold text-[11px]">
                 #{task.code}
               </span>
-              <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono font-bold text-[11px]">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-mono font-bold text-[11px]">
                 {task.points} Story Points
               </span>
               {currentColumn === "fail" && (
-                <span className="px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold text-[11px]">
-                  Cần sửa lại
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 font-bold text-[11px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                  <span>Cần sửa lại</span>
                 </span>
               )}
             </div>
@@ -318,20 +331,14 @@ export default function MarloTaskDrawer({
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5 text-xs text-slate-700 dark:text-slate-300 marlo-drawer-body bg-white dark:bg-slate-900">
           {/* Instructor Feedback Banner if present */}
           {reviewFeedback && (
-            <div
-              className={`p-3.5 rounded-2xl border flex items-start gap-2.5 ${
-                currentColumn === "fail"
-                  ? "bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-200"
-                  : "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-200"
-              }`}
-            >
+            <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/50 text-slate-800 dark:text-slate-200 flex items-start gap-2.5">
               {currentColumn === "fail" ? (
-                <AlertCircle size={16} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                <AlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" />
               ) : (
-                <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <ShieldCheck size={16} className="text-emerald-500 shrink-0 mt-0.5" />
               )}
               <div className="text-xs leading-relaxed">
-                <strong className="block font-bold mb-0.5">
+                <strong className="block font-bold mb-0.5 text-slate-900 dark:text-white">
                   {currentColumn === "fail" ? "Yêu cầu chỉnh sửa từ Giảng viên:" : "Nhận xét nghiệm thu của Giảng viên:"}
                 </strong>
                 <span>{reviewFeedback}</span>
@@ -410,7 +417,7 @@ export default function MarloTaskDrawer({
             {/* Project / Module */}
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-500 dark:text-slate-400 font-medium">Phân hệ / Đồ án</span>
-              <span className="font-bold text-[#f97316]">
+              <span className="font-bold text-slate-900 dark:text-white">
                 {projectName}
               </span>
             </div>
@@ -508,13 +515,7 @@ export default function MarloTaskDrawer({
             {/* Due Date (Dynamic status instead of hardcoded '5 days ago') */}
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-500 dark:text-slate-400 font-medium">Hạn hoàn thành</span>
-              <span
-                className={`font-semibold font-mono ${
-                  dueMeta.isUrgent
-                    ? "text-amber-600 dark:text-amber-400"
-                    : "text-slate-800 dark:text-slate-200"
-                }`}
-              >
+              <span className="font-semibold font-mono text-slate-800 dark:text-slate-200">
                 {dueText} · <span className="font-sans font-bold">{dueMeta.text}</span>
               </span>
             </div>
@@ -522,20 +523,23 @@ export default function MarloTaskDrawer({
             {/* Priority */}
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-500 dark:text-slate-400 font-medium">Độ ưu tiên</span>
-              <span
-                className={`px-2.5 py-0.5 rounded-lg font-bold text-[11px] ${
-                  task.priority === "high"
-                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+              <span className="inline-flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    task.priority === "high"
+                      ? "bg-rose-500"
+                      : task.priority === "medium"
+                      ? "bg-amber-500"
+                      : "bg-slate-400"
+                  }`}
+                />
+                <span>
+                  {task.priority === "high"
+                    ? "Cao (P0)"
                     : task.priority === "medium"
-                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                    : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                }`}
-              >
-                {task.priority === "high"
-                  ? "Cao (P0)"
-                  : task.priority === "medium"
-                  ? "Trung bình (P1)"
-                  : "Thấp (P2)"}
+                    ? "Trung bình (P1)"
+                    : "Thấp (P2)"}
+                </span>
               </span>
             </div>
 
@@ -546,23 +550,76 @@ export default function MarloTaskDrawer({
                 {estHours} giờ thực hành · {task.points} Story Points
               </span>
             </div>
+
+            {/* Phụ thuộc H2 (Task tiền đề) */}
+            {onChangeDependsOn && (
+              <div className="pt-2.5 border-t border-slate-200/70 dark:border-slate-800 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">
+                    Phụ thuộc H2 (Task tiền đề)
+                  </span>
+                  {task.dependsOn && !isSprintLocked && (
+                    <button
+                      type="button"
+                      disabled={h2Saving}
+                      onClick={async () => {
+                        setH2Error(null);
+                        setH2Saving(true);
+                        const err = await onChangeDependsOn(task, "");
+                        setH2Saving(false);
+                        if (err) setH2Error(err);
+                      }}
+                      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-50"
+                    >
+                      Gỡ H2
+                    </button>
+                  )}
+                </div>
+                <MarloSelect
+                  value={task.dependsOn || ""}
+                  disabled={isSprintLocked || h2Saving}
+                  onChange={async (e) => {
+                    setH2Error(null);
+                    setH2Saving(true);
+                    const err = await onChangeDependsOn(task, e.target.value);
+                    setH2Saving(false);
+                    if (err) setH2Error(err);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a202e] px-3 py-2 text-xs font-semibold text-slate-900 dark:text-white outline-none disabled:opacity-60"
+                >
+                  <option value="">Không có ràng buộc H2</option>
+                  {availableTasks
+                    .filter((cand) => cand.id !== task.id)
+                    .map((cand) => (
+                      <option key={cand.id} value={cand.id}>
+                        #{cand.code} · {cand.title}
+                      </option>
+                    ))}
+                </MarloSelect>
+                {h2Error && (
+                  <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                    {h2Error}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 5. GITHUB INTEGRATION CARD (REAL COMMITS, PRS & REPO PROOF LINK) */}
           <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-2.5 text-xs">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-1.5 min-w-0">
-                <FolderGit2 size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <FolderGit2 size={14} className="text-slate-600 dark:text-slate-300 shrink-0" />
                 <span className="font-bold text-slate-900 dark:text-white">
                   Liên kết GitHub &amp; Minh chứng
                 </span>
-                <strong className="font-mono text-[11px] text-amber-600 dark:text-amber-400">
+                <strong className="font-mono text-[11px] text-slate-700 dark:text-slate-200">
                   #{task.code}
                 </strong>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {task.deliverable && (
-                  <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold text-[10px]">
+                  <span className="px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-[10px]">
                     {task.deliverable.label}
                   </span>
                 )}
@@ -570,7 +627,7 @@ export default function MarloTaskDrawer({
                   <button
                     type="button"
                     onClick={() => onOpenGitHub("prs")}
-                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/70 text-blue-700 dark:text-blue-300 font-bold text-[10.5px] inline-flex items-center gap-1 transition cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 font-bold text-[10.5px] inline-flex items-center gap-1 transition cursor-pointer"
                   >
                     <GitFork size={11} />
                     <span>Mở Git Hub →</span>
@@ -583,12 +640,14 @@ export default function MarloTaskDrawer({
               <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                 <span className="font-mono truncate">Repo: {projectGitRepo.repoSlug}</span>
                 {task.gitActivity?.hasValidGitProof ? (
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold text-[10px] shrink-0">
-                    ✓ Đủ điều kiện minh chứng Git
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-[10px] shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span>Đủ điều kiện minh chứng Git</span>
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold text-[10px] shrink-0">
-                    Chưa có Commit/PR
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-[10px] shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span>Chưa có Commit/PR</span>
                   </span>
                 )}
               </div>
@@ -602,14 +661,14 @@ export default function MarloTaskDrawer({
                 </div>
                 {task.gitActivity.pullRequests.map((pr) => {
                   const stLow = (pr.status || "open").toLowerCase();
-                  const badgeCls =
+                  const dotCls =
                     stLow === "merged"
-                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      ? "bg-emerald-500"
                       : stLow === "approved"
-                      ? "bg-blue-500/15 text-blue-700 dark:text-blue-300"
+                      ? "bg-sky-500"
                       : stLow === "changes_requested"
-                      ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                      : "bg-amber-500/15 text-amber-700 dark:text-amber-300";
+                      ? "bg-rose-500"
+                      : "bg-amber-500";
                   const statusLabel =
                     stLow === "merged"
                       ? "Merged"
@@ -625,12 +684,13 @@ export default function MarloTaskDrawer({
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          <GitPullRequest size={12} className="text-blue-500 shrink-0" />
+                          <GitPullRequest size={12} className="text-slate-500 dark:text-slate-400 shrink-0" />
                           <span className="font-mono font-bold text-[11px] text-slate-800 dark:text-slate-100">
                             PR #{String(pr.prNumber).padStart(2, "0")}
                           </span>
-                          <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${badgeCls}`}>
-                            {statusLabel}
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[9.5px] font-bold">
+                            <span className={`w-1.5 h-1.5 rounded-full ${dotCls}`} />
+                            <span>{statusLabel}</span>
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5">
@@ -698,7 +758,7 @@ export default function MarloTaskDrawer({
                     href={task.submissionUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline font-semibold inline-flex items-center gap-1"
+                    className="text-slate-700 dark:text-slate-200 hover:underline font-semibold inline-flex items-center gap-1"
                   >
                     <span>Mở link</span>
                     <ExternalLink size={10} />
@@ -718,13 +778,13 @@ export default function MarloTaskDrawer({
                         if (submissionUrlSuccess) setSubmissionUrlSuccess(null);
                       }}
                       placeholder={`https://github.com/${projectGitRepo?.repoSlug || "owner/repo"}/pull/1`}
-                      className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[11px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+                      className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[11px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
                     />
                     <button
                       type="button"
                       disabled={isSavingUrl}
                       onClick={() => void handleSaveLink()}
-                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-bold text-[11px] shrink-0 transition cursor-pointer disabled:opacity-60"
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-bold text-[11px] shrink-0 transition cursor-pointer disabled:opacity-60"
                     >
                       {isSavingUrl ? "Đang lưu..." : "Lưu link"}
                     </button>
@@ -750,18 +810,18 @@ export default function MarloTaskDrawer({
 
           {/* 6. USER STORY (SCRUM SPEC) */}
           {task.userStory && (
-            <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 text-xs space-y-1 leading-relaxed">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 font-mono mb-1">
+            <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 text-xs space-y-1 leading-relaxed">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 font-mono mb-1">
                 Đặc tả Scrum User Story:
               </div>
               <p>
-                <strong className="text-amber-800 dark:text-amber-300">Là (Role):</strong> {task.userStory.role}
+                <strong className="text-slate-900 dark:text-white">Là (Role):</strong> {task.userStory.role}
               </p>
               <p>
                 <strong className="text-slate-900 dark:text-white">Tôi muốn (Goal):</strong> {task.userStory.want}
               </p>
               <p>
-                <strong className="text-emerald-700 dark:text-emerald-400">Để (Benefit):</strong> {task.userStory.benefit}
+                <strong className="text-slate-900 dark:text-white">Để (Benefit):</strong> {task.userStory.benefit}
               </p>
             </div>
           )}
@@ -773,7 +833,7 @@ export default function MarloTaskDrawer({
                 Checklist & Tiêu chuẩn DoD
               </h3>
               {checks.length > 0 && (
-                <span className="text-[11px] font-mono font-bold text-[#f97316]">
+                <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300">
                   {completedChecksCount}/{checks.length} hoàn thành
                 </span>
               )}
@@ -809,13 +869,13 @@ export default function MarloTaskDrawer({
 
           {/* 8. INSTRUCTOR INLINE REVIEW BOX (When role === "instructor" and task is in "done") */}
           {role === "instructor" && onReviewTask && (isDone || currentColumn === "fail") && (
-            <div className="p-4 rounded-2xl border border-amber-300/80 dark:border-amber-800/70 bg-amber-50/60 dark:bg-amber-950/25 space-y-3">
+            <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/50 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
-                  <ShieldCheck size={15} className="text-amber-600" />
+                <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <ShieldCheck size={15} className="text-slate-600 dark:text-slate-300" />
                   <span>Hội đồng / Giảng viên Thẩm định Task</span>
                 </span>
-                <span className="text-[10.5px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                <span className="text-[10.5px] font-mono font-bold text-slate-600 dark:text-slate-300">
                   +{task.points * 10} XP khi duyệt
                 </span>
               </div>
@@ -827,7 +887,7 @@ export default function MarloTaskDrawer({
                     value={revisionNote}
                     onChange={(e) => setRevisionNote(e.target.value)}
                     placeholder="Nhập nhận xét chi tiết yêu cầu sinh viên bổ sung hoặc sửa lại..."
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-amber-500"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-slate-400"
                   />
                   <div className="flex items-center justify-end gap-2">
                     <button
@@ -848,7 +908,7 @@ export default function MarloTaskDrawer({
                         setShowRevisionInput(false);
                         setRevisionNote("");
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 text-xs font-bold cursor-pointer"
                     >
                       Gửi Yêu cầu sửa
                     </button>
@@ -859,7 +919,7 @@ export default function MarloTaskDrawer({
                   <button
                     type="button"
                     onClick={() => onReviewTask(task.id, "approve")}
-                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
                   >
                     <Check size={14} strokeWidth={2.8} />
                     <span>Nghiệm thu (+{task.points * 10} XP)</span>
@@ -867,7 +927,7 @@ export default function MarloTaskDrawer({
                   <button
                     type="button"
                     onClick={() => setShowRevisionInput(true)}
-                    className="py-2 px-3 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    className="py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
                     <RotateCcw size={13} />
                     <span>Yêu cầu sửa</span>

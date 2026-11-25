@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import current_user, session_owned, log_audit
+from app.api.deps import assert_sandbox_enabled_for_exercise, current_user, log_audit, session_owned
 from app.core.database import db, row_dict
 from app.core.security import uid, sha256
 from app.core.timezone import now_utc
@@ -21,13 +21,14 @@ def evaluate_sandbox_code(
 ) -> dict[str, Any]:
     """Chấm điểm nhanh code trên Docker Sandbox trực quan cho LearningWorkspace."""
     with db() as conn:
-        docker_svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-docker'").fetchone()
-        if docker_svc and not docker_svc["active"]:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Docker CI/CD Isolated Sandbox Pool đang được Quản trị viên tạm dừng bảo trì.",
-            )
-        result = evaluate_sandbox_detailed(payload.code, payload.language, payload.exercise_id)
+        policies = assert_sandbox_enabled_for_exercise(conn, user, payload.exercise_id)
+        result = evaluate_sandbox_detailed(
+            payload.code,
+            payload.language,
+            payload.exercise_id,
+            network_isolated=bool(policies.get("dockerNetworkNone", True)),
+            conn=conn,
+        )
         conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id='svc-docker'")
     track_event(
         user["id"],
@@ -43,6 +44,7 @@ def create_submission(session_id: str, payload: SubmissionIn, user: dict[str, An
     """Tiếp nhận mã nguồn và chấm điểm tự động trong sandbox."""
     session_owned(session_id, user["id"])
     with db() as conn:
+        assert_sandbox_enabled_for_exercise(conn, user, "", session_id=session_id)
         existing = conn.execute("SELECT * FROM submissions WHERE idempotency_key=?", (payload.idempotency_key,)).fetchone()
         if existing:
             return {
@@ -67,6 +69,7 @@ def create_submission(session_id: str, payload: SubmissionIn, user: dict[str, An
                 "INSERT INTO test_results(id, submission_id, sequence_no, status, safe_message, duration_ms) VALUES(?,?,?,?,?,?)",
                 (uid(), submission_id, index, result_status, message, int(duration)),
             )
+        conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id='svc-docker'")
         submission = conn.execute("SELECT id, status, passed_count, total_count FROM submissions WHERE id=?", (submission_id,)).fetchone()
         
     track_event(user["id"], session_id, "submission_queued", {"submission_no": 1, "code_bytes": len(payload.code.encode("utf-8"))})

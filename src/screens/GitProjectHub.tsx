@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
+import MarloSelect from "../components/MarloSelect";
 import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
 import {
   isProjectFrozen,
@@ -1631,11 +1632,11 @@ const GitRepoConfigModal = memo(function GitRepoConfigModal({
             >
               Nhánh nộp bài & đồng bộ chính (Target Branch):
             </label>
-            <select
+            <MarloSelect
               id="git-target-branch-select"
               value={draftTargetBranch}
               onChange={(e) => setDraftTargetBranch(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
             >
               {hasCustomBranch && (
                 <option value={draftTargetBranch}>
@@ -1647,7 +1648,7 @@ const GitRepoConfigModal = memo(function GitRepoConfigModal({
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </MarloSelect>
           </div>
 
           <div>
@@ -1657,16 +1658,16 @@ const GitRepoConfigModal = memo(function GitRepoConfigModal({
             >
               Chiến lược Merge mặc định (Default Merge Strategy):
             </label>
-            <select
+            <MarloSelect
               id="git-merge-strategy-select"
               value={draftMergeStrategy}
               onChange={(e) => setDraftMergeStrategy(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
             >
               <option value="squash">squash (Squash and Merge — Chuẩn Sprint)</option>
               <option value="rebase">rebase (Rebase and Merge — Tuyến tính)</option>
               <option value="merge">merge (Merge Commit --no-ff)</option>
-            </select>
+            </MarloSelect>
           </div>
 
           <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/60 rounded-lg text-blue-900 dark:text-blue-200 space-y-1.5 text-xs">
@@ -1788,8 +1789,9 @@ export default function GitProjectHub({
     () => projectsList.find((p) => p.id === activeProjectId) || projectsList[0] || null,
     [projectsList, activeProjectId]
   );
-  const canFreezeRepo = isAdmin || isInstructor || Boolean(activeProjectSummary?.isLead);
-  const canEditRepoConfig = isAdmin || isInstructor || Boolean(activeProjectSummary?.isLead);
+  const isProjectAdvisorFlag = Boolean((activeProjectSummary as any)?.isAdvisor);
+  const canFreezeRepo = isAdmin || (isInstructor && isProjectAdvisorFlag);
+  const canEditRepoConfig = isAdmin || (isInstructor && isProjectAdvisorFlag) || Boolean(activeProjectSummary?.isLead);
 
   const showToast = (msg: string) => {
     setActionToast(msg);
@@ -2182,11 +2184,11 @@ export default function GitProjectHub({
     files_changed: string[];
     additions?: number;
     deletions?: number;
-  }) => {
+  }): Promise<boolean> => {
     const res = await pushGitCommitApi(activeProjectId, payload, role);
     if (res.error) {
       showToast(res.error);
-      return;
+      return false;
     }
     if (res.commit) {
       await loadGitWorkspace(activeProjectId, selectedPr?.id);
@@ -2201,6 +2203,7 @@ export default function GitProjectHub({
         }${taskHint}`
       );
     }
+    return true;
   };
 
   const handleCreateNewPr = async (payload: {
@@ -2210,12 +2213,13 @@ export default function GitProjectHub({
     target_branch: string;
     task_code?: string;
     code_snippet: string;
-  }) => {
+  }): Promise<boolean> => {
     setActionError(null);
     const res = await createGitPullRequestApi(activeProjectId, payload, role);
     if (res.error) {
       setActionError(res.error);
-      return;
+      showToast(res.error);
+      return false;
     }
     if (res.pullRequest) {
       await loadGitWorkspace(activeProjectId, res.pullRequest.id);
@@ -2225,6 +2229,7 @@ export default function GitProjectHub({
         : "";
       showToast(`Đã tạo PR #${String(res.pullRequest.prNumber).padStart(2, "0")} & chạy AST Scanner${taskHint}`);
     }
+    return true;
   };
 
   const handleAiFixPr = async (prId: string) => {
@@ -2875,7 +2880,7 @@ export default function GitProjectHub({
       )}
 
       {/* Top Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/90 dark:border-slate-800 pb-5 animate-cascade-1">
+      <header className="marlo-card flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/90 dark:border-slate-800 pb-5">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="pill pill--info font-mono text-[11px] font-bold">
@@ -2918,7 +2923,7 @@ export default function GitProjectHub({
 
         <div className="flex items-center gap-2.5 flex-wrap">
           {projectsList.length > 0 && (
-            <select
+            <MarloSelect
               aria-label="Chọn dự án GitHub"
               value={activeProjectId}
               onChange={(e) => {
@@ -2926,14 +2931,14 @@ export default function GitProjectHub({
                 setActiveProjectId(nextId);
                 onSelectProject?.(nextId);
               }}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="px-3.5 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 shadow-2xs focus:outline-none max-w-[320px]"
             >
               {projectsList.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.code} · {p.name}
                 </option>
               ))}
-            </select>
+            </MarloSelect>
           )}
           {onNavigate && (
             <>
@@ -4094,7 +4099,6 @@ export default function GitProjectHub({
                 return (
                   <div
                     key={c.id}
-                    style={{ animationDelay: `${0.05 + Math.min(cIdx, 8) * 0.04}s` }}
                     onClick={() => {
                       setSelectedCommit(c);
                       if (gitGraphScrollRef.current && typeof c.cx === "number") {
@@ -4103,7 +4107,7 @@ export default function GitProjectHub({
                         gitGraphScrollRef.current.scrollTo({ left: targetScroll, behavior: "smooth" });
                       }
                     }}
-                    className={`animate-cascade-item p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition cursor-pointer ${
+                    className={`marlo-row p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors cursor-pointer ${
                       isSelected
                         ? "bg-blue-50/70 dark:bg-blue-950/35 border-l-4 border-l-blue-600 dark:border-l-blue-400"
                         : "bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/70"
@@ -4305,8 +4309,7 @@ export default function GitProjectHub({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {/* Bước 1 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
-                style={{ animationDelay: "0.14s" }}
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-[border-color,box-shadow,background-color] duration-200 space-y-3 flex flex-col justify-between"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -4336,8 +4339,7 @@ export default function GitProjectHub({
 
               {/* Bước 2 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
-                style={{ animationDelay: "0.19s" }}
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-[border-color,box-shadow,background-color] duration-200 space-y-3 flex flex-col justify-between"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -4366,8 +4368,7 @@ export default function GitProjectHub({
 
               {/* Bước 3 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
-                style={{ animationDelay: "0.24s" }}
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-[border-color,box-shadow,background-color] duration-200 space-y-3 flex flex-col justify-between"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -4396,8 +4397,7 @@ export default function GitProjectHub({
 
               {/* Bước 4 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
-                style={{ animationDelay: "0.29s" }}
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/40 shadow-2xs hover:shadow-md transition-[border-color,box-shadow,background-color] duration-200 space-y-3 flex flex-col justify-between"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -4426,8 +4426,7 @@ export default function GitProjectHub({
 
               {/* Bước 5 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 shadow-xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
-                style={{ animationDelay: "0.34s" }}
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 shadow-xs hover:shadow-md transition-[border-color,box-shadow,background-color] duration-200 space-y-3 flex flex-col justify-between"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -4462,8 +4461,7 @@ export default function GitProjectHub({
 
               {/* Bước 6 */}
               <div
-                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 shadow-xs hover:shadow-md transition-all duration-300 space-y-3 flex flex-col justify-between"
-                style={{ animationDelay: "0.39s" }}
+                className="marlo-card marlo-item-interactive p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 shadow-xs hover:shadow-md transition-[border-color,box-shadow,background-color] duration-200 space-y-3 flex flex-col justify-between"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">

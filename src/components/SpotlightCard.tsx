@@ -3,6 +3,7 @@ import React, { useRef } from "react";
 interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
+  wrapperClassName?: string;
   spotlightColor?: string;
   spotlightRadius?: number;
   haloColor?: string;
@@ -11,6 +12,7 @@ interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement> {
 export function SpotlightCard({
   children,
   className = "",
+  wrapperClassName = "",
   spotlightColor = "rgba(255, 255, 255, 0.28)",
   spotlightRadius = 380,
   haloColor = "rgba(255, 255, 255, 0.22)",
@@ -32,11 +34,11 @@ export function SpotlightCard({
   return (
     <div
       style={style}
-      className="relative group transition-all duration-300"
+      className={`relative group h-full ${wrapperClassName}`}
     >
       {/* 🌟 1. Radiant Ambient Halo (Hào quang phát sáng rực rỡ phía sau card khi hover) */}
       <div
-        className="pointer-events-none absolute -inset-1.5 rounded-[22px] opacity-0 group-hover:opacity-100 blur-xl transition-all duration-500 group-hover:scale-[1.04] -z-10"
+        className="pointer-events-none absolute -inset-1.5 rounded-[26px] opacity-0 group-hover:opacity-100 blur-xl transition-[opacity,transform] duration-500 group-hover:scale-[1.04] -z-10"
         style={{
           background: `radial-gradient(circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%), ${haloColor}, transparent 75%)`,
         }}
@@ -47,7 +49,7 @@ export function SpotlightCard({
       <div
         ref={cardRef}
         onMouseMove={handleMouseMove}
-        className={`relative overflow-hidden transition-all duration-300 ${className}`}
+        className={`relative h-full overflow-hidden transition-[transform,box-shadow,border-color] duration-300 ${className}`}
         {...props}
       >
         {/* Dynamic Surface Spotlight (Tia sáng mặt card rọi theo con trỏ chuột) */}
@@ -61,7 +63,7 @@ export function SpotlightCard({
 
         {/* Specular Neon Border Glow (Viền sáng ánh neon chuẩn Linear / Vercel) */}
         <div
-          className="pointer-events-none absolute -inset-px rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
+          className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
           style={{
             padding: "1.5px",
             background: `radial-gradient(280px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%), rgba(255, 255, 255, 0.8), ${spotlightColor} 45%, transparent 80%)`,
@@ -73,7 +75,7 @@ export function SpotlightCard({
         />
 
         {/* Card Content */}
-        <div className="relative z-0 h-full w-full">{children}</div>
+        <div className="relative z-0 flex h-full w-full flex-col justify-between">{children}</div>
       </div>
     </div>
   );

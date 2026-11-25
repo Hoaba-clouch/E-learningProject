@@ -171,10 +171,36 @@ def trigger_session_action(
 
 
 @router.get("/instructor/dual-submissions")
-def list_dual_submissions(_: dict[str, Any] = Depends(require_instructor)) -> dict[str, Any]:
-    """Danh sách biên bản Chấm Kép (Docker CI/CD + Phòng Phản Biện AI 3D)."""
+def list_dual_submissions(
+    section_id: str | None = None,
+    user: dict[str, Any] = Depends(require_instructor),
+) -> dict[str, Any]:
+    """Danh sách biên bản Chấm Kép (Docker CI/CD + Phòng Phản Biện AI 3D) theo lớp GV phụ trách."""
+    is_admin = (user.get("role") or "").lower() == "admin"
     with db() as conn:
-        rows = conn.execute("SELECT * FROM dual_submissions ORDER BY updated_at DESC, id ASC").fetchall()
+        sql = """
+            SELECT ds.*
+            FROM dual_submissions ds
+            LEFT JOIN class_sections cs ON cs.id = ds.class_id
+            WHERE 1=1
+        """
+        params: list[Any] = []
+        if section_id:
+            target_sec = conn.execute(
+                "SELECT id, course_id, instructor_id FROM class_sections WHERE id=?",
+                (section_id,),
+            ).fetchone()
+            if not target_sec:
+                raise HTTPException(status_code=404, detail="Không tìm thấy lớp học phần")
+            if not is_admin and target_sec.get("instructor_id") != user["id"]:
+                raise HTTPException(status_code=403, detail="Bạn không phụ trách lớp học phần này")
+            sql += " AND (ds.class_id = ? OR ds.class_id = ?)"
+            params.extend([target_sec["id"], target_sec["course_id"]])
+        elif not is_admin:
+            sql += " AND cs.instructor_id = ?"
+            params.append(user["id"])
+        sql += " ORDER BY ds.updated_at DESC, ds.id ASC"
+        rows = conn.execute(sql, tuple(params)).fetchall()
     items = [_serialize_dual_submission(r) for r in rows]
     return {"submissions": items, "total": len(items)}
 
@@ -188,10 +214,28 @@ def decide_dual_submission(
     """Giảng viên phê duyệt điểm Chấm Kép hoặc yêu cầu bảo vệ lại trên Phòng Phản biện 3D."""
     now = now_utc()
     instructor_name = user.get("display_name") or user.get("full_name") or "Giảng viên"
+    is_admin = (user.get("role") or "").lower() == "admin"
     with db() as conn:
         existing = conn.execute("SELECT * FROM dual_submissions WHERE id=?", (sub_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy biên bản chấm kép")
+        if not is_admin:
+            owns_dual = conn.execute(
+                """SELECT cs.id FROM class_sections cs
+                   WHERE (cs.id = ? OR cs.course_id = ?) AND cs.instructor_id = ?
+                   LIMIT 1""",
+                (existing["class_id"], existing["class_id"], user["id"]),
+            ).fetchone()
+            if not owns_dual:
+                owns_course = conn.execute(
+                    "SELECT id FROM courses WHERE id = ? AND instructor_id = ? LIMIT 1",
+                    (existing["class_id"], user["id"]),
+                ).fetchone()
+                if not owns_course:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Bạn không phụ trách lớp học phần của biên bản Chấm Kép này.",
+                    )
 
         if payload.action == "approve":
             if payload.final_score is None:
@@ -223,9 +267,14 @@ def decide_dual_submission(
             "SELECT COUNT(*) AS c FROM dual_submissions WHERE class_id=? AND status IN ('pending', 'flagged')",
             (existing["class_id"],),
         ).fetchone()
+        pending_val = int(cnt_row["c"] or 0) if cnt_row else 0
         conn.execute(
             "UPDATE courses SET pending_dual_reviews = ? WHERE id=?",
-            (int(cnt_row["c"] or 0) if cnt_row else 0, existing["class_id"]),
+            (pending_val, existing["class_id"]),
+        )
+        conn.execute(
+            "UPDATE class_sections SET pending_dual_reviews = ? WHERE id=? OR course_id=?",
+            (pending_val, existing["class_id"], existing["class_id"]),
         )
         updated = conn.execute("SELECT * FROM dual_submissions WHERE id=?", (sub_id,)).fetchone()
 
@@ -309,21 +358,39 @@ def ask_instructor_copilot(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Dịch vụ AI Co-Pilot / AIGC hiện đang tạm dừng bởi Quản trị viên.",
             )
+        from app.api.deps import load_system_policies
+        policies = load_system_policies(conn)
+        budget_cap = float(policies.get("budgetCap", 500.0) or 500.0)
+        cost_row = conn.execute("SELECT COALESCE(SUM(estimated_cost), 0) AS total_cost FROM ai_service_units").fetchone()
+        total_cost = float(cost_row["total_cost"] or 0.0) if cost_row else 0.0
+        if total_cost >= budget_cap:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Ngân sách AI tháng (${total_cost:.2f}/${budget_cap:.0f}) đã chạm trần giới hạn do Quản trị viên cấu hình.",
+            )
         if payload.class_id:
-            row = conn.execute("SELECT code, name FROM courses WHERE id=?", (payload.class_id,)).fetchone()
+            row = conn.execute(
+                """SELECT c.code, c.name
+                   FROM class_sections cs
+                   JOIN courses c ON c.id = cs.course_id
+                   WHERE cs.id = ? OR c.id = ?""",
+                (payload.class_id, payload.class_id),
+            ).fetchone()
+            if not row:
+                row = conn.execute("SELECT code, name FROM courses WHERE id=?", (payload.class_id,)).fetchone()
             if row:
                 course_code = row["code"]
                 course_name = row["name"] or ""
 
     res = generate_copilot_suggestion(payload.prompt, course_code, course_name)
 
+    in_tok = int(res.get("input_tokens") or 0)
+    out_tok = int(res.get("output_tokens") or 0)
     with db() as conn:
-        record_ai_usage(
-            conn,
-            "svc-aigc",
-            int(res.get("input_tokens") or 380),
-            int(res.get("output_tokens") or 220),
-        )
+        if in_tok > 0 or out_tok > 0:
+            record_ai_usage(conn, "svc-aigc", in_tok, out_tok)
+        else:
+            conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id = 'svc-aigc'")
         conn.commit()
     return {"reply": res["reply"], "courseCode": course_code, "model": res["model"]}
 
@@ -337,30 +404,83 @@ class StudentRemindIn(BaseModel):
 @router.get("/instructor/students-analytics")
 def get_students_analytics(
     course_code: str | None = None,
-    _: dict[str, Any] = Depends(require_instructor),
+    section_id: str | None = None,
+    user: dict[str, Any] = Depends(require_instructor),
 ) -> dict[str, Any]:
-    """Báo cáo Thống kê Học viên theo dữ liệu thật trong MySQL 8.0 (Tiến độ bài học, điểm bài nộp, AI Defense, Kanban SP & Rủi ro)."""
+    """Báo cáo Thống kê Học viên theo lớp học phần & danh sách ghi danh thực tế trong MySQL 8.0."""
+    is_admin = (user.get("role") or "").lower() == "admin"
     with db() as conn:
+        selected_section = None
         selected_course = None
-        if course_code:
-            selected_course = conn.execute(
-                "SELECT id, code, subject_id, chapters_json FROM courses WHERE code = ? OR id = ? OR subject_id = ?",
-                (course_code, course_code, course_code),
+        if section_id:
+            selected_section = conn.execute(
+                """SELECT cs.id AS section_id, cs.section_code, cs.instructor_id,
+                          c.id AS course_id, c.code, c.subject_id, c.chapters_json
+                   FROM class_sections cs
+                   JOIN courses c ON c.id = cs.course_id
+                   WHERE cs.id = ?""",
+                (section_id,),
             ).fetchone()
+            if not selected_section:
+                raise HTTPException(status_code=404, detail="Không tìm thấy lớp học phần")
+            if not is_admin and selected_section.get("instructor_id") != user["id"]:
+                raise HTTPException(status_code=403, detail="Bạn không phụ trách lớp học phần này")
+        elif course_code:
+            sec_sql = """
+                SELECT cs.id AS section_id, cs.section_code, cs.instructor_id,
+                       c.id AS course_id, c.code, c.subject_id, c.chapters_json
+                FROM class_sections cs
+                JOIN courses c ON c.id = cs.course_id
+                WHERE (cs.section_code = ? OR cs.id = ? OR c.code = ? OR c.id = ? OR c.subject_id = ?)
+            """
+            sec_params: list[Any] = [course_code, course_code, course_code, course_code, course_code]
+            if not is_admin:
+                sec_sql += " AND cs.instructor_id = ?"
+                sec_params.append(user["id"])
+            sec_sql += " ORDER BY cs.created_at ASC LIMIT 1"
+            selected_section = conn.execute(sec_sql, tuple(sec_params)).fetchone()
+            if not selected_section and not is_admin:
+                other_sec = conn.execute(
+                    """SELECT cs.id FROM class_sections cs
+                       JOIN courses c ON c.id = cs.course_id
+                       WHERE cs.section_code = ? OR cs.id = ? OR c.code = ? OR c.id = ? OR c.subject_id = ?""",
+                    (course_code, course_code, course_code, course_code, course_code),
+                ).fetchone()
+                if other_sec:
+                    raise HTTPException(status_code=403, detail="Bạn không phụ trách lớp học phần này")
+            if not selected_section and is_admin:
+                selected_course = conn.execute(
+                    "SELECT id, code, subject_id, chapters_json FROM courses WHERE code = ? OR id = ? OR subject_id = ?",
+                    (course_code, course_code, course_code),
+                ).fetchone()
 
-        target_subject_id = selected_course["subject_id"] if selected_course else None
-        target_class_id = selected_course["id"] if selected_course else None
-        assigned_course = selected_course["code"] if selected_course else (course_code or "ALL")
+        target_section_id = selected_section["section_id"] if selected_section else None
+        target_subject_id = (
+            selected_section["subject_id"]
+            if selected_section
+            else (selected_course["subject_id"] if selected_course else None)
+        )
+        target_class_id = (
+            selected_section["course_id"]
+            if selected_section
+            else (selected_course["id"] if selected_course else None)
+        )
+        assigned_course = (
+            selected_section["section_code"]
+            if selected_section
+            else (selected_course["code"] if selected_course else (course_code or "ALL"))
+        )
+        chapters_source = selected_section or selected_course
 
         # Đếm tổng số bài học đã phát hành thực tế trong giáo trình & tập hợp mã hợp lệ
         total_course_lessons = 0
         published_lesson_keys: set[str] = set()
         published_keys_by_subject: dict[str, set[str]] = {}
-        if selected_course:
-            subj_key = str(selected_course.get("subject_id") or "")
+        if chapters_source:
+            subj_key = str(chapters_source.get("subject_id") or "")
             keys = published_keys_by_subject.setdefault(subj_key, set())
             try:
-                for ch_idx, ch in enumerate(json.loads(selected_course.get("chapters_json") or "[]"), start=1):
+                for ch_idx, ch in enumerate(json.loads(chapters_source.get("chapters_json") or "[]"), start=1):
                     if ch.get("status") == "Bản nháp":
                         continue
                     pub_ls = [ls for ls in ch.get("lessons", []) if ls.get("status") != "Bản nháp"]
@@ -380,7 +500,16 @@ def get_students_analytics(
             except Exception:
                 total_course_lessons = 0
         else:
-            all_courses = conn.execute("SELECT subject_id, chapters_json FROM courses").fetchall()
+            if is_admin:
+                all_courses = conn.execute("SELECT subject_id, chapters_json FROM courses").fetchall()
+            else:
+                all_courses = conn.execute(
+                    """SELECT DISTINCT c.subject_id, c.chapters_json
+                       FROM class_sections cs
+                       JOIN courses c ON c.id = cs.course_id
+                       WHERE cs.instructor_id = ? AND cs.status = 'active'""",
+                    (user["id"],),
+                ).fetchall()
             for c in all_courses:
                 subj_key = str(c.get("subject_id") or "")
                 keys = published_keys_by_subject.setdefault(subj_key, set())
@@ -401,17 +530,44 @@ def get_students_analytics(
                 except Exception:
                     pass
 
-        students_query = """
-            SELECT u.id, u.user_code, u.full_name, u.display_name, u.email,
-                   COALESCE(sp.exp_points, 0) AS exp_points,
-                   COALESCE(sp.current_streak, 0) AS current_streak,
-                   COALESCE(sp.longest_streak, 0) AS longest_streak
-            FROM users u
-            LEFT JOIN student_profiles sp ON sp.user_id = u.id
-            WHERE u.role = 'student'
-            ORDER BY u.display_name ASC
-        """
-        st_rows = conn.execute(students_query).fetchall()
+        if target_section_id:
+            st_rows = conn.execute(
+                """SELECT DISTINCT u.id, u.user_code, u.full_name, u.display_name, u.email,
+                          COALESCE(sp.exp_points, 0) AS exp_points,
+                          COALESCE(sp.current_streak, 0) AS current_streak,
+                          COALESCE(sp.longest_streak, 0) AS longest_streak
+                   FROM class_enrollments ce
+                   JOIN users u ON u.id = ce.student_id
+                   LEFT JOIN student_profiles sp ON sp.user_id = u.id
+                   WHERE ce.section_id = ? AND ce.status = 'active' AND u.role = 'student'
+                   ORDER BY u.display_name ASC""",
+                (target_section_id,),
+            ).fetchall()
+        elif not is_admin:
+            st_rows = conn.execute(
+                """SELECT DISTINCT u.id, u.user_code, u.full_name, u.display_name, u.email,
+                          COALESCE(sp.exp_points, 0) AS exp_points,
+                          COALESCE(sp.current_streak, 0) AS current_streak,
+                          COALESCE(sp.longest_streak, 0) AS longest_streak
+                   FROM class_enrollments ce
+                   JOIN class_sections cs ON cs.id = ce.section_id
+                   JOIN users u ON u.id = ce.student_id
+                   LEFT JOIN student_profiles sp ON sp.user_id = u.id
+                   WHERE cs.instructor_id = ? AND cs.status = 'active' AND ce.status = 'active' AND u.role = 'student'
+                   ORDER BY u.display_name ASC""",
+                (user["id"],),
+            ).fetchall()
+        else:
+            st_rows = conn.execute(
+                """SELECT u.id, u.user_code, u.full_name, u.display_name, u.email,
+                          COALESCE(sp.exp_points, 0) AS exp_points,
+                          COALESCE(sp.current_streak, 0) AS current_streak,
+                          COALESCE(sp.longest_streak, 0) AS longest_streak
+                   FROM users u
+                   LEFT JOIN student_profiles sp ON sp.user_id = u.id
+                   WHERE u.role = 'student'
+                   ORDER BY u.display_name ASC"""
+            ).fetchall()
 
         results = []
         for st in st_rows:
@@ -508,7 +664,10 @@ def get_students_analytics(
                   AND defense_score > 0
             """
             def_params: list[Any] = [uid_val, code_val]
-            if target_class_id:
+            if target_section_id and target_class_id:
+                def_sql += " AND (class_id = ? OR class_id = ?)"
+                def_params.extend([target_section_id, target_class_id])
+            elif target_class_id:
                 def_sql += " AND class_id = ?"
                 def_params.append(target_class_id)
             def_row = conn.execute(def_sql, tuple(def_params)).fetchone()
@@ -623,13 +782,14 @@ class ChapterSubmissionGradeIn(BaseModel):
 @router.get("/instructor/chapter-submissions")
 def list_chapter_submissions(
     subject_id: str | None = Query(default=None),
+    section_id: str | None = Query(default=None),
     chapter_number: int | None = Query(default=None),
     status_filter: str = Query(default="all"),
-    _: dict[str, Any] = Depends(require_instructor),
+    user: dict[str, Any] = Depends(require_instructor),
 ) -> dict[str, Any]:
-    """Danh sách bài tập thực hành theo từng chương để Giảng viên thẩm định & chấm điểm."""
+    """Danh sách bài tập thực hành theo từng chương để Giảng viên thẩm định & chấm điểm theo lớp phụ trách."""
+    is_admin = (user.get("role") or "").lower() == "admin"
     with db() as conn:
-        # Tự động khởi tạo dữ liệu mẫu thực tế nếu bảng đang trống
         count = conn.execute("SELECT COUNT(*) as c FROM student_chapter_submissions").fetchone()["c"]
         if count == 0:
             sample_submissions = [
@@ -669,35 +829,98 @@ def list_chapter_submissions(
                 )
             conn.commit()
 
-        # Chuẩn hóa subject_id (ví dụ 'class-oop' -> 'oop')
-        clean_subject_id = subject_id.replace("class-", "") if subject_id else None
+        raw_key = (section_id or subject_id or "").strip()
+        resolved_section_id: str | None = None
+        resolved_subject_id: str | None = None
+        resolved_course_id: str | None = None
 
-        query = "SELECT * FROM student_chapter_submissions WHERE 1=1"
-        params: list[Any] = []
-        if clean_subject_id:
-            query += " AND (subject_id = ? OR subject_id = ?)"
-            params.extend([clean_subject_id, subject_id])
+        if raw_key:
+            sec_exact = conn.execute(
+                """SELECT cs.id AS section_id, cs.instructor_id, c.id AS course_id, c.subject_id
+                   FROM class_sections cs
+                   JOIN courses c ON c.id = cs.course_id
+                   WHERE cs.id = ? OR cs.section_code = ?
+                   LIMIT 1""",
+                (raw_key, raw_key),
+            ).fetchone()
+            if sec_exact:
+                if not is_admin and sec_exact["instructor_id"] != user["id"]:
+                    raise HTTPException(status_code=403, detail="Bạn không phụ trách lớp học phần này.")
+                resolved_section_id = sec_exact["section_id"]
+                resolved_subject_id = sec_exact["subject_id"]
+                resolved_course_id = sec_exact["course_id"]
+            else:
+                c_row = conn.execute(
+                    "SELECT id, subject_id, code FROM courses WHERE id = ? OR subject_id = ? OR code = ? LIMIT 1",
+                    (raw_key, raw_key, raw_key),
+                ).fetchone()
+                if c_row:
+                    resolved_subject_id = c_row["subject_id"]
+                    resolved_course_id = c_row["id"]
+                    if not is_admin:
+                        my_sec = conn.execute(
+                            "SELECT id FROM class_sections WHERE course_id = ? AND instructor_id = ? AND status = 'active' LIMIT 1",
+                            (c_row["id"], user["id"]),
+                        ).fetchone()
+                        if not my_sec:
+                            raise HTTPException(
+                                status_code=403,
+                                detail="Bạn không phụ trách lớp học phần nào thuộc môn học này.",
+                            )
+                        resolved_section_id = my_sec["id"]
+                else:
+                    resolved_subject_id = raw_key
+
+        where_sql = " WHERE 1=1"
+        base_params: list[Any] = []
+        if resolved_subject_id:
+            if resolved_course_id:
+                where_sql += " AND (subject_id = ? OR subject_id = ?)"
+                base_params.extend([resolved_subject_id, resolved_course_id])
+            else:
+                where_sql += " AND subject_id = ?"
+                base_params.append(resolved_subject_id)
+
+        if resolved_section_id:
+            where_sql += " AND user_id IN (SELECT student_id FROM class_enrollments WHERE section_id = ? AND status = 'active')"
+            base_params.append(resolved_section_id)
+        elif not is_admin:
+            where_sql += """
+                AND EXISTS (
+                    SELECT 1 FROM class_enrollments ce
+                    JOIN class_sections cs ON cs.id = ce.section_id
+                    JOIN courses c ON c.id = cs.course_id
+                    WHERE ce.student_id = student_chapter_submissions.user_id
+                      AND ce.status = 'active'
+                      AND cs.status = 'active'
+                      AND cs.instructor_id = ?
+                      AND (c.subject_id = student_chapter_submissions.subject_id OR c.id = student_chapter_submissions.subject_id)
+                )
+            """
+            base_params.append(user["id"])
+
         if chapter_number is not None:
-            query += " AND chapter_number = ?"
-            params.append(chapter_number)
+            where_sql += " AND chapter_number = ?"
+            base_params.append(chapter_number)
+
+        query = "SELECT * FROM student_chapter_submissions" + where_sql
+        query_params = list(base_params)
         if status_filter and status_filter != "all":
             query += " AND status = ?"
-            params.append(status_filter)
+            query_params.append(status_filter)
 
         query += " ORDER BY submitted_at DESC, id DESC"
-        rows = conn.execute(query, tuple(params)).fetchall()
+        rows = conn.execute(query, tuple(query_params)).fetchall()
 
-        # Thống kê tổng quan
-        total_q = "SELECT COUNT(*) as total, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) as pending_c, SUM(CASE WHEN status='graded' THEN 1 ELSE 0 END) as graded_c, SUM(CASE WHEN status='flagged' THEN 1 ELSE 0 END) as flagged_c, AVG(score) as avg_score FROM student_chapter_submissions WHERE 1=1"
-        stats_params: list[Any] = []
-        if clean_subject_id:
-            total_q += " AND (subject_id = ? OR subject_id = ?)"
-            stats_params.extend([clean_subject_id, subject_id])
-        if chapter_number is not None:
-            total_q += " AND chapter_number = ?"
-            stats_params.append(chapter_number)
-        
-        stat_row = conn.execute(total_q, tuple(stats_params)).fetchone()
+        total_q = (
+            "SELECT COUNT(*) as total, "
+            "SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) as pending_c, "
+            "SUM(CASE WHEN status='graded' THEN 1 ELSE 0 END) as graded_c, "
+            "SUM(CASE WHEN status='flagged' THEN 1 ELSE 0 END) as flagged_c, "
+            "AVG(score) as avg_score "
+            "FROM student_chapter_submissions" + where_sql
+        )
+        stat_row = conn.execute(total_q, tuple(base_params)).fetchone()
 
     items = []
     for r in rows:
@@ -747,11 +970,31 @@ def grade_chapter_submission(
     """Giảng viên phê duyệt điểm AI, chấm lại ghi đè điểm hoặc yêu cầu học viên nộp lại bài tập chương."""
     now = now_utc()
     instructor_name = user.get("display_name") or user.get("full_name") or "Giảng viên"
+    is_admin = (user.get("role") or "").lower() == "admin"
 
     with db() as conn:
         existing = conn.execute("SELECT * FROM student_chapter_submissions WHERE id = ?", (sub_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy bài nộp chương.")
+        if not is_admin:
+            teaches_student = conn.execute(
+                """SELECT cs.id
+                   FROM class_enrollments ce
+                   JOIN class_sections cs ON cs.id = ce.section_id
+                   JOIN courses c ON c.id = cs.course_id
+                   WHERE ce.student_id = ?
+                     AND ce.status = 'active'
+                     AND cs.status = 'active'
+                     AND cs.instructor_id = ?
+                     AND (c.subject_id = ? OR c.id = ?)
+                   LIMIT 1""",
+                (existing["user_id"], user["id"], existing["subject_id"], existing["subject_id"]),
+            ).fetchone()
+            if not teaches_student:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Bạn không phụ trách lớp học phần của học viên này nên không có quyền chấm bài tập chương.",
+                )
 
         if payload.action == "approve":
             new_status = "graded"
@@ -799,9 +1042,14 @@ def grade_chapter_submission(
                     "SELECT COUNT(*) AS c FROM dual_submissions WHERE class_id=? AND status IN ('pending', 'flagged')",
                     (dual_row["class_id"],),
                 ).fetchone()
+                pending_val = int(cnt_row["c"] or 0) if cnt_row else 0
                 conn.execute(
                     "UPDATE courses SET pending_dual_reviews = ? WHERE id = ?",
-                    (int(cnt_row["c"] or 0) if cnt_row else 0, dual_row["class_id"]),
+                    (pending_val, dual_row["class_id"]),
+                )
+                conn.execute(
+                    "UPDATE class_sections SET pending_dual_reviews = ? WHERE id = ? OR course_id = ?",
+                    (pending_val, dual_row["class_id"], dual_row["class_id"]),
                 )
 
         # Gửi thông báo đến học viên

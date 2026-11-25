@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import MarloSelect from "../components/MarloSelect";
 
 import {
 
@@ -78,36 +79,26 @@ import type { Screen } from "../App";
 
 import {
 
+  clearAdminAiCacheApi,
   clearBroadcastApi,
-
   createAdminClass,
-
   createAdminUser,
-
   deleteAdminUserApi,
-
+  enrollStudentInClassApi,
   ensureRoleSession,
-
+  fetchAdminClassEnrollments,
   fetchAdminGovernanceBundle,
-
   fetchAdminUsers,
-
   fetchAdminAnalyticsApi,
-
   fetchKanbanWorkspace,
-
   type AdminAnalyticsData,
-
   type WorkspaceProjectDto,
-
   patchAdminAiService,
-
   patchAdminClass,
-
   patchAdminUser,
-
   publishBroadcastApi,
-
+  recordAdminAuditLogApi,
+  resetAdminUserPasswordApi,
   resolveAdminApproval,
 
   revokeJwtSessionApi,
@@ -117,6 +108,8 @@ import {
   saveAdminPolicies,
 
   triggerAdminResetDemo,
+
+  unenrollStudentFromClassApi,
 
   type AdminUserRecord,
 
@@ -148,11 +141,17 @@ import {
 
   type AdminAuditLog,
 
+  type AdminClassEnrollmentsResponse,
+
   type AdminClassRecord,
+
+  type AdminInstructorOption,
 
   type AdminJwtSession,
 
   type AdminServiceUnit,
+
+  type AdminSubjectSummary,
 
   type PendingApprovalItem,
 
@@ -260,15 +259,15 @@ const statusPillStyle: Record<AdminUserRecord["status"], string> = {
 
   active:
 
-    "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+    "bg-slate-100 dark:bg-slate-800/90 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200",
 
   pending:
 
-    "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400",
+    "bg-slate-100 dark:bg-slate-800/90 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200",
 
   suspended:
 
-    "bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400",
+    "bg-slate-100 dark:bg-slate-800/90 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200",
 
 };
 
@@ -442,23 +441,47 @@ export default function AdminDashboard({
 
 
 
-  // Add / Inspect Class Modals
+  // Add / Inspect Class Modals (Phương án A: Lộ trình -> Môn học -> Lớp học phần -> Ghi danh)
+
+  const [subjectsList, setSubjectsList] = useState<AdminSubjectSummary[]>([]);
+
+  const [instructorsList, setInstructorsList] = useState<AdminInstructorOption[]>([]);
 
   const [isAddClassModalOpen, setIsAddClassModalOpen] = useState(false);
+
+  const [newClassMode, setNewClassMode] = useState<"new_section" | "new_course">("new_section");
+
+  const [newClassCourseId, setNewClassCourseId] = useState("");
+
+  const [newClassSectionCode, setNewClassSectionCode] = useState("");
 
   const [newClassCode, setNewClassCode] = useState("");
 
   const [newClassName, setNewClassName] = useState("");
 
-  const [newClassTeacher, setNewClassTeacher] = useState("Cô Trần Thị B");
+  const [newClassStageNumber, setNewClassStageNumber] = useState<number>(1);
 
-  const [newClassStudents, setNewClassStudents] = useState("40");
+  const [newClassCredits, setNewClassCredits] = useState("3");
+
+  const [newClassSemester, setNewClassSemester] = useState("Học kỳ 1 / 2026");
+
+  const [newClassInstructorId, setNewClassInstructorId] = useState("usr-gv-01");
+
+  const [newClassStudents, setNewClassStudents] = useState("45");
 
   const [newClassRoom, setNewClassRoom] = useState("Lab A3-201");
 
   const [newClassImage, setNewClassImage] = useState("codemind/cpp20-sandbox:valgrind-1.4");
 
   const [editingClass, setEditingClass] = useState<AdminClassRecord | null>(null);
+
+  const [classEnrollments, setClassEnrollments] = useState<AdminClassEnrollmentsResponse | null>(null);
+
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+
+  const [selectedEnrollStudentId, setSelectedEnrollStudentId] = useState("");
+
+  const [enrollmentActionLoading, setEnrollmentActionLoading] = useState(false);
 
 
 
@@ -480,7 +503,14 @@ export default function AdminDashboard({
 
 
 
-  useMarloPageEntrance(adminRef);
+  useMarloPageEntrance(adminRef, (el) => {
+    const chrome = el.querySelectorAll(
+      ".marlo-card:not([data-content-stage] .marlo-card)"
+    );
+    if (chrome.length > 0) {
+      animateMarloCards(chrome, { y: 18, stagger: 0.045, duration: 0.65 });
+    }
+  });
 
 
 
@@ -504,6 +534,18 @@ export default function AdminDashboard({
       setUsers(bundle.users);
 
       if (bundle.classes.length > 0) setClassesList(bundle.classes);
+
+      if (bundle.subjects && bundle.subjects.length > 0) {
+        setSubjectsList(bundle.subjects);
+        setNewClassCourseId((prev) => prev || bundle.subjects![0].id);
+      }
+
+      if (bundle.instructors && bundle.instructors.length > 0) {
+        setInstructorsList(bundle.instructors);
+        setNewClassInstructorId((prev) =>
+          bundle.instructors!.some((inst) => inst.id === prev) ? prev : bundle.instructors![0].id
+        );
+      }
 
       if (bundle.aiServices.length > 0) setAiServices(bundle.aiServices);
 
@@ -611,27 +653,20 @@ export default function AdminDashboard({
 
 
 
-  useLayoutEffect(() => {
-
-    if (!contentRef.current) return;
-
-    const cards = contentRef.current.querySelectorAll(".marlo-card");
-
-    if (cards.length > 0) {
-
-      animateMarloCards(cards, { stagger: 0.04, y: 16 });
-
-    }
-
-    const rows = contentRef.current.querySelectorAll(".marlo-row");
-
-    if (rows.length > 0) {
-
-      animateMarloRows(rows, { y: 10, stagger: 0.02, delay: 0.12 });
-
-    }
-
-  }, [tab, userRoleFilter, classHealthFilter, auditTypeFilter]);
+  useMarloPageEntrance(
+    contentRef,
+    (el) => {
+      const cards = el.querySelectorAll(".marlo-card");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { stagger: 0.05, y: 22, duration: 0.7 });
+      }
+      const rows = el.querySelectorAll(".marlo-row");
+      if (rows.length > 0) {
+        animateMarloRows(rows, { y: 10, stagger: 0.025, delay: 0.16, duration: 0.5 });
+      }
+    },
+    [tab, userRoleFilter, classHealthFilter, auditTypeFilter]
+  );
 
 
 
@@ -790,67 +825,29 @@ export default function AdminDashboard({
   // --- ACTIONS ---
 
   const handleResolvePending = async (item: PendingApprovalItem, decision: "approved" | "rejected") => {
-
+    const resolved = await resolveAdminApproval(item.id, decision);
+    if (!resolved) {
+      notify("❌ Không thể xử lý yêu cầu phê duyệt trên máy chủ.");
+      return;
+    }
     setPendingApprovals((prev) => prev.filter((p) => p.id !== item.id));
 
-    await resolveAdminApproval(item.id, decision);
-
     if (decision === "approved") {
-
       setUsers((prev) => {
-
         const exists = prev.some((u) => u.email.toLowerCase() === item.email.toLowerCase());
-
         if (exists) {
-
           return prev.map((u) =>
-
             u.email.toLowerCase() === item.email.toLowerCase()
-
               ? { ...u, status: "active", role: item.requestedRole, lastActive: "Vừa duyệt" }
-
               : u
-
           );
-
         }
-
-        return [
-
-          {
-
-            id: `usr-${Date.now()}`,
-
-            name: item.name,
-
-            code: item.studentCode,
-
-            email: item.email,
-
-            role: item.requestedRole,
-
-            status: "active",
-
-            lastActive: "Vừa duyệt",
-
-            device: "Web Session",
-
-            classesCount: 1,
-
-          },
-
-          ...prev,
-
-        ];
-
+        return prev;
       });
-
+      void loadBackendUsers(false);
       notify(`Đã phê duyệt ${item.name} (${item.requestedRole}) vào ${item.classCode}.`);
-
       logAction(`Phê duyệt ${item.requestedRole}`, `${item.name} → ${item.classCode}`, "user");
-
     } else {
-
       setUsers((prev) =>
         prev.map((u) =>
           u.email.toLowerCase() === item.email.toLowerCase() && u.status === "pending"
@@ -858,53 +855,43 @@ export default function AdminDashboard({
             : u
         )
       );
-
       notify(`Đã từ chối yêu cầu của ${item.name}.`);
-
       logAction("Từ chối yêu cầu ghi danh", `${item.name} (${item.classCode})`, "user");
-
     }
-
   };
-
-
 
   const handleChangeUserRole = async (userId: string, nextRole: AdminUserRecord["role"]) => {
-
     const target = users.find((u) => u.id === userId);
-
     if (!target) return;
-
-    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: nextRole } : u)));
-
-    await patchAdminUser(userId, { role: nextRole });
-
+    const updated = await patchAdminUser(userId, { role: nextRole });
+    if (!updated) {
+      notify("❌ Không thể đổi vai trò RBAC (không được tự hạ quyền Quản trị viên đang đăng nhập).");
+      return;
+    }
+    setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
     notify(`Đã cập nhật quyền RBAC của ${target.name} thành ${nextRole}.`);
-
     logAction("Đổi vai trò RBAC", `${target.name} → ${nextRole}`, "user");
-
   };
 
-
-
   const handleToggleUserLock = async (userId: string) => {
-
     const target = users.find((u) => u.id === userId);
-
     if (!target) return;
-
     const wasPending = target.status === "pending";
-
     const nextStatus: AdminUserRecord["status"] =
       target.status === "active" ? "suspended" : "active";
+
+    const updated = await patchAdminUser(userId, { status: nextStatus });
+    if (!updated) {
+      notify("❌ Không thể thay đổi trạng thái tài khoản này (không được tự khóa tài khoản Quản trị viên đang đăng nhập).");
+      return;
+    }
 
     setUsers((prev) =>
       prev.map((u) =>
         u.id === userId
           ? {
-              ...u,
-              status: nextStatus,
-              lastActive: wasPending && nextStatus === "active" ? "Vừa duyệt" : u.lastActive,
+              ...updated,
+              lastActive: wasPending && nextStatus === "active" ? "Vừa duyệt" : updated.lastActive,
             }
           : u
       )
@@ -916,11 +903,9 @@ export default function AdminDashboard({
       );
     }
 
-    await patchAdminUser(userId, { status: nextStatus });
-
     notify(
       nextStatus === "suspended"
-        ? `Đã khóa tài khoản ${target.name}.`
+        ? `Đã khóa tài khoản ${target.name} & thu hồi phiên JWT.`
         : wasPending
         ? `Đã duyệt cấp quyền vào học cho ${target.name}.`
         : `Đã mở khóa tài khoản ${target.name}.`
@@ -935,237 +920,242 @@ export default function AdminDashboard({
       `${target.name} (${target.code})`,
       "user"
     );
-
   };
-
-
 
   const handleDeleteUser = async (userId: string) => {
-
     const target = users.find((u) => u.id === userId);
-
     if (!target) return;
-
-    await deleteAdminUserApi(userId);
-
+    const ok = await deleteAdminUserApi(userId);
+    if (!ok) {
+      notify("❌ Không thể xóa tài khoản này (không được tự xóa tài khoản Quản trị viên đang đăng nhập).");
+      return;
+    }
     setUsers((prev) => prev.filter((u) => u.id !== userId));
-
     notify(`Đã xóa tài khoản ${target.name}.`);
-
     logAction("Xóa tài khoản RBAC", `${target.name} (${target.email})`, "user");
-
   };
-
-
 
   const handleAddUserSubmit = async (e: React.FormEvent) => {
-
     e.preventDefault();
-
     if (!newUserName.trim() || !newUserEmail.trim()) return;
-
     const apiCreated = await createAdminUser({
-
       name: newUserName.trim(),
-
       email: newUserEmail.trim(),
-
       code: newUserCode.trim(),
-
       role: newUserRole,
-
     });
-
-    const created: AdminUserRecord = apiCreated || {
-
-      id: `usr-${Date.now()}`,
-
-      name: newUserName.trim(),
-
-      code:
-
-        newUserCode.trim() ||
-
-        (newUserRole === "Quản trị viên"
-
-          ? `ADM-${Math.floor(10 + Math.random() * 89)}`
-
-          : newUserRole === "Giảng viên"
-
-          ? `GV-${Math.floor(100 + Math.random() * 899)}`
-
-          : `2210${Math.floor(100 + Math.random() * 899)}`),
-
-      email: newUserEmail.trim(),
-
-      role: newUserRole,
-
-      status: "active",
-
-      lastActive: "Vừa tạo",
-
-      device: "Chưa đăng nhập",
-
-      classesCount: newUserRole === "Học viên" ? 1 : 2,
-
-    };
-
-    setUsers((prev) => [created, ...prev]);
-
+    if (!apiCreated) {
+      notify("❌ Không thể tạo tài khoản (Email hoặc Mã định danh đã tồn tại hoặc không hợp lệ).");
+      return;
+    }
+    setUsers((prev) => [apiCreated, ...prev]);
     setIsAddUserModalOpen(false);
-
     setNewUserName("");
-
     setNewUserEmail("");
-
     setNewUserCode("");
-
-    notify(`Đã tạo tài khoản ${created.role}: ${created.name}.`);
-
-    logAction("Tạo tài khoản RBAC", `${created.name} (${created.role})`, "user");
-
+    notify(`Đã tạo tài khoản ${apiCreated.role}: ${apiCreated.name}.`);
+    logAction("Tạo tài khoản RBAC", `${apiCreated.name} (${apiCreated.role})`, "user");
   };
-
-
 
   const handleToggleClassFlag = async (
-
     classId: string,
-
     field: "sandboxEnabled" | "aiDefenseEnabled"
-
   ) => {
-
     const target = classesList.find((c) => c.id === classId);
-
     if (!target) return;
-
     const nextVal = !target[field];
-
+    const updated = await patchAdminClass(classId, { [field]: nextVal });
+    if (!updated) {
+      notify("❌ Không thể cập nhật cấu hình lớp trên máy chủ.");
+      return;
+    }
     setClassesList((prev) =>
-
-      prev.map((c) => (c.id === classId ? { ...c, [field]: nextVal } : c))
-
+      prev.map((c) => (c.id === classId ? updated : c))
     );
-
-    await patchAdminClass(classId, { [field]: nextVal });
-
     const featureLabel = field === "sandboxEnabled" ? "Docker Sandbox" : "Phòng Phản biện 3D";
-
     notify(`${target.code}: ${nextVal ? "Đã bật" : "Đã tắt"} ${featureLabel}.`);
-
     logAction(`${nextVal ? "Bật" : "Tắt"} ${featureLabel}`, `${target.code} — ${target.name}`, "class");
-
   };
 
 
+
+  useEffect(() => {
+    if (!editingClass?.id) {
+      setClassEnrollments(null);
+      setSelectedEnrollStudentId("");
+      return;
+    }
+    let cancelled = false;
+    setEnrollmentsLoading(true);
+    fetchAdminClassEnrollments(editingClass.id)
+      .then((res) => {
+        if (cancelled) return;
+        setClassEnrollments(res);
+        setSelectedEnrollStudentId(res?.availableStudents?.[0]?.id || "");
+      })
+      .finally(() => {
+        if (!cancelled) setEnrollmentsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editingClass?.id]);
+
+  const instructorOptions = useMemo<AdminInstructorOption[]>(() => {
+    if (instructorsList.length > 0) return instructorsList;
+    const fromUsers = users
+      .filter((u) => u.role === "Giảng viên" && u.status === "active")
+      .map((u) => ({ id: u.id, name: u.name, email: u.email, code: u.code }));
+    if (fromUsers.length > 0) return fromUsers;
+    return [
+      { id: "usr-gv-01", name: "Cô Trần Thị B", email: "lananh.gv@codemind.ai", code: "GV-2026-01" },
+      { id: "usr-gv-02", name: "Thầy Nguyễn Phước", email: "phuoc.gv@codemind.ai", code: "GV-2026-02" },
+    ];
+  }, [instructorsList, users]);
 
   const handleAddClassSubmit = async (e: React.FormEvent) => {
-
     e.preventDefault();
+    const chosenInstructor =
+      instructorOptions.find((inst) => inst.id === newClassInstructorId) || instructorOptions[0];
+    const maxStu = Math.max(1, Number(newClassStudents) || 45);
 
-    if (!newClassCode.trim() || !newClassName.trim()) return;
+    if (newClassMode === "new_section") {
+      if (!newClassCourseId) {
+        notify("Vui lòng chọn môn học gốc để mở lớp mới.");
+        return;
+      }
+      const res = await createAdminClass({
+        mode: "new_section",
+        course_id: newClassCourseId,
+        section_code: newClassSectionCode.trim() || undefined,
+        instructor_id: chosenInstructor?.id,
+        teacher: chosenInstructor?.name,
+        semester: newClassSemester.trim() || "Học kỳ 1 / 2026",
+        max_students: maxStu,
+        students: maxStu,
+        room: newClassRoom.trim() || "Lab A3-201",
+        dockerImage: newClassImage.trim() || "codemind/cpp20-sandbox:latest",
+      });
+      if (!res.classRecord) {
+        notify(res.error || "Không thể mở lớp học phần mới.");
+        return;
+      }
+      const created = res.classRecord;
+      setClassesList((prev) => [created, ...prev]);
+      const refreshed = await fetchAdminGovernanceBundle();
+      if (refreshed) {
+        setClassesList(refreshed.classes);
+        if (refreshed.subjects) setSubjectsList(refreshed.subjects);
+      }
+      setIsAddClassModalOpen(false);
+      setNewClassSectionCode("");
+      notify(`Đã mở lớp học phần ${created.sectionCode || created.code}.`);
+      logAction("Mở lớp học phần", `${created.sectionCode || created.code} (${created.teacher})`, "class");
+      return;
+    }
 
-    const apiCreated = await createAdminClass({
+    if (!newClassCode.trim() || !newClassName.trim()) {
+      notify("Vui lòng nhập đầy đủ Mã môn học và Tên học phần.");
+      return;
+    }
 
+    const res = await createAdminClass({
+      mode: "new_course",
       code: newClassCode.trim().toUpperCase(),
-
       name: newClassName.trim(),
-
-      teacher: newClassTeacher,
-
-      students: Number(newClassStudents) || 35,
-
+      instructor_id: chosenInstructor?.id,
+      teacher: chosenInstructor?.name,
+      semester: newClassSemester.trim() || "Học kỳ 1 / 2026",
+      stage_number: newClassStageNumber,
+      credits: Math.max(1, Number(newClassCredits) || 3),
+      max_students: maxStu,
+      students: maxStu,
       room: newClassRoom.trim() || "Lab A3-201",
-
       dockerImage: newClassImage.trim() || "codemind/cpp20-sandbox:latest",
-
     });
 
-    const created: AdminClassRecord = apiCreated || {
-
-      id: `adm-cls-${Date.now()}`,
-
-      code: newClassCode.trim().toUpperCase(),
-
-      name: newClassName.trim(),
-
-      teacher: newClassTeacher,
-
-      students: Number(newClassStudents) || 35,
-
-      progressPct: 0,
-
-      pendingDualReviews: 0,
-
-      health: "Tốt",
-
-      room: newClassRoom.trim() || "Lab A3-201",
-
-      dockerImage: newClassImage.trim() || "codemind/cpp20-sandbox:latest",
-
-      sandboxEnabled: true,
-
-      aiDefenseEnabled: true,
-
-    };
-
+    if (!res.classRecord) {
+      notify(res.error || "Không thể khởi tạo môn học & lớp học phần mới.");
+      return;
+    }
+    const created = res.classRecord;
     setClassesList((prev) => [created, ...prev]);
-
+    const refreshed = await fetchAdminGovernanceBundle();
+    if (refreshed) {
+      setClassesList(refreshed.classes);
+      if (refreshed.subjects) setSubjectsList(refreshed.subjects);
+    }
     setIsAddClassModalOpen(false);
-
     setNewClassCode("");
-
     setNewClassName("");
-
-    notify(`Đã khởi tạo học phần ${created.code}.`);
-
-    logAction("Tạo lớp học phần", `${created.code} (${created.teacher})`, "class");
-
+    setNewClassSectionCode("");
+    notify(`Đã tạo môn ${created.code} & mở lớp ${created.sectionCode || `${created.code}-N01`}.`);
+    logAction("Tạo môn & lớp học phần", `${created.sectionCode || created.code} (${created.teacher})`, "class");
   };
 
-
-
   const handleSaveClassEdit = async (e: React.FormEvent) => {
-
     e.preventDefault();
-
     if (!editingClass) return;
-
-    setClassesList((prev) =>
-
-      prev.map((c) => (c.id === editingClass.id ? editingClass : c))
-
-    );
-
-    await patchAdminClass(editingClass.id, {
-
+    const apiUpdated = await patchAdminClass(editingClass.id, {
+      instructor_id: editingClass.instructorId || undefined,
       teacher: editingClass.teacher,
-
-      students: editingClass.students,
-
       room: editingClass.room,
-
+      max_students: editingClass.maxStudents ?? editingClass.students,
       dockerImage: editingClass.dockerImage,
-
       health: editingClass.health,
-
     });
-
-    notify(`Đã cập nhật điều phối lớp ${editingClass.code}.`);
-
+    if (!apiUpdated) {
+      notify("❌ Không thể cập nhật lớp (Sĩ số tối đa không được nhỏ hơn số học viên đang học hoặc giảng viên chưa kích hoạt).");
+      return;
+    }
+    setClassesList((prev) => prev.map((c) => (c.id === editingClass.id ? apiUpdated : c)));
+    notify(`Đã cập nhật điều phối lớp ${apiUpdated.sectionCode || apiUpdated.code}.`);
     logAction(
-
       "Điều phối giảng viên & runner",
-
-      `${editingClass.code} → ${editingClass.teacher}`,
-
+      `${apiUpdated.sectionCode || apiUpdated.code} → ${apiUpdated.teacher}`,
       "class"
-
     );
-
     setEditingClass(null);
+  };
 
+  const handleEnrollStudent = async () => {
+    if (!editingClass || !selectedEnrollStudentId) return;
+    setEnrollmentActionLoading(true);
+    const res = await enrollStudentInClassApi(editingClass.id, selectedEnrollStudentId);
+    if (res.error) {
+      notify(res.error);
+      setEnrollmentActionLoading(false);
+      return;
+    }
+    if (res.classRecord) {
+      setEditingClass(res.classRecord);
+      setClassesList((prev) => prev.map((c) => (c.id === editingClass.id ? res.classRecord! : c)));
+    }
+    const fresh = await fetchAdminClassEnrollments(editingClass.id);
+    setClassEnrollments(fresh);
+    setSelectedEnrollStudentId(fresh?.availableStudents?.[0]?.id || "");
+    setEnrollmentActionLoading(false);
+    notify(`Đã ghi danh học viên vào lớp ${editingClass.sectionCode || editingClass.code}.`);
+  };
+
+  const handleUnenrollStudent = async (studentId: string) => {
+    if (!editingClass) return;
+    setEnrollmentActionLoading(true);
+    const res = await unenrollStudentFromClassApi(editingClass.id, studentId);
+    if (res.error) {
+      notify(res.error);
+      setEnrollmentActionLoading(false);
+      return;
+    }
+    if (res.classRecord) {
+      setEditingClass(res.classRecord);
+      setClassesList((prev) => prev.map((c) => (c.id === editingClass.id ? res.classRecord! : c)));
+    }
+    const fresh = await fetchAdminClassEnrollments(editingClass.id);
+    setClassEnrollments(fresh);
+    setSelectedEnrollStudentId(fresh?.availableStudents?.[0]?.id || "");
+    setEnrollmentActionLoading(false);
+    notify(`Đã gỡ ghi danh học viên khỏi lớp ${editingClass.sectionCode || editingClass.code}.`);
   };
 
 
@@ -1315,6 +1305,11 @@ export default function AdminDashboard({
     notify(`Đã xuất tệp ${filename}.`);
 
     logAction(logTitle, `${bodyLines.length} bản ghi CSV`, "user");
+    void recordAdminAuditLogApi({
+      action: logTitle,
+      target: `${bodyLines.length} bản ghi CSV`,
+      type: "user",
+    });
 
   };
 
@@ -1331,7 +1326,7 @@ export default function AdminDashboard({
 
       {/* Optional System Broadcast Banner */}
       {activeBroadcast && (
-        <div className="marlo-card mb-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 flex items-center justify-between gap-2.5 text-xs font-semibold text-[#8F5404] dark:text-amber-300">
+        <div className="marlo-card mb-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2 flex items-center justify-between gap-2.5 text-xs font-semibold text-slate-800 dark:text-slate-100 shadow-2xs">
           <div className="flex items-center gap-2 min-w-0">
             <Radio size={15} className="text-[#EE8420] shrink-0" />
             <span className="truncate">THÔNG BÁO HỆ THỐNG: {activeBroadcast}</span>
@@ -1471,7 +1466,7 @@ export default function AdminDashboard({
           ]}
         />
 
-        <div className="hidden xl:flex items-center gap-2 px-3 text-xs font-mono text-slate-500 dark:text-slate-400">
+        <div className="hidden 2xl:flex shrink-0 items-center gap-2 px-3 text-xs font-mono text-slate-500 dark:text-slate-400">
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
           <span>{stats.sandboxReadyCount}/{classesList.length} Sandbox · {stats.untrustedSessions} Phiên cần chú ý</span>
         </div>
@@ -1481,7 +1476,7 @@ export default function AdminDashboard({
       <LiquidCardConnector className="h-2 -my-0.5" />
 
       {/* ─── TAB CONTENT BODY ───────────────────────────────────────────────── */}
-      <div ref={contentRef} key={tab} className="relative z-10 space-y-3">
+      <div ref={contentRef} key={tab} data-content-stage="1" className="relative z-10 space-y-3">
 
         {/* ====================================================================
 
@@ -2277,7 +2272,7 @@ export default function AdminDashboard({
 
                         <td className="px-4 py-3">
 
-                          <select
+                          <MarloSelect
 
                             aria-label={`Vai trò của ${user.name}`}
 
@@ -2305,7 +2300,7 @@ export default function AdminDashboard({
 
                             <option value="Quản trị viên">Quản trị viên</option>
 
-                          </select>
+                          </MarloSelect>
 
                         </td>
 
@@ -2318,31 +2313,18 @@ export default function AdminDashboard({
                         <td className="px-4 py-3">
 
                           <span
-
-                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
-
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
                               statusPillStyle[user.status]
-
                             }`}
-
                           >
-
                             {user.status === "active" ? (
-
-                              <CheckCircle2 size={11} />
-
+                              <CheckCircle2 size={11} className="text-emerald-500 shrink-0" />
                             ) : user.status === "pending" ? (
-
-                              <Clock size={11} />
-
+                              <Clock size={11} className="text-amber-500 shrink-0" />
                             ) : (
-
-                              <XCircle size={11} />
-
+                              <XCircle size={11} className="text-rose-500 shrink-0" />
                             )}
-
                             {statusLabel[user.status]}
-
                           </span>
 
                         </td>
@@ -2389,12 +2371,14 @@ export default function AdminDashboard({
 
                               type="button"
 
-                              onClick={() => {
-
-                                notify(`Đã gửi liên kết đặt lại mật khẩu tới ${user.email}.`);
-
-                                logAction("Cấp reset mật khẩu", user.email, "user");
-
+                              onClick={async () => {
+                                const ok = await resetAdminUserPasswordApi(user.id);
+                                if (!ok) {
+                                  notify("❌ Không thể cấp lại mật khẩu trên máy chủ.");
+                                  return;
+                                }
+                                notify(`Đã cấp lại mật khẩu & làm mới phiên xác thực cho ${user.email}.`);
+                                logAction("Cấp reset mật khẩu", user.email, "security");
                               }}
 
                               className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5 text-slate-500 hover:text-slate-900 cursor-pointer"
@@ -2470,7 +2454,10 @@ export default function AdminDashboard({
 
               <button
                 type="button"
-                onClick={() => setIsAddClassModalOpen(true)}
+                onClick={() => {
+                  setNewClassMode(subjectsList.length > 0 ? "new_section" : "new_course");
+                  setIsAddClassModalOpen(true);
+                }}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-[#F4F4F6] dark:text-[#141619] px-3.5 py-1.5 text-xs font-bold cursor-pointer transition active:scale-95 shadow-xs"
               >
                 <Plus size={14} />
@@ -2486,17 +2473,25 @@ export default function AdminDashboard({
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 rounded-lg">
-                        {cls.code}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-mono text-xs font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 rounded-lg">
+                          {cls.sectionCode || cls.code}
+                        </span>
+                        {cls.stageNumber ? (
+                          <span className="font-mono text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                            Chặng {cls.stageNumber}
+                          </span>
+                        ) : null}
+                      </div>
                       <span
-                        className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold ${
-                          cls.health === "Cần theo dõi"
-                            ? "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400"
-                            : "bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
-                        }`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/90 px-2.5 py-0.5 text-[10.5px] font-bold text-slate-700 dark:text-slate-200"
                       >
-                        {cls.health}
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            cls.health === "Cần theo dõi" ? "bg-amber-500" : "bg-emerald-500"
+                          }`}
+                        />
+                        <span>{cls.health}</span>
                       </span>
                     </div>
 
@@ -2517,8 +2512,11 @@ export default function AdminDashboard({
                       <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2">
                         <div className="text-sm sm:text-base font-black font-mono text-slate-900 dark:text-white">
                           {cls.students}
+                          {cls.maxStudents ? (
+                            <span className="text-[11px] font-normal text-slate-400">/{cls.maxStudents}</span>
+                          ) : null}
                         </div>
-                        <div className="text-[10px] text-slate-500">Học viên</div>
+                        <div className="text-[10px] text-slate-500">Học viên ghi danh</div>
                       </div>
                       <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 p-2">
                         <div className="text-sm sm:text-base font-black font-mono text-[#EE8420]">
@@ -2576,7 +2574,9 @@ export default function AdminDashboard({
 
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
 
-                    <span className="text-[11px] font-mono text-slate-400">Học kỳ 1 / 2026</span>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      {cls.semester || "Học kỳ 1 / 2026"}
+                    </span>
 
                     <button
 
@@ -2642,12 +2642,14 @@ export default function AdminDashboard({
 
                   type="button"
 
-                  onClick={() => {
-
-                    notify("Đã dọn dẹp 1.4 GB Prompt & AST Cache · Giảm ~18% chi phí token.");
-
-                    logAction("Xóa Token Cache hệ thống", "1.4 GB Prompt Cache", "ai");
-
+                  onClick={async () => {
+                    const ok = await clearAdminAiCacheApi();
+                    if (!ok) {
+                      notify("❌ Không thể xóa bộ nhớ đệm trên máy chủ.");
+                      return;
+                    }
+                    notify("Đã dọn dẹp Prompt & AST Cache trên máy chủ · Giảm ~18% chi phí token.");
+                    logAction("Xóa Token Cache hệ thống", "AI Gateway & Semantic Cache Cluster", "ai");
                   }}
 
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
@@ -2840,20 +2842,14 @@ export default function AdminDashboard({
 
                             }}
 
-                            className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold cursor-pointer transition ${
-
-                              svc.active
-
-                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
-
-                                : "bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400"
-
-                            }`}
-
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/90 hover:bg-slate-200/70 dark:hover:bg-slate-700 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 cursor-pointer transition"
                           >
-
-                            {svc.active ? "Đang bật" : "Tạm dừng"}
-
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                svc.active ? "bg-emerald-500" : "bg-rose-500"
+                              }`}
+                            />
+                            <span>{svc.active ? "Đang bật" : "Tạm dừng"}</span>
                           </button>
 
                         </td>
@@ -3097,9 +3093,9 @@ export default function AdminDashboard({
                 <button
                   type="button"
                   onClick={handleRevokeAllUntrusted}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 px-3.5 py-2 text-xs font-bold text-rose-700 dark:text-rose-300 cursor-pointer transition shadow-2xs hover:scale-102 active:scale-98 shrink-0"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 cursor-pointer transition shadow-2xs shrink-0"
                 >
-                  <XCircle size={14} className="text-rose-600 dark:text-rose-400" />
+                  <XCircle size={14} className="text-slate-500 dark:text-slate-400" />
                   <span>Đăng xuất tất cả thiết bị lạ</span>
                 </button>
 
@@ -3169,11 +3165,7 @@ export default function AdminDashboard({
 
                       <div className="flex items-center gap-2.5 shrink-0">
                         <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border shadow-2xs transition ${
-                            sess.isUntrusted
-                              ? "bg-amber-500/10 border-amber-400/40 text-amber-800 dark:text-amber-300"
-                              : "bg-emerald-500/10 border-emerald-400/40 text-emerald-800 dark:text-emerald-300"
-                          }`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 shadow-2xs transition"
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
@@ -3185,10 +3177,10 @@ export default function AdminDashboard({
                         <button
                           type="button"
                           onClick={() => handleRevokeJwtSession(sess.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 px-2.5 py-1.5 text-xs font-semibold transition hover:scale-102 active:scale-98 shadow-2xs cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white px-2.5 py-1.5 text-xs font-semibold transition shadow-2xs cursor-pointer"
                           title="Thu hồi JWT và ngắt phiên ngay lập tức"
                         >
-                          <XCircle size={12} className="text-rose-600 dark:text-rose-400" />
+                          <XCircle size={12} className="text-slate-500 dark:text-slate-400" />
                           <span>Ngắt phiên</span>
                         </button>
                       </div>
@@ -3548,21 +3540,14 @@ export default function AdminDashboard({
                       <td className="px-4 py-3">
 
                         <span
-
-                          className={`rounded-full border px-2.5 py-0.5 text-[10px] font-mono font-bold ${
-
-                            log.type === "security"
-
-                              ? "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400"
-
-                              : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-
-                          }`}
-
+                          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/90 px-2.5 py-0.5 text-[10px] font-mono font-bold text-slate-700 dark:text-slate-200"
                         >
-
-                          {auditTypeLabel[log.type]}
-
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              log.type === "security" ? "bg-amber-500" : "bg-slate-400"
+                            }`}
+                          />
+                          <span>{auditTypeLabel[log.type]}</span>
                         </span>
 
                       </td>
@@ -3602,11 +3587,8 @@ export default function AdminDashboard({
         >
 
           <div
-
             onClick={(e) => e.stopPropagation()}
-
-            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4"
-
+            className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
           >
 
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -3822,209 +3804,221 @@ export default function AdminDashboard({
         >
 
           <div
-
             onClick={(e) => e.stopPropagation()}
-
-            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4"
-
+            className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
           >
-
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-
-                Tạo lớp học phần & Docker Sandbox
-
+                Mở lớp học phần & Docker Sandbox
               </h3>
-
               <button
-
                 type="button"
-
                 onClick={() => setIsAddClassModalOpen(false)}
-
                 className="p-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 cursor-pointer"
-
               >
-
                 <X size={15} />
-
               </button>
-
             </div>
 
-
-
             <form onSubmit={handleAddClassSubmit} className="space-y-3 text-xs">
-
-              <div className="grid grid-cols-2 gap-2">
-
-                <div>
-
-                  <label className="font-bold block mb-1">Mã học phần</label>
-
-                  <input
-
-                    type="text"
-
-                    required
-
-                    value={newClassCode}
-
-                    onChange={(e) => setNewClassCode(e.target.value)}
-
-                    placeholder="CS315"
-
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
-
-                  />
-
-                </div>
-
-                <div>
-
-                  <label className="font-bold block mb-1">Phòng / Lab</label>
-
-                  <input
-
-                    type="text"
-
-                    value={newClassRoom}
-
-                    onChange={(e) => setNewClassRoom(e.target.value)}
-
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
-
-                  />
-
-                </div>
-
-              </div>
-
-
-
               <div>
-
-                <label className="font-bold block mb-1">Tên học phần</label>
-
-                <input
-
-                  type="text"
-
-                  required
-
-                  value={newClassName}
-
-                  onChange={(e) => setNewClassName(e.target.value)}
-
-                  placeholder="Hệ thống Phân tán & Kafka Cache"
-
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
-
+                <label className="font-bold block mb-1.5 text-slate-600 dark:text-slate-300">
+                  Chế độ khởi tạo
+                </label>
+                <MarloSegmentedControl<"new_section" | "new_course">
+                  size="sm"
+                  value={newClassMode}
+                  onChange={setNewClassMode}
+                  options={[
+                    { id: "new_section", label: "Mở lớp mới (Môn sẵn có)" },
+                    { id: "new_course", label: "Tạo môn mới + Lớp N01" },
+                  ]}
                 />
-
               </div>
 
+              {newClassMode === "new_section" ? (
+                <>
+                  <div>
+                    <label className="font-bold block mb-1">Chọn Môn học gốc</label>
+                    <MarloSelect
+                      value={newClassCourseId}
+                      onChange={(e) => {
+                        const chosen = subjectsList.find((s) => s.id === e.target.value);
+                        setNewClassCourseId(e.target.value);
+                        if (chosen?.dockerImage) setNewClassImage(chosen.dockerImage);
+                      }}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-semibold outline-none"
+                    >
+                      {subjectsList.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.code} — {s.name} ({s.sectionCount} lớp)
+                        </option>
+                      ))}
+                    </MarloSelect>
+                  </div>
 
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-bold block mb-1">Mã lớp (bỏ trống để tự sinh)</label>
+                      <input
+                        type="text"
+                        value={newClassSectionCode}
+                        onChange={(e) => setNewClassSectionCode(e.target.value)}
+                        placeholder={
+                          (() => {
+                            const chosen = subjectsList.find((s) => s.id === newClassCourseId);
+                            return chosen
+                              ? `${chosen.code}-N${String(chosen.sectionCount + 1).padStart(2, "0")}`
+                              : "CS201-N02";
+                          })()
+                        }
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold block mb-1">Phòng / Lab</label>
+                      <input
+                        type="text"
+                        value={newClassRoom}
+                        onChange={(e) => setNewClassRoom(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-bold block mb-1">Mã môn học</label>
+                      <input
+                        type="text"
+                        required
+                        value={newClassCode}
+                        onChange={(e) => setNewClassCode(e.target.value)}
+                        placeholder="CS505"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold block mb-1">Phòng / Lab</label>
+                      <input
+                        type="text"
+                        value={newClassRoom}
+                        onChange={(e) => setNewClassRoom(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-bold block mb-1">Tên học phần</label>
+                    <input
+                      type="text"
+                      required
+                      value={newClassName}
+                      onChange={(e) => setNewClassName(e.target.value)}
+                      placeholder="Hệ thống Phân tán & Kafka Cache"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-bold block mb-1">Chặng Lộ trình</label>
+                      <MarloSelect
+                        value={String(newClassStageNumber)}
+                        onChange={(e) => setNewClassStageNumber(Number(e.target.value))}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2 font-semibold outline-none"
+                      >
+                        <option value="1">Chặng 1 · Cơ sở cốt lõi</option>
+                        <option value="2">Chặng 2 · Giao diện & Trải nghiệm</option>
+                        <option value="3">Chặng 3 · Kiến trúc Nền tảng</option>
+                        <option value="4">Chặng 4 · Trí tuệ Nhân tạo Ứng dụng</option>
+                        <option value="5">Chặng 5 · Chuyên sâu & Tốt nghiệp</option>
+                      </MarloSelect>
+                    </div>
+                    <div>
+                      <label className="font-bold block mb-1">Số tín chỉ</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={newClassCredits}
+                        onChange={(e) => setNewClassCredits(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
-
                 <div>
-
                   <label className="font-bold block mb-1">Giảng viên phụ trách</label>
-
-                  <select
-
-                    value={newClassTeacher}
-
-                    onChange={(e) => setNewClassTeacher(e.target.value)}
-
+                  <MarloSelect
+                    value={newClassInstructorId}
+                    onChange={(e) => setNewClassInstructorId(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2 font-semibold outline-none"
-
                   >
-
-                    <option value="Cô Trần Thị B">Cô Trần Thị B</option>
-
-                    <option value="Thầy Nguyễn Phước">Thầy Nguyễn Phước</option>
-
-                  </select>
-
+                    {instructorOptions.map((inst) => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.name} ({inst.code})
+                      </option>
+                    ))}
+                  </MarloSelect>
                 </div>
 
                 <div>
-
-                  <label className="font-bold block mb-1">Chỉ tiêu HV</label>
-
+                  <label className="font-bold block mb-1">Chỉ tiêu HV tối đa</label>
                   <input
-
                     type="number"
-
+                    min={1}
+                    max={500}
                     value={newClassStudents}
-
                     onChange={(e) => setNewClassStudents(e.target.value)}
-
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
-
                   />
-
                 </div>
-
               </div>
 
-
-
-              <div>
-
-                <label className="font-bold block mb-1">Docker Runner Image</label>
-
-                <input
-
-                  type="text"
-
-                  value={newClassImage}
-
-                  onChange={(e) => setNewClassImage(e.target.value)}
-
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
-
-                />
-
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold block mb-1">Học kỳ</label>
+                  <input
+                    type="text"
+                    value={newClassSemester}
+                    onChange={(e) => setNewClassSemester(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold block mb-1">Docker Runner Image</label>
+                  <input
+                    type="text"
+                    value={newClassImage}
+                    onChange={(e) => setNewClassImage(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
+                  />
+                </div>
               </div>
-
-
 
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
-
                 <button
-
                   type="button"
-
                   onClick={() => setIsAddClassModalOpen(false)}
-
                   className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 font-semibold cursor-pointer"
-
                 >
-
                   Hủy
-
                 </button>
-
                 <button
-
                   type="submit"
-
                   className="rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-4 py-2 font-bold cursor-pointer"
-
                 >
-
-                  Tạo học phần
-
+                  {newClassMode === "new_section" ? "Mở lớp học phần" : "Tạo môn & mở lớp N01"}
                 </button>
-
               </div>
-
             </form>
-
           </div>
 
         </div>
@@ -4050,11 +4044,8 @@ export default function AdminDashboard({
         >
 
           <div
-
             onClick={(e) => e.stopPropagation()}
-
-            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4"
-
+            className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
           >
 
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -4094,31 +4085,49 @@ export default function AdminDashboard({
 
 
             <form onSubmit={handleSaveClassEdit} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold block mb-1">Giảng viên phụ trách</label>
+                  <MarloSelect
+                    value={
+                      editingClass.instructorId ||
+                      instructorOptions.find((inst) => inst.name === editingClass.teacher)?.id ||
+                      ""
+                    }
+                    onChange={(e) => {
+                      const chosen = instructorOptions.find((inst) => inst.id === e.target.value);
+                      setEditingClass({
+                        ...editingClass,
+                        instructorId: chosen?.id || e.target.value,
+                        teacher: chosen?.name || editingClass.teacher,
+                      });
+                    }}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-semibold outline-none"
+                  >
+                    {instructorOptions.map((inst) => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.name} ({inst.code})
+                      </option>
+                    ))}
+                  </MarloSelect>
+                </div>
 
-              <div>
-
-                <label className="font-bold block mb-1">Giảng viên phụ trách</label>
-
-                <select
-
-                  value={editingClass.teacher}
-
-                  onChange={(e) =>
-
-                    setEditingClass({ ...editingClass, teacher: e.target.value })
-
-                  }
-
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-semibold outline-none"
-
-                >
-
-                  <option value="Cô Trần Thị B">Cô Trần Thị B</option>
-
-                  <option value="Thầy Nguyễn Phước">Thầy Nguyễn Phước</option>
-
-                </select>
-
+                <div>
+                  <label className="font-bold block mb-1">Chỉ tiêu HV tối đa</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={editingClass.maxStudents ?? editingClass.students}
+                    onChange={(e) =>
+                      setEditingClass({
+                        ...editingClass,
+                        maxStudents: Math.max(1, Number(e.target.value) || 45),
+                      })
+                    }
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
+                  />
+                </div>
               </div>
 
 
@@ -4151,7 +4160,7 @@ export default function AdminDashboard({
 
                   <label className="font-bold block mb-1">Trạng thái lớp</label>
 
-                  <select
+                  <MarloSelect
 
                     value={editingClass.health}
 
@@ -4177,7 +4186,7 @@ export default function AdminDashboard({
 
                     <option value="Cần theo dõi">Cần theo dõi</option>
 
-                  </select>
+                  </MarloSelect>
 
                 </div>
 
@@ -4190,24 +4199,77 @@ export default function AdminDashboard({
                 <label className="font-bold block mb-1">Docker Sandbox Image</label>
 
                 <input
-
                   type="text"
-
                   value={editingClass.dockerImage}
-
                   onChange={(e) =>
-
                     setEditingClass({ ...editingClass, dockerImage: e.target.value })
-
                   }
-
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 font-mono outline-none"
-
                 />
-
               </div>
 
+              {/* Quản lý Học viên Ghi danh (class_enrollments) */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    Học viên ghi danh lớp {editingClass.sectionCode || editingClass.code}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 font-mono text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                    {classEnrollments?.enrolledCount ?? editingClass.students} / {editingClass.maxStudents ?? 45} HV
+                  </span>
+                </div>
 
+                {classEnrollments && classEnrollments.availableStudents.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <MarloSelect
+                      value={selectedEnrollStudentId}
+                      onChange={(e) => setSelectedEnrollStudentId(e.target.value)}
+                      className="flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5 font-semibold outline-none"
+                    >
+                      {classEnrollments.availableStudents.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.studentCode})
+                        </option>
+                      ))}
+                    </MarloSelect>
+                    <button
+                      type="button"
+                      disabled={enrollmentActionLoading || !selectedEnrollStudentId}
+                      onClick={handleEnrollStudent}
+                      className="shrink-0 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-white dark:text-[#141619] px-3 py-1.5 font-bold cursor-pointer disabled:opacity-50"
+                    >
+                      + Ghi danh
+                    </button>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 max-h-40 overflow-y-auto divide-y divide-slate-200/70 dark:divide-slate-800">
+                  {enrollmentsLoading ? (
+                    <div className="p-3 text-center text-slate-400">Đang tải danh sách ghi danh...</div>
+                  ) : !classEnrollments || classEnrollments.enrollments.length === 0 ? (
+                    <div className="p-3 text-center text-slate-400">Chưa có học viên nào ghi danh vào lớp này.</div>
+                  ) : (
+                    classEnrollments.enrollments.map((enr) => (
+                      <div key={enr.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 dark:text-white truncate">
+                            {enr.name} <span className="font-mono text-[10.5px] text-slate-400">· {enr.studentCode}</span>
+                          </div>
+                          <div className="text-[10.5px] text-slate-400 truncate">{enr.email}</div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={enrollmentActionLoading}
+                          onClick={() => handleUnenrollStudent(enr.studentId)}
+                          className="shrink-0 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-50"
+                        >
+                          Gỡ khỏi lớp
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
 
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
 
@@ -4276,11 +4338,8 @@ export default function AdminDashboard({
         >
 
           <div
-
             onClick={(e) => e.stopPropagation()}
-
-            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4"
-
+            className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
           >
 
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">

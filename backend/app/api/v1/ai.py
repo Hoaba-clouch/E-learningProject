@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from datetime import timedelta
 import json
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import current_user, session_owned
+from app.api.deps import current_user, load_system_policies, session_owned
 from app.core.database import db, row_dict
 from app.core.security import uid
-from app.core.timezone import now_utc
+from app.core.timezone import now_utc, now_utc_dt
 from app.schemas.submission import AIInteractionIn, SocraticChatIn
 from app.services.ai_tutor import ask_socratic_with_policy
 from app.services.analytics import track_event
@@ -30,13 +31,28 @@ def socratic_chat(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Dịch vụ Socratic AI Tutor hiện đang tạm dừng bởi Quản trị viên.",
             )
-        pol = conn.execute("SELECT value_json FROM system_settings WHERE key='policies'").fetchone()
-        if pol:
-            try:
-                pol_data = json.loads(pol["value_json"])
-                strict_refuse = bool(pol_data.get("guardrailRefuseAnswer", True))
-            except Exception:
-                strict_refuse = True
+        policies = load_system_policies(conn)
+        strict_refuse = bool(policies.get("guardrailRefuseAnswer", True))
+        budget_cap = float(policies.get("budgetCap", 500.0) or 500.0)
+        cost_row = conn.execute("SELECT COALESCE(SUM(estimated_cost), 0) AS total_cost FROM ai_service_units").fetchone()
+        total_cost = float(cost_row["total_cost"] or 0.0) if cost_row else 0.0
+        if total_cost >= budget_cap:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Ngân sách AI tháng (${total_cost:.2f}/${budget_cap:.0f}) đã chạm trần giới hạn do Quản trị viên cấu hình.",
+            )
+        if bool(policies.get("rateLimit20PerHour", True)) and (user.get("role") or "student").lower() == "student":
+            one_hour_ago = (now_utc_dt() - timedelta(hours=1)).isoformat()
+            cnt_row = conn.execute(
+                """SELECT COUNT(*) AS c FROM analytics_events
+                   WHERE user_id=? AND event_name='socratic_chat' AND occurred_at >= ?""",
+                (user["id"], one_hour_ago),
+            ).fetchone()
+            if int(cnt_row["c"] or 0) >= 20:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Bạn đã đạt giới hạn 20 câu hỏi Socratic AI mỗi giờ theo chính sách của Quản trị viên.",
+                )
 
     res = ask_socratic_with_policy(
         payload.message,
@@ -50,7 +66,10 @@ def socratic_chat(
     in_tok = int(res.pop("input_tokens", 0) or 0)
     out_tok = int(res.pop("output_tokens", 0) or 0)
     with db() as conn:
-        record_ai_usage(conn, "svc-socratic", in_tok or 420, out_tok or 180)
+        if in_tok > 0 or out_tok > 0:
+            record_ai_usage(conn, "svc-socratic", in_tok, out_tok)
+        else:
+            conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id = 'svc-socratic'")
         conn.commit()
 
     track_event(

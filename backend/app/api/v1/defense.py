@@ -6,7 +6,16 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import current_user, record_audit_log
+from app.api.deps import current_user, load_system_policies, record_audit_log
+from app.api.v1.kanban import (
+    _ensure_project_writable_for_user,
+    can_grade_project_council,
+    credit_project_team_xp,
+    is_project_advisor,
+    is_project_reviewer,
+    is_user_in_project,
+    resolve_project_student_ids,
+)
 from app.core.database import db, row_dict
 from app.core.security import sha256, uid
 from app.core.timezone import now_utc
@@ -351,11 +360,30 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
         }
 
         proj_rows = conn.execute(
-            """SELECT ep.id, ep.code, ep.name, ep.course, ep.status, ep.is_frozen, gr.repo_url
+            """SELECT ep.id, ep.code, ep.name, ep.course, ep.status, ep.is_frozen,
+                      ep.leader_user_id, ep.created_by, ep.instructor_id, ep.instructor_name,
+                      ep.reviewer_id, ep.reviewer_name, ep.instructor_label, ep.team_json,
+                      gr.repo_url
                FROM engineering_projects ep
                LEFT JOIN git_repositories gr ON gr.project_id = ep.id
                ORDER BY ep.id ASC"""
         ).fetchall()
+        inst_rows = conn.execute(
+            """SELECT id, full_name, display_name, email
+               FROM users
+               WHERE role = 'instructor'
+                 AND status = 'active'
+                 AND id NOT IN ('student-demo', 'instructor-demo', 'admin-demo')
+               ORDER BY full_name ASC"""
+        ).fetchall()
+        instructors_list = [
+            {
+                "id": ir["id"],
+                "name": ir["full_name"] or ir["display_name"] or "Giảng viên",
+                "email": ir["email"] or "",
+            }
+            for ir in inst_rows
+        ]
         pkg_rows = {
             r["project_id"]: row_dict(r) or {}
             for r in conn.execute("SELECT project_id, demo_url, slide_url, report_url FROM project_defense_packages").fetchall()
@@ -372,13 +400,34 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
             ).fetchall()
         }
 
+        is_admin_role = role in ("admin", "org_admin")
         projects = []
+        allowed_council_proj_ids: set[str] = set()
         for p in proj_rows:
             c_code = (p["course"] or "").split("·")[0].strip().upper()
             matched_c = courses_by_code.get(c_code)
             done_cnt, total_cnt = task_stats.get(p["id"], (0, 0))
             pkg = pkg_rows.get(p["id"], {})
             ev = eval_rows.get(p["id"])
+            adv_flag = is_project_advisor(user, p)
+            rev_flag = is_project_reviewer(user, p)
+            can_grade_flag = can_grade_project_council(user, p)
+            if can_grade_flag:
+                allowed_council_proj_ids.add(p["id"])
+            is_my_project = (
+                True
+                if is_admin_role
+                else (can_grade_flag if role == "instructor" else is_user_in_project(user, p))
+            )
+            my_council_role = (
+                "admin"
+                if is_admin_role
+                else "advisor"
+                if adv_flag
+                else "reviewer"
+                if rev_flag
+                else ("member" if is_user_in_project(user, p) else "viewer")
+            )
             projects.append(
                 {
                     "id": p["id"],
@@ -387,6 +436,15 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
                     "course": p["course"],
                     "status": p["status"],
                     "isFrozen": bool(p["is_frozen"]),
+                    "isMyProject": is_my_project,
+                    "isAdvisor": adv_flag,
+                    "isReviewer": rev_flag,
+                    "canGradeCouncil": can_grade_flag,
+                    "myCouncilRole": my_council_role,
+                    "instructorId": p["instructor_id"] or "",
+                    "instructorName": p["instructor_name"] or "",
+                    "reviewerId": p["reviewer_id"] or "",
+                    "reviewerName": p["reviewer_name"] or "",
                     "hasDefensePackage": bool((pkg.get("demo_url") or "").strip()),
                     "demoUrl": (pkg.get("demo_url") or "").strip(),
                     "isGraded": bool(ev),
@@ -403,11 +461,13 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
                     "totalTasksCount": total_cnt,
                 }
             )
+        if not is_admin_role:
+            projects.sort(key=lambda item: (0 if item["isMyProject"] else 1, item["id"]))
 
         rubric_row = conn.execute("SELECT * FROM defense_rubric_configs WHERE id='default'").fetchone()
         rubric = _rubric_dict(rubric_row)
 
-        if is_staff:
+        if is_admin_role:
             sess_rows = conn.execute(
                 """SELECT ds.*, COALESCE(NULLIF(u.full_name, ''), u.display_name) AS student_name,
                           u.user_code AS student_code,
@@ -421,6 +481,31 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
             sub_rows = conn.execute(
                 "SELECT * FROM dual_submissions ORDER BY updated_at DESC, id ASC"
             ).fetchall()
+        elif role == "instructor":
+            taught_sec_rows = conn.execute(
+                "SELECT id, course_id FROM class_sections WHERE instructor_id = ? AND status = 'active'",
+                (user["id"],),
+            ).fetchall()
+            taught_class_ids = {r["id"] for r in taught_sec_rows} | {r["course_id"] for r in taught_sec_rows}
+            all_sess = conn.execute(
+                """SELECT ds.*, COALESCE(NULLIF(u.full_name, ''), u.display_name) AS student_name,
+                          u.user_code AS student_code,
+                          ep.name AS project_name, ep.code AS project_code, c.code AS course_code
+                   FROM defense_sessions ds
+                   LEFT JOIN users u ON u.id = ds.user_id
+                   LEFT JOIN engineering_projects ep ON ep.id = ds.project_id
+                   LEFT JOIN courses c ON c.id = ds.class_id
+                   ORDER BY ds.updated_at DESC"""
+            ).fetchall()
+            sess_rows = [
+                r
+                for r in all_sess
+                if r["project_id"] in allowed_council_proj_ids or r["class_id"] in taught_class_ids
+            ]
+            all_subs = conn.execute(
+                "SELECT * FROM dual_submissions ORDER BY updated_at DESC, id ASC"
+            ).fetchall()
+            sub_rows = [r for r in all_subs if r["class_id"] in taught_class_ids]
         else:
             sess_rows = conn.execute(
                 """SELECT ds.*, COALESCE(NULLIF(u.full_name, ''), u.display_name) AS student_name,
@@ -473,6 +558,7 @@ def get_defense_workspace(user: dict[str, Any] = Depends(current_user)) -> dict[
         },
         "projects": projects,
         "courses": courses,
+        "instructors": instructors_list,
         "rubric": rubric,
         "sessions": sessions,
         "dualSubmissions": dual_submissions,
@@ -494,16 +580,54 @@ def start_defense_session(
 
     now = now_utc()
     defense_id = f"def-{uid()[:8]}"
+    from app.api.deps import assert_ai_service_active
     with db() as conn:
+        assert_ai_service_active(conn, "svc-defense", "Hội đồng Phản biện AI 3D")
+        policies = load_system_policies(conn)
+        if policies.get("blockConcurrentIP", True):
+            untrusted_row = conn.execute(
+                """SELECT id FROM jwt_sessions
+                   WHERE user_id = ? AND revoked = 0 AND is_untrusted = 1
+                     AND (state LIKE ? OR device LIKE ?)
+                   LIMIT 1""",
+                (user["id"], "%trùng IP%", "%2 IP%"),
+            ).fetchone()
+            if untrusted_row:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Phát hiện phiên đăng nhập trùng IP bất thường trong kỳ thi. Vui lòng thu hồi thiết bị lạ trong mục Bảo mật trước khi vào Phòng Phản biện.",
+                )
         proj, course = _resolve_project_course(conn, payload.project_id, payload.class_id)
         if not proj:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Không tìm thấy đồ án '{payload.project_id}' trong hệ thống.",
             )
+        full_proj_row = conn.execute(
+            "SELECT * FROM engineering_projects WHERE id = ?", (proj["id"],)
+        ).fetchone()
+        if full_proj_row and not is_user_in_project(user, full_proj_row):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn chỉ được khởi tạo phiên Phản biện AI trên đồ án mà bạn là thành viên.",
+            )
         class_id = course["id"] if course else (payload.class_id or "class-capstone")
         course_code = course["code"] if course else ""
-        if course and not course["ai_defense_enabled"]:
+        sec_disabled = False
+        if course:
+            enr_sec = conn.execute(
+                """SELECT cs.id, cs.ai_defense_enabled
+                   FROM class_enrollments ce
+                   JOIN class_sections cs ON cs.id = ce.section_id
+                   WHERE ce.student_id = ? AND cs.course_id = ? AND ce.status = 'active'
+                   LIMIT 1""",
+                (user["id"], course["id"]),
+            ).fetchone()
+            if enr_sec:
+                class_id = enr_sec["id"]
+                if not enr_sec["ai_defense_enabled"]:
+                    sec_disabled = True
+        if (course and not course["ai_defense_enabled"]) or sec_disabled:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Phòng Phản Biện AI hiện đang tạm khóa cho học phần {course_code}.",
@@ -647,7 +771,10 @@ def respond_defense_round(
                 defense_id,
             ),
         )
-        record_ai_usage(conn, "svc-defense", in_tok or 680, out_tok or 280)
+        if in_tok > 0 or out_tok > 0:
+            record_ai_usage(conn, "svc-defense", in_tok, out_tok)
+        else:
+            conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id = 'svc-defense'")
         conn.commit()
 
     return {
@@ -709,7 +836,7 @@ def complete_defense_session(
         student_code = u_dict.get("user_code") or user.get("user_code") or "SV-000"
 
         proj_row = conn.execute(
-            """SELECT ep.id, ep.code, ep.name, gr.repo_url
+            """SELECT ep.id, ep.code, ep.name, ep.instructor_id, gr.repo_url
                FROM engineering_projects ep
                LEFT JOIN git_repositories gr ON gr.project_id = ep.id
                WHERE ep.id = ?""",
@@ -742,6 +869,11 @@ def complete_defense_session(
             if payload.total_tests is not None
             else (real_total_tasks if real_total_tasks > 0 else 5)
         )
+        if passed_tests > total_tests:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Số lượng kiểm thử đạt ({passed_tests}) không được vượt quá tổng số kiểm thử ({total_tests}).",
+            )
         chapter_title = (payload.chapter_title or "").strip() or (
             f"{(proj.get('name') or sess['project_id']).split(' - ')[0]} · Phản biện Hội đồng AI"
         )
@@ -756,7 +888,7 @@ def complete_defense_session(
         weighted_score = round((cicd_pct * cicd_w / 100.0) + (final_defense * def_w / 100.0))
         discrepancy = abs(cicd_pct - final_defense) >= threshold
 
-        sub_id = f"sub-def-{defense_id[4:]}"
+        sub_id = f"sub-def-{sess['user_id'][-6:]}-{sess['project_id']}"
         coherence = (
             f"Cảnh báo luyện tập lệch chỉ số tiến độ ({round(cicd_pct)}%) vs AI Mock ({final_defense}%): Giảng viên cần kiểm tra kỹ khi hỏi đáp trực tiếp."
             if discrepancy
@@ -825,17 +957,24 @@ def complete_defense_session(
             "SELECT COUNT(*) AS c FROM dual_submissions WHERE class_id=? AND status IN ('pending', 'flagged')",
             (sess["class_id"],),
         ).fetchone()
+        pending_val = int(cnt_row["c"] or 0) if cnt_row else 0
         conn.execute(
             "UPDATE courses SET pending_dual_reviews = ? WHERE id=?",
-            (int(cnt_row["c"] or 0) if cnt_row else 0, sess["class_id"]),
+            (pending_val, sess["class_id"]),
+        )
+        conn.execute(
+            "UPDATE class_sections SET pending_dual_reviews = ? WHERE id=? OR course_id=?",
+            (pending_val, sess["class_id"], sess["class_id"]),
         )
 
+        target_inst_id = (proj.get("instructor_id") or "").strip() or None
         conn.execute(
             """INSERT INTO notifications (
                 id, recipient_user_id, target_role, title, desc_text, category, is_read, action_url, created_at
-            ) VALUES (?, NULL, 'instructor', ?, ?, 'defense', 0, '/defense-room', ?)""",
+            ) VALUES (?, ?, 'instructor', ?, ?, 'defense', 0, '/defense-room', ?)""",
             (
                 f"notif-{uid()}",
+                target_inst_id,
                 f"Biên bản Phản biện mới: {student_name}",
                 f"{student_name} vừa hoàn tất Phản biện AI ({chapter_title}) đạt {final_defense}/100. Cần Giảng viên duyệt Chấm Kép.",
                 now,
@@ -888,16 +1027,22 @@ def delete_defense_session(
                     detail="Không thể tự xóa phiên bảo vệ đã chốt điểm hoàn tất.",
                 )
 
-        sub_id = f"sub-def-{defense_id[4:]}"
-        conn.execute("DELETE FROM dual_submissions WHERE id=?", (sub_id,))
+        sub_id_legacy = f"sub-def-{defense_id[4:]}"
+        sub_id_det = f"sub-def-{sess['user_id'][-6:]}-{sess['project_id']}"
+        conn.execute("DELETE FROM dual_submissions WHERE id IN (?, ?)", (sub_id_legacy, sub_id_det))
         conn.execute("DELETE FROM defense_sessions WHERE id=?", (defense_id,))
         cnt_row = conn.execute(
             "SELECT COUNT(*) AS c FROM dual_submissions WHERE class_id=? AND status IN ('pending', 'flagged')",
             (sess["class_id"],),
         ).fetchone()
+        pending_val = int(cnt_row["c"] or 0) if cnt_row else 0
         conn.execute(
             "UPDATE courses SET pending_dual_reviews = ? WHERE id=?",
-            (int(cnt_row["c"] or 0) if cnt_row else 0, sess["class_id"]),
+            (pending_val, sess["class_id"]),
+        )
+        conn.execute(
+            "UPDATE class_sections SET pending_dual_reviews = ? WHERE id=? OR course_id=?",
+            (pending_val, sess["class_id"], sess["class_id"]),
         )
         conn.commit()
 
@@ -922,14 +1067,24 @@ def toggle_course_defense(
     next_val = 1 if payload.ai_defense_enabled else 0
     with db() as conn:
         course_row = conn.execute("SELECT * FROM courses WHERE id=?", (class_id,)).fetchone()
+        target_course_id = class_id
+        if not course_row:
+            sec_row = conn.execute("SELECT course_id FROM class_sections WHERE id=?", (class_id,)).fetchone()
+            if sec_row:
+                target_course_id = sec_row["course_id"]
+                course_row = conn.execute("SELECT * FROM courses WHERE id=?", (target_course_id,)).fetchone()
         if not course_row:
             raise HTTPException(status_code=404, detail="Không tìm thấy học phần yêu cầu.")
         conn.execute(
             "UPDATE courses SET ai_defense_enabled=?, updated_at=? WHERE id=?",
-            (next_val, now, class_id),
+            (next_val, now, target_course_id),
+        )
+        conn.execute(
+            "UPDATE class_sections SET ai_defense_enabled=?, updated_at=? WHERE id=? OR course_id=?",
+            (next_val, now, class_id, target_course_id),
         )
         conn.commit()
-        updated = row_dict(conn.execute("SELECT * FROM courses WHERE id=?", (class_id,)).fetchone())
+        updated = row_dict(conn.execute("SELECT * FROM courses WHERE id=?", (target_course_id,)).fetchone())
 
     record_audit_log(
         user.get("display_name") or user.get("full_name") or "Quản trị viên",
@@ -1014,7 +1169,9 @@ def _serialize_official_evaluation(eval_row: Any) -> dict[str, Any]:
     }
 
 
-def _build_project_defense_dossier(conn: Any, project_id: str) -> dict[str, Any]:
+def _build_project_defense_dossier(
+    conn: Any, project_id: str, viewer: dict[str, Any] | None = None
+) -> dict[str, Any]:
     proj_row = conn.execute(
         "SELECT * FROM engineering_projects WHERE id = ?", (project_id,)
     ).fetchone()
@@ -1245,6 +1402,67 @@ def _build_project_defense_dossier(conn: Any, project_id: str) -> dict[str, Any]
     video_url = (pkg.get("video_url") or "").strip()
     repo_url = (repo.get("repo_url") or "").strip()
 
+    viewer_role = str((viewer or {}).get("role") or "").strip().lower()
+    is_admin_viewer = viewer_role in ("admin", "org_admin")
+    adv_flag = is_project_advisor(viewer, proj) if viewer else False
+    rev_flag = is_project_reviewer(viewer, proj) if viewer else False
+    can_grade_flag = True if viewer is None else can_grade_project_council(viewer, proj)
+    can_manage_council = bool(is_admin_viewer or adv_flag)
+    my_council_role = (
+        "admin"
+        if is_admin_viewer
+        else "advisor"
+        if adv_flag
+        else "reviewer"
+        if rev_flag
+        else ("member" if (viewer and is_user_in_project(viewer, proj)) else "viewer")
+    )
+
+    inst_rows = conn.execute(
+        """SELECT id, full_name, display_name, email
+           FROM users
+           WHERE role = 'instructor'
+             AND status = 'active'
+             AND id NOT IN ('student-demo', 'instructor-demo', 'admin-demo')
+           ORDER BY full_name ASC"""
+    ).fetchall()
+    instructors_list = [
+        {
+            "id": ir["id"],
+            "name": ir["full_name"] or ir["display_name"] or "Giảng viên",
+            "email": ir["email"] or "",
+        }
+        for ir in inst_rows
+    ]
+
+    if viewer is None or is_admin_viewer:
+        is_my_project = True
+        can_edit_package = True
+        edit_block_reason = ""
+    elif viewer_role == "instructor":
+        is_my_project = can_grade_flag
+        can_edit_package = adv_flag
+        edit_block_reason = (
+            ""
+            if adv_flag
+            else "Chỉ thành viên nhóm, Giảng viên Hướng dẫn của đồ án này hoặc Quản trị viên mới có quyền cập nhật Hồ sơ Bảo vệ."
+        )
+    else:
+        is_my_project = is_user_in_project(viewer, proj)
+        proj_status = str(proj.get("status") or "").strip().lower()
+        if not is_my_project:
+            can_edit_package = False
+            edit_block_reason = "Chỉ thành viên trong nhóm đồ án này mới có quyền cập nhật Hồ sơ Bảo vệ."
+        elif bool(proj.get("is_frozen")):
+            can_edit_package = False
+            edit_block_reason = "Đồ án đã bị GVHD/Admin đóng băng nộp bài, Hồ sơ Bảo vệ ở chế độ chỉ đọc."
+        elif proj_status == "delivered":
+            can_edit_package = False
+            edit_block_reason = "Đồ án đã bảo vệ xong (Đã hoàn thành), Hồ sơ Bảo vệ đã chốt và không thể chỉnh sửa."
+        else:
+            can_edit_package = True
+            edit_block_reason = ""
+
     return {
         "project": {
             "id": proj["id"],
@@ -1255,8 +1473,19 @@ def _build_project_defense_dossier(conn: Any, project_id: str) -> dict[str, Any]
             "status": proj.get("status") or "active",
             "sprint": proj.get("sprint") or "",
             "isFrozen": bool(proj.get("is_frozen")),
+            "isMyProject": is_my_project,
+            "isAdvisor": adv_flag,
+            "isReviewer": rev_flag,
+            "canGradeCouncil": can_grade_flag,
+            "canManageCouncil": can_manage_council,
+            "myCouncilRole": my_council_role,
+            "canEditPackage": can_edit_package,
+            "editPackageBlockReason": edit_block_reason,
             "leaderUserId": proj.get("leader_user_id") or "",
+            "instructorId": proj.get("instructor_id") or "",
             "instructorName": proj.get("instructor_name") or "",
+            "reviewerId": proj.get("reviewer_id") or "",
+            "reviewerName": proj.get("reviewer_name") or "",
             "dueDate": proj.get("due_date") or "",
             "storyPointsBudget": int(proj.get("story_points_budget") or 0),
             "repoUrl": repo_url,
@@ -1271,6 +1500,7 @@ def _build_project_defense_dossier(conn: Any, project_id: str) -> dict[str, Any]
             "prsCount": len(pr_rows),
             "epics": epics_seen[:8],
         },
+        "instructors": instructors_list,
         "package": {
             "demoUrl": demo_url,
             "slideUrl": slide_url,
@@ -1295,11 +1525,11 @@ def _build_project_defense_dossier(conn: Any, project_id: str) -> dict[str, Any]
 @router.get("/defense/projects/{project_id}/dossier", status_code=status.HTTP_200_OK)
 def get_project_defense_dossier(
     project_id: str,
-    _: dict[str, Any] = Depends(current_user),
+    user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Lấy toàn bộ hồ sơ dự án thực tế phục vụ luyện tập & Hội đồng chấm điểm trực tiếp."""
     with db() as conn:
-        return _build_project_defense_dossier(conn, project_id)
+        return _build_project_defense_dossier(conn, project_id, viewer=user)
 
 
 @router.put("/defense/projects/{project_id}/package", status_code=status.HTTP_200_OK)
@@ -1309,18 +1539,32 @@ def save_project_defense_package(
     user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Lưu Hồ sơ Bảo vệ Đồ án (Link Demo trực tiếp, Slide, Báo cáo, Video, Tóm tắt kiến trúc)."""
-    demo_url = _validate_optional_http_url(payload.demo_url, "Link Live Demo")
-    slide_url = _validate_optional_http_url(payload.slide_url, "Link Slide thuyết trình")
-    report_url = _validate_optional_http_url(payload.report_url, "Link Báo cáo đồ án")
-    video_url = _validate_optional_http_url(payload.video_url, "Link Video demo")
-    repo_url = _validate_optional_http_url(payload.repo_url, "Link GitHub Repository")
-
     now = now_utc()
     actor_name = user.get("full_name") or user.get("display_name") or "Thành viên"
     with db() as conn:
-        proj = conn.execute("SELECT id, code, name FROM engineering_projects WHERE id = ?", (project_id,)).fetchone()
+        proj = conn.execute(
+            "SELECT id, code, name, status, is_frozen, team_json, leader_user_id, created_by, instructor_id FROM engineering_projects WHERE id = ?",
+            (project_id,),
+        ).fetchone()
         if not proj:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+        if bool(dict(proj).get("is_frozen")):
+            raise HTTPException(
+                status_code=403,
+                detail="Đồ án đang bị đóng băng nộp bài, không thể cập nhật Hồ sơ Bảo vệ.",
+            )
+        if str(proj["status"] or "").strip().lower() in ("delivered", "done", "completed"):
+            raise HTTPException(
+                status_code=403,
+                detail="Đồ án đã hoàn tất bảo vệ nghiệm thu, Hồ sơ Bảo vệ đã được niêm phong.",
+            )
+        _ensure_project_writable_for_user(user, proj, "cập nhật Hồ sơ Bảo vệ")
+
+        demo_url = _validate_optional_http_url(payload.demo_url, "Link Live Demo")
+        slide_url = _validate_optional_http_url(payload.slide_url, "Link Slide thuyết trình")
+        report_url = _validate_optional_http_url(payload.report_url, "Link Báo cáo đồ án")
+        video_url = _validate_optional_http_url(payload.video_url, "Link Video demo")
+        repo_url = _validate_optional_http_url(payload.repo_url, "Link GitHub Repository")
 
         conn.execute(
             """INSERT OR REPLACE INTO project_defense_packages(
@@ -1350,7 +1594,7 @@ def save_project_defense_package(
                     (repo_url, now, project_id),
                 )
         conn.commit()
-        dossier = _build_project_defense_dossier(conn, project_id)
+        dossier = _build_project_defense_dossier(conn, project_id, viewer=user)
 
     record_audit_log(
         actor_name,
@@ -1638,12 +1882,45 @@ def generate_practice_questions(
 ) -> dict[str, Any]:
     """Sinh bộ câu hỏi Luyện tập Phản biện AI bám sát dữ liệu dự án thật từ MySQL."""
     with db() as conn:
-        dossier = _build_project_defense_dossier(conn, project_id)
+        raw_proj = conn.execute(
+            "SELECT * FROM engineering_projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        if not raw_proj:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+        if str(user.get("role") or "").lower() == "student" and not is_user_in_project(user, raw_proj):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Chỉ thành viên trong nhóm đồ án này mới được sinh câu hỏi luyện tập Phản biện AI.",
+            )
+        dossier = _build_project_defense_dossier(conn, project_id, viewer=user)
         svc_row = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-defense'").fetchone()
         service_active = bool(svc_row["active"]) if svc_row else True
+        rubric_row = conn.execute("SELECT mandatory_probes_json FROM defense_rubric_configs WHERE id='default'").fetchone()
+        raw_probes = json.loads((rubric_row["mandatory_probes_json"] if rubric_row else None) or "[]")
 
     student_name = user.get("full_name") or user.get("display_name") or "Học viên"
     fallback_rounds = _build_deterministic_practice_rounds(dossier, student_name)
+    proj_course_str = f"{dossier['project'].get('code', '')} {dossier['project'].get('course', '')}".lower()
+    matched_probes = [
+        p for p in raw_probes
+        if isinstance(p, dict) and str(p.get("topic") or "").strip()
+        and (
+            not str(p.get("chapterKeyword") or "").strip()
+            or str(p.get("chapterKeyword") or "").strip().lower() in proj_course_str
+        )
+    ] or [p for p in raw_probes if isinstance(p, dict) and str(p.get("topic") or "").strip()]
+    if matched_probes and fallback_rounds:
+        top_probe = matched_probes[0]
+        p_topic = str(top_probe.get("topic") or "").strip()
+        p_kw = str(top_probe.get("chapterKeyword") or "Rubric").strip()
+        fallback_rounds[0]["phaseTitle"] = f"Vòng 1 (Trọng tâm Rubric · {p_kw}): {p_topic[:60]}"
+        fallback_rounds[0]["question"] = (
+            f"[Câu hỏi bắt buộc theo Rubric Giảng viên - {p_kw}] Hãy giải thích cách nhóm em hiện thực và kiểm chứng "
+            f"chủ đề '{p_topic}' ngay trong kiến trúc dự án '{dossier['project']['name']}'?"
+        )
+        fallback_rounds[0]["suggestedKeywords"] = list(
+            dict.fromkeys([p_topic[:28], *fallback_rounds[0].get("suggestedKeywords", [])])
+        )[:5]
     source = "project-evidence"
 
     if service_active:
@@ -1677,6 +1954,16 @@ def generate_practice_questions(
                     _normalize_practice_round(parsed_rounds[i], fallback_rounds[i])
                     for i in range(3)
                 ]
+                if matched_probes:
+                    top_probe = matched_probes[0]
+                    p_topic = str(top_probe.get("topic") or "").strip()
+                    p_kw = str(top_probe.get("chapterKeyword") or "Rubric").strip()
+                    if p_topic and p_topic.lower() not in fallback_rounds[0]["question"].lower():
+                        fallback_rounds[0]["phaseTitle"] = f"Vòng 1 (Trọng tâm Rubric · {p_kw}): {p_topic[:60]}"
+                        fallback_rounds[0]["question"] = (
+                            f"[Câu hỏi bắt buộc theo Rubric Giảng viên - {p_kw}] {fallback_rounds[0]['question']} "
+                            f"(Yêu cầu phân tích trực tiếp: '{p_topic}')"
+                        )
                 source = f"gemini:{meta.get('model') or 'gemini'}"
                 with db() as conn:
                     record_ai_usage(
@@ -1717,15 +2004,40 @@ def generate_council_questions(
         )
 
     with db() as conn:
-        dossier = _build_project_defense_dossier(conn, project_id)
+        raw_proj = conn.execute(
+            "SELECT * FROM engineering_projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        if not raw_proj:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+        if not can_grade_project_council(user, raw_proj):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Theo quy chế Hướng 2, chỉ Giảng viên Hướng dẫn, Giảng viên Phản biện được phân công hoặc Quản trị viên mới được sinh bộ câu hỏi Hội đồng cho đồ án này.",
+            )
+        dossier = _build_project_defense_dossier(conn, project_id, viewer=user)
         svc_row = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-defense'").fetchone()
         service_active = bool(svc_row["active"]) if svc_row else True
+        rubric_row = conn.execute("SELECT mandatory_probes_json FROM defense_rubric_configs WHERE id='default'").fetchone()
+        raw_probes = json.loads((rubric_row["mandatory_probes_json"] if rubric_row else None) or "[]")
 
     proj = dossier["project"]
     pkg = dossier["package"]
     metrics = dossier["memberMetrics"]
 
-    project_probes = [
+    mandatory_project_probes = []
+    for p in raw_probes[:3]:
+        if isinstance(p, dict) and str(p.get("topic") or "").strip():
+            kw_lbl = str(p.get("chapterKeyword") or "Rubric").strip()
+            tp_lbl = str(p.get("topic") or "").strip()
+            mandatory_project_probes.append(
+                {
+                    "category": f"Trọng tâm Rubric ({kw_lbl})",
+                    "question": f"Kiểm tra bắt buộc theo Rubric Giảng viên: Hãy mở mã nguồn/demo của {proj['code']} để chứng minh cơ chế '{tp_lbl}'.",
+                    "whatToVerify": f"Đối chiếu trực tiếp yêu cầu '{tp_lbl}' trong cấu hình Rubric Phản biện.",
+                }
+            )
+    project_probes = [*mandatory_project_probes]
+    project_probes.extend([
         {
             "category": "Demo Trực tiếp",
             "question": f"Yêu cầu nhóm chạy trực tiếp luồng nghiệp vụ chính trên {pkg['demoUrl'] or 'ứng dụng'}, sau đó tải lại trang (F5) và kiểm tra dữ liệu lưu thực tế trong DB.",
@@ -1741,7 +2053,7 @@ def generate_council_questions(
             "question": f"Đối chiếu lịch sử {proj['commitsCount']} commits / {proj['prsCount']} PRs với bảng Kanban ({proj['doneTasks']}/{proj['totalTasks']} task): vì sao có phần tập trung ở giai đoạn cuối?",
             "whatToVerify": "Lịch sử làm việc đều đặn, không dồn code hoặc copy vào phút chót.",
         },
-    ]
+    ])
 
     member_probes = []
     for m in metrics:
@@ -1797,7 +2109,7 @@ def generate_council_questions(
                             }
                         )
                 if norm_pp:
-                    project_probes = norm_pp
+                    project_probes = [*mandatory_project_probes, *norm_pp]
             if isinstance(parsed.get("memberProbes"), list):
                 by_id = {str(mp.get("memberId") or ""): mp for mp in parsed["memberProbes"] if isinstance(mp, dict)}
                 for idx, mp in enumerate(member_probes):
@@ -1852,19 +2164,34 @@ def submit_live_council_grade(
         + 0.25 * payload.defense_score,
         2,
     )
+    if verdict == "pass" and final_score < 4.0:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Điểm tổng kết {final_score}/10 dưới mức đạt tối thiểu (4.0/10), không thể chọn kết luận 'Đạt (pass)'.",
+        )
     now = now_utc()
     instructor_name = user.get("full_name") or user.get("display_name") or "Giảng viên Hội đồng"
     council_members = (payload.council_members or "").strip() or instructor_name
     eval_status = "redefense_required" if verdict == "fail" else "graded"
 
     with db() as conn:
-        dossier = _build_project_defense_dossier(conn, project_id)
+        raw_proj = conn.execute(
+            "SELECT * FROM engineering_projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        if not raw_proj:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+        if not can_grade_project_council(user, raw_proj):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Theo quy chế Hướng 2, chỉ Giảng viên Hướng dẫn, Giảng viên Phản biện được phân công hoặc Quản trị viên mới có quyền chốt điểm Hội đồng trực tiếp cho đồ án này.",
+            )
+        dossier = _build_project_defense_dossier(conn, project_id, viewer=user)
         proj = dossier["project"]
         existing = conn.execute(
             "SELECT id FROM project_evaluations WHERE project_id = ? ORDER BY graded_at DESC LIMIT 1",
             (project_id,),
         ).fetchone()
-        eval_id = existing["id"] if existing else f"eval-{uid()[:8]}"
+        eval_id = existing["id"] if existing else f"eval-{project_id}"
 
         member_scores_data = [m.model_dump() for m in payload.member_scores]
         if not member_scores_data:
@@ -1956,29 +2283,27 @@ def submit_live_council_grade(
                 "UPDATE engineering_projects SET status='delivered', tl_color='done', updated_at=? WHERE id=?",
                 (now, project_id),
             )
-            prof = conn.execute("SELECT user_id FROM student_profiles LIMIT 1").fetchone()
-            if prof:
-                conn.execute(
-                    "UPDATE student_profiles SET exp_points = exp_points + 150 WHERE user_id = ?",
-                    (prof["user_id"],),
-                )
+            if not existing:
+                credit_project_team_xp(conn, raw_proj, 150)
 
-        conn.execute(
-            """INSERT INTO notifications(
-                   id, recipient_user_id, target_role, title, desc_text, category, is_read, action_url, created_at
-               ) VALUES(?,?,?,?,?,?,?,?,?)""",
-            (
-                f"notif-council-{uid()[:8]}",
-                None,
-                "student",
-                f"Biên bản Hội đồng đồ án {proj['code']}: {final_score}/10",
-                f"{council_members} vừa chốt điểm bảo vệ trực tiếp đồ án {proj['name']} đạt {final_score}/10.",
-                "defense",
-                0,
-                "/defense-room",
-                now,
-            ),
-        )
+        student_ids = resolve_project_student_ids(conn, raw_proj)
+        for suid in student_ids:
+            conn.execute(
+                """INSERT INTO notifications(
+                       id, recipient_user_id, target_role, title, desc_text, category, is_read, action_url, created_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?)""",
+                (
+                    f"notif-council-{uid()[:8]}",
+                    suid,
+                    "student",
+                    f"Biên bản Hội đồng đồ án {proj['code']}: {final_score}/10",
+                    f"{council_members} vừa chốt điểm bảo vệ trực tiếp đồ án {proj['name']} đạt {final_score}/10.",
+                    "defense",
+                    0,
+                    "/defense-room",
+                    now,
+                ),
+            )
         conn.commit()
         updated_eval_row = conn.execute(
             "SELECT * FROM project_evaluations WHERE id = ?", (eval_id,)

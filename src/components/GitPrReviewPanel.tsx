@@ -21,12 +21,15 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import type {
-  GitMemberAnalytics,
-  GitProjectTaskRef,
-  GitPullRequestRecord,
-  SessionRole,
+import {
+  getStoredUser,
+  type GitMemberAnalytics,
+  type GitProjectTaskRef,
+  type GitPullRequestRecord,
+  type SessionRole,
 } from "../api";
+import MarloSegmentedControl from "./MarloSegmentedControl";
+import MarloSelect from "./MarloSelect";
 
 interface GitPrReviewPanelProps {
   role?: SessionRole;
@@ -115,7 +118,8 @@ export function GitPrReviewPanel({
   useEffect(() => {
     setLocalError(null);
     if (isInstructor) {
-      setSelectedReviewer("TS. Nguyễn Lan Anh");
+      const storedIns = getStoredUser(role);
+      setSelectedReviewer(storedIns?.full_name || storedIns?.display_name || "Giảng viên Hướng dẫn");
       setPeerComment("Giảng viên đã thẩm định DoD, mã nguồn & kiến trúc — Đạt yêu cầu.");
     } else {
       setSelectedReviewer(eligibleReviewers[0]?.name || "");
@@ -221,35 +225,25 @@ export function GitPrReviewPanel({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs">
-          {[
+        <MarloSegmentedControl<"all" | "open" | "merged">
+          value={filterStatus}
+          onChange={(val) => setFilterStatus(val)}
+          label="Lọc Pull Requests"
+          size="sm"
+          tone="dark"
+          className="w-full [&>button]:flex-1"
+          options={[
             { id: "all", label: `Tất cả (${pullRequests.length})` },
             {
               id: "open",
-              label: `Đang mở (${
-                pullRequests.filter((p) => p.status !== "merged").length
-              })`,
+              label: `Đang mở (${pullRequests.filter((p) => p.status !== "merged").length})`,
             },
             {
               id: "merged",
-              label: `Đã Merge (${
-                pullRequests.filter((p) => p.status === "merged").length
-              })`,
+              label: `Đã Merge (${pullRequests.filter((p) => p.status === "merged").length})`,
             },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setFilterStatus(tab.id as any)}
-              className={`flex-1 py-1.5 px-2 rounded-lg font-semibold transition text-[11px] cursor-pointer ${
-                filterStatus === tab.id
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+          ]}
+        />
 
         <div className="space-y-2.5 max-h-[640px] overflow-y-auto pr-0.5">
           {visiblePrs.length === 0 ? (
@@ -622,7 +616,7 @@ export function GitPrReviewPanel({
                       <div className="flex flex-col sm:flex-row gap-2">
                         {isStudent && (
                           <div className="sm:w-52 shrink-0">
-                            <select
+                            <MarloSelect
                               value={selectedReviewer}
                               onChange={(e) => setSelectedReviewer(e.target.value)}
                               disabled={isFrozen || actionLoading !== null || eligibleReviewers.length === 0}
@@ -638,7 +632,7 @@ export function GitPrReviewPanel({
                                   </option>
                                 ))
                               )}
-                            </select>
+                            </MarloSelect>
                           </div>
                         )}
                         <input
@@ -710,7 +704,7 @@ export function GitPrReviewPanel({
                       <span className="font-semibold text-slate-600 dark:text-slate-400">
                         Chiến lược Merge:
                       </span>
-                      <select
+                      <MarloSelect
                         value={mergeStrategy}
                         onChange={(e) => setMergeStrategy(e.target.value as any)}
                         disabled={isFrozen || actionLoading !== null}
@@ -719,7 +713,7 @@ export function GitPrReviewPanel({
                         <option value="squash">Squash and Merge (Khuyên dùng)</option>
                         <option value="rebase">Rebase and Merge</option>
                         <option value="merge">Merge Commit (--no-ff)</option>
-                      </select>
+                      </MarloSelect>
                     </div>
                     <button
                       onClick={() => onMerge(selectedPr.id, mergeStrategy)}
@@ -867,7 +861,7 @@ export function GitNewCommitModal({
     files_changed: string[];
     additions?: number;
     deletions?: number;
-  }) => Promise<void>;
+  }) => Promise<boolean | void>;
   members: GitMemberAnalytics[];
   tasks: GitProjectTaskRef[];
   existingBranches?: string[];
@@ -997,7 +991,7 @@ export function GitNewCommitModal({
     if (!message.trim()) return;
     setSubmitting(true);
     try {
-      await onSubmit({
+      const ok = await onSubmit({
         branch,
         task_code: taskCode || undefined,
         author_name: authorName || undefined,
@@ -1006,7 +1000,7 @@ export function GitNewCommitModal({
         additions: estAdditions,
         deletions: estDeletions,
       });
-      onClose();
+      if (ok !== false) onClose();
     } finally {
       setSubmitting(false);
     }
@@ -1061,7 +1055,7 @@ export function GitNewCommitModal({
               </label>
               <span className="text-[10px] text-slate-400 font-sans">Đổi task = tự động cập nhật form</span>
             </div>
-            <select
+            <MarloSelect
               value={taskCode}
               onChange={(e) => handleTaskChange(e.target.value)}
               className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-900 dark:text-slate-100 cursor-pointer shadow-2xs"
@@ -1075,7 +1069,7 @@ export function GitNewCommitModal({
                   </option>
                 ))
               )}
-            </select>
+            </MarloSelect>
           </div>
 
           {/* 2. LOẠI COMMIT */}
@@ -1108,7 +1102,7 @@ export function GitNewCommitModal({
                 Nhánh Git (Branch)
               </label>
               <div className="relative">
-                <select
+                <MarloSelect
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
                   className="w-full pl-7 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs text-slate-900 dark:text-slate-100 cursor-pointer"
@@ -1118,9 +1112,9 @@ export function GitNewCommitModal({
                       {b}
                     </option>
                   ))}
-                </select>
+                </MarloSelect>
                 <span
-                  className="absolute left-2.5 top-3 w-2 h-2 rounded-full"
+                  className="pointer-events-none absolute left-2.5 top-3 w-2 h-2 rounded-full"
                   style={{ backgroundColor: currentBranchColor }}
                 />
               </div>
@@ -1134,7 +1128,7 @@ export function GitNewCommitModal({
               <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
                 Thành viên thực hiện
               </label>
-              <select
+              <MarloSelect
                 value={authorName}
                 onChange={(e) => setAuthorName(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 cursor-pointer"
@@ -1144,7 +1138,7 @@ export function GitNewCommitModal({
                     {m.name} ({m.role})
                   </option>
                 ))}
-              </select>
+              </MarloSelect>
             </div>
           </div>
 
@@ -1323,7 +1317,7 @@ export function GitNewPrModal({
     target_branch: string;
     task_code?: string;
     code_snippet: string;
-  }) => Promise<void>;
+  }) => Promise<boolean | void>;
   tasks: GitProjectTaskRef[];
   defaultTargetBranch?: string;
   existingBranches?: string[];
@@ -1398,7 +1392,7 @@ export function GitNewPrModal({
     if (!title.trim() || sameBranchError || !sourceBranch.trim()) return;
     setSubmitting(true);
     try {
-      await onSubmit({
+      const ok = await onSubmit({
         title: title.trim(),
         description: description.trim(),
         source_branch: sourceBranch.trim(),
@@ -1406,7 +1400,7 @@ export function GitNewPrModal({
         task_code: taskCode || undefined,
         code_snippet: codeSnippet,
       });
-      onClose();
+      if (ok !== false) onClose();
     } finally {
       setSubmitting(false);
     }
@@ -1474,7 +1468,7 @@ export function GitNewPrModal({
               <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
                 Nhánh đích
               </label>
-              <select
+              <MarloSelect
                 value={targetBranch}
                 onChange={(e) => setTargetBranch(e.target.value)}
                 className="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs text-slate-900 dark:text-slate-100"
@@ -1484,13 +1478,13 @@ export function GitNewPrModal({
                     {b}
                   </option>
                 ))}
-              </select>
+              </MarloSelect>
             </div>
             <div>
               <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
                 Mã Task Kanban
               </label>
-              <select
+              <MarloSelect
                 value={taskCode}
                 onChange={(e) => handlePrTaskChange(e.target.value)}
                 className="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs text-slate-900 dark:text-slate-100"
@@ -1504,7 +1498,7 @@ export function GitNewPrModal({
                     </option>
                   ))
                 )}
-              </select>
+              </MarloSelect>
             </div>
           </div>
 

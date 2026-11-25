@@ -13,6 +13,10 @@ export interface Project {
   dueDate: string;
   lead?: string;
   instructor?: string;
+  instructorId?: string;
+  instructorName?: string;
+  reviewerId?: string;
+  reviewerName?: string;
   finalScore?: number | null;
   evaluationStatus?: string | null;
   evaluationFeedback?: string | null;
@@ -21,6 +25,10 @@ export interface Project {
   team: TeamMember[];
   isMyProject?: boolean;
   isLead?: boolean;
+  isAdvisor?: boolean;
+  isReviewer?: boolean;
+  canManageProject?: boolean;
+  canGradeProject?: boolean;
   leaderUserId?: string | null;
 }
 

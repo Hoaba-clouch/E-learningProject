@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
+import json
+import re
 import secrets
 from typing import Any
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 import jwt
+from pydantic import BaseModel, Field
 
-from app.api.deps import get_current_user, log_audit, record_audit_log, security
+from app.api.deps import get_current_user, load_system_policies, log_audit, record_audit_log, security
 from app.core.database import db, row_dict
 from app.core.security import (
     TOKENS,
@@ -82,6 +87,152 @@ def _parse_theme_preference(raw: str | None) -> tuple[str, str]:
     if clean in VALID_COLOR_MODES:
         return clean, "diagonal"
     return "light", "diagonal"
+
+
+class UserAvatarUpdateIn(BaseModel):
+    avatar_data: str = Field(min_length=20, max_length=2_800_000)
+
+
+class UserProfileUpdateIn(BaseModel):
+    full_name: str | None = Field(default=None, max_length=120)
+    headline: str | None = Field(default=None, max_length=191)
+    bio: str | None = Field(default=None, max_length=800)
+    department: str | None = Field(default=None, max_length=191)
+    office_location: str | None = Field(default=None, max_length=191)
+    skills: list[str] | None = Field(default=None)
+    github_url: str | None = Field(default=None, max_length=255)
+    website_url: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=40)
+
+
+_PROFILE_URL_RE = re.compile(r"^https?://[^\s/$.?#].[^\s]*$", re.IGNORECASE)
+
+
+def parse_skills_json(raw: Any) -> list[str]:
+    """Chuẩn hóa danh sách kỹ năng/chuyên môn (tối đa 12 thẻ, mỗi thẻ <= 40 ký tự)."""
+    if raw is None:
+        return []
+    items: list[Any]
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+            items = parsed if isinstance(parsed, list) else text.split(",")
+        except Exception:
+            items = text.split(",")
+    else:
+        return []
+
+    seen_low: set[str] = set()
+    cleaned: list[str] = []
+    for item in items:
+        s = " ".join(str(item or "").strip().split())
+        if not s:
+            continue
+        s = s[:40]
+        low = s.lower()
+        if low in seen_low:
+            continue
+        seen_low.add(low)
+        cleaned.append(s)
+        if len(cleaned) >= 12:
+            break
+    return cleaned
+
+
+def normalize_profile_url(raw: str | None, field_label: str) -> str:
+    """Chuẩn hóa & kiểm tra liên kết HTTP(S) hợp lệ cho hồ sơ cá nhân."""
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    if re.match(r"^[a-z][a-z0-9+.-]*:", s, re.IGNORECASE) and not re.match(
+        r"^https?://", s, re.IGNORECASE
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_label} chỉ chấp nhận liên kết http:// hoặc https://.",
+        )
+    if "://" not in s:
+        s = f"https://{s}"
+    try:
+        parsed = urlparse(s)
+        host = parsed.hostname or ""
+        port_ok = True
+        try:
+            _ = parsed.port
+        except ValueError:
+            port_ok = False
+    except Exception:
+        parsed = None
+        host = ""
+        port_ok = False
+
+    if (
+        not parsed
+        or not port_ok
+        or parsed.scheme.lower() not in ("http", "https")
+        or not host
+        or ("." not in host and host.lower() != "localhost")
+        or len(s) > 255
+        or not _PROFILE_URL_RE.match(s)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_label} không hợp lệ. Vui lòng nhập URL http:// hoặc https:// hợp lệ.",
+        )
+    return s
+
+
+def serialize_shared_profile_fields(row: dict[str, Any] | None) -> dict[str, Any]:
+    """Trả về cấu trúc trường hồ sơ dùng chung đồng bộ giữa Profile và Team Person Detail."""
+    r = row or {}
+    return {
+        "headline": str(r.get("headline") or "").strip(),
+        "bio": str(r.get("bio") or "").strip(),
+        "department": str(r.get("department") or "").strip(),
+        "office_location": str(r.get("office_location") or "").strip(),
+        "skills": parse_skills_json(r.get("skills_json") if "skills_json" in r else r.get("skills")),
+        "github_url": str(r.get("github_url") or "").strip(),
+        "website_url": str(r.get("website_url") or "").strip(),
+        "phone": str(r.get("phone") or "").strip(),
+        "avatar_url": str(r.get("avatar_url") or "").strip(),
+    }
+
+
+_AVATAR_DATA_URL_RE = re.compile(
+    r"^data:image/(png|jpeg|jpg|webp|gif);base64,([A-Za-z0-9+/=\s]+)$",
+    re.IGNORECASE,
+)
+
+
+def _validate_avatar_data_url(raw: str) -> str:
+    err_detail = "Tệp ảnh đại diện không hợp lệ. Chỉ hỗ trợ PNG, JPG, WebP hoặc GIF (tối đa 1.5MB)."
+    m = _AVATAR_DATA_URL_RE.match((raw or "").strip())
+    if not m:
+        raise HTTPException(status_code=422, detail=err_detail)
+    ext = m.group(1).lower()
+    norm_mime = "jpeg" if ext == "jpg" else ext
+    clean_b64 = re.sub(r"\s+", "", m.group(2))
+    try:
+        decoded = base64.b64decode(clean_b64, validate=True)
+    except Exception:
+        raise HTTPException(status_code=422, detail=err_detail)
+    if not decoded or len(decoded) > 1_500_000:
+        raise HTTPException(status_code=422, detail=err_detail)
+
+    is_valid_magic = (
+        (norm_mime == "png" and decoded.startswith(b"\x89PNG\r\n\x1a\n"))
+        or (norm_mime == "jpeg" and decoded.startswith(b"\xff\xd8\xff"))
+        or (norm_mime == "gif" and (decoded.startswith(b"GIF87a") or decoded.startswith(b"GIF89a")))
+        or (norm_mime == "webp" and len(decoded) >= 12 and decoded[:4] == b"RIFF" and decoded[8:12] == b"WEBP")
+    )
+    if not is_valid_magic:
+        raise HTTPException(status_code=422, detail=err_detail)
+    return f"data:image/{norm_mime};base64,{clean_b64}"
 
 
 def _parse_device_info(request: Request | None, explicit_name: str | None = None) -> dict[str, str]:
@@ -304,6 +455,12 @@ def register(payload: UserRegisterIn, request: Request) -> dict[str, Any]:
       - Nếu là student: tự động khởi tạo hồ sơ học tập (student_profiles) và consent mặc định.
       - Cấp cặp Access Token (15 phút) và Refresh Token (7 ngày) kèm phiên thiết bị đầu tiên.
     """
+    if payload.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tài khoản Quản trị viên không cho phép tự đăng ký công khai. Vui lòng liên hệ Admin hệ thống.",
+        )
+
     clean_email = payload.email.strip().lower()
     timestamp = now_utc()
     device_info = _parse_device_info(request, payload.device_name)
@@ -320,15 +477,13 @@ def register(payload: UserRegisterIn, request: Request) -> dict[str, Any]:
         pwd_hash = hash_password(payload.password)
         org_id = "org-demo-codemind"
         user_code = (payload.user_code or "").strip() or (
-            f"ADM-{secrets.randbelow(90) + 10}"
-            if payload.role == "admin"
-            else f"GV-{secrets.randbelow(900) + 100}"
+            f"GV-{secrets.randbelow(900) + 100}"
             if payload.role == "instructor"
             else f"2210{secrets.randbelow(900) + 100}"
         )
 
-        initial_status = "pending" if payload.role == "student" else "active"
-        initial_active_label = "Chờ Admin duyệt" if payload.role == "student" else "Vừa đăng ký"
+        initial_status = "pending"
+        initial_active_label = "Chờ Admin duyệt"
 
         conn.execute(
             """INSERT INTO users(
@@ -353,7 +508,7 @@ def register(payload: UserRegisterIn, request: Request) -> dict[str, Any]:
             ),
         )
 
-        membership_role = "org_admin" if payload.role == "admin" else payload.role
+        membership_role = payload.role
         conn.execute(
             "INSERT INTO memberships(id, organization_id, user_id, role, status) VALUES(?, ?, ?, ?, 'active')",
             (uid(), org_id, user_id, membership_role),
@@ -371,23 +526,25 @@ def register(payload: UserRegisterIn, request: Request) -> dict[str, Any]:
                     "INSERT INTO consents(id, user_id, purpose, policy_version, granted, granted_at, updated_at) VALUES(?, ?, ?, '2026-08-01', 1, ?, ?)",
                     (uid(), user_id, purpose, timestamp, timestamp),
                 )
-            conn.execute(
-                """INSERT INTO pending_approvals(
-                       id, name, student_code, email, class_code, class_name,
-                       requested_role, risk_note, status, created_at
-                   ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
-                (
-                    f"apr-reg-{uid()[:8]}",
-                    payload.full_name,
-                    user_code,
-                    clean_email,
-                    "SELF-REG",
-                    "Đăng ký mới · Chờ cấp quyền vào học",
-                    "Học viên",
-                    "Học viên mới đăng ký tài khoản — tạm giới hạn ở trang Giới thiệu cho đến khi Quản trị viên phê duyệt.",
-                    timestamp,
-                ),
-            )
+
+        req_role_vi = "Giảng viên" if payload.role == "instructor" else "Học viên"
+        conn.execute(
+            """INSERT INTO pending_approvals(
+                   id, name, student_code, email, class_code, class_name,
+                   requested_role, risk_note, status, created_at
+               ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
+            (
+                f"apr-reg-{uid()[:8]}",
+                payload.full_name,
+                user_code,
+                clean_email,
+                "SELF-REG",
+                f"Đăng ký mới ({req_role_vi}) · Chờ cấp quyền",
+                req_role_vi,
+                f"Tài khoản {req_role_vi} mới đăng ký — tạm giới hạn ở trang Giới thiệu cho đến khi Quản trị viên phê duyệt.",
+                timestamp,
+            ),
+        )
 
         user_row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
@@ -448,15 +605,18 @@ def login(payload: UserLoginIn, request: Request) -> dict[str, Any]:
     challenge_token_2fa = ""
 
     with db() as conn:
+        policies = load_system_policies(conn)
+        auto_lock_enabled = bool(policies.get("autoLockFailedAttempts", True))
+        require_2fa_policy = bool(policies.get("require2FA", True))
         user_row = conn.execute("SELECT * FROM users WHERE lower(email) = ?", (clean_email,)).fetchone()
-        if user_row and _is_account_locked(user_row):
+        if user_row and auto_lock_enabled and _is_account_locked(user_row):
             outcome = "locked_attempt"
             user_row_dict = row_dict(user_row) or {}
         elif not user_row or not verify_password(payload.password, user_row["password_hash"]):
             if user_row:
                 new_attempts = int(user_row["failed_login_attempts"] or 0) + 1
                 user_row_dict = row_dict(user_row) or {}
-                if new_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
+                if auto_lock_enabled and new_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
                     lock_until = (now_utc_dt() + timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
                     conn.execute(
                         "UPDATE users SET failed_login_attempts=?, locked_until=?, updated_at=? WHERE id=?",
@@ -480,7 +640,10 @@ def login(payload: UserLoginIn, request: Request) -> dict[str, Any]:
                 "UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE id=?",
                 (user_row["id"],),
             )
-            if int(user_row["two_factor_enabled"] or 0) == 1:
+            must_2fa = int(user_row["two_factor_enabled"] or 0) == 1 or (
+                require_2fa_policy and (user_row.get("role") or "").lower() == "admin"
+            )
+            if must_2fa:
                 otp_code_2fa, challenge_token_2fa = _create_otp_challenge(
                     conn,
                     user_row,
@@ -828,17 +991,130 @@ def refresh_token_endpoint(payload: RefreshTokenIn) -> dict[str, Any]:
 def get_me(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
     """Xem thông tin hồ sơ của tài khoản đang đăng nhập."""
     with db() as conn:
-        user_row = conn.execute("SELECT theme_preference FROM users WHERE id = ?", (user["id"],)).fetchone()
+        user_row = conn.execute(
+            """SELECT theme_preference, avatar_url, full_name, display_name, user_code,
+                      headline, bio, department, office_location, skills_json,
+                      github_url, website_url, phone
+               FROM users WHERE id = ?""",
+            (user["id"],),
+        ).fetchone()
         profile = conn.execute("SELECT * FROM student_profiles WHERE user_id = ?", (user["id"],)).fetchone()
+        status_row = conn.execute(
+            "SELECT value_json FROM system_settings WHERE key='team_member_statuses'"
+        ).fetchone()
+        course_rows = []
+        section_rows = []
+        proj_rows = []
+        if (user.get("role") or "").strip().lower() == "instructor":
+            section_rows = conn.execute(
+                """SELECT cs.id AS section_id, cs.section_code, cs.semester AS section_semester,
+                          cs.instructor_id, cs.teacher_name, cs.room AS section_room,
+                          cs.course_id, c.subject_id, c.code, c.name, c.credits,
+                          c.avg_progress_pct, c.health,
+                          (SELECT COUNT(*) FROM class_enrollments ce WHERE ce.section_id = cs.id AND ce.status = 'active') AS enrolled_cnt
+                   FROM class_sections cs
+                   JOIN courses c ON c.id = cs.course_id
+                   WHERE cs.instructor_id = ? AND cs.status = 'active'
+                   ORDER BY cs.section_code ASC""",
+                (user["id"],),
+            ).fetchall()
+            course_rows = conn.execute(
+                """SELECT id, subject_id, code, name, semester, credits, instructor_id,
+                          teacher_name, student_count, avg_progress_pct, room, health
+                   FROM courses ORDER BY code ASC"""
+            ).fetchall()
+            proj_rows = conn.execute("SELECT * FROM engineering_projects ORDER BY id ASC").fetchall()
 
     result = dict(user)
     result.pop("password_hash", None)
+    if user_row:
+        if user_row.get("full_name"):
+            result["full_name"] = user_row["full_name"]
+        if user_row.get("display_name"):
+            result["display_name"] = user_row["display_name"]
+        if user_row.get("user_code") is not None:
+            result["user_code"] = user_row["user_code"]
+        result.update(serialize_shared_profile_fields(dict(user_row)))
+    else:
+        result.update(serialize_shared_profile_fields(result))
+
+    try:
+        saved_statuses = json.loads(status_row["value_json"]) if status_row else {}
+    except Exception:
+        saved_statuses = {}
+    team_status = saved_statuses.get(user["id"], "in")
+    result["team_status"] = team_status if team_status in ("in", "remote", "off") else "in"
+
+    taught_courses: list[dict[str, Any]] = []
+    guided_project_ids: list[str] = []
+    council_project_ids: list[str] = []
+    if (result.get("role") or "").strip().lower() == "instructor":
+        from app.api.v1.kanban import (
+            _user_matches_project_advisor,
+            _user_matches_taught_course,
+            can_grade_project_council,
+        )
+
+        if section_rows:
+            for sr in section_rows:
+                sd = dict(sr)
+                taught_courses.append(
+                    {
+                        "id": sd["section_id"],
+                        "courseId": sd["course_id"],
+                        "subjectId": sd.get("subject_id") or "",
+                        "code": sd["code"],
+                        "sectionCode": sd.get("section_code") or f"{sd['code']}-N01",
+                        "courseCode": sd["code"],
+                        "name": sd["name"],
+                        "semester": sd.get("section_semester") or "",
+                        "credits": int(sd.get("credits") or 3),
+                        "studentCount": int(sd.get("enrolled_cnt") or 0),
+                        "avgProgressPct": int(sd.get("avg_progress_pct") or 0),
+                        "room": sd.get("section_room") or "",
+                        "health": sd.get("health") or "Ổn định",
+                    }
+                )
+        else:
+            for c in course_rows:
+                cd = dict(c)
+                if _user_matches_taught_course(result, cd):
+                    taught_courses.append(
+                        {
+                            "id": cd["id"],
+                            "subjectId": cd.get("subject_id") or "",
+                            "code": cd["code"],
+                            "name": cd["name"],
+                            "semester": cd.get("semester") or "",
+                            "credits": int(cd.get("credits") or 3),
+                            "studentCount": int(cd.get("student_count") or 0),
+                            "avgProgressPct": int(cd.get("avg_progress_pct") or 0),
+                            "room": cd.get("room") or "",
+                            "health": cd.get("health") or "Ổn định",
+                        }
+                    )
+        for p in proj_rows:
+            if _user_matches_project_advisor(result, p):
+                guided_project_ids.append(p["id"])
+            if can_grade_project_council(result, p):
+                council_project_ids.append(p["id"])
+
+    result["taught_courses"] = taught_courses
+    result["guided_project_ids"] = guided_project_ids
+    result["council_project_ids"] = council_project_ids
+
     raw_pref = (user_row["theme_preference"] if user_row else None) or result.get("theme_preference")
     color_mode, background_theme = _parse_theme_preference(raw_pref)
     result["color_mode"] = color_mode
     result["background_theme"] = background_theme
     if profile:
-        result["profile"] = row_dict(profile)
+        prof_dict = row_dict(profile) or {}
+        result["profile"] = prof_dict
+        try:
+            eq = json.loads(prof_dict.get("equipped_items_json") or "{}")
+            result["equipped_items"] = eq if isinstance(eq, dict) else {}
+        except Exception:
+            result["equipped_items"] = {}
     return result
 
 
@@ -871,47 +1147,318 @@ def update_user_preferences(
     }
 
 
+@router.post("/users/me/avatar")
+@router.put("/users/me/avatar")
+def upload_my_avatar(
+    payload: UserAvatarUpdateIn,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, str]:
+    """Tải lên và lưu ảnh đại diện (PNG/JPG/WebP/GIF) vào hồ sơ người dùng."""
+    clean_url = _validate_avatar_data_url(payload.avatar_data)
+    with db() as conn:
+        conn.execute(
+            "UPDATE users SET avatar_url = ?, updated_at = ? WHERE id = ?",
+            (clean_url, now_utc(), user["id"]),
+        )
+        conn.commit()
+    record_audit_log(
+        user.get("full_name") or user.get("display_name") or "Thành viên",
+        user["id"],
+        "Cập nhật ảnh đại diện cá nhân",
+        f"user_id={user['id']}",
+        log_type="profile",
+        resource_type="user",
+        resource_id=user["id"],
+    )
+    return {"avatar_url": clean_url, "user_id": user["id"]}
+
+
+@router.delete("/users/me/avatar")
+def delete_my_avatar(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, str]:
+    """Xóa ảnh đại diện tùy chỉnh và quay về hiển thị ký tự viết tắt / avatar mẫu."""
+    with db() as conn:
+        conn.execute(
+            "UPDATE users SET avatar_url = NULL, updated_at = ? WHERE id = ?",
+            (now_utc(), user["id"]),
+        )
+        conn.commit()
+    record_audit_log(
+        user.get("full_name") or user.get("display_name") or "Thành viên",
+        user["id"],
+        "Gỡ ảnh đại diện cá nhân",
+        f"user_id={user['id']}",
+        log_type="profile",
+        resource_type="user",
+        resource_id=user["id"],
+    )
+    return {"avatar_url": "", "user_id": user["id"]}
+
+
+@router.patch("/users/me")
+def update_my_profile(
+    payload: UserProfileUpdateIn,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Cập nhật thông tin hồ sơ cá nhân dùng chung (tên, chức danh, giới thiệu, khoa, phòng, kỹ năng, liên hệ)."""
+    updates: list[str] = []
+    params: list[Any] = []
+    next_name = (user.get("full_name") or user.get("display_name") or "Thành viên").strip()
+
+    if payload.full_name is not None:
+        cleaned = " ".join(payload.full_name.strip().split())
+        if len(cleaned) < 2:
+            raise HTTPException(status_code=422, detail="Họ và tên phải có ít nhất 2 ký tự.")
+        next_name = cleaned
+        updates.extend(["full_name = ?", "display_name = ?"])
+        params.extend([next_name, next_name])
+
+    if payload.headline is not None:
+        updates.append("headline = ?")
+        params.append(" ".join(payload.headline.strip().split())[:191])
+
+    if payload.bio is not None:
+        updates.append("bio = ?")
+        params.append(payload.bio.strip()[:800])
+
+    if payload.department is not None:
+        updates.append("department = ?")
+        params.append(" ".join(payload.department.strip().split())[:191])
+
+    if payload.office_location is not None:
+        updates.append("office_location = ?")
+        params.append(" ".join(payload.office_location.strip().split())[:191])
+
+    if payload.skills is not None:
+        clean_skills = parse_skills_json(payload.skills)
+        updates.append("skills_json = ?")
+        params.append(json.dumps(clean_skills, ensure_ascii=False))
+
+    if payload.github_url is not None:
+        updates.append("github_url = ?")
+        params.append(normalize_profile_url(payload.github_url, "Liên kết GitHub"))
+
+    if payload.website_url is not None:
+        updates.append("website_url = ?")
+        params.append(normalize_profile_url(payload.website_url, "Website cá nhân"))
+
+    if payload.phone is not None:
+        updates.append("phone = ?")
+        params.append(" ".join(payload.phone.strip().split())[:40])
+
+    with db() as conn:
+        if updates:
+            updates.append("updated_at = ?")
+            params.append(now_utc())
+            params.append(user["id"])
+            conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", tuple(params))
+            if payload.full_name is not None and str(user.get("role") or "").strip().lower() == "instructor":
+                conn.execute(
+                    "UPDATE class_sections SET teacher_name = ?, updated_at = ? WHERE instructor_id = ?",
+                    (next_name, now_utc(), user["id"]),
+                )
+                conn.execute(
+                    "UPDATE courses SET teacher_name = ? WHERE instructor_id = ?",
+                    (next_name, user["id"]),
+                )
+                conn.execute(
+                    "UPDATE engineering_projects SET instructor_name = ?, instructor_label = ?, updated_at = ? WHERE instructor_id = ?",
+                    (next_name, f"{next_name} (GV Hướng dẫn)", now_utc(), user["id"]),
+                )
+                conn.execute(
+                    "UPDATE engineering_projects SET reviewer_name = ?, updated_at = ? WHERE reviewer_id = ?",
+                    (next_name, now_utc(), user["id"]),
+                )
+                conn.execute(
+                    "UPDATE academic_schedules SET instructor_name = ?, updated_at = ? WHERE instructor_id = ?",
+                    (next_name, now_utc(), user["id"]),
+                )
+            conn.commit()
+        updated_row = conn.execute(
+            """SELECT id, full_name, display_name, avatar_url, headline, bio, department,
+                      office_location, skills_json, github_url, website_url, phone
+               FROM users WHERE id = ?""",
+            (user["id"],),
+        ).fetchone()
+
+    if updates:
+        record_audit_log(
+            next_name,
+            user["id"],
+            "Cập nhật hồ sơ cá nhân",
+            next_name,
+            log_type="profile",
+            resource_type="user",
+            resource_id=user["id"],
+        )
+
+    u_dict = dict(updated_row) if updated_row else {}
+    resolved_name = (u_dict.get("full_name") or next_name).strip()
+    return {
+        "id": user["id"],
+        "full_name": resolved_name,
+        "display_name": (u_dict.get("display_name") or resolved_name).strip(),
+        **serialize_shared_profile_fields(u_dict),
+    }
+
+
 @router.get("/navigation/counts")
 def get_navigation_counts(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, int]:
-    """Đếm số lượng thực tế từ MySQL để hiển thị badge điều hướng không dùng số cứng."""
+    """Đếm số lượng thực tế từ MySQL theo đúng phạm vi vai trò (Student / Instructor / Admin)."""
+    u_role = str(user.get("role") or "student").strip().lower()
+    uid_str = str(user["id"])
+
     with db() as conn:
+        from app.api.v1.kanban import (
+            can_grade_project_council,
+            count_scoped_team_members,
+            is_user_in_project,
+        )
+
         users_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"] or 0)
-        courses_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM courses").fetchone()["c"] or 0)
         ai_active = int(conn.execute("SELECT COUNT(*) AS c FROM ai_service_units WHERE active = 1").fetchone()["c"] or 0)
         ai_total = int(conn.execute("SELECT COUNT(*) AS c FROM ai_service_units").fetchone()["c"] or 0)
-        projects_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM engineering_projects").fetchone()["c"] or 0)
-        team_cnt = int(
-            conn.execute(
-                """SELECT COUNT(*) AS c FROM users
-                   WHERE role IN ('student', 'instructor')
-                     AND status != 'suspended'
-                     AND id NOT IN ('student-demo', 'instructor-demo', 'admin-demo')"""
-            ).fetchone()["c"]
-            or 0
-        )
-        kanban_total = int(conn.execute("SELECT COUNT(*) AS c FROM engineering_tasks").fetchone()["c"] or 0)
-        kanban_open = int(
-            conn.execute(
-                "SELECT COUNT(*) AS c FROM engineering_tasks WHERE column_id NOT IN ('done', 'verified')"
-            ).fetchone()["c"]
-            or 0
-        )
-        schedules_cnt = int(
-            conn.execute("SELECT COUNT(*) AS c FROM academic_schedules WHERE status != 'cancelled'").fetchone()["c"] or 0
-        )
-        pending_dual = int(
-            conn.execute(
-                "SELECT COUNT(*) AS c FROM dual_submissions WHERE status IN ('pending', 'flagged')"
-            ).fetchone()["c"]
-            or 0
-        )
+        team_cnt = count_scoped_team_members(conn, user)
         completed_lessons = int(
             conn.execute(
                 "SELECT COUNT(*) AS c FROM student_lesson_progress WHERE user_id = ?",
-                (user["id"],),
+                (uid_str,),
             ).fetchone()["c"]
             or 0
         )
+
+        all_proj_rows = conn.execute("SELECT * FROM engineering_projects").fetchall()
+
+        if u_role == "student":
+            enrolled_cnt = int(
+                conn.execute(
+                    """SELECT COUNT(DISTINCT ce.section_id) AS c
+                       FROM class_enrollments ce
+                       JOIN class_sections cs ON cs.id = ce.section_id
+                       WHERE ce.student_id = ? AND ce.status = 'active' AND cs.status = 'active'""",
+                    (uid_str,),
+                ).fetchone()["c"]
+                or 0
+            )
+            courses_cnt = (
+                enrolled_cnt
+                if enrolled_cnt > 0
+                else int(conn.execute("SELECT COUNT(*) AS c FROM courses").fetchone()["c"] or 0)
+            )
+            scoped_proj_ids = [p["id"] for p in all_proj_rows if is_user_in_project(user, p)]
+            projects_cnt = len(scoped_proj_ids)
+            if scoped_proj_ids:
+                ph = ",".join("?" for _ in scoped_proj_ids)
+                kanban_total = int(
+                    conn.execute(f"SELECT COUNT(*) AS c FROM engineering_tasks WHERE project_id IN ({ph})", tuple(scoped_proj_ids)).fetchone()["c"]
+                    or 0
+                )
+                kanban_open = int(
+                    conn.execute(
+                        f"SELECT COUNT(*) AS c FROM engineering_tasks WHERE project_id IN ({ph}) AND column_id NOT IN ('done', 'verified')",
+                        tuple(scoped_proj_ids),
+                    ).fetchone()["c"]
+                    or 0
+                )
+            else:
+                kanban_total = 0
+                kanban_open = 0
+            schedules_cnt = int(
+                conn.execute("SELECT COUNT(*) AS c FROM academic_schedules WHERE status != 'cancelled'").fetchone()["c"] or 0
+            )
+            pending_dual = 0
+        elif u_role == "instructor":
+            sec_rows = conn.execute(
+                """SELECT cs.id, cs.course_id, c.subject_id
+                   FROM class_sections cs
+                   JOIN courses c ON c.id = cs.course_id
+                   WHERE cs.instructor_id = ? AND cs.status = 'active'""",
+                (uid_str,),
+            ).fetchall()
+            sec_ids = [str(r["id"]) for r in sec_rows]
+            course_ids = list({str(r["course_id"]) for r in sec_rows if r.get("course_id")})
+            subj_ids = list({str(r["subject_id"]) for r in sec_rows if r.get("subject_id")})
+            courses_cnt = len(sec_ids)
+
+            scoped_proj_ids = [p["id"] for p in all_proj_rows if can_grade_project_council(user, p)]
+            projects_cnt = len(scoped_proj_ids)
+            if scoped_proj_ids:
+                ph = ",".join("?" for _ in scoped_proj_ids)
+                kanban_total = int(
+                    conn.execute(f"SELECT COUNT(*) AS c FROM engineering_tasks WHERE project_id IN ({ph})", tuple(scoped_proj_ids)).fetchone()["c"]
+                    or 0
+                )
+                kanban_open = int(
+                    conn.execute(
+                        f"SELECT COUNT(*) AS c FROM engineering_tasks WHERE project_id IN ({ph}) AND column_id NOT IN ('done', 'verified')",
+                        tuple(scoped_proj_ids),
+                    ).fetchone()["c"]
+                    or 0
+                )
+            else:
+                kanban_total = 0
+                kanban_open = 0
+
+            schedules_cnt = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS c FROM academic_schedules WHERE instructor_id = ? AND status != 'cancelled'",
+                    (uid_str,),
+                ).fetchone()["c"]
+                or 0
+            )
+
+            allowed_class_ids = list(set(sec_ids + course_ids))
+            dual_cnt = 0
+            if allowed_class_ids:
+                ph_cls = ",".join("?" for _ in allowed_class_ids)
+                dual_cnt = int(
+                    conn.execute(
+                        f"SELECT COUNT(*) AS c FROM dual_submissions WHERE status IN ('pending', 'flagged') AND class_id IN ({ph_cls})",
+                        tuple(allowed_class_ids),
+                    ).fetchone()["c"]
+                    or 0
+                )
+
+            ch_cnt = 0
+            if sec_ids and subj_ids:
+                ph_sec = ",".join("?" for _ in sec_ids)
+                ph_subj = ",".join("?" for _ in subj_ids)
+                ch_cnt = int(
+                    conn.execute(
+                        f"""SELECT COUNT(*) AS c
+                            FROM student_chapter_submissions scs
+                            WHERE scs.status IN ('pending', 'flagged')
+                              AND scs.subject_id IN ({ph_subj})
+                              AND EXISTS (
+                                  SELECT 1 FROM class_enrollments ce
+                                  WHERE ce.student_id = scs.user_id
+                                    AND ce.status = 'active'
+                                    AND ce.section_id IN ({ph_sec})
+                              )""",
+                        tuple(subj_ids + sec_ids),
+                    ).fetchone()["c"]
+                    or 0
+                )
+            pending_dual = dual_cnt + ch_cnt
+        else:
+            courses_cnt = int(conn.execute("SELECT COUNT(*) AS c FROM courses").fetchone()["c"] or 0)
+            projects_cnt = len(all_proj_rows)
+            kanban_total = int(conn.execute("SELECT COUNT(*) AS c FROM engineering_tasks").fetchone()["c"] or 0)
+            kanban_open = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS c FROM engineering_tasks WHERE column_id NOT IN ('done', 'verified')"
+                ).fetchone()["c"]
+                or 0
+            )
+            schedules_cnt = int(
+                conn.execute("SELECT COUNT(*) AS c FROM academic_schedules WHERE status != 'cancelled'").fetchone()["c"] or 0
+            )
+            pending_dual = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS c FROM dual_submissions WHERE status IN ('pending', 'flagged')"
+                ).fetchone()["c"]
+                or 0
+            )
+
     return {
         "users": users_cnt,
         "courses": courses_cnt,
@@ -1302,19 +1849,31 @@ def create_demo_session(payload: DemoSessionIn, request: Request) -> dict[str, A
         "instructor": "instructor-demo",
         "admin": "admin-demo",
     }
+    actual_role = "admin" if payload.demo_role == "admin" else payload.demo_role
     user_id = role_to_user.get(payload.demo_role, "student-demo")
     with db() as conn:
         if payload.preferred_email:
-            found = conn.execute(
-                "SELECT id FROM users WHERE lower(email)=? AND status='active'",
-                (payload.preferred_email.strip().lower(),),
+            req_email = payload.preferred_email.strip().lower()
+            exact_row = conn.execute(
+                "SELECT id, role, status FROM users WHERE lower(email)=?",
+                (req_email,),
             ).fetchone()
-            if found:
-                user_id = found["id"]
-        user = conn.execute("SELECT id, email, display_name, full_name, role FROM users WHERE id=?", (user_id,)).fetchone()
+            if exact_row:
+                if exact_row["status"] != "active":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Tài khoản yêu cầu đang bị khóa hoặc chờ phê duyệt.",
+                    )
+                if (exact_row["role"] or "").lower() == actual_role:
+                    user_id = exact_row["id"]
+        user = conn.execute("SELECT id, email, display_name, full_name, role, status FROM users WHERE id=?", (user_id,)).fetchone()
+        if user and user["status"] != "active":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tài khoản demo hiện đang bị khóa.",
+            )
 
     token = generate_access_token()
-    actual_role = "admin" if payload.demo_role == "admin" else payload.demo_role
     refresh_token = create_refresh_token({"sub": user_id, "role": actual_role})
 
     TOKENS[token] = {

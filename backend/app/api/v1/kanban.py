@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import current_user, get_optional_current_user, record_audit_log
+from app.api.v1.auth import serialize_shared_profile_fields
 from app.core.database import db, row_dict
 from app.core.security import uid
 from app.core.timezone import now_utc
@@ -432,6 +434,45 @@ def _fetch_single_task_git_activity(conn: Any, task_row: Any) -> dict[str, Any]:
     )
 
 
+def _normalize_audit_logs(raw_logs: Any, fallback_col: str = "") -> list[dict[str, Any]]:
+    if not isinstance(raw_logs, list):
+        return []
+    alias_labels = {
+        **COLUMN_LABEL,
+        "todo": "Cần làm",
+        "in_progress": "Đang làm",
+        "in_review": "Đang review",
+    }
+    normalized: list[dict[str, Any]] = []
+    for item in raw_logs:
+        if not isinstance(item, dict):
+            continue
+        entry = dict(item)
+        entry["user"] = str(entry.get("user") or entry.get("actor") or "Hệ thống")
+        entry["timestamp"] = str(entry.get("timestamp") or "")
+        from_col = str(entry.get("fromColumn") or entry.get("from_column") or "").strip()
+        to_col = str(entry.get("toColumn") or entry.get("to_column") or "").strip()
+        action = str(entry.get("action") or "").strip()
+        if (not from_col or not to_col) and "->" in action and ":" in action:
+            parts = action.split(":", 1)[1].split("->", 1)
+            if len(parts) == 2:
+                raw_from = parts[0].strip()
+                raw_to = parts[1].strip()
+                if not from_col:
+                    from_col = alias_labels.get(raw_from, raw_from)
+                if not to_col:
+                    to_col = alias_labels.get(raw_to, raw_to)
+        entry["fromColumn"] = from_col or "Khởi tạo"
+        entry["toColumn"] = (
+            to_col
+            or alias_labels.get(fallback_col, fallback_col)
+            or action
+            or "Cập nhật"
+        )
+        normalized.append(entry)
+    return normalized
+
+
 def _serialize_task(
     row: Any,
     git_activity: dict[str, Any] | None = None,
@@ -444,7 +485,10 @@ def _serialize_task(
     dod = json.loads(d.get("dod_json") or "[]")
     user_story = json.loads(d["user_story_json"]) if d.get("user_story_json") else None
     deliverable = json.loads(d["deliverable_json"]) if d.get("deliverable_json") else None
-    audit_logs = json.loads(d.get("audit_logs_json") or "[]")
+    audit_logs = _normalize_audit_logs(
+        json.loads(d.get("audit_logs_json") or "[]"),
+        str(d.get("column_id") or ""),
+    )
 
     res: dict[str, Any] = {
         "id": d["id"],
@@ -495,12 +539,84 @@ def _serialize_task(
 
 
 
+_EARLY_MENTOR_PREFIX_RE = re.compile(
+    r"^(?:p?gs\.?\s*|ts\.?\s*|ths\.?\s*|ks\.?\s*|cô\s+|thầy\s+|giảng\s+viên\s+|gvhd\s*[:\-]?\s*|gvpb\s*[:\-]?\s*)+",
+    re.IGNORECASE,
+)
+
+
+def _clean_person_name_for_match(raw: str | None) -> str:
+    cleaned = re.sub(r"\([^)]*\)", " ", raw or "")
+    cleaned = " ".join(cleaned.split()).strip()
+    stripped = _EARLY_MENTOR_PREFIX_RE.sub("", cleaned)
+    return " ".join(stripped.split()).strip().lower()
+
+
+def is_project_advisor(user: dict[str, Any] | None, proj_row: Any) -> bool:
+    """Kiểm tra người dùng có phải GV Hướng dẫn của đồ án (hoặc Admin) không."""
+    if not user:
+        return False
+    u_role = str(user.get("role") or "").strip().lower()
+    if u_role in ("admin", "org_admin"):
+        return True
+    if u_role != "instructor":
+        return False
+    p_dict = dict(proj_row)
+    uid_val = str(user.get("id") or "").strip()
+    inst_id = str(p_dict.get("instructor_id") or "").strip()
+    if inst_id and inst_id != "instructor-demo":
+        return inst_id == uid_val or inst_id == f"usr-{uid_val}"
+    u_stripped = _clean_person_name_for_match(user.get("full_name") or user.get("display_name") or "")
+    if not u_stripped:
+        return False
+    for field in (p_dict.get("instructor_name"), p_dict.get("instructor_label")):
+        f_stripped = _clean_person_name_for_match(field)
+        if f_stripped and (f_stripped == u_stripped or u_stripped in f_stripped or f_stripped in u_stripped):
+            return True
+    return False
+
+
+def is_project_reviewer(user: dict[str, Any] | None, proj_row: Any) -> bool:
+    """Kiểm tra người dùng có phải GV Phản biện được phân công trên đồ án không."""
+    if not user:
+        return False
+    u_role = str(user.get("role") or "").strip().lower()
+    if u_role != "instructor":
+        return False
+    p_dict = dict(proj_row)
+    uid_val = str(user.get("id") or "").strip()
+    rev_id = str(p_dict.get("reviewer_id") or "").strip()
+    if rev_id:
+        return rev_id == uid_val or rev_id == f"usr-{uid_val}"
+    u_stripped = _clean_person_name_for_match(user.get("full_name") or user.get("display_name") or "")
+    rev_stripped = _clean_person_name_for_match(p_dict.get("reviewer_name"))
+    return bool(
+        u_stripped
+        and rev_stripped
+        and (rev_stripped == u_stripped or u_stripped in rev_stripped or rev_stripped in u_stripped)
+    )
+
+
+def can_grade_project_council(user: dict[str, Any] | None, proj_row: Any) -> bool:
+    """Hướng 2: Chỉ Admin, GV Hướng dẫn hoặc GV Phản biện được chỉ định mới có quyền chấm đồ án."""
+    if not user:
+        return False
+    u_role = str(user.get("role") or "").strip().lower()
+    if u_role in ("admin", "org_admin"):
+        return True
+    if u_role == "instructor":
+        return is_project_advisor(user, proj_row) or is_project_reviewer(user, proj_row)
+    return False
+
+
 def is_user_in_project(user: dict[str, Any] | None, proj_row: Any) -> bool:
     if not user:
         return True
     u_role = str(user.get("role") or "").lower()
-    if u_role in ("admin", "org_admin", "instructor"):
+    if u_role in ("admin", "org_admin"):
         return True
+    if u_role == "instructor":
+        return can_grade_project_council(user, proj_row)
 
     uid_val = str(user.get("id") or "").strip()
     u_email = str(user.get("email") or "").strip().lower()
@@ -513,10 +629,6 @@ def is_user_in_project(user: dict[str, Any] | None, proj_row: Any) -> bool:
 
     created_by = str(p_dict.get("created_by") or "").strip()
     if created_by and (created_by == uid_val or created_by == f"usr-{uid_val}"):
-        return True
-
-    inst_id = str(p_dict.get("instructor_id") or "").strip()
-    if inst_id and (inst_id == uid_val or inst_id == f"usr-{uid_val}"):
         return True
 
     try:
@@ -542,12 +654,14 @@ def is_user_in_project(user: dict[str, Any] | None, proj_row: Any) -> bool:
 
 
 def is_user_project_leader(user: dict[str, Any] | None, proj_row: Any) -> bool:
-    """Xác định người dùng có phải Nhóm trưởng đồ án (hoặc Giảng viên/Admin) hay không."""
+    """Xác định người dùng có phải Nhóm trưởng đồ án, GVHD của đồ án hoặc Admin hay không."""
     if not user:
         return False
     u_role = str(user.get("role") or "").strip().lower()
-    if u_role in ("admin", "org_admin", "instructor"):
+    if u_role in ("admin", "org_admin"):
         return True
+    if u_role == "instructor":
+        return is_project_advisor(user, proj_row)
 
     uid_val = str(user.get("id") or "").strip()
     u_email = str(user.get("email") or "").strip().lower()
@@ -592,8 +706,11 @@ def _is_task_assignee(user: dict[str, Any], task_row: Any) -> bool:
     uid_val = str(user.get("id") or "").strip()
     u_email = str(user.get("email") or "").strip().lower()
     u_name = str(user.get("full_name") or user.get("display_name") or "").strip().lower()
+    t_dict = dict(task_row)
+    if str(t_dict.get("assignee_user_id") or "").strip() == uid_val and uid_val:
+        return True
     try:
-        raw = dict(task_row).get("assignee_json") or "{}"
+        raw = t_dict.get("assignee_json") or "{}"
         assignee = json.loads(raw) if isinstance(raw, str) else (raw or {})
     except Exception:
         return False
@@ -611,7 +728,13 @@ def _is_task_assignee(user: dict[str, Any], task_row: Any) -> bool:
 
 def _ensure_project_writable_for_user(user: dict[str, Any], proj_row: Any, action_label: str = "chỉnh sửa công việc") -> None:
     u_role = str(user.get("role") or "").strip().lower()
-    if u_role == "student":
+    if u_role == "instructor":
+        if not is_project_advisor(user, proj_row):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Chỉ Giảng viên hướng dẫn được phân công cho đồ án này hoặc Admin mới có quyền {action_label}.",
+            )
+    elif u_role == "student":
         p_dict = dict(proj_row)
         if not is_user_in_project(user, proj_row):
             raise HTTPException(status_code=403, detail=f"Chỉ thành viên trong nhóm đồ án này mới có quyền {action_label}.")
@@ -622,14 +745,14 @@ def _ensure_project_writable_for_user(user: dict[str, Any], proj_row: Any, actio
 
 
 DEFAULT_PROJECT_MENTORS: dict[str, str] = {
-    "prj-codemind": "TS. Nguyễn Phước (GV Hướng dẫn)",
-    "prj-compiler": "ThS. Trần Minh Quân (GV Hướng dẫn)",
+    "prj-codemind": "Cô Trần Thị B (GV Hướng dẫn)",
+    "prj-compiler": "Cô Trần Thị B (GV Hướng dẫn)",
     "prj-devnet": "Cô Trần Thị B (GV Hướng dẫn)",
-    "prj-ecommerce": "TS. Nguyễn Phước (GV Hướng dẫn)",
+    "prj-ecommerce": "Thầy Nguyễn Phước (GV Hướng dẫn)",
     "prj-faceattend": "TS. Lê Hoàng Mai (GV Hướng dẫn)",
     "prj-medai": "TS. Lê Hoàng Mai (GV Hướng dẫn)",
-    "prj-pintos": "ThS. Trần Minh Quân (GV Hướng dẫn)",
-    "prj-security": "TS. Đặng Quốc Bảo (GV Hướng dẫn)",
+    "prj-pintos": "Thầy Trần Minh Quân (GV Hướng dẫn)",
+    "prj-security": "Thầy Đặng Quốc Bảo (GV Hướng dẫn)",
 }
 
 
@@ -675,10 +798,19 @@ def _serialize_project(
     raw_instructor = str(p.get("instructor_label") or "").strip()
     if not raw_instructor or "(lead)" in raw_instructor.lower():
         raw_instructor = DEFAULT_PROJECT_MENTORS.get(
-            p["id"], "TS. Nguyễn Phước (GV Hướng dẫn)"
+            p["id"], "Thầy Nguyễn Phước (GV Hướng dẫn)"
         )
 
     ev_dict = row_dict(eval_row) if eval_row else None
+    u_role = str(user.get("role") or "").strip().lower() if user else ""
+    advisor_flag = is_project_advisor(user, proj_row) if user else False
+    reviewer_flag = is_project_reviewer(user, proj_row) if user else False
+    can_grade_flag = can_grade_project_council(user, proj_row) if user else False
+    can_manage_flag = (
+        u_role in ("admin", "org_admin")
+        or (u_role == "instructor" and advisor_flag)
+        or (u_role == "student" and is_user_project_leader(user, proj_row))
+    ) if user else False
 
     return {
         "id": p["id"],
@@ -703,6 +835,10 @@ def _serialize_project(
         "budgetStr": f"{story_budget:,} SP",
         "lead": lead_name,
         "instructor": raw_instructor,
+        "instructorId": str(p.get("instructor_id") or ""),
+        "instructorName": str(p.get("instructor_name") or ""),
+        "reviewerId": str(p.get("reviewer_id") or ""),
+        "reviewerName": str(p.get("reviewer_name") or ""),
         "instructorAvatar": (team_members[0]["avatar"] if team_members else "H"),
         "finalScore": float(ev_dict["final_score"]) if ev_dict and ev_dict.get("final_score") is not None else None,
         "evaluationStatus": str(ev_dict.get("status") or "graded") if ev_dict else None,
@@ -717,6 +853,10 @@ def _serialize_project(
         "tasks": tasks_out,
         "isMyProject": is_user_in_project(user, proj_row),
         "isLead": is_user_project_leader(user, proj_row) if user else False,
+        "isAdvisor": advisor_flag,
+        "isReviewer": reviewer_flag,
+        "canManageProject": can_manage_flag,
+        "canGradeProject": can_grade_flag,
         "leaderUserId": p.get("leader_user_id"),
     }
 
@@ -807,11 +947,148 @@ def _check_h2_constraint(conn: Any, task_row: Any, target_col: str) -> None:
         )
 
 
-def _credit_student_xp(conn: Any, xp_amount: int) -> bool:
-    if xp_amount <= 0:
+def _check_reverse_h2_constraint(conn: Any, task_row: Any, target_col: str) -> None:
+    row_map = dict(task_row)
+    cur_col = str(row_map.get("column_id") or "")
+    if cur_col not in ("done", "verified") or target_col in ("done", "verified"):
+        return
+    child = conn.execute(
+        """SELECT code, title FROM engineering_tasks
+           WHERE project_id=? AND depends_on=? AND column_id IN ('done', 'verified')
+           LIMIT 1""",
+        (row_map.get("project_id"), row_map.get("id")),
+    ).fetchone()
+    if child:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Vi phạm Ràng buộc H2 ngược: Không thể kéo lùi Task #{row_map.get('code')} khi Task phụ thuộc "
+                f"#{child['code']} ({child['title']}) đang ở trạng thái Hoàn thành / Đã nghiệm thu."
+            ),
+        )
+
+
+def _validate_h2_dependency(
+    conn: Any,
+    project_id: str,
+    task_id: str | None,
+    raw_depends_on: str | None,
+) -> str | None:
+    """Chuẩn hóa và kiểm tra hợp lệ Task tiền đề H2 (chặn tự trỏ, sai dự án, hoặc vòng lặp A -> B -> A)."""
+    cleaned = (raw_depends_on or "").strip()
+    if not cleaned:
+        return None
+    if task_id and cleaned == task_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Không thể đặt Task tự phụ thuộc chính nó (vòng lặp H2).",
+        )
+    parent = conn.execute(
+        "SELECT id, code, title, depends_on FROM engineering_tasks WHERE id=? AND project_id=?",
+        (cleaned, project_id),
+    ).fetchone()
+    if not parent:
+        raise HTTPException(
+            status_code=404,
+            detail="Không tìm thấy Task tiền đề (H2) trong dự án hiện tại.",
+        )
+    if task_id:
+        visited: set[str] = {task_id}
+        cursor_id: str | None = cleaned
+        hops = 0
+        while cursor_id and hops < 100:
+            if cursor_id in visited:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Phát hiện vòng lặp phụ thuộc H2 (A → B → A). Vui lòng chọn Task tiền đề khác.",
+                )
+            visited.add(cursor_id)
+            row = conn.execute(
+                "SELECT depends_on FROM engineering_tasks WHERE id=? AND project_id=?",
+                (cursor_id, project_id),
+            ).fetchone()
+            cursor_id = ((row["depends_on"] or "").strip() or None) if row else None
+            hops += 1
+    return cleaned
+
+
+def _resolve_student_uid_from_assignee(
+    conn: Any, assignee: dict[str, Any] | None, fallback_uid: str = ""
+) -> str:
+    if isinstance(assignee, dict):
+        aid = str(assignee.get("id") or "").strip()
+        aemail = str(assignee.get("email") or "").strip().lower()
+        aname = str(assignee.get("name") or "").strip().lower()
+        legacy_map = {
+            "m1": "usr-sv-01",
+            "m2": "usr-sv-03",
+            "m3": "usr-sv-04",
+            "e1": "usr-sv-08",
+            "e2": "usr-sv-07",
+            "a1": "usr-sv-07",
+            "a2": "usr-sv-08",
+        }
+        if aid in legacy_map:
+            return legacy_map[aid]
+        if aid:
+            r = conn.execute(
+                "SELECT id FROM users WHERE id = ? AND role = 'student' LIMIT 1",
+                (aid,),
+            ).fetchone()
+            if r:
+                return str(r["id"])
+        if aemail:
+            r = conn.execute(
+                "SELECT id FROM users WHERE LOWER(email) = ? AND role = 'student' LIMIT 1",
+                (aemail,),
+            ).fetchone()
+            if r:
+                return str(r["id"])
+        if aname:
+            r = conn.execute(
+                "SELECT id FROM users WHERE (LOWER(full_name) = ? OR LOWER(display_name) = ?) AND role = 'student' LIMIT 1",
+                (aname, aname),
+            ).fetchone()
+            if r:
+                return str(r["id"])
+    return fallback_uid
+
+
+def resolve_project_student_ids(conn: Any, proj_row: Any) -> list[str]:
+    p_dict = dict(proj_row)
+    found: list[str] = []
+    seen: set[str] = set()
+    try:
+        raw_team = p_dict.get("team_json") or "[]"
+        team_list = json.loads(raw_team) if isinstance(raw_team, str) else (raw_team or [])
+    except Exception:
+        team_list = []
+
+    for tm in team_list:
+        if not isinstance(tm, dict):
+            continue
+        uid_resolved = _resolve_student_uid_from_assignee(conn, tm)
+        if uid_resolved and uid_resolved not in seen:
+            seen.add(uid_resolved)
+            found.append(uid_resolved)
+
+    leader_id = str(p_dict.get("leader_user_id") or "").strip()
+    if leader_id:
+        uid_leader = _resolve_student_uid_from_assignee(conn, {"id": leader_id})
+        if uid_leader and uid_leader not in seen:
+            seen.add(uid_leader)
+            found.append(uid_leader)
+    return found
+
+
+def _credit_student_xp(
+    conn: Any, xp_amount: int, target_user_id: str | None = None
+) -> bool:
+    if xp_amount <= 0 or not target_user_id:
         return False
     prof = conn.execute(
-        "SELECT user_id, radar_teamwork FROM student_profiles LIMIT 1"
+        "SELECT user_id, radar_teamwork FROM student_profiles WHERE user_id = ? LIMIT 1",
+        (target_user_id,),
     ).fetchone()
     if not prof:
         return False
@@ -820,22 +1097,41 @@ def _credit_student_xp(conn: Any, xp_amount: int) -> bool:
         """UPDATE student_profiles
            SET exp_points = exp_points + ?,
                radar_teamwork = ?
-           WHERE user_id=?""",
+           WHERE user_id = ?""",
         (xp_amount, next_radar, prof["user_id"]),
     )
     return True
 
 
+def credit_project_team_xp(conn: Any, proj_row: Any, xp_amount: int) -> list[str]:
+    student_ids = resolve_project_student_ids(conn, proj_row)
+    credited: list[str] = []
+    for suid in student_ids:
+        if _credit_student_xp(conn, xp_amount, target_user_id=suid):
+            credited.append(suid)
+    return credited
+
+
 def _award_task_done_xp(conn: Any, user: dict[str, Any], task_row: Any, target_col: str) -> int:
-    current_awarded = int(dict(task_row).get("xp_awarded") or 0)
+    td = dict(task_row)
+    current_awarded = int(td.get("xp_awarded") or 0)
+    try:
+        ass_obj = json.loads(td.get("assignee_json") or "{}")
+    except Exception:
+        ass_obj = {}
+    fallback_student = str(user.get("id") or "") if str(user.get("role") or "").lower() == "student" else ""
+    target_uid = (
+        str(td.get("assignee_user_id") or "").strip()
+        or _resolve_student_uid_from_assignee(conn, ass_obj, fallback_uid=fallback_student)
+    )
     if target_col == "verified" and current_awarded < 50:
-        xp_reward = max(50, int(dict(task_row).get("points") or 3) * 10)
+        xp_reward = max(50, int(td.get("points") or 3) * 10)
         delta = xp_reward - current_awarded
-        if _credit_student_xp(conn, delta):
+        if _credit_student_xp(conn, delta, target_user_id=target_uid):
             conn.execute("UPDATE engineering_tasks SET xp_awarded = ? WHERE id=?", (xp_reward, task_row["id"]))
             return delta
     if target_col == "done" and current_awarded == 0:
-        if _credit_student_xp(conn, 15):
+        if _credit_student_xp(conn, 15, target_user_id=target_uid):
             conn.execute("UPDATE engineering_tasks SET xp_awarded = 15 WHERE id=?", (task_row["id"],))
             return 15
     return 0
@@ -874,18 +1170,21 @@ def _insert_workspace_task(
     code = (item.code or f"TSK-{random.randint(100, 999)}").strip()
     assignee = dict(item.assignee or {})
     if not assignee.get("name"):
-        assignee = {"name": "Nguyễn Bá Hòa", "avatar": "H", "role": "Leader & Architect"}
+        assignee = {"id": "usr-sv-01", "name": "Nguyễn Bá Hòa", "avatar": "H", "role": "Leader & Architect"}
+    assignee_uid = _resolve_student_uid_from_assignee(conn, assignee)
+    if assignee_uid and not assignee.get("id"):
+        assignee["id"] = assignee_uid
     dod = item.definitionOfDone if item.definitionOfDone else _default_dod(item.column == "done")
 
     conn.execute(
         """INSERT INTO engineering_tasks(
                id, project_id, code, title, description, column_id, priority, moscow,
-               points, assignee_json, estimate_hours, due_date, epic, epic_color,
+               points, assignee_user_id, assignee_json, estimate_hours, due_date, epic, epic_color,
                depends_on, checklist_json, dod_json, user_story_json, acceptance_criteria,
                deliverable_json, submission_requirement, submission_url, is_bonus,
                comments_count, attachments_count, audit_logs_json, position_order,
                xp_awarded, created_at, updated_at
-           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             task_id,
             project_id,
@@ -896,12 +1195,13 @@ def _insert_workspace_task(
             item.priority,
             item.moscow,
             item.points,
+            assignee_uid or None,
             json.dumps(assignee, ensure_ascii=False),
             item.estimateHours,
             item.dueDate,
             item.epic,
             item.epicColor,
-            item.dependsOn,
+            (item.dependsOn or "").strip() or None,
             json.dumps(item.checklist, ensure_ascii=False),
             json.dumps(dod, ensure_ascii=False),
             json.dumps(item.userStory, ensure_ascii=False) if item.userStory else None,
@@ -992,6 +1292,54 @@ def get_kanban_workspace(
             "done_tasks": total_done,
         },
     }
+
+
+_MENTOR_TITLE_PREFIX_RE = re.compile(
+    r"^(?:p?gs\.?\s*|ts\.?\s*|ths\.?\s*|ks\.?\s*|cô\s+|thầy\s+|giảng\s+viên\s+|gvhd\s*[:\-]?\s*)+",
+    re.IGNORECASE,
+)
+
+
+def _strip_mentor_title(raw: str | None) -> str:
+    cleaned = re.sub(r"\([^)]*\)", " ", raw or "")
+    cleaned = " ".join(cleaned.split()).strip()
+    stripped = _MENTOR_TITLE_PREFIX_RE.sub("", cleaned)
+    return " ".join(stripped.split()).strip().lower()
+
+
+def _resolve_instructor_for_label(conn: Any, label: str | None) -> tuple[str, str]:
+    raw_label = (label or "").strip()
+    if not raw_label:
+        return ("", "")
+    instructors = conn.execute(
+        """SELECT id, full_name, display_name
+           FROM users
+           WHERE role = 'instructor'
+             AND status NOT IN ('suspended', 'pending')
+             AND id NOT IN ('student-demo', 'instructor-demo', 'admin-demo')"""
+    ).fetchall()
+    raw_low = raw_label.lower()
+    target_stripped = _strip_mentor_title(raw_label)
+
+    for inst in instructors:
+        i_id = str(inst["id"] or "").strip()
+        i_full = str(inst["full_name"] or inst["display_name"] or "").strip()
+        i_disp = str(inst["display_name"] or "").strip()
+        if i_id and raw_low == i_id.lower():
+            return (i_id, i_full or i_disp)
+        if i_full and raw_low == i_full.lower():
+            return (i_id, i_full)
+        if i_disp and raw_low == i_disp.lower():
+            return (i_id, i_full or i_disp)
+
+    if target_stripped:
+        for inst in instructors:
+            i_id = str(inst["id"] or "").strip()
+            i_full = str(inst["full_name"] or inst["display_name"] or "").strip()
+            i_stripped = _strip_mentor_title(i_full)
+            if i_stripped and (i_stripped == target_stripped or i_stripped in target_stripped or target_stripped in i_stripped):
+                return (i_id, i_full)
+    return ("", "")
 
 
 @router.post("/kanban/workspace/projects", status_code=status.HTTP_201_CREATED)
@@ -1085,8 +1433,9 @@ def create_workspace_project(
                     )
                     notif_id = f"notif-{uid()[:8]}"
                     conn.execute(
-                        """INSERT INTO notifications(id, user_id, title, message, type, is_read, created_at)
-                           VALUES(?, ?, ?, ?, 'project_invite', 0, ?)""",
+                        """INSERT INTO notifications(
+                               id, recipient_user_id, target_role, title, desc_text, category, is_read, action_url, created_at
+                           ) VALUES(?, ?, 'student', ?, ?, 'project', 0, '/projects', ?)""",
                         (
                             notif_id,
                             u_row["id"],
@@ -1113,13 +1462,29 @@ def create_workspace_project(
                     }
                 )
 
+        creator_role = str(user.get("role") or "").strip().lower()
+        if creator_role == "instructor":
+            inst_id = user["id"]
+            inst_name = creator_name
+            default_mentor = f"{creator_name} (GV Hướng dẫn)"
+        else:
+            resolved_id, resolved_name = _resolve_instructor_for_label(conn, default_mentor)
+            inst_id = resolved_id or "usr-gv-02"
+            inst_name = resolved_name or "Thầy Nguyễn Phước"
+        rev_id, rev_name = (
+            ("usr-gv-02", "Thầy Nguyễn Phước")
+            if inst_id != "usr-gv-02"
+            else ("usr-gv-03", "Thầy Trần Minh Quân")
+        )
+
         conn.execute(
             """INSERT INTO engineering_projects(
                    id, code, name, client, course, sprint, kind, status, fav,
                    due_date, due_text, story_points_budget, color_hex,
-                   tl_start, tl_width, tl_color, instructor_label, team_json,
+                   tl_start, tl_width, tl_color, instructor_id, instructor_name,
+                   reviewer_id, reviewer_name, instructor_label, team_json,
                    leader_user_id, created_by, created_at, updated_at
-               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 proj_id,
                 code,
@@ -1137,6 +1502,10 @@ def create_workspace_project(
                 32.0,
                 34.0,
                 "amber",
+                inst_id,
+                inst_name,
+                rev_id,
+                rev_name,
                 default_mentor,
                 json.dumps(team_list, ensure_ascii=False),
                 user["id"],
@@ -1222,11 +1591,46 @@ def patch_workspace_project(
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
 
+        if u_role == "instructor":
+            modifies_restricted = any(
+                val is not None
+                for val in (
+                    payload.is_frozen,
+                    payload.status,
+                    payload.name,
+                    payload.sprint,
+                    payload.due_date,
+                    payload.instructor,
+                    payload.instructor_id,
+                    payload.reviewer,
+                    payload.reviewer_id,
+                    payload.team,
+                )
+            )
+            if modifies_restricted and not is_project_advisor(user, existing):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Chỉ Giảng viên hướng dẫn được phân công cho đồ án này hoặc Quản trị viên mới có quyền quản trị cấu hình/đóng băng đồ án.",
+                )
+            if payload.instructor_id is not None or payload.instructor is not None:
+                req_inst = (payload.instructor_id or payload.instructor or "").strip()
+                resolved_req_id, _ = _resolve_instructor_for_label(conn, req_inst)
+                if resolved_req_id and resolved_req_id != str(dict(existing).get("instructor_id") or ""):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Chỉ Quản trị viên mới có quyền điều chuyển Giảng viên Hướng dẫn chính của đồ án.",
+                    )
+
         if u_role == "student":
             if payload.is_frozen is not None:
                 raise HTTPException(
                     status_code=403,
                     detail="Chỉ Giảng viên hướng dẫn hoặc Admin mới có quyền Đóng băng / Mở khóa nộp bài đồ án.",
+                )
+            if any(v is not None for v in (payload.instructor_id, payload.instructor, payload.reviewer_id, payload.reviewer)):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Sinh viên không có quyền tự thay đổi Giảng viên Hướng dẫn hoặc Giảng viên Phản biện.",
                 )
             modifies_config = any(
                 val is not None
@@ -1269,22 +1673,85 @@ def patch_workspace_project(
         name = payload.name.strip() if payload.name is not None else existing["name"]
         sprint = payload.sprint if payload.sprint is not None else existing["sprint"]
         due_date = payload.due_date if payload.due_date is not None else existing["due_date"]
+        existing_dict = dict(existing)
+        instructor_id = str(existing_dict.get("instructor_id") or "")
+        instructor_name = str(existing_dict.get("instructor_name") or "")
+        reviewer_id = str(existing_dict.get("reviewer_id") or "")
+        reviewer_name = str(existing_dict.get("reviewer_name") or "")
         instructor_label = (
             payload.instructor.strip()
             if payload.instructor is not None and payload.instructor.strip()
             else existing["instructor_label"]
         )
-        team_json = (
-            json.dumps(payload.team, ensure_ascii=False)
-            if payload.team is not None
-            else existing["team_json"]
-        )
+        if payload.instructor_id is not None and payload.instructor_id.strip():
+            resolved_id, resolved_name = _resolve_instructor_for_label(conn, payload.instructor_id.strip())
+            if not resolved_id:
+                raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản Giảng viên Hướng dẫn được chọn.")
+            instructor_id = resolved_id
+            instructor_name = resolved_name
+            instructor_label = f"{resolved_name} (GV Hướng dẫn)"
+        elif payload.instructor is not None and payload.instructor.strip():
+            resolved_id, resolved_name = _resolve_instructor_for_label(conn, instructor_label)
+            if resolved_id:
+                instructor_id = resolved_id
+                instructor_name = resolved_name
+
+        raw_rev = (payload.reviewer_id if payload.reviewer_id is not None else payload.reviewer)
+        if raw_rev is not None:
+            clean_rev = raw_rev.strip()
+            if not clean_rev:
+                reviewer_id = ""
+                reviewer_name = ""
+            else:
+                res_rev_id, res_rev_name = _resolve_instructor_for_label(conn, clean_rev)
+                if not res_rev_id:
+                    raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản Giảng viên Phản biện được chọn.")
+                reviewer_id = res_rev_id
+                reviewer_name = res_rev_name
+
+        if instructor_id and reviewer_id and instructor_id == reviewer_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Giảng viên Phản biện không được trùng với Giảng viên Hướng dẫn trên cùng một đồ án.",
+            )
+
+        if payload.team is not None:
+            if len(payload.team) == 0:
+                raise HTTPException(status_code=400, detail="Đồ án phải có ít nhất 1 thành viên.")
+            leader_uid = str(existing_dict.get("leader_user_id") or "").strip()
+            old_team = json.loads(existing["team_json"] or "[]")
+            if leader_uid and any(str(m.get("id") or "") == leader_uid for m in old_team):
+                if not any(str(m.get("id") or "") == leader_uid for m in payload.team):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Không thể gỡ Nhóm trưởng khỏi danh sách thành viên đồ án.",
+                    )
+            team_json = json.dumps(payload.team, ensure_ascii=False)
+        else:
+            team_json = existing["team_json"]
 
         conn.execute(
             """UPDATE engineering_projects
-               SET fav=?, is_frozen=?, status=?, name=?, sprint=?, due_date=?, instructor_label=?, team_json=?, updated_at=?
+               SET fav=?, is_frozen=?, status=?, name=?, sprint=?, due_date=?,
+                   instructor_id=?, instructor_name=?, reviewer_id=?, reviewer_name=?,
+                   instructor_label=?, team_json=?, updated_at=?
                WHERE id=?""",
-            (fav, is_frozen, norm_status, name, sprint, due_date, instructor_label, team_json, now, project_id),
+            (
+                fav,
+                is_frozen,
+                norm_status,
+                name,
+                sprint,
+                due_date,
+                instructor_id,
+                instructor_name,
+                reviewer_id,
+                reviewer_name,
+                instructor_label,
+                team_json,
+                now,
+                project_id,
+            ),
         )
         proj_row = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         task_rows = conn.execute(
@@ -1373,6 +1840,11 @@ def invite_user_to_project(
             raise HTTPException(status_code=404, detail="Không tìm thấy đồ án")
 
         u_role = str(user.get("role") or "").lower()
+        if u_role == "instructor" and not is_project_advisor(user, proj):
+            raise HTTPException(
+                status_code=403,
+                detail="Chỉ Giảng viên hướng dẫn của đồ án này hoặc Admin mới có quyền mời thành viên vào đồ án.",
+            )
         if u_role == "student":
             if not is_user_project_leader(user, proj):
                 raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng thực tế của đồ án mới có quyền mời thành viên vào đồ án")
@@ -1428,8 +1900,9 @@ def invite_user_to_project(
         try:
             notif_id = f"notif-{uid()[:8]}"
             conn.execute(
-                """INSERT INTO notifications(id, user_id, title, message, type, is_read, created_at)
-                   VALUES(?, ?, ?, ?, 'project_invite', 0, ?)""",
+                """INSERT INTO notifications(
+                       id, recipient_user_id, target_role, title, desc_text, category, is_read, action_url, created_at
+                   ) VALUES(?, ?, 'student', ?, ?, 'project', 0, '/projects', ?)""",
                 (
                     notif_id,
                     target_user["id"],
@@ -1614,6 +2087,11 @@ def remove_member_from_project(
 
         u_role = str(user.get("role") or "").lower()
         team = json.loads(proj["team_json"] or "[]")
+        if u_role == "instructor" and not is_project_advisor(user, proj):
+            raise HTTPException(
+                status_code=403,
+                detail="Chỉ Giảng viên hướng dẫn của đồ án này hoặc Admin mới có quyền gỡ thành viên.",
+            )
         if u_role == "student":
             if bool(dict(proj).get("is_frozen")):
                 raise HTTPException(status_code=403, detail="Đồ án đã bị đóng băng nộp bài, không thể gỡ thành viên.")
@@ -1621,6 +2099,16 @@ def remove_member_from_project(
                 raise HTTPException(status_code=403, detail="Đồ án đã bảo vệ xong, không thể gỡ thành viên.")
             if not is_user_project_leader(user, proj):
                 raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng thực tế của đồ án hoặc Giảng viên/Admin mới có quyền gỡ thành viên.")
+
+        leader_uid = str(dict(proj).get("leader_user_id") or "").strip()
+        for idx, m in enumerate(team):
+            if m.get("id") == member_id or m.get("name") == member_id:
+                is_lead_member = (leader_uid and str(m.get("id") or "") == leader_uid) or (not leader_uid and idx == 0)
+                if is_lead_member:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Không thể gỡ Nhóm trưởng khỏi đồ án. Vui lòng chuyển quyền Nhóm trưởng trước.",
+                    )
 
         new_team = [m for m in team if m.get("id") != member_id and m.get("name") != member_id]
         if len(new_team) == len(team):
@@ -1631,6 +2119,10 @@ def remove_member_from_project(
         conn.execute(
             "UPDATE engineering_projects SET team_json=?, updated_at=? WHERE id=?",
             (json.dumps(new_team, ensure_ascii=False), now, project_id),
+        )
+        conn.execute(
+            "DELETE FROM project_members WHERE project_id=? AND user_id=?",
+            (project_id, member_id),
         )
 
     return {"success": True, "message": "Đã gỡ thành viên khỏi đồ án thành công."}
@@ -1644,11 +2136,38 @@ def create_workspace_task(
 ) -> dict[str, Any]:
     """Tạo mới 1 Task Kanban trong dự án và lưu vào SQLite."""
     now = now_utc()
+    u_role = str(user.get("role") or "").lower()
     with db() as conn:
         proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         if not proj:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
         _ensure_project_writable_for_user(user, proj, "tạo công việc")
+        if u_role == "student" and payload.column.strip() == "verified":
+            raise HTTPException(
+                status_code=403,
+                detail="Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định.",
+            )
+
+        payload.dependsOn = _validate_h2_dependency(conn, project_id, payload.id, payload.dependsOn)
+        if payload.dependsOn and payload.column in ("done", "verified"):
+            _check_h2_constraint(
+                conn,
+                {"project_id": project_id, "depends_on": payload.dependsOn},
+                payload.column,
+            )
+        if u_role == "student" and payload.column.strip() == "done":
+            _check_git_proof_for_done(
+                conn,
+                user,
+                {
+                    "project_id": project_id,
+                    "column_id": "ready",
+                    "code": payload.code or "NEW",
+                    "submission_url": payload.submissionUrl,
+                },
+                "done",
+                payload.submissionUrl,
+            )
 
         max_pos = conn.execute(
             "SELECT COALESCE(MAX(position_order), -1) m FROM engineering_tasks WHERE project_id=? AND column_id=?",
@@ -1667,6 +2186,7 @@ def batch_create_workspace_tasks(
 ) -> dict[str, Any]:
     """Lưu hàng loạt Task (dùng cho AI Chia Việc WBS & Nhập CSV)."""
     now = now_utc()
+    u_role = str(user.get("role") or "").lower()
     created_list: list[dict[str, Any]] = []
     with db() as conn:
         proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
@@ -1675,6 +2195,16 @@ def batch_create_workspace_tasks(
         _ensure_project_writable_for_user(user, proj, "nhập danh sách công việc")
 
         if payload.replace:
+            if u_role == "student":
+                ver_cnt = conn.execute(
+                    "SELECT COUNT(*) AS c FROM engineering_tasks WHERE project_id=? AND column_id='verified'",
+                    (project_id,),
+                ).fetchone()["c"]
+                if int(ver_cnt or 0) > 0:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Không thể ghi đè danh sách khi dự án đã có công việc được Giảng viên nghiệm thu.",
+                    )
             conn.execute("DELETE FROM engineering_tasks WHERE project_id=?", (project_id,))
             next_pos = 0
         else:
@@ -1686,9 +2216,20 @@ def batch_create_workspace_tasks(
         id_remap: dict[str, str] = {}
 
         for idx, item in enumerate(payload.tasks):
+            if u_role == "student" and item.column.strip() == "verified":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Sinh viên không thể nhập trực tiếp công việc vào cột 'Đã nghiệm thu'.",
+                )
             orig_id = item.id
             if item.dependsOn and item.dependsOn in id_remap:
                 item = item.model_copy(update={"dependsOn": id_remap[item.dependsOn]})
+            if item.dependsOn and item.column in ("done", "verified"):
+                _check_h2_constraint(
+                    conn,
+                    {"project_id": project_id, "depends_on": item.dependsOn},
+                    item.column,
+                )
             inserted = _insert_workspace_task(conn, project_id, item, next_pos + idx, now)
             if orig_id:
                 id_remap[orig_id] = inserted["id"]
@@ -1703,6 +2244,10 @@ def generate_ai_wbs(
     _: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """AI Chia Việc tự động (Scrum WBS + ràng buộc H2) phân bổ cho các thành viên đã chọn."""
+    from app.api.deps import assert_ai_service_active
+    with db() as conn:
+        assert_ai_service_active(conn, "svc-aigc", "AI Chia Việc WBS (AIGC)")
+        conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id = 'svc-aigc'")
     feature = payload.feature_name.strip()
     stamp = uid()[:6]
     stack_labels = {
@@ -1917,15 +2462,37 @@ def patch_workspace_task(
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
 
         u_role = str(user.get("role") or "").lower()
-        if u_role == "student":
+        if u_role in ("student", "instructor"):
             proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (existing["project_id"],)).fetchone()
             if not proj:
                 raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
             _ensure_project_writable_for_user(user, proj, "chỉnh sửa công việc")
 
+        if payload.dependsOn is not None:
+            next_depends_on = _validate_h2_dependency(conn, existing["project_id"], task_id, payload.dependsOn)
+        else:
+            next_depends_on = existing["depends_on"]
+
         target_col = payload.column if payload.column is not None else existing["column_id"]
-        if target_col == "done" and existing["column_id"] != "done":
-            _check_h2_constraint(conn, existing, target_col)
+        if u_role == "student" and target_col == "verified":
+            raise HTTPException(
+                status_code=403,
+                detail="Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định.",
+            )
+        if user.get("role") == "student" and existing["column_id"] == "verified" and target_col != "verified":
+            raise HTTPException(
+                status_code=403,
+                detail="Công việc đã được Giảng viên nghiệm thu, sinh viên không thể tự ý chuyển cột.",
+            )
+        if target_col in ("done", "verified") and (
+            target_col != existing["column_id"] or next_depends_on != existing["depends_on"]
+        ):
+            _check_h2_constraint(
+                conn,
+                {**dict(existing), "depends_on": next_depends_on},
+                target_col,
+            )
+        _check_reverse_h2_constraint(conn, existing, target_col)
         _check_git_proof_for_done(
             conn,
             user,
@@ -1940,10 +2507,20 @@ def patch_workspace_task(
         else:
             logs_out = _append_column_audit_log(existing_logs, actor_name, existing["column_id"], target_col)
 
+        next_assignee_uid = existing["assignee_user_id"]
+        next_assignee_json = existing["assignee_json"]
+        if payload.assignee is not None:
+            ass_copy = dict(payload.assignee)
+            resolved_auid = _resolve_student_uid_from_assignee(conn, ass_copy)
+            if resolved_auid and not ass_copy.get("id"):
+                ass_copy["id"] = resolved_auid
+            next_assignee_uid = resolved_auid or None
+            next_assignee_json = json.dumps(ass_copy, ensure_ascii=False)
+
         conn.execute(
             """UPDATE engineering_tasks
                SET title=?, description=?, column_id=?, priority=?, moscow=?, points=?,
-                   assignee_json=?, estimate_hours=?, due_date=?, epic=?, epic_color=?,
+                   assignee_user_id=?, assignee_json=?, estimate_hours=?, due_date=?, epic=?, epic_color=?,
                    depends_on=?, checklist_json=?, dod_json=?, user_story_json=?,
                    acceptance_criteria=?, deliverable_json=?, submission_requirement=?,
                    submission_url=?, is_bonus=?, comments_count=?, attachments_count=?,
@@ -1956,12 +2533,13 @@ def patch_workspace_task(
                 payload.priority if payload.priority is not None else existing["priority"],
                 payload.moscow if payload.moscow is not None else existing["moscow"],
                 payload.points if payload.points is not None else existing["points"],
-                json.dumps(payload.assignee, ensure_ascii=False) if payload.assignee is not None else existing["assignee_json"],
+                next_assignee_uid,
+                next_assignee_json,
                 payload.estimateHours if payload.estimateHours is not None else existing["estimate_hours"],
                 payload.dueDate if payload.dueDate is not None else existing["due_date"],
                 payload.epic if payload.epic is not None else existing["epic"],
                 payload.epicColor if payload.epicColor is not None else existing["epic_color"],
-                payload.dependsOn if payload.dependsOn is not None else existing["depends_on"],
+                next_depends_on,
                 json.dumps(payload.checklist, ensure_ascii=False) if payload.checklist is not None else existing["checklist_json"],
                 json.dumps(payload.definitionOfDone, ensure_ascii=False) if payload.definitionOfDone is not None else existing["dod_json"],
                 json.dumps(payload.userStory, ensure_ascii=False) if payload.userStory is not None else existing["user_story_json"],
@@ -1999,7 +2577,7 @@ def move_workspace_task(
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
 
-        if str(user.get("role") or "").lower() == "student":
+        if str(user.get("role") or "").lower() in ("student", "instructor"):
             proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (existing["project_id"],)).fetchone()
             if not proj:
                 raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
@@ -2011,7 +2589,13 @@ def move_workspace_task(
                 status_code=403,
                 detail="Cột 'Đã nghiệm thu' chỉ dành riêng cho Giảng viên hướng dẫn thẩm định. Sinh viên chỉ có thể chuyển sang 'Hoàn thành' để chờ nghiệm thu."
             )
+        if user.get("role") == "student" and existing["column_id"] == "verified" and target_col != "verified":
+            raise HTTPException(
+                status_code=403,
+                detail="Công việc đã được Giảng viên nghiệm thu, sinh viên không thể tự ý kéo lùi.",
+            )
         _check_h2_constraint(conn, existing, target_col)
+        _check_reverse_h2_constraint(conn, existing, target_col)
         _check_git_proof_for_done(conn, user, existing, target_col)
 
         existing_logs = json.loads(existing["audit_logs_json"] or "[]")
@@ -2053,13 +2637,20 @@ def delete_workspace_task(
         if not existing:
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
         u_role = str(user.get("role") or "").lower()
-        if u_role == "student":
+        if u_role in ("student", "instructor"):
             proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (existing["project_id"],)).fetchone()
             if not proj:
                 raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
             _ensure_project_writable_for_user(user, proj, "xóa công việc")
-            if not is_user_project_leader(user, proj) and not _is_task_assignee(user, existing):
-                raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng hoặc người phụ trách mới có quyền xóa công việc")
+            if u_role == "student":
+                if existing["column_id"] == "verified":
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Không thể xóa công việc đã được Giảng viên nghiệm thu.",
+                    )
+                if not is_user_project_leader(user, proj) and not _is_task_assignee(user, existing):
+                    raise HTTPException(status_code=403, detail="Chỉ Nhóm trưởng hoặc người phụ trách mới có quyền xóa công việc")
+        _check_reverse_h2_constraint(conn, existing, "backlog")
         conn.execute("UPDATE engineering_tasks SET depends_on=NULL WHERE depends_on=?", (task_id,))
         conn.execute("DELETE FROM engineering_tasks WHERE id=?", (task_id,))
     return {"status": "deleted", "id": task_id}
@@ -2072,15 +2663,15 @@ def delete_workspace_task(
 class TaskReviewIn(BaseModel):
     decision: str  # "approve" | "request_revision"
     feedback: str = ""
-    rating: int | None = None
+    rating: int | None = Field(default=None, ge=1, le=5)
 
 
 class ProjectEvaluationIn(BaseModel):
-    group_score: float
-    demo_score: float | None = None
-    architecture_score: float
-    process_score: float
-    defense_score: float
+    group_score: float = Field(ge=0.0, le=10.0)
+    demo_score: float | None = Field(default=None, ge=0.0, le=10.0)
+    architecture_score: float = Field(ge=0.0, le=10.0)
+    process_score: float = Field(ge=0.0, le=10.0)
+    defense_score: float = Field(ge=0.0, le=10.0)
     feedback: str
     member_scores: list[dict[str, Any]]
 
@@ -2094,6 +2685,8 @@ def review_workspace_task(
     """Giảng viên thẩm định & nghiệm thu Task (Approve -> verified hoặc Request Revision -> fail)."""
     if user.get("role") not in ("instructor", "admin"):
         raise HTTPException(status_code=403, detail="Chỉ Giảng viên hoặc Admin mới có quyền thẩm định task.")
+    if payload.decision not in ("approve", "request_revision"):
+        raise HTTPException(status_code=422, detail="decision phải là 'approve' hoặc 'request_revision'.")
 
     now = now_utc()
     ts_display = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
@@ -2102,8 +2695,18 @@ def review_workspace_task(
         task = conn.execute("SELECT * FROM engineering_tasks WHERE id=?", (task_id,)).fetchone()
         if not task:
             raise HTTPException(status_code=404, detail="Không tìm thấy task")
+        proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (task["project_id"],)).fetchone()
+        if proj and str(user.get("role") or "").lower() == "instructor" and not is_project_advisor(user, proj):
+            raise HTTPException(
+                status_code=403,
+                detail="Chỉ Giảng viên hướng dẫn được phân công cho đồ án này hoặc Admin mới có quyền nghiệm thu công việc.",
+            )
 
         target_col = "verified" if payload.decision == "approve" else "fail"
+        if target_col == "verified":
+            _check_h2_constraint(conn, task, "verified")
+        else:
+            _check_reverse_h2_constraint(conn, task, "fail")
         existing_logs = json.loads(task["audit_logs_json"] or "[]")
         clean_fb = (payload.feedback or "").strip()
         if payload.decision == "approve":
@@ -2146,13 +2749,15 @@ def review_workspace_task(
 @router.get("/kanban/workspace/projects/{project_id}/evaluation")
 def get_project_evaluation(
     project_id: str,
-    user: dict[str, Any] | None = Depends(get_optional_current_user),
+    user: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     """Lấy kết quả đánh giá đồ án hoặc tính toán đề xuất điểm số Anti-Freerider trực tiếp từ tiến độ thực tế."""
     with db() as conn:
         proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         if not proj:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+        if str(user.get("role") or "").lower() == "student" and not is_user_in_project(user, proj):
+            raise HTTPException(status_code=403, detail="Chỉ thành viên thuộc đồ án này mới có quyền xem bảng đánh giá chi tiết.")
 
         eval_row = conn.execute(
             "SELECT * FROM project_evaluations WHERE project_id=? ORDER BY graded_at DESC LIMIT 1",
@@ -2246,6 +2851,15 @@ def evaluate_project(
     """Giảng viên nộp điểm nghiệm thu đồ án, áp dụng trọng số Anti-Freerider & cấp XP."""
     if user.get("role") not in ("instructor", "admin"):
         raise HTTPException(status_code=403, detail="Chỉ Giảng viên hoặc Admin mới có quyền chấm điểm đồ án.")
+    for ms in payload.member_scores:
+        raw_ind = ms.get("individual_score")
+        if raw_ind is not None:
+            ind_val = float(raw_ind)
+            if ind_val < 0.0 or ind_val > 10.0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Điểm cá nhân của từng thành viên phải nằm trong thang [0.0, 10.0].",
+                )
 
     eval_id = f"eval-{uid()[:8]}"
     now = now_utc()
@@ -2273,6 +2887,24 @@ def evaluate_project(
         proj = conn.execute("SELECT * FROM engineering_projects WHERE id=?", (project_id,)).fetchone()
         if not proj:
             raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+        if not can_grade_project_council(user, proj):
+            raise HTTPException(
+                status_code=403,
+                detail="Theo quy chế Hướng 2, chỉ Giảng viên Hướng dẫn, Giảng viên Phản biện được phân công hoặc Quản trị viên mới có quyền chấm điểm đồ án này.",
+            )
+        existing_eval = conn.execute(
+            "SELECT id FROM project_evaluations WHERE project_id=? ORDER BY graded_at DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        if existing_eval:
+            eval_id = existing_eval["id"]
+
+        council_role_label = (
+            "Quản trị viên"
+            if str(user.get("role") or "").lower() in ("admin", "org_admin")
+            else ("GV Hướng dẫn" if is_project_advisor(user, proj) else "GV Phản biện")
+        )
+        grader_display = f"{instructor_name} ({council_role_label})"
 
         conn.execute(
             """INSERT OR REPLACE INTO project_evaluations(
@@ -2293,7 +2925,7 @@ def evaluate_project(
                 payload.feedback,
                 json.dumps(payload.member_scores, ensure_ascii=False),
                 json.dumps(payload.member_scores, ensure_ascii=False),
-                instructor_name,
+                grader_display,
                 now,
                 "graded",
                 now,
@@ -2304,10 +2936,11 @@ def evaluate_project(
             "UPDATE engineering_projects SET status='delivered', tl_color='done', updated_at=? WHERE id=?",
             (now, project_id),
         )
-        _credit_student_xp(conn, 150)
+        if not existing_eval:
+            credit_project_team_xp(conn, proj, 150)
 
-        team = json.loads(proj["team_json"] or "[]")
-        for m in team:
+        student_ids = resolve_project_student_ids(conn, proj)
+        for suid in student_ids:
             notif_id = f"notif-ev-{uid()[:8]}"
             conn.execute(
                 """INSERT INTO notifications(
@@ -2315,13 +2948,13 @@ def evaluate_project(
                    ) VALUES(?,?,?,?,?,?,?,?,?)""",
                 (
                     notif_id,
-                    None,
+                    suid,
                     "student",
                     f"Đồ án {proj['code']} đã được nghiệm thu!",
-                    f"Giảng viên {instructor_name} đã hoàn tất chấm điểm với Điểm chung: {final_score}/10.",
+                    f"{grader_display} đã chốt biên bản chấm đồ án với Điểm chung: {final_score}/10.",
                     "project",
                     0,
-                    "/kanban",
+                    "/defense-room",
                     now,
                 ),
             )
@@ -2337,72 +2970,273 @@ class TeamStatusPatchIn(BaseModel):
     status: str = Field(pattern="^(in|remote|off)$")
 
 
-@router.get("/team/members")
-def list_team_members(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    """Lấy danh sách thành viên đội ngũ & cố vấn thực tế từ MySQL (users, projects, tasks, git_commits)."""
-    with db() as conn:
-        user_rows = conn.execute(
-            """SELECT id, user_code, email, full_name, display_name, role, status, last_active_label
+def _user_matches_project_advisor(u: dict[str, Any], proj_row: Any) -> bool:
+    if (u.get("role") or "").strip().lower() != "instructor":
+        return False
+    p_dict = dict(proj_row)
+    uid_val = str(u.get("id") or "").strip()
+    inst_id = str(p_dict.get("instructor_id") or "").strip()
+    if inst_id and inst_id != "instructor-demo":
+        return inst_id == uid_val or inst_id == f"usr-{uid_val}"
+
+    u_name_stripped = _strip_mentor_title(u.get("full_name") or u.get("display_name") or "")
+    if not u_name_stripped:
+        return False
+    for field in (p_dict.get("instructor_label"), p_dict.get("instructor_name")):
+        f_stripped = _strip_mentor_title(field)
+        if f_stripped and (f_stripped == u_name_stripped or u_name_stripped in f_stripped or f_stripped in u_name_stripped):
+            return True
+    return False
+
+
+def _user_matches_project_student(u: dict[str, Any], proj_row: Any) -> bool:
+    if (u.get("role") or "").strip().lower() != "student":
+        return False
+    p_dict = dict(proj_row)
+    uid_val = str(u.get("id") or "").strip()
+    u_email = str(u.get("email") or "").strip().lower()
+    u_names = {
+        str(u.get(k) or "").strip().lower()
+        for k in ("full_name", "display_name")
+        if str(u.get(k) or "").strip()
+    }
+
+    leader_id = str(p_dict.get("leader_user_id") or "").strip()
+    if leader_id and (leader_id == uid_val or leader_id == f"usr-{uid_val}"):
+        return True
+    created_by = str(p_dict.get("created_by") or "").strip()
+    if created_by and (created_by == uid_val or created_by == f"usr-{uid_val}"):
+        return True
+
+    try:
+        raw_team = p_dict.get("team_json") or "[]"
+        team_list = json.loads(raw_team) if isinstance(raw_team, str) else (raw_team or [])
+    except Exception:
+        team_list = []
+
+    for tm in team_list:
+        if not isinstance(tm, dict):
+            continue
+        tm_id = str(tm.get("id") or "").strip()
+        tm_email = str(tm.get("email") or "").strip().lower()
+        tm_name = str(tm.get("name") or "").strip().lower()
+        if tm_id and (tm_id == uid_val or tm_id == f"usr-{uid_val}"):
+            return True
+        if tm_email and u_email and tm_email == u_email:
+            return True
+        if tm_name and tm_name in u_names:
+            return True
+    return False
+
+
+def _user_is_student_project_leader(u: dict[str, Any], proj_row: Any) -> bool:
+    if (u.get("role") or "").strip().lower() != "student":
+        return False
+    p_dict = dict(proj_row)
+    uid_val = str(u.get("id") or "").strip()
+    u_email = str(u.get("email") or "").strip().lower()
+    u_names = {
+        str(u.get(k) or "").strip().lower()
+        for k in ("full_name", "display_name")
+        if str(u.get(k) or "").strip()
+    }
+
+    try:
+        raw_team = p_dict.get("team_json") or "[]"
+        team_list = json.loads(raw_team) if isinstance(raw_team, str) else (raw_team or [])
+    except Exception:
+        team_list = []
+
+    leader_id = str(p_dict.get("leader_user_id") or "").strip()
+    if leader_id:
+        if leader_id == uid_val or leader_id == f"usr-{uid_val}":
+            return True
+    else:
+        created_by = str(p_dict.get("created_by") or "").strip()
+        if created_by and (created_by == uid_val or created_by == f"usr-{uid_val}"):
+            return True
+
+    for idx, tm in enumerate(team_list):
+        if not isinstance(tm, dict):
+            continue
+        tm_id = str(tm.get("id") or "").strip()
+        tm_email = str(tm.get("email") or "").strip().lower()
+        tm_name = str(tm.get("name") or "").strip().lower()
+        matches = (
+            (tm_id and (tm_id == uid_val or tm_id == f"usr-{uid_val}"))
+            or (tm_email and u_email and tm_email == u_email)
+            or (tm_name and tm_name in u_names)
+        )
+        if not matches:
+            continue
+        if tm.get("isLead") is True or (not leader_id and idx == 0):
+            return True
+    return False
+
+
+def _user_matches_taught_course(u: dict[str, Any], course_row: dict[str, Any]) -> bool:
+    if (u.get("role") or "").strip().lower() != "instructor":
+        return False
+    uid_val = str(u.get("id") or "").strip()
+    c_inst = str(course_row.get("instructor_id") or "").strip()
+    if c_inst and c_inst != "instructor-demo":
+        return c_inst == uid_val or c_inst == f"usr-{uid_val}"
+    u_name_stripped = _strip_mentor_title(u.get("full_name") or u.get("display_name") or "")
+    t_stripped = _strip_mentor_title(course_row.get("teacher_name") or "")
+    return bool(
+        u_name_stripped
+        and t_stripped
+        and (
+            t_stripped == u_name_stripped
+            or u_name_stripped in t_stripped
+            or t_stripped in u_name_stripped
+        )
+    )
+
+
+def _select_scoped_team_users(
+    conn: Any, caller_user: dict[str, Any]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], str]:
+    all_users = [
+        dict(r)
+        for r in conn.execute(
+            """SELECT id, user_code, email, full_name, display_name, role, status, last_active_label, avatar_url,
+                      headline, bio, department, office_location, skills_json, github_url, website_url, phone
                FROM users
                WHERE role IN ('student', 'instructor')
-                 AND status != 'suspended'
+                 AND status NOT IN ('suspended', 'pending')
                  AND id NOT IN ('student-demo', 'instructor-demo', 'admin-demo')
                ORDER BY CASE WHEN role='instructor' THEN 0 ELSE 1 END, full_name ASC"""
         ).fetchall()
-        proj_rows = conn.execute("SELECT * FROM engineering_projects ORDER BY id ASC").fetchall()
+    ]
+    all_projects = [
+        dict(r) for r in conn.execute("SELECT * FROM engineering_projects ORDER BY id ASC").fetchall()
+    ]
+
+    caller_role = (caller_user.get("role") or "student").strip().lower()
+    if caller_role in ("admin", "org_admin"):
+        return (all_users, all_projects, all_projects, "admin")
+
+    if caller_role == "instructor":
+        scoped_projects = [p for p in all_projects if can_grade_project_council(caller_user, p)]
+        selected_users = [
+            u
+            for u in all_users
+            if (u.get("role") or "").strip().lower() == "instructor"
+            or any(_user_matches_project_student(u, p) for p in scoped_projects)
+        ]
+        return (selected_users, scoped_projects, all_projects, "instructor")
+
+    scoped_projects = [p for p in all_projects if _user_matches_project_student(caller_user, p)]
+    if not scoped_projects:
+        return ([], [], all_projects, "student")
+    selected_users = [
+        u
+        for u in all_users
+        if (
+            (u.get("role") or "").strip().lower() == "instructor"
+            and any(can_grade_project_council(u, p) for p in scoped_projects)
+        )
+        or (
+            (u.get("role") or "").strip().lower() == "student"
+            and any(_user_matches_project_student(u, p) for p in scoped_projects)
+        )
+    ]
+    return (selected_users, scoped_projects, all_projects, "student")
+
+
+def count_scoped_team_members(conn: Any, caller_user: dict[str, Any]) -> int:
+    selected_users, _, _, _ = _select_scoped_team_users(conn, caller_user)
+    return len(selected_users)
+
+
+@router.get("/team/members")
+def list_team_members(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    """Lấy danh sách thành viên đội ngũ & cố vấn thực tế theo phân quyền vai trò từ MySQL."""
+    with db() as conn:
+        user_rows, scoped_projects, all_projects, scope_role = _select_scoped_team_users(conn, user)
         task_rows = conn.execute("SELECT * FROM engineering_tasks ORDER BY position_order ASC").fetchall()
         commit_rows = conn.execute("SELECT project_id, author_name FROM git_commits").fetchall()
+        student_profile_rows = conn.execute(
+            """SELECT user_id, current_streak, longest_streak, exp_points, selected_title,
+                      radar_algorithm, radar_debugging, radar_cleancode, radar_teamwork, radar_defense
+               FROM student_profiles"""
+        ).fetchall()
+        course_rows = conn.execute(
+            """SELECT id, subject_id, code, name, semester, credits, instructor_id,
+                      teacher_name, student_count, avg_progress_pct, room, health
+               FROM courses ORDER BY code ASC"""
+        ).fetchall()
         status_row = conn.execute(
             "SELECT value_json FROM system_settings WHERE key='team_member_statuses'"
         ).fetchone()
+
+    profiles_by_uid: dict[str, dict[str, Any]] = {
+        str(r["user_id"]): dict(r) for r in student_profile_rows if r.get("user_id")
+    }
+    courses_dicts: list[dict[str, Any]] = [dict(c) for c in course_rows]
 
     try:
         saved_statuses: dict[str, str] = json.loads(status_row["value_json"]) if status_row else {}
     except Exception:
         saved_statuses = {}
 
-    projects_by_id = {p["id"]: p for p in proj_rows}
-    commit_count_by_name: dict[str, int] = {}
+    projects_by_id = {p["id"]: p for p in all_projects}
+    commit_counts_by_proj_author: dict[tuple[str, str], int] = {}
     for c in commit_rows:
+        pid = str(c["project_id"] or "").strip()
         nm = (c["author_name"] or "").strip().lower()
-        if nm:
-            commit_count_by_name[nm] = commit_count_by_name.get(nm, 0) + 1
+        if pid and nm:
+            key = (pid, nm)
+            commit_counts_by_proj_author[key] = commit_counts_by_proj_author.get(key, 0) + 1
 
     members_out: list[dict[str, Any]] = []
     for idx, u in enumerate(user_rows):
         uid_val = u["id"]
         full_name = (u["full_name"] or u["display_name"] or "Thành viên").strip()
         name_low = full_name.lower()
+        u_email_low = (u.get("email") or "").strip().lower()
         u_role = (u["role"] or "student").lower()
         is_advisor = u_role in ("instructor", "admin", "org_admin")
 
+        if scope_role == "student":
+            candidate_projects = scoped_projects
+        elif scope_role == "instructor":
+            candidate_projects = all_projects if is_advisor else scoped_projects
+        else:
+            candidate_projects = all_projects
+
         member_projects: list[dict[str, Any]] = []
+        matched_projects: list[dict[str, Any]] = []
         is_lead = False
-        derived_role = "Giảng viên / Cố vấn Hội đồng" if is_advisor else "Kỹ sư Thực tập"
+        derived_role = "Giảng viên hướng dẫn / Hội đồng" if is_advisor else "Thành viên Đồ án"
 
-        for p in proj_rows:
-            try:
-                team_list = json.loads(p["team_json"] or "[]")
-            except Exception:
-                team_list = []
-
-            in_team = False
-            if p["leader_user_id"] == uid_val:
-                in_team = True
-                is_lead = True
-            if is_advisor and p["instructor_id"] == uid_val:
-                in_team = True
-
-            for t_idx, tm in enumerate(team_list):
-                tm_name = str(tm.get("name") or "").strip()
-                if tm_name.lower() == name_low or tm.get("id") == uid_val:
-                    in_team = True
-                    if t_idx == 0 and not is_advisor:
-                        is_lead = True
-                    if tm.get("role") and not is_advisor:
-                        derived_role = str(tm["role"])
-
-            if in_team:
+        for p in candidate_projects:
+            if is_advisor:
+                in_proj = _user_matches_project_advisor(u, p)
+            else:
+                in_proj = _user_matches_project_student(u, p)
+                if in_proj:
+                    try:
+                        team_list = json.loads(p.get("team_json") or "[]")
+                    except Exception:
+                        team_list = []
+                    for tm in team_list:
+                        if not isinstance(tm, dict):
+                            continue
+                        tm_id = str(tm.get("id") or "").strip()
+                        tm_email = str(tm.get("email") or "").strip().lower()
+                        tm_name = str(tm.get("name") or "").strip().lower()
+                        if (
+                            (tm_id and (tm_id == uid_val or tm_id == f"usr-{uid_val}"))
+                            or (tm_email and u_email_low and tm_email == u_email_low)
+                            or (tm_name and tm_name == name_low)
+                        ):
+                            if tm.get("role"):
+                                derived_role = str(tm["role"])
+                            break
+            if in_proj:
+                matched_projects.append(p)
                 member_projects.append(
                     {
                         "id": p["id"],
@@ -2414,43 +3248,55 @@ def list_team_members(user: dict[str, Any] = Depends(current_user)) -> dict[str,
                     }
                 )
 
+        if not is_advisor:
+            is_lead = any(_user_is_student_project_leader(u, p) for p in matched_projects)
+
+        allowed_project_ids = {p["id"] for p in member_projects}
         open_tasks: list[dict[str, Any]] = []
         done_tasks_count = 0
         total_est_hours = 0.0
-        for tk in task_rows:
-            try:
-                assignee_obj = json.loads(tk["assignee_json"] or "{}")
-            except Exception:
-                assignee_obj = {}
-            assignee_name = str(assignee_obj.get("name") or "").strip().lower()
-            matches_user = tk["assignee_user_id"] == uid_val or (assignee_name and assignee_name == name_low)
-            if not matches_user:
-                continue
+        if not is_advisor and allowed_project_ids:
+            for tk in task_rows:
+                if tk["project_id"] not in allowed_project_ids:
+                    continue
+                try:
+                    assignee_obj = json.loads(tk["assignee_json"] or "{}")
+                except Exception:
+                    assignee_obj = {}
+                assignee_name = str(assignee_obj.get("name") or "").strip().lower()
+                matches_user = tk["assignee_user_id"] == uid_val or (assignee_name and assignee_name == name_low)
+                if not matches_user:
+                    continue
 
-            col_id = (tk["column_id"] or "backlog").lower()
-            if col_id in ("done", "verified"):
-                done_tasks_count += 1
-            else:
-                est = float(tk["estimate_hours"] or 0.0)
-                total_est_hours += est
-                p_ref = projects_by_id.get(tk["project_id"])
-                open_tasks.append(
-                    {
-                        "id": tk["id"],
-                        "code": tk["code"] or "",
-                        "title": tk["title"],
-                        "projectId": tk["project_id"],
-                        "projectName": p_ref["name"] if p_ref else tk["project_id"],
-                        "column": tk["column_id"],
-                        "priority": tk["priority"] or "medium",
-                        "points": int(tk["points"] or 0),
-                        "estimateHours": est,
-                        "dueDate": tk["due_date"] or "",
-                    }
-                )
+                col_id = (tk["column_id"] or "backlog").lower()
+                if col_id in ("done", "verified"):
+                    done_tasks_count += 1
+                else:
+                    est = float(tk["estimate_hours"] or 0.0)
+                    total_est_hours += est
+                    p_ref = projects_by_id.get(tk["project_id"])
+                    open_tasks.append(
+                        {
+                            "id": tk["id"],
+                            "code": tk["code"] or "",
+                            "title": tk["title"],
+                            "projectId": tk["project_id"],
+                            "projectName": p_ref["name"] if p_ref else tk["project_id"],
+                            "column": tk["column_id"],
+                            "priority": tk["priority"] or "medium",
+                            "points": int(tk["points"] or 0),
+                            "estimateHours": est,
+                            "dueDate": tk["due_date"] or "",
+                        }
+                    )
 
-        default_status = "remote" if (u["status"] or "") == "pending" else "in"
-        cur_status = saved_statuses.get(uid_val, default_status)
+        commits_count = (
+            0
+            if is_advisor
+            else sum(commit_counts_by_proj_author.get((pid, name_low), 0) for pid in allowed_project_ids)
+        )
+
+        cur_status = saved_statuses.get(uid_val, "in")
         if cur_status not in ("in", "remote", "off"):
             cur_status = "in"
 
@@ -2460,6 +3306,55 @@ def list_team_members(user: dict[str, Any] = Depends(current_user)) -> dict[str,
             if len(parts) >= 2
             else (full_name[:2].upper() or "CM")
         )
+        shared_prof = serialize_shared_profile_fields(u)
+        taught_courses: list[dict[str, Any]] = []
+        if is_advisor:
+            for c_dict in courses_dicts:
+                if _user_matches_taught_course(u, c_dict):
+                    taught_courses.append(
+                        {
+                            "id": c_dict["id"],
+                            "subjectId": c_dict.get("subject_id") or "",
+                            "code": c_dict["code"],
+                            "name": c_dict["name"],
+                            "semester": c_dict.get("semester") or "",
+                            "credits": int(c_dict.get("credits") or 3),
+                            "studentCount": int(c_dict.get("student_count") or 0),
+                            "avgProgressPct": int(c_dict.get("avg_progress_pct") or 0),
+                            "room": c_dict.get("room") or "",
+                            "health": c_dict.get("health") or "Ổn định",
+                        }
+                    )
+
+        learning_summary: dict[str, Any] | None = None
+        if not is_advisor:
+            sp = profiles_by_uid.get(uid_val)
+            if sp:
+                xp_val = int(sp.get("exp_points") or 0)
+                league_name = (
+                    "Vàng"
+                    if xp_val >= 3000
+                    else "Bạc"
+                    if xp_val >= 1500
+                    else "Đồng"
+                    if xp_val >= 500
+                    else "Tân binh"
+                )
+                learning_summary = {
+                    "expPoints": xp_val,
+                    "streakDays": int(sp.get("current_streak") or 0),
+                    "longestStreak": int(sp.get("longest_streak") or 0),
+                    "selectedTitle": sp.get("selected_title") or "CodeMind Campus Builder",
+                    "leagueName": league_name,
+                    "radar": {
+                        "algorithm": round(float(sp.get("radar_algorithm") or 0)),
+                        "cleancode": round(float(sp.get("radar_cleancode") or 0)),
+                        "teamwork": round(float(sp.get("radar_teamwork") or 0)),
+                        "defense": round(float(sp.get("radar_defense") or 0)),
+                        "debugging": round(float(sp.get("radar_debugging") or 0)),
+                    },
+                }
+
         members_out.append(
             {
                 "id": uid_val,
@@ -2469,14 +3364,25 @@ def list_team_members(user: dict[str, Any] = Depends(current_user)) -> dict[str,
                 "userRole": u_role,
                 "role": derived_role,
                 "initials": initials,
+                "avatarUrl": shared_prof["avatar_url"],
+                "headline": shared_prof["headline"],
+                "bio": shared_prof["bio"],
+                "department": shared_prof["department"],
+                "officeLocation": shared_prof["office_location"],
+                "skills": shared_prof["skills"],
+                "githubUrl": shared_prof["github_url"],
+                "websiteUrl": shared_prof["website_url"],
+                "phone": shared_prof["phone"],
                 "hue": (idx % 6) + 1,
                 "status": cur_status,
                 "isAdvisor": is_advisor,
                 "isLead": is_lead,
                 "projects": member_projects,
+                "taughtCourses": taught_courses,
+                "learningSummary": learning_summary,
                 "openTasks": open_tasks,
                 "doneTasksCount": done_tasks_count,
-                "commitsCount": commit_count_by_name.get(name_low, 0),
+                "commitsCount": commits_count,
                 "totalEstimateHours": round(total_est_hours, 1),
                 "lastActive": u["last_active_label"] or "Vừa xong",
             }
@@ -2486,6 +3392,8 @@ def list_team_members(user: dict[str, Any] = Depends(current_user)) -> dict[str,
         "members": members_out,
         "total": len(members_out),
         "inLabCount": sum(1 for m in members_out if m["status"] == "in"),
+        "scopeRole": scope_role,
+        "scopedProjectsCount": len(scoped_projects),
     }
 
 
@@ -2506,6 +3414,11 @@ def update_team_member_status(
             raise HTTPException(
                 status_code=403,
                 detail="Học viên không thể thay đổi trạng thái công tác của Giảng viên / Quản trị viên.",
+            )
+        if caller_role not in ("admin", "org_admin") and member_id != user["id"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Bạn chỉ có thể thay đổi trạng thái hiện diện của chính mình (hoặc cần quyền Quản trị viên).",
             )
 
         status_row = conn.execute(

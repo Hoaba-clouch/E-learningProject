@@ -14,7 +14,7 @@ import {
   ChevronRight,
   ListOrdered,
   Play,
-  ShieldAlert,
+  Lightbulb,
 } from "lucide-react";
 import {
   getF8VideoLecture,
@@ -48,6 +48,17 @@ interface LessonVideoStudioProps {
   onVideoCompleted?: (lessonId: string) => void;
   onVideoProgressChange?: (watchedSec: number, durationSec: number, completed: boolean) => void;
 }
+
+const MENTOR_STUDY_TIPS: Record<MentorMascot, { name: string; mark: string; tip: string }> = {
+  mino: { name: "Mino", mark: "MI", tip: "Đánh dấu ghi chú ngay tại các đoạn code mẫu để khi ôn tập chỉ cần bấm tua đúng mốc." },
+  nova: { name: "Nova", mark: "NV", tip: "Nắm chắc luồng dữ liệu trong video trước khi bước sang phần Quiz tình huống." },
+  byte: { name: "Byte", mark: "BY", tip: "Gặp mẹo debug hay ở phút nào, bấm Thêm ghi chú lưu lại ngay kẻo trôi nhé!" },
+  sage: { name: "Sage", mark: "SG", tip: "Ở mỗi phân cảnh, hãy thử đặt câu hỏi: tại sao phải thiết kế kiến trúc như vậy?" },
+  luna: { name: "Mecha-Luna", mark: "LN", tip: "Hoàn tất tối thiểu 80% thời lượng video để mở khóa ghi nhận hoàn thành & +XP." },
+  kuro: { name: "Kuro", mark: "KR", tip: "Chú ý những lỗi thường gặp giảng viên nhắc ở nửa sau video để làm Quiz không bị bẫy." },
+  ignis: { name: "Ignis", mark: "IG", tip: "Xem liền mạch và chuyển sang Quiz ngay để giữ chuỗi Streak trả lời đúng liên tiếp!" },
+  sylph: { name: "Sylph", mark: "SP", tip: "Bấm trực tiếp từng mốc trong Mục lục Video nếu cần xem lại phần chuyển tiếp." },
+};
 
 function parseTimeLabelToSeconds(label?: string, fallbackSec = 0): number {
   if (!label) return fallbackSec;
@@ -483,9 +494,11 @@ export function LessonVideoStudio({
           <div className="flex items-center gap-2">
             {/* 🎬 Nút xác nhận xem video (chỉ mở khóa khi xem đủ điều kiện, không thể bấm ăn gian ở 00:00) */}
             {isEffectiveCompleted ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs select-none shadow-xs">
-                <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
-                <span>Đã xem hết video bài giảng ✓</span>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] border border-white/[0.12] px-3 py-1.5 text-slate-100 font-semibold text-xs select-none shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90 text-slate-950 shrink-0">
+                  <Check size={10} strokeWidth={3} />
+                </span>
+                <span className="tracking-tight">Đã xem hết video bài giảng</span>
               </div>
             ) : canConfirmWatch ? (
               <button
@@ -498,10 +511,10 @@ export function LessonVideoStudio({
               </button>
             ) : (
               <div
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/90 border border-slate-700 text-slate-400 font-semibold text-xs select-none"
+                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] border border-white/[0.10] px-3 py-1.5 text-slate-300 font-medium text-xs select-none"
                 title="Cần phát video thực tế trên trang tối thiểu 80% thời lượng hoặc hết video"
               >
-                <ShieldAlert size={13} className="text-amber-400 shrink-0" />
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
                 <span>Đang ghi nhận xem ({watchProgressPct}%/80%)</span>
               </div>
             )}
@@ -580,39 +593,78 @@ export function LessonVideoStudio({
       <LiquidCardConnector />
 
       {/* ─── VIDEO DETAILS & INTERACTIVE TABS (F8 LAYOUT) ─────────────── */}
-      {/* ─── VIDEO METADATA & SIDEBAR (CLEAN ENGINEERING GRADE) ─────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-2.5">
+      {/* ─── VIDEO METADATA & SIDEBAR (EDITORIAL ENGINEERING GRADE) ──── */}
+      {(() => {
+        const activeChapterIdx = effectiveChapters.reduce((bestIdx, chap, idx) => {
+          return currentSeconds >= chap.timeSec ? idx : bestIdx;
+        }, 0);
+        const mentorMeta = MENTOR_STUDY_TIPS[mentorMascot] || MENTOR_STUDY_TIPS.mino;
+        return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         {/* Col 1 & 2: Video Info, Chapters, Notes, Resources */}
         <div
-          className="animate-cascade-item lg:col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-4 shadow-2xs"
+          className="animate-cascade-item lg:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-5 shadow-2xs"
           style={{ animationDelay: "120ms" }}
         >
-          <div>
-            <h2 className="text-lg lg:text-xl font-bold text-slate-900 dark:text-white leading-snug">
-              {effectiveTitle}
-            </h2>
-            <p className="text-sm text-[#62656b] dark:text-[#a0a3a9] mt-1.5 font-normal">
-              {currentVideo.subtitle}
-            </p>
-          </div>
-
-          {/* Instructor Line - Clean Minimal */}
-          <div className="flex items-center gap-3.5 py-2.5 px-3.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
-            <div className="h-9 w-9 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-sm shrink-0">
-              <UserCheck size={18} />
-            </div>
-            <div>
-              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block">
-                {effectiveInstructor}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-[#14161a] dark:bg-white text-amber-400 dark:text-slate-950">
+                {currentVideo.subjectCode}
               </span>
-              <span className="text-xs text-slate-500">Giảng viên Phụ trách Học phần</span>
+              <span className="inline-flex items-center gap-1 font-mono text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700">
+                <Clock size={11} /> {formatTime(videoDurationSec)}
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-slate-700">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                    isEffectiveCompleted ? "bg-emerald-500" : "bg-amber-500"
+                  }`}
+                />
+                {isEffectiveCompleted ? "Đã hoàn thành xem" : `Tiến độ: ${watchProgressPct}%`}
+              </span>
+              <span className="font-mono text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                · {effectiveChapters.length} phân cảnh
+              </span>
+            </div>
+
+            <div>
+              <h2 className="text-lg lg:text-2xl font-extrabold text-slate-900 dark:text-white leading-snug tracking-tight">
+                {effectiveTitle}
+              </h2>
+              {currentVideo.subtitle && (
+                <p className="text-sm text-[#62656b] dark:text-[#a0a3a9] mt-1 font-normal">
+                  {currentVideo.subtitle}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-              Nội dung trọng tâm bài giảng:
-            </h3>
+          {/* Instructor Line - Editorial Profile Strip */}
+          <div className="flex items-center justify-between gap-3.5 py-2.5 px-3.5 rounded-xl bg-slate-50/90 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-9 w-9 rounded-xl bg-[#14161a] dark:bg-amber-500/15 text-amber-400 dark:text-amber-300 border border-slate-800/20 dark:border-amber-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+                <UserCheck size={17} />
+              </div>
+              <div className="min-w-0">
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block truncate">
+                  {effectiveInstructor}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Giảng viên Phụ trách Học phần</span>
+              </div>
+            </div>
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-300 shrink-0">
+              Bài giảng Video
+            </span>
+          </div>
+
+          {/* Focus Highlight Callout */}
+          <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 border-l-[3px] border-l-amber-500 bg-slate-50/80 dark:bg-slate-950/50 p-4 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              <h3 className="text-[11px] font-mono font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                Nội dung trọng tâm bài giảng
+              </h3>
+            </div>
             <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-normal">
               {effectiveOverview}
             </p>
@@ -672,64 +724,104 @@ export function LessonVideoStudio({
 
             {/* Tab Content with Smooth Fade-in & Slide Entrance */}
             <div key={activeTab} className="animate-in fade-in duration-300 slide-in-from-bottom-2">
-              {/* Tab 1: Chapters */}
+              {/* Tab 1: Chapters - Interactive Timeline Track */}
               {activeTab === "chapters" && (
-                <div className="pt-3 space-y-2">
-                  {effectiveChapters.map((chap, idx) => (
+                <div className="pt-3.5 space-y-2.5">
+                  {effectiveChapters.map((chap, idx) => {
+                    const isCurrentChapter = idx === activeChapterIdx && (hasInteractedWithPlayer || currentSeconds > 0);
+                    return (
                     <div
                       key={idx}
                       onClick={() => handleSeek(chap.timeSec)}
-                      className="p-3 rounded-xl border border-slate-200/70 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition cursor-pointer flex items-start gap-3.5 group"
+                      className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3.5 group ${
+                        isCurrentChapter
+                          ? "border-slate-300 dark:border-slate-700 border-l-[3px] border-l-slate-900 dark:border-l-white bg-slate-50/90 dark:bg-slate-800/60 shadow-2xs"
+                          : "border-slate-200/80 dark:border-slate-800 hover:border-amber-300/80 dark:hover:border-amber-700/60 bg-white dark:bg-slate-900/50 hover:bg-slate-50/90 dark:hover:bg-slate-800/60"
+                      }`}
                     >
-                      <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 shrink-0">
-                        {chap.timestamp}
-                      </span>
+                      <div className="flex flex-col items-center gap-1 shrink-0">
+                        <span
+                          className={`font-mono text-xs font-bold px-2.5 py-1 rounded-md border transition ${
+                            isCurrentChapter
+                              ? "bg-[#14161a] text-amber-400 border-slate-900 dark:bg-amber-500 dark:text-slate-950 dark:border-amber-400"
+                              : "text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 group-hover:bg-[#14161a] group-hover:text-amber-400 group-hover:border-slate-900"
+                          }`}
+                        >
+                          {chap.timestamp}
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          Phần {String(idx + 1).padStart(2, "0")}
+                        </span>
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-500 dark:group-hover:text-amber-400 transition leading-snug">
-                          {chap.title}
-                        </h4>
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition leading-snug">
+                            {chap.title}
+                          </h4>
+                          {isCurrentChapter ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-slate-700 text-[10px] font-mono font-bold shrink-0">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              Đang học
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition shrink-0">
+                              Tua tới →
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
                           {chap.description}
                         </p>
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
 
               {/* Tab 2: Notes */}
               {activeTab === "notes" && (
-                <div className="pt-3 space-y-2">
+                <div className="pt-3.5 space-y-2.5">
                   {notes.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-slate-400">
-                      Chưa có ghi chú nào. Hãy bấm "Thêm ghi chú tại {formatTime(currentSeconds)}" để lưu kiến thức quan trọng!
+                    <div className="p-6 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-950/30 text-center space-y-2.5">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Chưa có ghi chú nào cho bài giảng này. Hãy đánh dấu lại các mốc kiến thức quan trọng để dễ ôn tập!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingNote(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14161a] dark:bg-white text-white dark:text-slate-950 text-xs font-bold hover:bg-slate-800 transition cursor-pointer"
+                      >
+                        <BookmarkPlus size={13} />
+                        <span>Thêm ghi chú tại {formatTime(currentSeconds)}</span>
+                      </button>
                     </div>
                   ) : (
                     notes.map((note) => (
                       <div
                         key={note.id}
-                        className="p-3 rounded-lg border border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex items-start justify-between gap-3"
+                        className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 border-l-[3px] border-l-amber-400/80 bg-slate-50/60 dark:bg-slate-950/40 flex items-start justify-between gap-3 group hover:border-slate-300 dark:hover:border-slate-700 transition"
                       >
-                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
                           <button
                             onClick={() => handleSeek(note.timeSec)}
-                            className="font-mono text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-200/80 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700 shrink-0 hover:bg-slate-900 hover:text-white dark:hover:bg-white dark:hover:text-slate-900 transition cursor-pointer"
+                            className="font-mono text-xs font-bold text-amber-400 bg-[#14161a] dark:bg-amber-500/15 dark:text-amber-300 px-2.5 py-1 rounded-md border border-slate-800/20 dark:border-amber-500/30 shrink-0 hover:bg-amber-500 hover:text-slate-950 transition cursor-pointer"
                             title="Tua tới mốc này"
                           >
                             {note.timestamp}
                           </button>
                           <div>
-                            <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
+                            <p className="text-xs sm:text-[13px] text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
                               {note.content}
                             </p>
-                            <span className="text-[10px] text-slate-400 mt-1 block">
-                              {note.createdAt}
+                            <span className="text-[10px] font-mono text-slate-400 mt-1 block">
+                              Đã lưu · {note.createdAt}
                             </span>
                           </div>
                         </div>
                         <button
                           onClick={() => handleDeleteNote(note.id)}
-                          className="text-slate-400 hover:text-rose-500 p-1 transition cursor-pointer"
+                          className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
                           title="Xóa ghi chú"
                         >
                           <Trash2 size={13} />
@@ -742,7 +834,7 @@ export function LessonVideoStudio({
 
               {/* Tab 3: Resources */}
               {activeTab === "resources" && (
-                <div className="pt-3 space-y-2">
+                <div className="pt-3.5 space-y-2.5">
                   {effectiveResources.map((res, idx) =>
                     res.isExternal ? (
                       <a
@@ -750,32 +842,41 @@ export function LessonVideoStudio({
                         href={res.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-850 transition flex items-center justify-between text-xs text-slate-700 dark:text-slate-300 group cursor-pointer"
+                        className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-amber-400/70 dark:hover:border-amber-600/60 bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition flex items-center justify-between text-xs text-slate-700 dark:text-slate-300 group cursor-pointer"
                       >
-                        <div className="flex items-center gap-2">
-                          {res.type === "slide" ? (
-                            <FileText size={14} className="text-slate-400" />
-                          ) : res.type === "git" ? (
-                            <GitBranch size={14} className="text-slate-400" />
-                          ) : (
-                            <BookOpen size={14} className="text-slate-400" />
-                          )}
-                          <span className="font-medium group-hover:text-amber-500 dark:group-hover:text-amber-400 transition">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0 group-hover:bg-[#14161a] group-hover:text-amber-400 transition">
+                            {res.type === "slide" ? (
+                              <FileText size={14} />
+                            ) : res.type === "git" ? (
+                              <GitBranch size={14} />
+                            ) : (
+                              <BookOpen size={14} />
+                            )}
+                          </span>
+                          <span className="font-semibold group-hover:text-amber-600 dark:group-hover:text-amber-400 transition truncate">
                             {res.title}
                           </span>
                         </div>
-                        <ExternalLink size={12} className="text-slate-400 group-hover:text-amber-500 transition" />
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-slate-500 dark:text-slate-300 group-hover:text-amber-600 dark:group-hover:text-amber-400 shrink-0">
+                          <span>Mở</span>
+                          <ExternalLink size={11} />
+                        </span>
                       </a>
                     ) : (
                       <div
                         key={idx}
-                        className="p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-700 dark:text-slate-300"
+                        className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-700 dark:text-slate-300"
                       >
-                        <div className="flex items-center gap-2">
-                          <FileText size={14} className="text-blue-500" />
-                          <span className="font-medium">{res.title}</span>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#14161a] dark:bg-amber-500/15 text-amber-400 dark:text-amber-300 shrink-0">
+                            <FileText size={14} />
+                          </span>
+                          <span className="font-semibold truncate">{res.title}</span>
                         </div>
-                        <span className="text-[10px] font-mono text-slate-400">Giáo trình đính kèm</span>
+                        <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono text-slate-500 dark:text-slate-400 shrink-0">
+                          Giáo trình
+                        </span>
                       </div>
                     )
                   )}
@@ -785,16 +886,72 @@ export function LessonVideoStudio({
           </div>
         </div>
 
-        {/* Col 3: Next Lesson & Socratic Quick Prompt - Clean Professional Cards */}
+        {/* Col 3: Progress Tracker, Next Checkpoint & Mentor Tip */}
         <div
-          className="animate-cascade-item space-y-4"
+          className="animate-cascade-item space-y-3.5"
           style={{ animationDelay: "200ms" }}
         >
-          {/* Card 1: Chặng tiếp theo */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3.5 shadow-2xs">
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Chặng tiếp theo
-            </span>
+          {/* Card 1: Điều kiện hoàn thành Video & Mở khóa XP */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3.5 shadow-2xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Điều kiện mở khóa XP
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/90 dark:border-slate-700">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                    isEffectiveCompleted ? "bg-emerald-500" : "bg-amber-500"
+                  }`}
+                />
+                {watchProgressPct}%
+              </span>
+            </div>
+
+            <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isEffectiveCompleted ? "bg-emerald-500" : "bg-amber-500"
+                }`}
+                style={{ width: `${watchProgressPct}%` }}
+              />
+            </div>
+
+            <div className="space-y-2 pt-0.5 text-xs">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                <CheckCircle2
+                  size={14}
+                  className={isEffectiveCompleted ? "text-emerald-500 shrink-0" : "text-slate-300 dark:text-slate-600 shrink-0"}
+                />
+                <span>Xem thực tế ≥80% hoặc hết video</span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                <CheckCircle2 size={14} className="text-amber-500 shrink-0" />
+                <span>Hoàn thành Quiz ({effectiveQuizCount} câu · ≥60%)</span>
+              </div>
+            </div>
+
+            {isEffectiveCompleted && (
+              <button
+                type="button"
+                onClick={() => onNavigateToTab?.("lecture")}
+                className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+              >
+                <FileText size={13} />
+                <span>Đến Bài đọc nhận XP →</span>
+              </button>
+            )}
+          </div>
+
+          {/* Card 2: Chặng tiếp theo */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 border-t-[3px] border-t-amber-500 bg-white dark:bg-slate-900 p-5 space-y-3.5 shadow-2xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Chặng tiếp theo
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-mono text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                CHECKPOINT
+              </span>
+            </div>
             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
               Kiểm tra Năng lực với Quiz
             </h4>
@@ -804,22 +961,42 @@ export function LessonVideoStudio({
             <div className="pt-1 flex flex-col gap-2.5">
               <button
                 onClick={() => onNavigateToTab?.("quiz")}
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-98"
+                className="w-full py-2.5 bg-[#14161a] hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-98"
               >
-                <span>Làm Checkpoint Quiz</span>
+                <span>Làm Checkpoint Quiz ({effectiveQuizCount} câu)</span>
                 <ChevronRight size={14} />
               </button>
               <button
                 onClick={() => onNavigateToTab?.("mindmap")}
-                className="w-full py-2.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-98"
+                className="w-full py-2.5 bg-slate-50 dark:bg-slate-950/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-98"
               >
                 <span>Xem Cây Tri Thức</span>
                 <ChevronRight size={14} />
               </button>
             </div>
           </div>
+
+          {/* Card 3: Mentor Study Cue */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 p-4 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#14161a] dark:bg-amber-500/15 text-amber-400 dark:text-amber-300 font-mono text-[10px] font-bold">
+                  {mentorMeta.mark}
+                </span>
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  Mẹo từ Mentor {mentorMeta.name}
+                </span>
+              </div>
+              <Lightbulb size={14} className="text-amber-500 shrink-0" />
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              {mentorMeta.tip}
+            </p>
+          </div>
         </div>
       </div>
+        );
+      })()}
     </div>
   );
 }

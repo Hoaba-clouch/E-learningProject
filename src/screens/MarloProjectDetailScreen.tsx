@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import MarloSelect from "../components/MarloSelect";
 import {
   ChevronLeft,
   Plus,
@@ -22,7 +23,11 @@ import {
   Check,
 } from "lucide-react";
 import gsap from "gsap";
-import { animateMarloCards } from "../utils/marloAnimations";
+import {
+  animateMarloCards,
+  animateMarloRows,
+  useMarloPageEntrance,
+} from "../utils/marloAnimations";
 import {
   isProjectFrozen,
   setProjectFrozen,
@@ -458,40 +463,38 @@ export default function MarloProjectDetailScreen({
     showToast(`✓ Đã đồng bộ trạng thái đồ án thành "${MARLO_PROJECT_STATUS[resolvedStatus] || resolvedStatus}"`);
   };
 
-  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
-  useLayoutEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ctx = gsap.context(() => {
-      // 1. Stage container slides in smoothly with expo.out
-      gsap.fromTo(
-        el,
-        { y: 16, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.65,
-          ease: "expo.out",
-          clearProps: "transform,opacity",
-        }
-      );
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (ZERO DOUBLE-OPACITY FADE) ───
+  useMarloPageEntrance(
+    containerRef,
+    (el) => {
+      const headers = el.querySelectorAll(".backlink, .phead");
+      if (headers.length > 0) {
+        gsap.fromTo(
+          headers,
+          { opacity: 0, y: -8 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.45,
+            ease: "expo.out",
+            stagger: 0.04,
+            clearProps: "transform,opacity",
+          }
+        );
+      }
 
-      // 2. Cascade backlink and header
-      gsap.fromTo(
-        ".backlink, .phead",
-        { opacity: 0, y: -10 },
-        { opacity: 1, y: 0, duration: 0.5, ease: "expo.out", stagger: 0.04, clearProps: "transform,opacity" }
-      );
-
-      // 3. Stagger all detail cards with Marlo card physics
       const cards = el.querySelectorAll(".card, .pd__stat");
       if (cards.length > 0) {
-        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
+        animateMarloCards(cards, { y: 24, stagger: 0.05, duration: 0.72 });
       }
-    }, el);
 
-    return () => ctx.revert();
-  }, [displayId]);
+      const rows = el.querySelectorAll(".pd__task, .pd__person, .pd__inv");
+      if (rows.length > 0) {
+        animateMarloRows(rows, { x: -10, y: 0, stagger: 0.025, delay: 0.24, duration: 0.5 });
+      }
+    },
+    [displayId]
+  );
 
   return (
     <div
@@ -714,11 +717,11 @@ export default function MarloProjectDetailScreen({
               )}
             </div>
             <div className="my-1">
-              <select
+              <MarloSelect
                 value={currentStatus}
                 disabled={!canChangeStatus}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                className="w-full h-10 px-3 bg-[#ecedef] dark:bg-[#222326] border border-[#14161a26] dark:border-[#ffffff24] rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23] cursor-pointer disabled:opacity-60"
+                className="w-full h-10 px-3 bg-[#ecedef] dark:bg-[#222326] border border-[#14161a26] dark:border-[#ffffff24] rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none cursor-pointer disabled:opacity-60"
               >
                 {Object.keys(MARLO_PROJECT_STATUS).map((key) => (
                   <option
@@ -730,7 +733,7 @@ export default function MarloProjectDetailScreen({
                     {role === "student" && key === "delivered" ? " (Do GVHD chốt)" : ""}
                   </option>
                 ))}
-              </select>
+              </MarloSelect>
             </div>
             {leadStudent && (
               <div
@@ -1107,7 +1110,7 @@ export default function MarloProjectDetailScreen({
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                   Sinh viên phụ trách (Thành viên nhóm)
                 </label>
-                <select
+                <MarloSelect
                   value={newTaskAssigneeName}
                   onChange={(e) => setNewTaskAssigneeName(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none"
@@ -1117,7 +1120,7 @@ export default function MarloProjectDetailScreen({
                       {m.name} ({m.role})
                     </option>
                   ))}
-                </select>
+                </MarloSelect>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1138,7 +1141,7 @@ export default function MarloProjectDetailScreen({
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Mức ưu tiên
                   </label>
-                  <select
+                  <MarloSelect
                     value={newTaskPriority}
                     onChange={(e) => setNewTaskPriority(e.target.value as any)}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none"
@@ -1146,7 +1149,7 @@ export default function MarloProjectDetailScreen({
                     <option value="high">Ưu tiên cao (P0)</option>
                     <option value="medium">Bình thường (P1)</option>
                     <option value="low">Thấp (P2)</option>
-                  </select>
+                  </MarloSelect>
                 </div>
               </div>
 
@@ -1294,7 +1297,7 @@ export default function MarloProjectDetailScreen({
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Vai trò đảm nhiệm trong đồ án:
                     </label>
-                    <select
+                    <MarloSelect
                       value={selectedRoleToInvite}
                       onChange={(e) => setSelectedRoleToInvite(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white outline-none cursor-pointer"
@@ -1305,7 +1308,7 @@ export default function MarloProjectDetailScreen({
                       <option value="DevOps & Cloud Engineer">DevOps & Cloud Engineer</option>
                       <option value="Data Scientist & AI">Data Scientist & AI</option>
                       <option value="Quality Assurance (QA)">Quality Assurance (QA)</option>
-                    </select>
+                    </MarloSelect>
                   </div>
                 </div>
               )}

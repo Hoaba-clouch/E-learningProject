@@ -70,47 +70,47 @@ interface AutoGradeReport {
 }
 
 const DEFAULT_GRADE_REPORT: AutoGradeReport = {
-  score: 9.5,
+  score: 9.0,
   maxScore: 10,
-  gradeLabel: "LOẠI XUẤT SẮC (TIÊU CHUẨN ABET)",
-  testsPassed: 8,
-  testsTotal: 8,
-  executionTimeMs: 42,
+  gradeLabel: "ĐẠT CHUẨN KIỂM THỬ CI/CD",
+  testsPassed: 5,
+  testsTotal: 5,
+  executionTimeMs: 38,
   valgrindLeaks: 0,
-  antiPlagiarismScore: 98.6,
+  antiPlagiarismScore: 98.0,
   rubric: [
     {
-      title: "Yêu cầu Đề bài & Kế thừa Đa hình",
-      score: 10,
+      title: "Yêu cầu Kỹ thuật & Độ chính xác Test Cases",
+      score: 9.5,
       max: 10,
-      note: "Đầy đủ các lớp theo thiết kế, override hàm ảo chính xác, không dùng con trỏ sống vô tổ chức.",
+      note: "Hoàn thành các yêu cầu chức năng trọng tâm và vượt qua bộ kiểm thử tự động trong Docker Sandbox.",
     },
     {
       title: "Chất lượng Mã nguồn & Clean Architecture",
       score: 9.0,
       max: 10,
-      note: "Đặt tên chuẩn PascalCase cho Class và camelCase cho Method; phân tách rõ ràng interface và implementation.",
+      note: "Tổ chức cấu trúc thư mục rõ ràng, đặt tên nhất quán và phân tách hợp lý giữa giao diện, nghiệp vụ và dữ liệu.",
     },
     {
-      title: "An toàn Bộ nhớ & Tối ưu vtable",
-      score: 9.5,
+      title: "Kiểm soát Lỗi biên & An toàn Tài nguyên",
+      score: 9.0,
       max: 10,
-      note: "Sử dụng smart pointer (std::unique_ptr) bảo vệ tài nguyên; Valgrind kiểm thử đạt 0 bytes memory leak.",
+      note: "Có kiểm tra điều kiện biên đầu vào (Guard Clauses), xử lý ngoại lệ an toàn và giải phóng tài nguyên đúng chuẩn.",
     },
     {
-      title: "Tài liệu Kỹ thuật & Báo cáo README",
-      score: 9.5,
+      title: "Tài liệu Kỹ thuật & Ghi chú Thiết kế",
+      score: 8.5,
       max: 10,
-      note: "README trình bày rõ ràng kiến trúc sơ đồ lớp (Class Diagram), có hướng dẫn biên dịch CMake cụ thể.",
+      note: "Trình bày rõ hướng tiếp cận giải thuật và hướng dẫn chạy kiểm thử trong kho mã nguồn.",
     },
   ],
   aiFeedback: {
     strengths:
-      "Cấu trúc đa hình runtime phân tách rất rõ ràng giữa Base class và Derived class. Cơ chế Virtual Method Dispatch được gọi chính xác thông qua con trỏ lớp cha trỏ tới thực thể lớp con.",
+      "Mã nguồn tuân thủ tốt cấu trúc mô-đun của học phần, vượt qua các kiểm thử cốt lõi trên container cô lập.",
     improvements:
-      "Nên bổ sung thêm từ khóa `override` ở tất cả các phương thức ghi đè trong lớp con để trình biên dịch Clang-16 cảnh báo sớm nếu chữ ký hàm lớp cha bị thay đổi trong tương lai.",
+      "Nên bổ sung thêm kiểm thử đơn vị (unit tests) cho các tình huống dữ liệu biên rỗng hoặc tải lớn và ghi chú rõ đánh đổi thiết kế trong README.",
     cleanCodeAnalysis:
-      "Độ phức tạp Cyclomatic Complexity trung bình đạt 2.4 (mức an toàn cao). Không phát hiện code smell nghiêm trọng.",
+      "Độ phức tạp hàm ở mức kiểm soát tốt, luồng xử lý mạch lạc và dễ mở rộng bảo trì.",
   },
 };
 
@@ -825,12 +825,12 @@ export default function ChapterExerciseStudio({
                 <button
                   type="button"
                   onClick={() => {
-                    setSubmissionLink(`https://github.com/Hoaba-clouch/oop-vtable-cpp`);
+                    setSubmissionLink(`https://github.com/Hoaba-clouch/E-learningProject`);
                     setSubmitError(null);
                   }}
                   className="text-[11px] font-mono text-blue-600 dark:text-blue-400 hover:underline bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded cursor-pointer"
                 >
-                  https://github.com/owner/{subjectId}-ch{exercise.chapterNumber}-lab
+                  https://github.com/Hoaba-clouch/E-learningProject
                 </button>
               </div>
             </div>

@@ -47,3 +47,8 @@ class XpShopPurchaseIn(BaseModel):
 class XpQuestClaimIn(BaseModel):
     quest_id: str = Field(min_length=1, max_length=64)
     reward: int = Field(ge=1, le=500)
+
+
+class XpShopEquipIn(BaseModel):
+    category: str = Field(min_length=1, max_length=32)
+    item_id: str = Field(min_length=1, max_length=64)

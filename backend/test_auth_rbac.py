@@ -75,7 +75,7 @@ def test_auth_and_rbac_suite():
         assert profile["current_streak"] == 0
         assert profile["exp_points"] == 0
 
-    # Đăng ký Instructor
+    # Đăng ký Instructor (mặc định tạo ở trạng thái pending chờ Admin duyệt)
     r_inst = client.post(
         "/v1/auth/register",
         json={
@@ -89,9 +89,10 @@ def test_auth_and_rbac_suite():
     assert r_inst.status_code == 201, r_inst.text
     inst_data = r_inst.json()
     assert inst_data["role"] == "instructor"
+    assert inst_data["user"]["status"] == "pending"
     instructor_token = inst_data["access_token"]
 
-    # Đăng ký Admin
+    # Đăng ký công khai vai trò Admin -> Phải bị chặn 403 Forbidden (Chống leo thang đặc quyền)
     r_admin = client.post(
         "/v1/auth/register",
         json={
@@ -102,10 +103,15 @@ def test_auth_and_rbac_suite():
             "timezone": "Asia/Ho_Chi_Minh",
         },
     )
-    assert r_admin.status_code == 201, r_admin.text
-    admin_data = r_admin.json()
-    assert admin_data["role"] == "admin"
-    admin_token = admin_data["access_token"]
+    assert r_admin.status_code == 403, f"Không cho phép tự đăng ký Admin công khai, nhận: {r_admin.status_code}"
+
+    # Đăng nhập Admin hệ thống hợp lệ đã được seed để kiểm thử duyệt tài khoản & RBAC
+    r_admin_login = client.post(
+        "/v1/auth/login",
+        json={"email": "admin@codemind.ai", "password": "hasib123"},
+    )
+    assert r_admin_login.status_code == 200, r_admin_login.text
+    admin_token = r_admin_login.json()["access_token"]
 
     # Chống đăng ký trùng email
     r_dup = client.post(
@@ -212,7 +218,26 @@ def test_auth_and_rbac_suite():
     s_call_inst = client.get("/v1/instructor/sessions", headers=student_headers)
     assert s_call_inst.status_code == 403, f"Student phải bị từ chối 403, nhận: {s_call_inst.status_code}"
 
-    # Instructor gọi -> THÀNH CÔNG 200 OK
+    # Instructor mới đăng ký (pending) -> BỊ CHẶN 403 trước khi Admin duyệt
+    inst_pending_call = client.get("/v1/instructor/sessions", headers=instructor_headers)
+    assert inst_pending_call.status_code == 403, f"Instructor pending phải bị chặn 403, nhận: {inst_pending_call.status_code}"
+
+    # Admin duyệt Instructor mới đăng ký -> mở khóa 200 OK
+    inst_approvals_res = client.get("/v1/admin/pending-approvals", headers=admin_headers)
+    assert inst_approvals_res.status_code == 200, inst_approvals_res.text
+    matched_inst_approval = next(
+        (a for a in inst_approvals_res.json().get("approvals", []) if a["email"].lower() == instructor_email.lower()),
+        None,
+    )
+    assert matched_inst_approval is not None, "Giảng viên mới đăng ký phải xuất hiện trong danh sách pending-approvals"
+    inst_approve_res = client.post(
+        f"/v1/admin/pending-approvals/{matched_inst_approval['id']}/resolve",
+        json={"decision": "approved"},
+        headers=admin_headers,
+    )
+    assert inst_approve_res.status_code == 200, inst_approve_res.text
+
+    # Instructor sau khi được Admin duyệt -> THÀNH CÔNG 200 OK
     inst_call_inst = client.get("/v1/instructor/sessions", headers=instructor_headers)
     assert inst_call_inst.status_code == 200, inst_call_inst.text
 
@@ -277,6 +302,16 @@ def test_auth_and_rbac_suite():
     unlocked_learning = client.get("/v1/student/learning-overview", headers=student_headers)
     assert unlocked_learning.status_code == 200, unlocked_learning.text
     print("✓ Học viên mới chờ duyệt (403 -> Admin duyệt -> 200 mở khóa vào học): PASS")
+
+    with db() as conn:
+        for tmp_email in (student_email, instructor_email):
+            u_tmp = conn.execute("SELECT id FROM users WHERE email = ?", (tmp_email,)).fetchone()
+            conn.execute("DELETE FROM pending_approvals WHERE email = ?", (tmp_email,))
+            if u_tmp:
+                conn.execute("DELETE FROM jwt_sessions WHERE user_id = ?", (u_tmp["id"],))
+                conn.execute("DELETE FROM student_profiles WHERE user_id = ?", (u_tmp["id"],))
+                conn.execute("DELETE FROM users WHERE id = ?", (u_tmp["id"],))
+        conn.commit()
 
     print("\n=======================================================")
     print(">>> TẤT CẢ CÁC BÀI KIỂM THỬ AUTH & RBAC ĐÃ ĐẠT 100%! <<<")

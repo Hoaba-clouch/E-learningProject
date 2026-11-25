@@ -1,4 +1,13 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef, useLayoutEffect } from "react";
+import MarloSelect from "../components/MarloSelect";
+import MarloCopilotDrawer from "../components/MarloCopilotDrawer";
+
+const INITIAL_COPILOT_MESSAGE =
+  "**Chào giảng viên!** Tôi là **AI Teaching Co-Pilot** đồng hành cùng học phần của bạn:\n" +
+  "- **Lab & Docker Tests**: đề xuất đề bài, edge cases và kiểm tra `Valgrind`.\n" +
+  "- **Quiz & Nhánh yếu**: sinh nhanh câu hỏi bẫy cho các khái niệm lớp đạt `< 60%`.\n" +
+  "- **Hội đồng AI 3D**: gợi ý rubric chấm kép và câu hỏi phản biện chuyên sâu.\n" +
+  "> Chọn nhanh một gợi ý bên dưới hoặc nhập yêu cầu trực tiếp để tôi phân tích!";
 
 
 
@@ -1078,7 +1087,7 @@ function MonochromeMasterNode({
 
 
 
-              ? "bg-amber-500/10 text-[#8F5404] dark:text-amber-400 border border-amber-500/20"
+              ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80"
 
 
 
@@ -1230,11 +1239,11 @@ export default function InstructorPanel({
 
 
 
-  const [classes, setClasses] = useState<CourseClass[]>(INITIAL_INSTRUCTOR_CLASSES);
+  const [classes, setClasses] = useState<CourseClass[]>([]);
 
 
 
-  const [selectedClassId, setSelectedClassId] = useState<string>(INITIAL_INSTRUCTOR_CLASSES[0].id);
+  const [selectedClassId, setSelectedClassId] = useState<string>("");
 
 
 
@@ -1291,7 +1300,7 @@ export default function InstructorPanel({
 
 
 
-  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
 
 
 
@@ -1553,38 +1562,24 @@ export default function InstructorPanel({
 
 
   const [copilotMessages, setCopilotMessages] = useState<
-
-
-
     Array<{ sender: "user" | "ai"; text: string; time: string }>
-
-
-
   >([
-
-
-
     {
-
-
-
       sender: "ai",
-
-
-
-      text: "Chào giảng viên! Tôi có thể hỗ trợ soạn đề Lab + Docker Test Cases, tạo bộ câu hỏi phản biện cho Hội đồng AI 3D hoặc phân tích nhánh kiến thức cả lớp đang yếu.",
-
-
-
+      text: INITIAL_COPILOT_MESSAGE,
       time: "Hệ thống",
-
-
-
     },
-
-
-
   ]);
+
+  const handleResetCopilot = () => {
+    setCopilotMessages([
+      {
+        sender: "ai",
+        text: INITIAL_COPILOT_MESSAGE,
+        time: "Hệ thống",
+      },
+    ]);
+  };
 
 
 
@@ -1632,7 +1627,14 @@ export default function InstructorPanel({
 
 
 
-  useMarloPageEntrance(panelRef);
+  useMarloPageEntrance(panelRef, (el) => {
+    const chrome = el.querySelectorAll(
+      ".marlo-card:not([data-content-stage] .marlo-card)"
+    );
+    if (chrome.length > 0) {
+      animateMarloCards(chrome, { y: 18, stagger: 0.045, duration: 0.65 });
+    }
+  });
 
 
 
@@ -1727,48 +1729,42 @@ export default function InstructorPanel({
 
     await ensureRoleSession("instructor");
 
-    const [apiCourses, apiSubs, apiRubric, apiStudents, apiKbWs] = await Promise.all([
+    const apiCourses = await fetchInstructorCourses();
+    const resolvedCourses = apiCourses !== null ? apiCourses : INITIAL_INSTRUCTOR_CLASSES;
+    setClasses(resolvedCourses);
 
-      fetchInstructorCourses(),
-
-      fetchDualSubmissions(),
-
-      fetchDefenseRubric(),
-
-      fetchStudentsAnalyticsApi(),
-
-      fetchKanbanWorkspace("all"),
-
-    ]);
-
-    if (apiCourses && apiCourses.length > 0) {
-
-      setClasses(apiCourses);
-
+    let activeSecId: string | undefined;
+    if (resolvedCourses.length > 0) {
+      const keepExisting = resolvedCourses.some((c) => c.id === selectedClassId);
+      const picked = keepExisting ? selectedClassId : resolvedCourses[0].id;
+      if (picked !== selectedClassId) setSelectedClassId(picked);
+      const found = resolvedCourses.find((c) => c.id === picked) || resolvedCourses[0];
+      activeSecId = found.sectionId || found.id;
+    } else {
+      setSelectedClassId("");
     }
 
-    if (apiSubs && apiSubs.length > 0) {
+    const [apiSubs, apiRubric, apiStudents, apiKbWs] = await Promise.all([
+      fetchDualSubmissions(activeSecId),
+      fetchDefenseRubric(),
+      fetchStudentsAnalyticsApi(undefined, activeSecId),
+      fetchKanbanWorkspace("all"),
+    ]);
 
+    if (apiSubs !== null) {
       setSubmissions(apiSubs);
-
     }
 
     if (apiRubric) {
-
       setRubric(apiRubric);
-
     }
 
     if (Array.isArray(apiStudents)) {
-
       setStudentsAnalytics(apiStudents);
-
     }
 
     if (apiKbWs?.projects) {
-
       setWorkspaceProjects(apiKbWs.projects);
-
     }
 
     setWorkspaceLoading(false);
@@ -1776,54 +1772,43 @@ export default function InstructorPanel({
   }, []);
 
   useEffect(() => {
-
     void loadInstructorWorkspace();
-
   }, [loadInstructorWorkspace]);
 
-
-
-  useLayoutEffect(() => {
-
-
-
-    if (!contentRef.current) return;
-
-
-
-    const cards = contentRef.current.querySelectorAll(".marlo-card");
-
-
-
-    if (cards.length > 0) {
-
-
-
-      animateMarloCards(cards, { stagger: 0.04, y: 16 });
-
-
-
-    }
+  useEffect(() => {
+    if (!activeClass) return;
+    const targetSecId =
+      overviewScope === "all" ? undefined : activeClass.sectionId || activeClass.id;
+    let cancelled = false;
+    Promise.all([
+      fetchStudentsAnalyticsApi(undefined, targetSecId),
+      fetchDualSubmissions(targetSecId),
+    ]).then(([apiStudents, apiSubs]) => {
+      if (cancelled) return;
+      if (Array.isArray(apiStudents)) setStudentsAnalytics(apiStudents);
+      if (apiSubs !== null) setSubmissions(apiSubs);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeClass?.id, overviewScope]);
 
 
 
-    const rows = contentRef.current.querySelectorAll(".marlo-row");
-
-
-
-    if (rows.length > 0) {
-
-
-
-      animateMarloRows(rows, { y: 10, stagger: 0.02, delay: 0.12 });
-
-
-
-    }
-
-
-
-  }, [tab, selectedClassId]);
+  useMarloPageEntrance(
+    contentRef,
+    (el) => {
+      const cards = el.querySelectorAll(".marlo-card");
+      if (cards.length > 0) {
+        animateMarloCards(cards, { stagger: 0.05, y: 22, duration: 0.7 });
+      }
+      const rows = el.querySelectorAll(".marlo-row");
+      if (rows.length > 0) {
+        animateMarloRows(rows, { y: 10, stagger: 0.025, delay: 0.16, duration: 0.5 });
+      }
+    },
+    [tab, selectedClassId]
+  );
 
 
 
@@ -1868,10 +1853,12 @@ export default function InstructorPanel({
 
 
   const classSubmissions = useMemo(() => {
-
-
-
-    const list = submissions.filter((s) => s.classId === selectedClassId || overviewScope === "all");
+    const list = submissions.filter(
+      (s) =>
+        s.classId === selectedClassId ||
+        (Boolean(activeClass?.courseId) && s.classId === activeClass?.courseId) ||
+        overviewScope === "all"
+    );
 
 
 
@@ -1988,18 +1975,13 @@ export default function InstructorPanel({
 
 
     const scopeSubs =
-
-
-
       overviewScope === "all"
-
-
-
         ? submissions
-
-
-
-        : submissions.filter((s) => s.classId === selectedClassId);
+        : submissions.filter(
+            (s) =>
+              s.classId === selectedClassId ||
+              (Boolean(activeClass?.courseId) && s.classId === activeClass?.courseId)
+          );
 
 
 
@@ -2041,7 +2023,7 @@ export default function InstructorPanel({
 
         ? classes.reduce((sum, c) => sum + c.studentCount, 0)
 
-        : activeClass.studentCount;
+        : activeClass?.studentCount ?? 0;
 
 
 
@@ -2057,7 +2039,7 @@ export default function InstructorPanel({
 
 
 
-        : activeClass.avgProgressPct;
+        : activeClass?.avgProgressPct ?? 0;
 
 
 
@@ -2185,152 +2167,62 @@ export default function InstructorPanel({
 
 
 
+    const decided = await decideDualSubmission(activeSubmission.id, {
+      action: "approve",
+      final_score: score,
+      instructor_feedback: feedbackText,
+    });
+    if (!decided) {
+      notify("❌ Không thể lưu kết quả phê duyệt điểm lên máy chủ.");
+      return;
+    }
+
     setSubmissions((prev) =>
-
-
-
       prev.map((s) =>
-
-
-
         s.id === activeSubmission.id
-
-
-
           ? {
-
-
-
               ...s,
-
-
-
               status: "graded",
-
-
-
               finalScore: score,
-
-
-
               instructorFeedback: feedbackText,
-
-
-
             }
-
-
-
           : s
-
-
-
       )
-
-
-
     );
 
-
-
-    await decideDualSubmission(activeSubmission.id, {
-
-      action: "approve",
-
-      final_score: score,
-
-      instructor_feedback: feedbackText,
-
-    });
-
     window.dispatchEvent(new CustomEvent("codemind-instructor-updated"));
-
     notify(`Đã phê duyệt ${score}/100 cho ${activeSubmission.studentName}.`);
-
-
-
   };
 
-
-
   const handleRequestRedefense = async () => {
-
-
-
     if (!activeSubmission) return;
-
-
-
     const feedbackText =
-
-
-
       feedbackInput.trim() ||
-
-
-
       "Yêu cầu bảo vệ lại trực tiếp trên Phòng Phản Biện AI 3D để xác minh năng lực thực tế.";
 
-
+    const decided = await decideDualSubmission(activeSubmission.id, {
+      action: "redefense",
+      instructor_feedback: feedbackText,
+    });
+    if (!decided) {
+      notify("❌ Không thể gửi yêu cầu bảo vệ lại lên máy chủ.");
+      return;
+    }
 
     setSubmissions((prev) =>
-
-
-
       prev.map((s) =>
-
-
-
         s.id === activeSubmission.id
-
-
-
           ? {
-
-
-
               ...s,
-
-
-
               status: "redefense_requested",
-
-
-
               instructorFeedback: feedbackText,
-
-
-
             }
-
-
-
           : s
-
-
-
       )
-
-
-
     );
 
-
-
-    await decideDualSubmission(activeSubmission.id, {
-
-      action: "redefense",
-
-      instructor_feedback: feedbackText,
-
-    });
-
     window.dispatchEvent(new CustomEvent("codemind-instructor-updated"));
-
     notify(`Đã gửi yêu cầu bảo vệ lại 3D AI cho ${activeSubmission.studentName}.`);
-
-
-
   };
 
 
@@ -2619,28 +2511,55 @@ export default function InstructorPanel({
     setSelectedLesson(lesson);
     const content = (lesson.content || {}) as any;
     const preset = getSubjectAigcPreset(activeClass?.subjectId || "", activeClass?.code || "CS201", lesson.title);
+    const baseSub = MULTI_CHAPTER_SUBJECTS.find((s) => s.id === activeClass?.subjectId);
+    const chapIdx = Math.max(0, (activeClass?.chapters || []).findIndex((c) => c.id === chapterId));
+    const activeChapObj = (activeClass?.chapters || [])[chapIdx];
+    const lesIdx = Math.max(0, (activeChapObj?.lessons || []).findIndex((l) => l.id === lesson.id));
+    const baseChap = baseSub?.chapters.find((c) => c.id === chapterId) || baseSub?.chapters[chapIdx];
+    const titlePrefix = String(lesson.title || "").match(/^(\d+\.\d+)/)?.[1];
+    const baseLesson =
+      baseChap?.lessons.find((b) => b.id === lesson.id) ||
+      (titlePrefix ? baseChap?.lessons.find((b) => b.id === titlePrefix) : undefined) ||
+      (baseChap && lesIdx < baseChap.lessons.length ? baseChap.lessons[lesIdx] : undefined);
+
     setEditTitle(lesson.title || "");
-    setEditDuration(lesson.duration || "15 phút");
+    setEditDuration(lesson.duration || baseLesson?.duration || "15 phút");
     setEditXp(getEffectiveLessonXp(activeClass?.subjectId, lesson));
-    setEditDocuments(Array.isArray(lesson.documents) ? lesson.documents : []);
+    setEditDocuments(
+      Array.isArray(lesson.documents)
+        ? lesson.documents
+        : (baseLesson?.documents || []).map((d) => ({
+            name: d.name,
+            size: d.size || "1.2 MB",
+            uploadedAt: d.uploadedAt || "Đã đồng bộ",
+          }))
+    );
     setAigcTriggeredInModal(false);
-    setEditReading(content.reading || "");
+    setEditReading(content.reading || baseLesson?.reading || "");
     setEditScenes(
       content.videoScenes && content.videoScenes.length > 0
         ? content.videoScenes
+        : baseLesson?.videoScenes && baseLesson.videoScenes.length > 0
+        ? baseLesson.videoScenes
         : [
             { id: "s1", title: "Phân cảnh 1: Đặt vấn đề & Tổng quan", text: lesson.title, script: "Giới thiệu bản chất bài học", time: "00:00" },
             { id: "s2", title: `Phân cảnh 2: Demo mã nguồn (${activeClass?.code || "Core"})`, text: `Minh họa kiến trúc ${activeClass?.code || ""}`, script: "Phân tích thực thi", time: "05:20" },
             { id: "s3", title: "Phân cảnh 3: Cạm bẫy thiết kế & Tổng kết", text: "Lưu ý khi biên dịch & kiểm thử", script: "Thực hành trên Docker Sandbox", time: "12:15" },
           ]
     );
-    setEditQuizzes(
+    const sourceQuizzes =
       content.quizzes && content.quizzes.length > 0
-        ? content.quizzes.map((q: any, qi: number) => ({
+        ? content.quizzes
+        : baseLesson?.quizzes && baseLesson.quizzes.length > 0
+        ? baseLesson.quizzes
+        : null;
+    setEditQuizzes(
+      sourceQuizzes
+        ? sourceQuizzes.map((q: any, qi: number) => ({
             id: q.id || `q-${qi + 1}`,
             question: q.question || q.q || `Câu hỏi ${qi + 1}`,
             options: Array.isArray(q.options) && q.options.length > 0 ? q.options : ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
-            answer: q.answer || (q.options ? q.options[0] : "Phương án A"),
+            answer: q.answer || (q.options ? q.options[typeof q.correctIndex === "number" ? q.correctIndex : 0] : "Phương án A"),
             correctIndex: typeof q.correctIndex === "number" ? q.correctIndex : 0,
             explanation: q.explanation || `Giải thích chi tiết theo chuẩn học phần ${activeClass?.code || ""}.`,
           }))
@@ -2660,27 +2579,54 @@ export default function InstructorPanel({
             },
           ]
     );
-    setEditYoutubeUrl(content.youtubeUrl || (content.youtubeId ? `https://www.youtube.com/watch?v=${content.youtubeId}` : "https://www.youtube.com/watch?v=M6FwepHC6vM"));
-    setEditObjective(content.objective || `Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${lesson.title}`);
-    setEditLead(content.lead || content.reading || `Bài học tập trung giải thích cặn kẽ bản chất kỹ thuật của ${lesson.title}, phân tích ${preset.leadNote}.`);
-    setEditCodeSnippet(content.codeSnippet || {
-      lang: preset.lang,
-      code: preset.code,
-      caption: preset.caption,
-    });
+    const resolvedYtId =
+      content.youtubeId ||
+      (lesson as any).youtubeId ||
+      baseLesson?.youtubeId ||
+      "";
+    setEditYoutubeUrl(
+      content.youtubeUrl ||
+        (resolvedYtId
+          ? `https://www.youtube.com/watch?v=${resolvedYtId}`
+          : baseLesson?.youtubeUrl || "https://www.youtube.com/watch?v=M6FwepHC6vM")
+    );
+    setEditObjective(
+      content.objective ||
+        baseLesson?.objective ||
+        `Nắm vững nguyên lý và phương pháp thực hành chuyên sâu cho bài học: ${lesson.title}`
+    );
+    setEditLead(
+      content.lead ||
+        content.reading ||
+        baseLesson?.lead ||
+        `Bài học tập trung giải thích cặn kẽ bản chất kỹ thuật của ${lesson.title}, phân tích ${preset.leadNote}.`
+    );
+    setEditCodeSnippet(
+      content.codeSnippet ||
+        baseLesson?.codeSnippet || {
+          lang: preset.lang,
+          code: preset.code,
+          caption: preset.caption,
+        }
+    );
     setEditKeyTakeaways(
       content.keyTakeaways && content.keyTakeaways.length > 0
         ? content.keyTakeaways
+        : baseLesson?.keyTakeaways && baseLesson.keyTakeaways.length > 0
+        ? baseLesson.keyTakeaways
         : [
             `Hiểu rõ bản chất thiết kế và cơ chế vận hành của ${lesson.title}.`,
             `Nắm vững kỹ thuật ${preset.leadNote}.`,
             "Vượt qua các ca biên (edge cases) khi kiểm thử trên Docker Sandbox.",
           ]
     );
-    setEditAntiPattern(content.antiPattern || {
-      badDesc: preset.badDesc,
-      solution: preset.solution,
-    });
+    setEditAntiPattern(
+      content.antiPattern ||
+        baseLesson?.antiPattern || {
+          badDesc: preset.badDesc,
+          solution: preset.solution,
+        }
+    );
     setEditStatus(lesson.status || "Đã phát hành");
     setDrawerTab("video");
     setLessonModalOpen(true);
@@ -3012,6 +2958,15 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
       return;
     }
 
+    const parentChap = activeClass?.chapters.find((c) => c.id === activeLessonChapterId);
+    const shouldAutoPublishChapter =
+      finalStatus === "Đã phát hành" && parentChap?.status === "Bản nháp";
+    if (shouldAutoPublishChapter) {
+      await patchInstructorChapter(selectedClassId, activeLessonChapterId, {
+        status: "Đã phát hành",
+      });
+    }
+
     setClasses((prev) =>
       prev.map((c) =>
         c.id !== selectedClassId
@@ -3023,6 +2978,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
                   ? ch
                   : {
                       ...ch,
+                      ...(shouldAutoPublishChapter ? { status: "Đã phát hành" as const } : {}),
                       lessons: ch.lessons.map((l) =>
                         l.id === selectedLesson.id
                           ? {
@@ -3436,49 +3392,103 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
         if (prev >= 3) {
           clearInterval(timer);
           const ch = (activeClass?.chapters || []).find((c) => c.id === selectedMindmapChapterId);
+          const lessons = ch?.lessons || [];
+          const labAsg = ch?.assignments?.[0];
+          const baseMastery = Math.max(0, Math.min(100, Number(activeClass?.avgProgressPct || 0)));
           const rootId = `ai-root-${Date.now()}`;
+          const centerY = Math.max(140, Math.round(((Math.max(1, lessons.length) - 1) * 150) / 2 + 45));
+
           const genNodes: Node<MasterMindmapNodeData>[] = [
             {
               id: rootId,
               type: "masterMindmapNode",
-              position: { x: 40, y: 155 },
+              position: { x: 40, y: centerY },
               data: {
                 title: ch?.title || "Chủ đề chương",
-                summary: "Master Graph tổng hợp tự động từ giáo trình",
+                summary:
+                  lessons.length > 0
+                    ? `Tổng hợp ${lessons.length} bài giảng chuẩn hóa & thực hành kiểm thử Docker Sandbox.`
+                    : "Master Graph tổng hợp tự động từ giáo trình",
                 tag: `${activeClass.code} · ROOT`,
                 nodeType: "root",
-                masteryPct: activeClass.avgProgressPct,
+                masteryPct: baseMastery,
                 xp: 200,
               },
             },
-            ...(ch?.lessons || []).map((l, idx) => ({
-              id: `ai-b-${idx}`,
+          ];
+          const genEdges: Edge[] = [];
+
+          lessons.forEach((l, idx) => {
+            const branchId = `ai-b-${idx}`;
+            const leafId = `ai-l-${idx}`;
+            const rowY = 40 + idx * 155;
+            const cleanReading = (l.content?.reading || "")
+              .replace(/[#*`>-]/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+            genNodes.push({
+              id: branchId,
               type: "masterMindmapNode",
-              position: { x: 355, y: 40 + idx * 140 },
+              position: { x: 365, y: rowY },
               data: {
                 title: l.title,
-                summary: l.content.reading
-                  ? l.content.reading.slice(0, 95) + "..."
+                summary: cleanReading
+                  ? cleanReading.slice(0, 96) + (cleanReading.length > 96 ? "..." : "")
                   : "Trọng tâm bài giảng & kiểm thử thực hành",
                 tag: `Bài ${idx + 1}`,
-                nodeType: "branch" as const,
-                masteryPct: idx === 1 ? 54 : 80,
+                lessonId: l.id,
+                nodeType: "branch",
+                masteryPct: baseMastery,
+                xp: l.xp || 50,
+              } as MasterMindmapNodeData,
+            });
+            genEdges.push({
+              id: `ai-e-r-${idx}`,
+              source: rootId,
+              target: branchId,
+              type: "smoothstep",
+              markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+              style: { strokeWidth: 1.75, stroke: "#94a3b8", strokeDasharray: "5 4" },
+            });
+
+            const rawQuizList = (l.content as { quizzes?: Array<{ question?: string; q?: string }>; quiz?: Array<{ question?: string; q?: string }> } | undefined);
+            const quizArr = rawQuizList?.quizzes || rawQuizList?.quiz;
+            const firstQuizQ = quizArr?.[0]?.question || quizArr?.[0]?.q || "";
+            genNodes.push({
+              id: leafId,
+              type: "masterMindmapNode",
+              position: { x: 695, y: rowY },
+              data: {
+                title:
+                  idx === lessons.length - 1 && labAsg
+                    ? labAsg.title
+                    : `Trọng tâm thực hành Bài ${idx + 1}`,
+                summary:
+                  idx === lessons.length - 1 && labAsg
+                    ? labAsg.description || "Kiểm thử tự động trong container Docker cô lập."
+                    : firstQuizQ
+                    ? firstQuizQ.slice(0, 96) + (firstQuizQ.length > 96 ? "..." : "")
+                    : " Vận dụng giải quyết tình huống kỹ thuật & kiểm tra biên (Edge Cases).",
+                tag: idx === lessons.length - 1 && labAsg ? "Docker Lab" : `Chi tiết ${idx + 1}.1`,
+                nodeType: "leaf",
+                masteryPct: baseMastery,
               },
-            })),
-          ];
-          const genEdges: Edge[] = (ch?.lessons || []).map((_, idx) => ({
-            id: `ai-e-${idx}`,
-            source: rootId,
-            target: `ai-b-${idx}`,
-            type: "smoothstep",
-            markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
-            style: { strokeWidth: 1.75, stroke: "#94a3b8", strokeDasharray: "5 4" },
-          }));
+            });
+            genEdges.push({
+              id: `ai-e-l-${idx}`,
+              source: branchId,
+              target: leafId,
+              type: "smoothstep",
+              markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+              style: { strokeWidth: 1.5, stroke: "#94a3b8", strokeDasharray: "5 4" },
+            });
+          });
+
           setNodes(genNodes);
           setEdges(genEdges);
           setIsMindmapDirty(true);
           setIsMindmapGenerating(false);
-          notify("AI đã dựng xong Master Mindmap đơn sắc. Nhấn 'Lưu Master Graph' để phát hành.");
+          notify("AI đã dựng xong Master Mindmap 3 tầng. Nhấn 'Lưu Master Graph' để phát hành.");
           return 3;
         }
         return prev + 1;
@@ -3569,53 +3579,35 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
     setTimeout(() => {
-
-
-
-      let reply = `Tôi đã phân tích dữ liệu lớp ${activeClass.code}. Đề xuất hành động tiếp theo:\n• Mở rộng bộ Docker Edge-case Test cho chương hiện tại.\n• Thêm câu hỏi phản biện bắt buộc trong Rubric Hội đồng AI 3D để lọc các bài nộp nghi copy code.`;
-
-
+      let reply =
+        `### Đề xuất hành động cho lớp ${activeClass.code}\n` +
+        "- Mở rộng bộ **Docker Edge-case Test** cho chương hiện tại (chuỗi rỗng, `nullptr`, giới hạn bộ nhớ).\n" +
+        "- Bổ sung câu hỏi phản biện bắt buộc trong **Rubric Hội đồng AI 3D** để lọc các bài nộp nghi sao chép code.\n" +
+        "> Mở tab *Giáo trình & Test Cases* để gắn trực tiếp vào bài Lab tiếp theo.";
 
       if (clean.toLowerCase().includes("quiz") || clean.toLowerCase().includes("nhánh yếu")) {
-
-
-
-        reply = `Đề xuất 2 câu Quiz bổ trợ cho nhánh kiến thức lớp đang yếu (< 60%):\n1. Khi delete Base* trỏ tới Derived trong C++, điều kiện nào đảm bảo Destructor lớp con được gọi?\n   → Đáp án: ~Base() phải được khai báo virtual.\n2. Vì sao truyền Base obj theo giá trị gây mất tính đa hình?\n   → Đáp án: Trình biên dịch sao chép phần Base và đặt vptr trỏ về vtable của Base (Object Slicing).`;
-
-
-
+        reply =
+          "### Đề xuất 2 câu Quiz bổ trợ nhánh yếu (< 60%)\n" +
+          "1. Khi `delete Base*` trỏ tới `Derived` trong C++, điều kiện nào đảm bảo destructor lớp con được gọi?\n" +
+          "   → Đáp án: `~Base()` phải được khai báo `virtual`.\n" +
+          "2. Vì sao truyền `Base obj` theo giá trị gây mất tính đa hình?\n" +
+          "   → Đáp án: Trình biên dịch sao chép phần `Base` và đặt `vptr` trỏ về `vtable` của `Base` (**Object Slicing**).\n" +
+          "> Bạn có thể chèn trực tiếp 2 câu này vào mini-quiz trước buổi thực hành.";
       } else if (clean.toLowerCase().includes("lab") || clean.toLowerCase().includes("test case")) {
-
-
-
-        reply = `Đề xuất bộ Test Case Docker cho ${activeClass.code}:\n• TC Biên 1: Con trỏ null / input rỗng không gây crash (Exit 0).\n• TC Biên 2: Valgrind kiểm tra rò rỉ bộ nhớ = 0 bytes.\n• Câu hỏi AI Defense đi kèm: "Giải thích sự khác biệt giữa liên kết tĩnh và dynamic dispatch tại dòng gọi hàm ảo."`;
-
-
-
+        reply =
+          `### Bộ Test Case Docker gợi ý · ${activeClass.code}\n` +
+          "- **TC Biên 1**: Con trỏ `nullptr` hoặc input rỗng không gây crash (`Exit 0`).\n" +
+          "- **TC Biên 2**: Chạy `Valgrind` kiểm tra rò rỉ bộ nhớ = `0 bytes leaked`.\n" +
+          "- **Câu hỏi AI Defense**: *\"Giải thích sự khác biệt giữa liên kết tĩnh và dynamic dispatch tại dòng gọi hàm ảo.\"*\n" +
+          "> Khuyên dùng kèm ngưỡng thời gian chạy `< 500ms` cho tập test tải cao.";
       }
 
-
-
       setCopilotMessages((prev) => [
-
-
-
         ...prev,
-
-
-
         { sender: "ai", text: reply, time: "AI Co-Pilot" },
-
-
-
       ]);
 
-
-
       setCopilotTyping(false);
-
-
-
     }, 550);
 
 
@@ -3634,7 +3626,39 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
       .slice(0, 3);
   }, [studentsAnalytics]);
 
-
+  if (!activeClass) {
+    return (
+      <div
+        ref={panelRef}
+        className="min-h-full max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-7 pb-20 flex items-center justify-center"
+      >
+        <div className="marlo-card w-full max-w-lg rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-6 sm:p-8 text-center space-y-3 shadow-xs">
+          <div className="mx-auto w-11 h-11 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-slate-700 dark:text-slate-200">
+            <GraduationCap size={20} />
+          </div>
+          <h2 className="text-base sm:text-lg font-bold text-slate-950 dark:text-white">
+            {workspaceLoading
+              ? "Đang tải lớp học phần được phân công..."
+              : "Chưa có lớp học phần được phân công"}
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            {workspaceLoading
+              ? "Đang đồng bộ danh sách lớp học phần và dữ liệu ghi danh từ máy chủ."
+              : "Tài khoản giảng viên của bạn hiện chưa được Quản trị viên gán phụ trách lớp học phần nào."}
+          </p>
+          {!workspaceLoading && (
+            <button
+              type="button"
+              onClick={() => void loadInstructorWorkspace()}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-[#141619] hover:bg-black text-white dark:bg-white dark:text-[#141619] px-4 py-2 text-xs font-bold cursor-pointer transition"
+            >
+              Kiểm tra lại phân công
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
 
@@ -3674,8 +3698,8 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
                 CodeMind Teaching OS
               </span>
               <span className="text-slate-300 dark:text-slate-700">·</span>
-              <span className="text-[11px] font-mono font-semibold text-amber-600 dark:text-amber-400">
-                {activeClass.code} · {classes.length} học phần
+              <span className="text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-300">
+                {activeClass.sectionCode || activeClass.code} · {classes.length} lớp học phần
               </span>
             </div>
 
@@ -3704,22 +3728,22 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
         {/* Row 2: Course Switcher & Quick Action Buttons */}
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 basis-full lg:basis-[340px]">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 hidden sm:inline">
               Lớp học phần:
             </span>
-            <select
+            <MarloSelect
               aria-label="Chọn lớp học phần"
               value={selectedClassId}
               onChange={(e) => handleClassSelect(e.target.value)}
-              className="w-full sm:w-auto sm:min-w-[300px] max-w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold rounded-xl px-3 py-2 outline-none cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 transition"
+              className="min-w-0 flex-1 sm:flex-initial sm:w-[320px] max-w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold rounded-xl px-3 py-2 outline-none cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 transition"
             >
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.code} — {c.name} ({c.studentCount} HV)
+                  {c.sectionCode || c.code} — {c.name} ({c.studentCount} HV)
                 </option>
               ))}
-            </select>
+            </MarloSelect>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -3750,7 +3774,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-      <div ref={contentRef} key={tab} className="relative z-10 space-y-5">
+      <div ref={contentRef} key={tab} data-content-stage="1" className="relative z-10 space-y-5">
 
 
 
@@ -5311,14 +5335,13 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                  lesson.status === "Bản nháp"
-                                    ? "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
-                                    : "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
-                                }`}
-                              >
-                                {lesson.status || "Đã phát hành"}
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    lesson.status === "Bản nháp" ? "bg-slate-400" : "bg-emerald-500"
+                                  }`}
+                                />
+                                <span>{lesson.status || "Đã phát hành"}</span>
                               </span>
 
 
@@ -5339,7 +5362,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                                    : "bg-amber-500/10 border-amber-500/20 text-[#8F5404] dark:text-amber-400"
+                                    : "bg-slate-100 dark:bg-slate-800/90 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200"
 
 
 
@@ -5427,72 +5450,6 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
                             >
                               <Trash2 size={12} />
                             </button>
-
-
-
-                            <button
-
-
-
-                              type="button"
-
-
-
-                              onClick={() => {
-
-
-
-                                setPreviewLesson({
-
-
-
-                                  chapterTitle: chapter.title,
-
-
-
-                                  lesson,
-
-
-
-                                  assignment: chapter.assignments?.[0],
-
-
-
-                                });
-
-
-
-                                setPreviewTab("reading");
-
-
-
-                                setPreviewQuizAnswers({});
-
-
-
-                              }}
-
-
-
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 transition cursor-pointer"
-
-
-
-                            >
-
-
-
-                              <Eye size={13} />
-
-
-
-                              <span>Xem thử góc nhìn Học viên</span>
-
-
-
-                            </button>
-
-
 
                             <button
 
@@ -5946,7 +5903,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
               <InstructorChapterGradingView
                 onNotify={notify}
                 classes={classes}
-                defaultSubjectId={activeClass?.subjectId || ""}
+                defaultSubjectId={activeClass?.id || activeClass?.subjectId || ""}
               />
             ) : (
               <>
@@ -7002,7 +6959,12 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
           <div className="animate-screen-enter">
 
-            <InstructorStudentsTab onNotify={notify} activeCourseCode={activeClass?.code || ""} />
+            <InstructorStudentsTab
+              onNotify={notify}
+              activeCourseCode={activeClass.code}
+              activeSectionId={activeClass.sectionId || activeClass.id}
+              courses={classes}
+            />
 
           </div>
 
@@ -7030,7 +6992,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                <select
+                <MarloSelect
 
 
 
@@ -7074,12 +7036,13 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                </select>
+                </MarloSelect>
 
 
 
                 {isMindmapDirty && (
-                  <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 text-[10.5px] font-bold text-amber-700 dark:text-amber-300">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 px-2.5 py-0.5 text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                     Chưa lưu thay đổi
                   </span>
                 )}
@@ -7975,13 +7938,14 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
                     Biên soạn Bài học AIGC · {activeClass.code}
                   </span>
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      editStatus === "Đã phát hành"
-                        ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
-                        : "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800"
-                    }`}
+                    className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200"
                   >
-                    {editStatus}
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        editStatus === "Đã phát hành" ? "bg-emerald-500" : "bg-amber-500"
+                      }`}
+                    />
+                    <span>{editStatus}</span>
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -8114,7 +8078,7 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
                       <div className="flex items-center gap-1.5">
                         <span className="text-[11px] font-mono text-slate-400">YouTube ID:</span>
-                        <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-900">
+                        <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200/80 dark:border-slate-700/80">
                           {extractYoutubeId(editYoutubeUrl)}
                         </span>
                       </div>
@@ -9394,18 +9358,9 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                onClick={() => {
-
-
-
+                onClick={async () => {
+                  await handleSaveAssignmentMeta();
                   setTcModalOpen(false);
-
-
-
-                  notify("Đã lưu cấu hình Test Cases vào Sandbox CI/CD.");
-
-
-
                 }}
 
 
@@ -10472,22 +10427,14 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-                onClick={() => {
-
-
-
+                onClick={async () => {
+                  const ok = await saveDefenseRubric(rubric);
+                  if (!ok) {
+                    notify("❌ Không thể lưu cấu hình Rubric lên máy chủ.");
+                    return;
+                  }
                   setRubricModalOpen(false);
-
-
-
-                  void saveDefenseRubric(rubric);
-
-
-
                   notify("Đã cập nhật Rubric chấm điểm kép cho Hội đồng AI 3D.");
-
-
-
                 }}
 
 
@@ -10536,300 +10483,26 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
 
 
 
-      {/* Copilot Floating Drawer triggered from Shell Header */}
-      {isCopilotOpen && (
-
-
-
-        <div className="fixed bottom-6 right-6 z-50 w-[360px] max-w-[92vw] h-[480px] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#14161F] shadow-2xl flex flex-col overflow-hidden">
-
-
-
-          <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-[#141619] text-white dark:bg-slate-900">
-
-
-
-            <div className="flex items-center gap-2">
-
-
-
-              <Bot size={16} />
-
-
-
-              <span className="text-xs font-bold">AI Teaching Co-Pilot ({activeClass.code})</span>
-
-
-
-            </div>
-
-
-
-            <button
-
-
-
-              type="button"
-
-
-
-              onClick={() => setIsCopilotOpen(false)}
-
-
-
-              className="p-1 rounded-lg hover:bg-white/10 cursor-pointer"
-
-
-
-            >
-
-
-
-              <X size={15} />
-
-
-
-            </button>
-
-
-
-          </div>
-
-
-
-          <div className="p-2.5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap gap-1.5">
-
-
-
-            {[
-
-
-
-              "Soạn đề Lab + Test Cases mới",
-
-
-
-              "Sinh 2 câu Quiz cho nhánh yếu",
-
-
-
-              "Tóm tắt điểm yếu toàn lớp",
-
-
-
-            ].map((q) => (
-
-
-
-              <button
-
-
-
-                key={q}
-
-
-
-                type="button"
-
-
-
-                onClick={() => triggerCopilotPrompt(q)}
-
-
-
-                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[10.5px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
-
-
-
-              >
-
-
-
-                {q}
-
-
-
-              </button>
-
-
-
-            ))}
-
-
-
-          </div>
-
-
-
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
-
-
-
-            {copilotMessages.map((msg, i) => (
-
-
-
-              <div
-
-
-
-                key={i}
-
-
-
-                className={`rounded-xl p-3 text-xs leading-relaxed whitespace-pre-line ${
-
-
-
-                  msg.sender === "user"
-
-
-
-                    ? "ml-6 bg-[#141619] text-white dark:bg-white dark:text-[#141619]"
-
-
-
-                    : "mr-4 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-
-
-
-                }`}
-
-
-
-              >
-
-
-
-                {msg.text}
-
-
-
-              </div>
-
-
-
-            ))}
-
-
-
-            {copilotTyping && (
-
-
-
-              <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-
-
-
-                <Loader2 size={12} className="animate-spin" />
-
-
-
-                <span>AI Co-Pilot đang phân tích lớp...</span>
-
-
-
-              </div>
-
-
-
-            )}
-
-
-
-          </div>
-
-
-
-          <form
-
-
-
-            onSubmit={(e) => {
-
-
-
-              e.preventDefault();
-
-
-
-              triggerCopilotPrompt(copilotInput);
-
-
-
-            }}
-
-
-
-            className="p-2.5 border-t border-slate-100 dark:border-slate-800 flex gap-2"
-
-
-
-          >
-
-
-
-            <input
-
-
-
-              type="text"
-
-
-
-              value={copilotInput}
-
-
-
-              onChange={(e) => setCopilotInput(e.target.value)}
-
-
-
-              placeholder="Nhờ AI soạn đề, quiz hoặc nhận xét..."
-
-
-
-              className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs outline-none"
-
-
-
-            />
-
-
-
-            <button
-
-
-
-              type="submit"
-
-
-
-              className="rounded-xl bg-[#141619] text-white dark:bg-white dark:text-[#141619] px-3 py-2 cursor-pointer"
-
-
-
-            >
-
-
-
-              <Send size={14} />
-
-
-
-            </button>
-
-
-
-          </form>
-
-
-
-        </div>
-
-
-
-      )}
+      {/* Marlo Authentic AI Teaching Co-Pilot Drawer */}
+      <MarloCopilotDrawer
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
+        onReset={handleResetCopilot}
+        courseCode={activeClass.code}
+        courseName={activeClass.name}
+        messages={copilotMessages}
+        typing={copilotTyping}
+        inputValue={copilotInput}
+        onInputChange={setCopilotInput}
+        onSendPrompt={(text) => {
+          void triggerCopilotPrompt(text);
+        }}
+        quickPrompts={[
+          "Soạn đề Lab + Test Cases mới",
+          "Sinh 2 câu Quiz cho nhánh yếu",
+          "Tóm tắt điểm yếu toàn lớp",
+        ]}
+      />
 
 
 

@@ -466,10 +466,19 @@ function CountUpNumber({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
+        const entry = entries[0];
+        if (!entry) return;
+        if (entry.isIntersecting || entry.boundingClientRect.bottom < 0) {
           if (!hasAnimated.current) {
             hasAnimated.current = true;
-            const duration = 1200;
+            observer.unobserve(el);
+
+            if (entry.boundingClientRect.bottom < 0) {
+              setVal(end);
+              return;
+            }
+
+            const duration = 1100;
             const startTime = performance.now();
 
             const update = (now: number) => {
@@ -487,13 +496,11 @@ function CountUpNumber({
             };
             requestAnimationFrame(update);
           }
-        } else {
-          hasAnimated.current = false;
         }
       },
       {
         root: null,
-        threshold: 0.1,
+        threshold: 0.05,
       }
     );
 
@@ -773,43 +780,79 @@ export default function CodeMindIntroLandingPage({
     };
   }, []);
 
-  // Bidirectional IntersectionObserver for scroll-reveal animations across all showcase sections (Both Scroll Up & Scroll Down)
+  // Monotonic reveal-once IntersectionObserver + passive scroll fallback to prevent boundary bounce/blur oscillation
   useEffect(() => {
-    const observer = new IntersectionObserver(
+    const revealSelector =
+      ".reveal-on-scroll, .reveal-fade-left, .reveal-fade-right, .reveal-zoom-in, .reveal-3d-tilt, .reveal-spring-pop, .reveal-slide-left, .reveal-slide-right, .reveal-pulse-glow";
+    const pending = new Set<HTMLElement>(
+      Array.from(document.querySelectorAll<HTMLElement>(revealSelector))
+    );
+
+    let observer: IntersectionObserver | null = null;
+
+    const revealInOrAboveViewport = () => {
+      const viewportBottom = window.innerHeight * 0.96;
+      pending.forEach((el) => {
+        if (el.classList.contains("is-in-view")) {
+          pending.delete(el);
+          observer?.unobserve(el);
+          return;
+        }
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= viewportBottom) {
+          el.classList.add("is-in-view");
+          pending.delete(el);
+          observer?.unobserve(el);
+        }
+      });
+    };
+
+    observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           const el = entry.target as HTMLElement;
-          if (entry.isIntersecting) {
-            // Khi lướt tới (cả lướt lên và lướt xuống): kích hoạt hiệu ứng hiện ra mượt mà
+          if (entry.isIntersecting || entry.boundingClientRect.top <= window.innerHeight * 0.96) {
             el.classList.add("is-in-view");
-          } else {
-            // Khi lướt ra khỏi tầm nhìn: gỡ bỏ class để khi lướt ngược lại hiệu ứng sẽ được kích hoạt lại
-            el.classList.remove("is-in-view");
+            pending.delete(el);
+            observer?.unobserve(el);
           }
         });
       },
       {
         root: null,
-        threshold: 0.08,
-        rootMargin: "-20px 0px -20px 0px",
+        threshold: 0.01,
+        rootMargin: "0px 0px -24px 0px",
       }
     );
 
-    const revealElements = document.querySelectorAll(
-      ".reveal-on-scroll, .reveal-fade-left, .reveal-fade-right, .reveal-zoom-in, .reveal-3d-tilt, .reveal-spring-pop, .reveal-slide-left, .reveal-slide-right, .reveal-pulse-glow"
-    );
+    revealInOrAboveViewport();
+    pending.forEach((el) => observer?.observe(el));
 
-    revealElements.forEach((el) => {
-      observer.observe(el);
-    });
+    let rafId = 0;
+    const onScrollOrResize = () => {
+      if (pending.size === 0 || rafId) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        revealInOrAboveViewport();
+      });
+    };
+
+    const mainScrollEl = document.querySelector("main");
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize, { passive: true });
+    mainScrollEl?.addEventListener("scroll", onScrollOrResize, { passive: true });
 
     // Initialize Marlo magnetic physics on all .magnetic elements
     initMarloMagnetic(document);
 
     return () => {
-      observer.disconnect();
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+      mainScrollEl?.removeEventListener("scroll", onScrollOrResize);
+      observer?.disconnect();
     };
-  }, [hasIntroCompleted]);
+  }, []);
 
   const handleSkipIntro = () => {
     if (timelineRef.current) {
@@ -1031,15 +1074,35 @@ export default function CodeMindIntroLandingPage({
 
           {/* End Card */}
           <div ref={endcardRef} className="intro-endcard">
-            <p className="intro-endcard__cta">
-              {isPendingApproval
-                ? "Tài khoản đã đăng ký · Chờ Quản trị viên phê duyệt"
-                : "Sẵn sàng bứt phá sự nghiệp lập trình?"}
-            </p>
+            <div className="intro-endcard__cta">
+              {isPendingApproval ? (
+                <>
+                  <span className="intro-endcard__eyebrow">
+                    <span className="intro-endcard__eyebrow-dot" aria-hidden="true" />
+                    Tài khoản đã đăng ký
+                  </span>
+                  <h1 className="intro-endcard__title intro-endcard__title--pending">
+                    Chờ Quản trị viên phê duyệt
+                  </h1>
+                </>
+              ) : (
+                <h1 className="intro-endcard__title">
+                  Sẵn sàng bứt phá sự nghiệp lập trình?
+                </h1>
+              )}
+            </div>
             <p className="intro-endcard__sub">
-              {isPendingApproval
-                ? `Xin chào ${pendingUserName || "bạn"}. Tài khoản học viên của bạn đang chờ Admin cấp quyền để vào lớp học. Trong thời gian chờ duyệt, bạn có thể khám phá toàn bộ trang giới thiệu & lộ trình CodeMind AI.`
-                : "Chào mừng bạn đến với hệ sinh thái đào tạo kỹ sư công nghệ CodeMind AI Campus. Học thực chiến qua đồ án chuẩn doanh nghiệp cùng AI Mentor 24/7."}
+              {isPendingApproval ? (
+                <>
+                  Xin chào{" "}
+                  <strong className="font-semibold text-[#12131a]">
+                    {pendingUserName || "bạn"}
+                  </strong>
+                  . Tài khoản học viên của bạn đang chờ Admin cấp quyền để vào lớp học. Trong thời gian chờ duyệt, bạn có thể khám phá toàn bộ trang giới thiệu &amp; lộ trình CodeMind AI.
+                </>
+              ) : (
+                "Chào mừng bạn đến với hệ sinh thái đào tạo kỹ sư công nghệ CodeMind AI Campus. Học thực chiến qua đồ án chuẩn doanh nghiệp cùng AI Mentor 24/7."
+              )}
             </p>
 
             <div className="intro-endcard__actions flex items-center justify-center gap-3 flex-wrap relative z-20 pointer-events-auto">
@@ -1108,13 +1171,13 @@ export default function CodeMindIntroLandingPage({
             </div>
 
             <div className="intro-endcard__handle">
-              <span className="text-slate-700 font-semibold text-sm">@codemind_campus · Computer Science & AI Excellence</span>
+              <span className="text-slate-600 font-medium text-[13px] tracking-[0.012em]">@codemind_campus · Computer Science &amp; AI Excellence</span>
               <svg className="intro-squiggle intro-squiggle--sm" viewBox="0 0 240 26" fill="none" aria-hidden="true">
                 <path
                   className="intro-squiggle__path"
                   d="M6 17C42 8 96 4 152 6c22 1 46 4 60 9-30 4-72 5-116 4"
                   stroke="#E5A023"
-                  strokeWidth="3.2"
+                  strokeWidth="2.4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />

@@ -28,12 +28,14 @@ import {
 } from "lucide-react";
 import ProjectGradingModal from "../components/ProjectGradingModal";
 import MarloTitle from "../components/MarloTitle";
+import MarloSelect from "../components/MarloSelect";
 import MarloSegmentedControl from "../components/MarloSegmentedControl";
 import { MarloNewProjectModal } from "../components/MarloProjectModals";
 import MarloToast from "../components/MarloToast";
 import {
   animateMarloPill,
   animateMarloCards,
+  useMarloPageEntrance,
 } from "../utils/marloAnimations";
 import {
   isGlobalSubmissionLocked,
@@ -460,11 +462,13 @@ export default function MarloProjectsScreen({
   const [selectedMentor, setSelectedMentor] = useState("TS. Nguyễn Phước (GV Hướng dẫn)");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  const pageRef = useRef<HTMLDivElement>(null);
   const tabsNavRef = useRef<HTMLElement>(null);
   const tabLineRef = useRef<HTMLSpanElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const tlInnerRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
+  const hasInitialEnteredRef = useRef(false);
 
   // ─── GitHub-style Collaborator Invitations ───
   const [pendingInvitations, setPendingInvitations] = useState<ProjectInvitationItem[]>([]);
@@ -731,10 +735,11 @@ export default function MarloProjectsScreen({
       return;
     }
 
-    // Exit animation: items drop slightly and scale down, stage slides left/right
-    const exitItems = stage.querySelectorAll(".pcard, .pgrid, .tl, .tl__row, .toolbar");
+    // Exit animation: cards/tl gently exit before view swap (no outer stage opacity fight)
+    const exitItems = stage.querySelectorAll(".pcard, .tl, .tl__row, .toolbar");
     const exitTl = gsap.timeline({
       onComplete: () => {
+        gsap.set(stage, { clearProps: "transform" });
         setDisplayedTab(nextTab);
         setIsTransitioning(false);
       },
@@ -747,7 +752,7 @@ export default function MarloProjectsScreen({
           opacity: 0,
           y: 8,
           scale: 0.985,
-          duration: 0.2,
+          duration: 0.18,
           ease: "power2.in",
           stagger: 0.008,
           overwrite: true,
@@ -759,9 +764,8 @@ export default function MarloProjectsScreen({
     exitTl.to(
       stage,
       {
-        x: -dir * 18,
-        opacity: 0,
-        duration: 0.2,
+        x: -dir * 16,
+        duration: 0.18,
         ease: "power2.in",
         overwrite: true,
       },
@@ -769,32 +773,54 @@ export default function MarloProjectsScreen({
     );
   };
 
-  // ─── ENTER ANIMATION WHEN DISPLAYED TAB CHANGES ───
-  useLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const dir = displayedTab === "timeline" ? 1 : -1;
-
-    // View container slides in with expo.out
-    gsap.fromTo(
-      stage,
-      { x: dir * 24, opacity: 0 },
-      {
-        x: 0,
-        opacity: 1,
-        duration: 0.65,
-        ease: "expo.out",
-        clearProps: "transform,opacity",
+  // Page chrome entrance on mount / role switch (marlo-app parity, no double fade)
+  useMarloPageEntrance(
+    pageRef,
+    (el) => {
+      const headAndControls = el.querySelectorAll(".phead, .tabs, .toolbar");
+      if (headAndControls.length > 0) {
+        animateMarloCards(headAndControls, { y: 18, stagger: 0.045, duration: 0.65 });
       }
-    );
+    },
+    [role]
+  );
 
-    // Stagger child elements
-    if (displayedTab === "slate") {
-      const cards = stage.querySelectorAll(".pcard");
-      animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
-    }
-  }, [displayedTab]);
+  // ─── ENTER ANIMATION ON INITIAL ASYNC LOAD & DISPLAYED TAB SWITCH ───
+  useMarloPageEntrance(
+    stageRef,
+    (stage) => {
+      if (loadingProjects) return;
+      const dir = displayedTab === "timeline" ? 1 : -1;
+
+      if (hasInitialEnteredRef.current) {
+        gsap.fromTo(
+          stage,
+          { x: dir * 20 },
+          {
+            x: 0,
+            duration: 0.58,
+            ease: "expo.out",
+            clearProps: "transform",
+          }
+        );
+      } else {
+        hasInitialEnteredRef.current = true;
+      }
+
+      if (displayedTab === "slate") {
+        const cards = stage.querySelectorAll(".pcard");
+        if (cards.length > 0) {
+          animateMarloCards(cards, { y: 24, stagger: 0.05, duration: 0.72 });
+        }
+      } else {
+        const tlCards = stage.querySelectorAll(".tl");
+        if (tlCards.length > 0) {
+          animateMarloCards(tlCards, { y: 20, stagger: 0.05, duration: 0.65 });
+        }
+      }
+    },
+    [displayedTab, loadingProjects]
+  );
 
   // ─── TIMELINE EXACT MARLO ANIMATION ───
   useLayoutEffect(() => {
@@ -870,16 +896,18 @@ export default function MarloProjectsScreen({
     }
   }, [displayedTab, projects, filterStatus]);
 
-  // Animate cards when filter status changes in Slate view
+  // Animate cards when filter status or project scope changes in Slate view
   const prevFilterRef = useRef(filterStatus);
+  const prevScopeRef = useRef(projectScope);
   useLayoutEffect(() => {
-    if (displayedTab !== "slate" || !stageRef.current) return;
-    if (prevFilterRef.current !== filterStatus) {
+    if (displayedTab !== "slate" || loadingProjects || !stageRef.current) return;
+    if (prevFilterRef.current !== filterStatus || prevScopeRef.current !== projectScope) {
       const cards = stageRef.current.querySelectorAll(".pcard");
-      animateMarloCards(cards, { y: 16, stagger: 0.03, duration: 0.5 });
+      animateMarloCards(cards, { y: 16, stagger: 0.038, duration: 0.54 });
       prevFilterRef.current = filterStatus;
+      prevScopeRef.current = projectScope;
     }
-  }, [filterStatus, displayedTab]);
+  }, [filterStatus, projectScope, displayedTab, loadingProjects]);
 
   // Handle create project
   const handleCreateProject = async (newP: any) => {
@@ -901,66 +929,37 @@ export default function MarloProjectsScreen({
       repo_url: newP.repoUrl,
     });
 
-    const created: CNTTProjectItem = saved
-      ? {
-          id: saved.id,
-          name: saved.name,
-          client: saved.client,
-          course: saved.course,
-          kind: saved.kind,
-          status: saved.status,
-          progress: saved.progress,
-          tasksDone: saved.tasksDone,
-          tasksTotal: saved.tasksTotal,
-          dueText: saved.dueText,
-          storyPoints: saved.storyPoints,
-          pointsBurned: saved.pointsBurned,
-          budgetStr: saved.budgetStr,
-          instructor: saved.instructor,
-          instructorAvatar: saved.instructorAvatar,
-          totalXp: saved.totalXp,
-          members: saved.members || [],
-          fav: saved.fav,
-          colorHex: saved.colorHex,
-          tlStart: saved.tlStart,
-          tlWidth: saved.tlWidth,
-          tlColor: saved.tlColor,
-          gitRepo: saved.gitRepo ?? null,
-          isMyProject: true,
-          isLead: true,
-        }
-      : {
-          id: "prj-" + Date.now(),
-          name: newP.name,
-          client: newP.client || "CodeMind Campus",
-          course: newP.course || newP.client || "CNTT-2026 · Đồ án Chuyên ngành",
-          kind: (newP.kind || "COMMERCIAL").toUpperCase(),
-          status: "active",
-          progress: 0,
-          tasksDone: 0,
-          tasksTotal: 1,
-          dueText: newP.dueDate ? `due ${newP.dueDate}` : "in 30 days",
-          storyPoints: storyPts,
-          pointsBurned: 0,
-          budgetStr: newP.budgetStr || `${storyPts} SP`,
-          members:
-            newP.teamMembers && newP.teamMembers.length > 0
-              ? newP.teamMembers.map((mName: string, idx: number) => ({
-                  id: `tm-${idx}-${Date.now()}`,
-                  name: mName,
-                  initials: mName.slice(0, 2).toUpperCase(),
-                  role: "Team Member",
-                  bg: ["#C7D2FE", "#FCD34D", "#FED7AA", "#A7F3D0", "#E9D5FF", "#CCFBF1"][idx % 6],
-                  textColor: ["#312E81", "#78350F", "#7C2D12", "#064E3B", "#581C87", "#115E59"][idx % 6],
-                }))
-              : [CNTT_MEMBERS.vhuy, CNTT_MEMBERS.dnghi],
-          colorHex: "#f29b23",
-          tlStart: 45,
-          tlWidth: 28,
-          tlColor: "amber",
-          isMyProject: true,
-          isLead: true,
-        };
+    if (!saved) {
+      setToastMsg("❌ Không thể khởi tạo đồ án. Vui lòng kiểm tra định dạng URL GitHub Repository hợp lệ (https://github.com/owner/repo).");
+      return;
+    }
+    const created: CNTTProjectItem = {
+      id: saved.id,
+      name: saved.name,
+      client: saved.client,
+      course: saved.course,
+      kind: saved.kind,
+      status: saved.status,
+      progress: saved.progress,
+      tasksDone: saved.tasksDone,
+      tasksTotal: saved.tasksTotal,
+      dueText: saved.dueText,
+      storyPoints: saved.storyPoints,
+      pointsBurned: saved.pointsBurned,
+      budgetStr: saved.budgetStr,
+      instructor: saved.instructor,
+      instructorAvatar: saved.instructorAvatar,
+      totalXp: saved.totalXp,
+      members: saved.members || [],
+      fav: saved.fav,
+      colorHex: saved.colorHex,
+      tlStart: saved.tlStart,
+      tlWidth: saved.tlWidth,
+      tlColor: saved.tlColor,
+      gitRepo: saved.gitRepo ?? null,
+      isMyProject: true,
+      isLead: true,
+    };
     setProjects((prev) => [created, ...prev]);
     setIsNewProjectModalOpen(false);
     setToastMsg(`✓ Đã khởi tạo đồ án "${created.name}" thành công!`);
@@ -970,19 +969,24 @@ export default function MarloProjectsScreen({
 
   return (
     <div
+      ref={pageRef}
       className="min-h-screen bg-transparent text-[#161718] dark:text-[#f0f0f1] p-4 sm:p-6 lg:p-8 font-sans select-none relative overflow-x-hidden transition-colors duration-200"
     >
       {/* ─── TOP HEADER (3-ROLE ADAPTIVE DESIGN: STUDENT vs INSTRUCTOR vs ADMIN) ─── */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+      <div className="phead flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E1D1B] dark:text-white font-sans">
-              {role === "admin"
-                ? "Trung Tâm Quản Trị Đồ Án Toàn Khóa"
-                : role === "instructor"
-                ? "Hội Đồng Hướng Dẫn & Đánh Giá Đồ Án"
-                : "Không Gian Đồ Án Nhóm Của Tôi"}
-            </h1>
+            <MarloTitle
+              text={
+                role === "admin"
+                  ? "Trung Tâm Quản Trị Đồ Án Toàn Khóa"
+                  : role === "instructor"
+                  ? "Hội Đồng Hướng Dẫn & Đánh Giá Đồ Án"
+                  : "Không Gian Đồ Án Nhóm Của Tôi"
+              }
+              staggerMs={12}
+              className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E1D1B] dark:text-white font-sans"
+            />
             {role === "admin" && (
               <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-0 whitespace-nowrap">
                 Quản trị viên / Đào tạo
@@ -1083,7 +1087,12 @@ export default function MarloProjectsScreen({
                 type="button"
                 onClick={() => {
                   if (projects.length > 0) {
-                    setGradingProject(projects[0]);
+                    const gradable = projects.find((p: any) => p.canGradeCouncil || p.isAdvisor || p.isReviewer);
+                    if (!gradable) {
+                      setToastMsg("Bạn chưa được phân công Hướng dẫn hoặc Phản biện đề tài nào trong danh sách hiện tại.");
+                      return;
+                    }
+                    setGradingProject(gradable);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-[#EE8420] hover:from-amber-600 hover:to-[#d97316] text-white font-bold text-sm shadow-xs transition active:scale-95 cursor-pointer"
@@ -1205,38 +1214,27 @@ export default function MarloProjectsScreen({
         </nav>
 
         {/* User Scope Toggle: Đồ án của tôi vs Tất cả đề tài */}
-        <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
-          <button
-            type="button"
-            onClick={() => setProjectScope("my")}
-            className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-              projectScope === "my"
-                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"
-            }`}
-          >
-            <User size={13} />
-            <span>Đồ án của tôi</span>
-            <span className="ml-0.5 px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 rounded-full text-[10px] font-bold">
-              {projects.filter((p) => p.isMyProject ?? computeIsMyProject(p, currentUser)).length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setProjectScope("all")}
-            className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-              projectScope === "all"
-                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"
-            }`}
-          >
-            <Layers size={13} />
-            <span>Tất cả đề tài</span>
-            <span className="ml-0.5 px-1.5 py-0.2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-[10px] font-bold">
-              {projects.length}
-            </span>
-          </button>
-        </div>
+        <MarloSegmentedControl<"my" | "all">
+          value={projectScope}
+          onChange={(val) => setProjectScope(val)}
+          label="Phạm vi đồ án"
+          size="sm"
+          tone="dark"
+          options={[
+            {
+              id: "my",
+              label: "Đồ án của tôi",
+              icon: <User size={13} />,
+              badge: projects.filter((p) => p.isMyProject ?? computeIsMyProject(p, currentUser)).length,
+            },
+            {
+              id: "all",
+              label: "Tất cả đề tài",
+              icon: <Layers size={13} />,
+              badge: projects.length,
+            },
+          ]}
+        />
       </div>
 
       {/* ─── STAGE CONTAINER: ANIMATES ON VIEW SWITCH ─── */}
@@ -1737,7 +1735,7 @@ export default function MarloProjectsScreen({
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   1. Chọn Đồ án cần phân công ({projects.length} đồ án):
                 </label>
-                <select
+                <MarloSelect
                   value={assignMentorProject.id}
                   onChange={(e) => {
                     const found = projects.find((proj) => proj.id === e.target.value);
@@ -1753,14 +1751,14 @@ export default function MarloProjectsScreen({
                       {proj.name} — Nhóm trưởng: {(proj.lead || proj.members?.[0]?.name || "Nguyễn Bá Hòa").replace(/\(Lead\)/gi, "").trim()}
                     </option>
                   ))}
-                </select>
+                </MarloSelect>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   2. Chọn Giảng viên hướng dẫn:
                 </label>
-                <select
+                <MarloSelect
                   value={selectedMentor}
                   onChange={(e) => setSelectedMentor(e.target.value)}
                   className="w-full rounded-xl border border-slate-200/90 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-hidden"
@@ -1770,7 +1768,7 @@ export default function MarloProjectsScreen({
                   <option value="ThS. Trần Minh Quân (GV Hướng dẫn)">ThS. Trần Minh Quân (Cố vấn Hệ điều hành & Trình biên dịch)</option>
                   <option value="TS. Đặng Quốc Bảo (GV Hướng dẫn)">TS. Đặng Quốc Bảo (Cố vấn An toàn Thông tin & DevSecOps)</option>
                   <option value="Cô Trần Thị B (GV Hướng dẫn)">Cô Trần Thị B (Giảng viên Hướng dẫn Kỹ nghệ Phần mềm & Scrum)</option>
-                </select>
+                </MarloSelect>
               </div>
             </div>
 
@@ -1786,10 +1784,14 @@ export default function MarloProjectsScreen({
                 type="button"
                 onClick={async () => {
                   const targetId = assignMentorProject.id;
+                  const updated = await updateWorkspaceProjectApi(targetId, { instructor: selectedMentor });
+                  if (!updated) {
+                    setToastMsg("❌ Không thể phân công GVHD (GV Hướng dẫn không được trùng với GV Phản biện trên cùng đồ án).");
+                    return;
+                  }
                   setProjects((prev) =>
-                    prev.map((p) => (p.id === targetId ? { ...p, instructor: selectedMentor } : p))
+                    prev.map((p) => (p.id === targetId ? { ...p, instructor: updated.instructor || selectedMentor } : p))
                   );
-                  await updateWorkspaceProjectApi(targetId, { instructor: selectedMentor });
                   setToastMsg(`✓ Đã phân công ${selectedMentor} hướng dẫn đề tài "${assignMentorProject.name}"`);
                   setAssignMentorProject(null);
                 }}

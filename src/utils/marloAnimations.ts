@@ -1,5 +1,5 @@
 import gsap from "gsap";
-import { useLayoutEffect, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 export interface MarloStaggerOptions {
   y?: number;
@@ -17,14 +17,35 @@ export interface MarloStaggerOptions {
  * Ease: expo.out (Silky smooth exponential deceleration)
  * Automatically clears transform/opacity on complete to prevent layout jerk.
  */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+  );
+}
+
 export function animateMarloCards(
   elements: Element[] | NodeListOf<Element> | null | undefined,
   options: MarloStaggerOptions = {}
 ) {
-  const { y = 26, stagger = 0.06, delay = 0, duration = 0.8 } = options;
-  if (!elements) return;
-  const list = Array.from(elements);
-  if (list.length === 0) return;
+  const { y = 24, stagger = 0.055, delay = 0, duration = 0.72 } = options;
+  if (!elements) return null;
+  const list = Array.from(elements).filter(
+    (node): node is HTMLElement => node instanceof HTMLElement
+  );
+  if (list.length === 0) return null;
+
+  gsap.killTweensOf(list);
+  if (prefersReducedMotion()) {
+    list.forEach((el) => el.removeAttribute("data-marlo-entering"));
+    gsap.set(list, { opacity: 1, clearProps: "transform" });
+    return null;
+  }
+
+  list.forEach((el) => el.setAttribute("data-marlo-entering", "1"));
+  const clearEntering = () => {
+    list.forEach((el) => el.removeAttribute("data-marlo-entering"));
+  };
 
   return gsap.fromTo(
     list,
@@ -41,7 +62,11 @@ export function animateMarloCards(
       ease: "expo.out",
       stagger,
       delay,
+      force3D: true,
+      overwrite: "auto",
       clearProps: "transform,opacity",
+      onComplete: clearEntering,
+      onInterrupt: clearEntering,
     }
   );
 }
@@ -49,7 +74,7 @@ export function animateMarloCards(
 /**
  * 🏷️ Ported 1:1 from Marlo (marlo-app/src/kit.jsx - function co)
  * Staggered Row / List Item Entrance Animation
- * Initial: opacity: 0, x: 0, y: 14
+ * Initial: opacity: 0, x, y
  * Target:  opacity: 1, x: 0, y: 0
  * Ease: power3.out
  */
@@ -57,10 +82,24 @@ export function animateMarloRows(
   elements: Element[] | NodeListOf<Element> | null | undefined,
   options: MarloStaggerOptions = {}
 ) {
-  const { x = 0, y = 14, stagger = 0.025, delay = 0.22, duration = 0.55 } = options;
-  if (!elements) return;
-  const list = Array.from(elements);
-  if (list.length === 0) return;
+  const { x = 0, y = 12, stagger = 0.03, delay = 0.2, duration = 0.52 } = options;
+  if (!elements) return null;
+  const list = Array.from(elements).filter(
+    (node): node is HTMLElement => node instanceof HTMLElement
+  );
+  if (list.length === 0) return null;
+
+  gsap.killTweensOf(list);
+  if (prefersReducedMotion()) {
+    list.forEach((el) => el.removeAttribute("data-marlo-entering"));
+    gsap.set(list, { opacity: 1, clearProps: "transform" });
+    return null;
+  }
+
+  list.forEach((el) => el.setAttribute("data-marlo-entering", "1"));
+  const clearEntering = () => {
+    list.forEach((el) => el.removeAttribute("data-marlo-entering"));
+  };
 
   return gsap.fromTo(
     list,
@@ -77,9 +116,56 @@ export function animateMarloRows(
       ease: "power3.out",
       stagger,
       delay,
+      force3D: true,
+      overwrite: "auto",
       clearProps: "transform,opacity",
+      onComplete: clearEntering,
+      onInterrupt: clearEntering,
     }
   );
+}
+
+/**
+ * 🏷️ Ported 1:1 from Marlo (marlo-app/src/kit.jsx - function yo)
+ * Smooth GPU hover lift via GSAP without fighting CSS transition-all / entrance transforms
+ */
+export function initMarloLift(
+  container: HTMLElement | Document = document,
+  liftY = -4
+) {
+  if (typeof window === "undefined") return;
+  const canHover = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches;
+  if (!canHover) return;
+
+  const elements = container.querySelectorAll<HTMLElement>(
+    "[data-lift], .pcard, .person, .agenda__day"
+  );
+  elements.forEach((el) => {
+    if ((el as any).__lift) return;
+    (el as any).__lift = true;
+
+    el.addEventListener("pointerenter", () => {
+      if (prefersReducedMotion()) return;
+      if (el.getAttribute("data-marlo-entering") === "1") return;
+      gsap.to(el, {
+        y: liftY,
+        duration: 0.42,
+        ease: "power3.out",
+        overwrite: "auto",
+      });
+    });
+
+    el.addEventListener("pointerleave", () => {
+      if (el.getAttribute("data-marlo-entering") === "1") return;
+      gsap.to(el, {
+        y: 0,
+        duration: 0.48,
+        ease: "power3.out",
+        overwrite: "auto",
+        clearProps: "transform",
+      });
+    });
+  });
 }
 
 /**
@@ -104,21 +190,26 @@ export function useMarloPageEntrance(
           ".marlo-card, .card, .lane, [data-column-id], .top-card, .profile-hero"
         );
         if (cards.length > 0) {
-          animateMarloCards(cards, { stagger: 0.06, y: 26 });
+          animateMarloCards(cards, { stagger: 0.055, y: 24 });
         }
 
         const rows = el.querySelectorAll(
-          ".marlo-row, .row, .tcard, [data-task-card-id], .table tbody tr, .mine__row, .feed__row, .agenda-row"
+          ".marlo-row, .row, .tcard, [data-task-card-id], .table tbody tr, .mine__row, .feed__row, .agenda-row, .prow"
         );
         if (rows.length > 0) {
-          animateMarloRows(rows, { y: 14, stagger: 0.025, delay: 0.22 });
+          animateMarloRows(rows, { y: 12, stagger: 0.03, delay: 0.2 });
         }
       }
-      // 🏷️ Auto-initialize Marlo Magnetic physics on all .magnetic elements
       initMarloMagnetic(el);
+      initMarloLift(el);
     }, el);
 
-    return () => ctx.kill();
+    return () => {
+      el.querySelectorAll("[data-marlo-entering]").forEach((n) =>
+        n.removeAttribute("data-marlo-entering")
+      );
+      ctx.revert();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }
@@ -166,12 +257,24 @@ export function initMarloMagnetic(container: HTMLElement | Document = document) 
   });
 }
 
-// Global delegated initializer for dynamically mounted buttons
+// Global delegated initializers for dynamically mounted magnetic / lift surfaces
 if (typeof window !== "undefined") {
   const delegateHandler = (e: Event) => {
-    const target = (e.target as HTMLElement)?.closest?.(".magnetic");
-    if (target && !(target as any).__mag) {
+    const target = (e.target as HTMLElement)?.closest?.(
+      ".magnetic, [data-lift], .pcard, .person, .agenda__day"
+    );
+    if (!target) return;
+    if (target.classList.contains("magnetic") && !(target as any).__mag) {
       initMarloMagnetic(document);
+    }
+    if (
+      (target.hasAttribute("data-lift") ||
+        target.classList.contains("pcard") ||
+        target.classList.contains("person") ||
+        target.classList.contains("agenda__day")) &&
+      !(target as any).__lift
+    ) {
+      initMarloLift(document);
     }
   };
   window.addEventListener("pointerenter", delegateHandler, true);
@@ -480,4 +583,133 @@ export function animateMarloElasticPill(
   }
 
   pillEl.style.opacity = "1";
+}
+
+/**
+ * Điều khiển hiệu ứng mở/đóng chuẩn Marlo cho AI Chat Drawer (bung & thu về góc phải dưới).
+ * Hỗ trợ đóng từ nút X, phím Escape hoặc props isOpen bên ngoài mà không bị unmount cắt ngang animation.
+ */
+export function useMarloAiDrawerMotion(options: {
+  isOpen: boolean;
+  onClose: () => void;
+  drawerRef: RefObject<HTMLElement | null>;
+  chipsRef?: RefObject<HTMLElement | null>;
+}) {
+  const { isOpen, onClose, drawerRef, chipsRef } = options;
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isClosing, setIsClosing] = useState(false);
+  const closingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const runExitAnimation = useCallback(
+    (notifyParent: boolean) => {
+      if (closingRef.current) return;
+      const el = drawerRef.current;
+      if (!el || prefersReducedMotion()) {
+        closingRef.current = false;
+        setIsClosing(false);
+        setShouldRender(false);
+        if (notifyParent) onCloseRef.current();
+        return;
+      }
+      closingRef.current = true;
+      setIsClosing(true);
+      gsap.killTweensOf(el);
+      gsap.to(el, {
+        opacity: 0,
+        y: 18,
+        scale: 0.94,
+        transformOrigin: "100% 100%",
+        duration: 0.22,
+        ease: "power2.in",
+        overwrite: "auto",
+        onComplete: () => {
+          if (!closingRef.current) return;
+          closingRef.current = false;
+          setIsClosing(false);
+          setShouldRender(false);
+          if (notifyParent) onCloseRef.current();
+        },
+      });
+    },
+    [drawerRef]
+  );
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      if (drawerRef.current) gsap.killTweensOf(drawerRef.current);
+      closingRef.current = false;
+      setIsClosing(false);
+      if (!shouldRender) setShouldRender(true);
+      return;
+    }
+    if (shouldRender && !closingRef.current) {
+      runExitAnimation(false);
+    }
+  }, [isOpen, shouldRender, drawerRef, runExitAnimation]);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !shouldRender || closingRef.current || !drawerRef.current) return;
+    const el = drawerRef.current;
+    if (prefersReducedMotion()) {
+      gsap.set(el, { opacity: 1, clearProps: "transform" });
+      return;
+    }
+    gsap.killTweensOf(el);
+    gsap.fromTo(
+      el,
+      { opacity: 0, y: 20, scale: 0.94 },
+      {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        transformOrigin: "100% 100%",
+        duration: 0.36,
+        ease: "expo.out",
+        overwrite: "auto",
+        clearProps: "transform,opacity",
+      }
+    );
+    const chips = chipsRef?.current?.querySelectorAll<HTMLElement>(".ai-chip");
+    if (chips && chips.length > 0) {
+      gsap.killTweensOf(chips);
+      gsap.fromTo(
+        chips,
+        { opacity: 0, y: 8 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.36,
+          stagger: 0.04,
+          delay: 0.1,
+          ease: "power3.out",
+          clearProps: "transform,opacity",
+        }
+      );
+    }
+  }, [isOpen, shouldRender, drawerRef, chipsRef]);
+
+  useEffect(() => {
+    if (!isOpen || isClosing) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        runExitAnimation(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, isClosing, runExitAnimation]);
+
+  useEffect(() => {
+    return () => {
+      if (drawerRef.current) gsap.killTweensOf(drawerRef.current);
+    };
+  }, [drawerRef]);
+
+  const handleAnimatedClose = useCallback(() => {
+    runExitAnimation(true);
+  }, [runExitAnimation]);
+
+  return { shouldRender, isClosing, handleAnimatedClose };
 }

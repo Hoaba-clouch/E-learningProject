@@ -1,7 +1,12 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import MarloSelect from "../components/MarloSelect";
 import gsap from "gsap";
-import { animateMarloCards } from "../utils/marloAnimations";
+import {
+  animateMarloCards,
+  animateMarloRows,
+  useMarloPageEntrance,
+} from "../utils/marloAnimations";
 import {
   AlertTriangle,
   ArrowRight,
@@ -12,6 +17,7 @@ import {
   Download,
   ExternalLink,
   FileCode2,
+  FileText,
   FolderGit2,
   FolderKanban,
   GitFork,
@@ -78,7 +84,7 @@ interface Props {
   onOpenSchedule?: () => void;
 }
 
-type StudentTab = "room" | "official" | "history";
+type StudentTab = "dossier" | "practice" | "official" | "history";
 type StaffTab = "council" | "courses" | "sessions" | "queue" | "rubric";
 
 const DEFAULT_RUBRIC: DefenseRubricConfig = {
@@ -107,6 +113,30 @@ function getSubmissionBadge(status: string): { label: string; cls: string; dotCl
     default:
       return { label: "Chờ giảng viên duyệt", cls: neutral, dotCls: "bg-amber-500" };
   }
+}
+
+function getDefenseScoreAccent(score: number): {
+  pillCls: string;
+  dotCls: string;
+} {
+  const neutralPill =
+    "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700";
+  if (score >= 80) {
+    return {
+      pillCls: neutralPill,
+      dotCls: "bg-emerald-500",
+    };
+  }
+  if (score >= 60) {
+    return {
+      pillCls: neutralPill,
+      dotCls: "bg-amber-500",
+    };
+  }
+  return {
+    pillCls: neutralPill,
+    dotCls: "bg-rose-500",
+  };
 }
 
 function formatRankLabel(avgOutOf10: number): { text: string; cls: string } {
@@ -149,7 +179,7 @@ export default function AIDefenseRoomScreen({
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Navigation tabs
-  const [studentTab, setStudentTab] = useState<StudentTab>("room");
+  const [studentTab, setStudentTab] = useState<StudentTab>("dossier");
   const [staffTab, setStaffTab] = useState<StaffTab>(
     role === "admin" ? "courses" : "council"
   );
@@ -224,6 +254,7 @@ export default function AIDefenseRoomScreen({
 
   const speechRecRef = useRef<any>(null);
   const screenRef = useRef<HTMLDivElement>(null);
+  const userPickedProjectRef = useRef(false);
 
   const showToast = (msg: string) => setToastMsg(msg);
 
@@ -241,9 +272,19 @@ export default function AIDefenseRoomScreen({
       setWorkspace(bundle);
       if (bundle.rubric) setRubricDraft(bundle.rubric);
       if (bundle.projects.length > 0) {
-        const match = bundle.projects.find((p) => p.id === selectedProjId);
-        if (!match) {
-          setSelectedProjId(bundle.projects[0].id);
+        if (
+          role === "student" &&
+          !userPickedProjectRef.current &&
+          initialProjectId === "prj-codemind"
+        ) {
+          const preferred =
+            bundle.projects.find((p) => p.isMyProject) || bundle.projects[0];
+          setSelectedProjId(preferred.id);
+        } else {
+          const match = bundle.projects.find((p) => p.id === selectedProjId);
+          if (!match) {
+            setSelectedProjId(bundle.projects[0].id);
+          }
         }
       }
     } finally {
@@ -252,8 +293,9 @@ export default function AIDefenseRoomScreen({
   };
 
   useEffect(() => {
+    userPickedProjectRef.current = false;
     setStaffTab(role === "admin" ? "courses" : "council");
-    setStudentTab("room");
+    setStudentTab("dossier");
     setLiveDefenseId(null);
     setDynamicRounds(null);
     setPracticeEvidenceMeta(null);
@@ -267,6 +309,7 @@ export default function AIDefenseRoomScreen({
   useEffect(() => {
     if (role !== "student" || !selectedProjId) return;
     let active = true;
+    setStudentDossier(null);
     fetchDefenseProjectDossierApi(selectedProjId, role).then((d) => {
       if (active && d) setStudentDossier(d);
     });
@@ -279,6 +322,25 @@ export default function AIDefenseRoomScreen({
   const courses: DefenseCourseToggleItem[] = workspace?.courses || [];
   const sessions: DefenseSessionRecord[] = workspace?.sessions || [];
   const dualSubmissions: DefenseDualSubmissionItem[] = workspace?.dualSubmissions || [];
+
+  const dossierReadyStats = useMemo(() => {
+    if (!studentDossier) return { ready: 0, total: 5 };
+    const hasDemo = Boolean(safeHttpUrl(studentDossier.package.demoUrl));
+    const hasDocs = Boolean(
+      safeHttpUrl(studentDossier.package.slideUrl) ||
+        safeHttpUrl(studentDossier.package.reportUrl)
+    );
+    const hasRepo = Boolean(
+      safeHttpUrl(studentDossier.package.repoUrl || studentDossier.project.repoUrl)
+    );
+    const isFrozen = Boolean(studentDossier.project.isFrozen);
+    const hasPracticed =
+      sessions.length > 0 || studentDossier.practiceSessions.length > 0;
+    const ready = [hasDemo, hasDocs, hasRepo, isFrozen, hasPracticed].filter(
+      Boolean
+    ).length;
+    return { ready, total: 5 };
+  }, [studentDossier, sessions.length]);
 
   const activeProject = useMemo(
     () => projects.find((p) => p.id === selectedProjId) || projects[0] || null,
@@ -380,36 +442,23 @@ export default function AIDefenseRoomScreen({
     return () => window.removeEventListener("keydown", onKey);
   }, [certificateData]);
 
-  // ─── AUTHENTIC MARLO STAGE ENTRANCE (SILKY SMOOTH EXPO.OUT) ───
-  useLayoutEffect(() => {
-    const el = screenRef.current;
-    if (!el) return;
-
-    const ctx = gsap.context(() => {
-      // 1. Stage container slides in smoothly with expo.out (identical to MarloProjectsScreen)
-      gsap.fromTo(
-        el,
-        { y: 16, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.65,
-          ease: "expo.out",
-          clearProps: "transform,opacity",
-        }
-      );
-
-      // 2. Cascade header, council cards, debate stage and rubrics
+  // ─── AUTHENTIC MARLO STAGE ENTRANCE (ZERO DOUBLE-OPACITY FADE) ───
+  useMarloPageEntrance(
+    screenRef,
+    (el) => {
       const cards = el.querySelectorAll(
         ".defense-stage-header, .rounded-3xl, .rounded-\\[28px\\]"
       );
       if (cards.length > 0) {
-        animateMarloCards(cards, { y: 22, stagger: 0.035, duration: 0.75 });
+        animateMarloCards(cards, { y: 24, stagger: 0.05, duration: 0.72 });
       }
-    }, el);
-
-    return () => ctx.revert();
-  }, [role, selectedProjId]);
+      const rows = el.querySelectorAll(".marlo-row, tbody tr");
+      if (rows.length > 0) {
+        animateMarloRows(rows, { y: 10, stagger: 0.025, delay: 0.22, duration: 0.5 });
+      }
+    },
+    [role, selectedProjId]
+  );
 
   const resetLocalDefenseState = (discardServerDraft: boolean = true) => {
     const draftToDiscard =
@@ -1515,14 +1564,15 @@ export default function AIDefenseRoomScreen({
                   <FolderKanban size={14} className="text-[#EE8420]" />
                   <span className="hidden sm:inline">Đồ án:</span>
                 </span>
-                <select
+                <MarloSelect
                   value={selectedProjId}
                   onChange={(e) => {
+                    userPickedProjectRef.current = true;
                     setSelectedProjId(e.target.value);
                     resetLocalDefenseState();
                   }}
                   aria-label="Chọn đồ án bảo vệ"
-                  className="bg-white dark:bg-[#14161F] text-xs font-bold text-slate-900 dark:text-white px-3 py-1.5 rounded-xl outline-none cursor-pointer max-w-[230px]"
+                  className="bg-white dark:bg-[#14161F] text-xs font-bold text-slate-900 dark:text-white px-3 py-1.5 rounded-xl outline-none cursor-pointer max-w-[260px]"
                 >
                   {projects.length === 0 ? (
                     <option value="prj-codemind">Đang tải danh sách đồ án...</option>
@@ -1530,11 +1580,12 @@ export default function AIDefenseRoomScreen({
                     projects.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.code} · {p.name.split(" - ")[0]}{" "}
-                        {!p.aiDefenseEnabled ? "(Đang khóa)" : ""}
+                        {p.isMyProject ? "(Dự án của bạn)" : "(Chỉ xem)"}
+                        {!p.aiDefenseEnabled ? " · Đang khóa" : ""}
                       </option>
                     ))
                   )}
-                </select>
+                </MarloSelect>
               </div>
             )}
 
@@ -1581,14 +1632,44 @@ export default function AIDefenseRoomScreen({
             <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
               <button
                 type="button"
-                onClick={() => setStudentTab("room")}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-                  studentTab === "room"
+                onClick={() => setStudentTab("dossier")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shrink-0 ${
+                  studentTab === "dossier"
                     ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
                     : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
-                Hồ sơ & Luyện tập AI
+                <FileText size={13} />
+                <span>Hồ sơ Bảo vệ</span>
+                {studentDossier && (
+                  <span
+                    className={`px-1.5 rounded-full text-[10px] ${
+                      studentTab === "dossier"
+                        ? "bg-white/20 text-white dark:bg-slate-900/15 dark:text-slate-950"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                    }`}
+                  >
+                    {dossierReadyStats.ready}/{dossierReadyStats.total}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudentTab("practice")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shrink-0 ${
+                  studentTab === "practice"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <Play size={13} />
+                <span>Luyện tập AI</span>
+                {liveDefenseId && (
+                  <span
+                    className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"
+                    title="Phiên Luyện tập AI đang hoạt động"
+                  />
+                )}
               </button>
               <button
                 type="button"
@@ -1891,7 +1972,8 @@ export default function AIDefenseRoomScreen({
         <OfficialDefenseResultView
           dossier={studentDossier}
           practiceCount={sessions.length}
-          onGoToPractice={() => setStudentTab("room")}
+          onGoToDossier={() => setStudentTab("dossier")}
+          onGoToPractice={() => setStudentTab("practice")}
           onNotify={showToast}
         />
       ) : studentTab === "history" ? (
@@ -1945,22 +2027,41 @@ export default function AIDefenseRoomScreen({
             )}
           </div>
         </div>
-      ) : (
-        /* ── STUDENT DEFENSE ROOM TAB (PACKAGE + AI MOCK PRACTICE) ── */
-        <div className="space-y-6">
-          {!liveDefenseId && (
+      ) : studentTab === "dossier" ? (
+        /* ── STUDENT DEFENSE DOSSIER TAB (ALWAYS ACCESSIBLE EVEN DURING ACTIVE PRACTICE) ── */
+        <div className="space-y-4">
+          {studentDossier ? (
             <DefensePackagePanel
               dossier={studentDossier}
               role={role}
               practiceCount={sessions.length}
+              alwaysExpanded
               onSaved={(next) => {
                 setStudentDossier(next);
                 void loadWorkspace(true);
               }}
               onNotify={showToast}
               onOpenProjectDetail={onOpenProjectDetail}
+              onGoToPractice={() => setStudentTab("practice")}
             />
+          ) : (
+            <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-8 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Đang tải Hồ sơ Chuẩn bị Bảo vệ Đồ án...
+            </div>
           )}
+
+          {activeProject && (
+            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] px-5 py-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-slate-600 dark:text-slate-300">
+                <b className="text-slate-900 dark:text-white">{activeProject.code}</b> · Liên kết nhanh dữ liệu dự án thực tế:
+              </div>
+              {renderProjectLinks(activeProject)}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── STUDENT AI MOCK PRACTICE TAB ── */
+        <div className="space-y-6">
 
           {/* Responsive 3 Jury Cards (1 col < xl, 3 cols >= xl -> zero clipping at 871px) */}
           <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -2052,8 +2153,9 @@ export default function AIDefenseRoomScreen({
                 <div className="rounded-[28px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-6 sm:p-7 space-y-5 shadow-xs">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
-                        Phòng Luyện Tập Phản Biện AI (Mock Practice · Không tính điểm chính thức)
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100/90 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700">
+                        <Sparkles size={12} className="text-amber-500 shrink-0" />
+                        <span>Phòng Luyện Tập Phản Biện AI (Mock Practice · Không tính điểm chính thức)</span>
                       </span>
                       <h3 className="text-lg sm:text-xl font-black text-slate-950 dark:text-white mt-2">
                         {activeProject?.name || "Đồ án Kỹ nghệ Phần mềm"}
@@ -2067,27 +2169,30 @@ export default function AIDefenseRoomScreen({
 
                   {activeProject && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-                        <span className="text-slate-500 dark:text-slate-400 block">
-                          Tiến độ Kanban
+                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-amber-300/60 dark:hover:border-amber-700/50 transition-colors">
+                        <span className="text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5 font-semibold">
+                          <FolderKanban size={13} className="text-amber-500 shrink-0" />
+                          <span>Tiến độ Kanban</span>
                         </span>
-                        <b className="text-base font-bold text-slate-900 dark:text-white mt-0.5 block">
+                        <b className="text-base font-bold text-slate-900 dark:text-white mt-1 block">
                           {activeProject.doneTasksCount}/{activeProject.totalTasksCount} thẻ
                         </b>
                       </div>
-                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-                        <span className="text-slate-500 dark:text-slate-400 block">
-                          Hoạt động Git Hub
+                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-indigo-300/60 dark:hover:border-indigo-700/50 transition-colors">
+                        <span className="text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5 font-semibold">
+                          <GitFork size={13} className="text-indigo-500 shrink-0" />
+                          <span>Hoạt động Git Hub</span>
                         </span>
-                        <b className="text-base font-bold text-slate-900 dark:text-white mt-0.5 block">
+                        <b className="text-base font-bold text-slate-900 dark:text-white mt-1 block">
                           {activeProject.commitsCount} commit · {activeProject.prsCount} PR
                         </b>
                       </div>
-                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-                        <span className="text-slate-500 dark:text-slate-400 block">
-                          Trạng thái Bảo vệ Chính thức
+                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-emerald-300/60 dark:hover:border-emerald-700/50 transition-colors">
+                        <span className="text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5 font-semibold">
+                          <ShieldCheck size={13} className="text-emerald-500 shrink-0" />
+                          <span>Trạng thái Bảo vệ Chính thức</span>
                         </span>
-                        <b className="text-base font-bold text-slate-900 dark:text-white mt-0.5 block">
+                        <b className="text-base font-bold text-slate-900 dark:text-white mt-1 block">
                           {activeProject.isGraded
                             ? `${activeProject.officialFinalScore?.toFixed(2)} / 10 (Đã chấm)`
                             : `Chờ chấm Hội đồng (${activeProject.practiceCount ?? 0} lượt tập)`}
@@ -2117,48 +2222,67 @@ export default function AIDefenseRoomScreen({
                     <span className="text-xs text-slate-500 dark:text-slate-400">
                       Điểm AI chỉ đo Độ sẵn sàng trước khi lên Hội đồng trực tiếp.
                     </span>
-                    <button
-                      type="button"
-                      disabled={
-                        isStartingSession || !activeProject || !activeProject.aiDefenseEnabled
-                      }
-                      onClick={() => void handleStartDefenseSession()}
-                      className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-black text-slate-950 bg-gradient-to-r from-[#F8BD57] via-[#F29B23] to-[#EE8420] hover:brightness-105 shadow-md transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Play size={16} />
-                      <span>
-                        {isStartingSession
-                          ? "Đang đọc dự án & sinh câu hỏi..."
-                          : "Bắt đầu Luyện tập Phản biện AI"}
-                      </span>
-                    </button>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setStudentTab("dossier")}
+                        className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                      >
+                        <FileText size={14} className="text-amber-600 dark:text-amber-400" />
+                        <span>Xem / Nộp Hồ sơ Bảo vệ</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          isStartingSession ||
+                          !activeProject ||
+                          !activeProject.aiDefenseEnabled ||
+                          activeProject.isMyProject === false
+                        }
+                        title={
+                          activeProject?.isMyProject === false
+                            ? "Bạn chỉ có thể khởi tạo phiên luyện tập trên đồ án mà bạn là thành viên."
+                            : undefined
+                        }
+                        onClick={() => void handleStartDefenseSession()}
+                        className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-black text-slate-950 bg-gradient-to-r from-[#F8BD57] via-[#F29B23] to-[#EE8420] hover:brightness-105 shadow-md transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Play size={16} />
+                        <span>
+                          {isStartingSession
+                            ? "Đang đọc dự án & sinh câu hỏi..."
+                            : "Bắt đầu Luyện tập Phản biện AI"}
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="rounded-[28px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-7 space-y-5 shadow-xs">
                   {/* Top Round & Phase Banner */}
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                        {currentRound.phaseTitle}
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100/90 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                        <span>{currentRound.phaseTitle}</span>
                       </span>
                       <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
                         Vòng {currentRoundIdx + 1}/{rounds.length} ·{" "}
-                        {stagePhase === "speaking"
-                          ? "Bước 1: Trình bày luận điểm"
-                          : stagePhase === "council_deliberating"
-                          ? "Hội đồng đang đánh giá..."
-                          : stagePhase === "drilldown_question" ||
-                            stagePhase === "drilldown_evaluating"
-                          ? "Bước 2: Phản biện vặn lại"
-                          : "Phán quyết vòng thi"}
+                        <span className="text-slate-700 dark:text-slate-200 font-semibold">
+                          {stagePhase === "speaking" || stagePhase === "council_deliberating"
+                            ? "Bước 1: Trình bày luận điểm"
+                            : stagePhase === "drilldown_question" ||
+                              stagePhase === "drilldown_evaluating"
+                            ? "Bước 2: Phản biện vặn lại"
+                            : "Phán quyết vòng thi"}
+                        </span>
                       </span>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setShowMentorHint((v) => !v)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-200/70 dark:hover:bg-slate-700 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
                     >
                       <Sparkles size={13} className="text-amber-500" />
                       <span>{showMentorHint ? "Ẩn gợi ý" : "Gợi ý Socratic"}</span>
@@ -2166,7 +2290,7 @@ export default function AIDefenseRoomScreen({
                   </div>
 
                   {showMentorHint && (
-                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 flex items-start gap-2">
+                    <div className="p-3.5 rounded-2xl bg-slate-50/75 dark:bg-slate-900/50 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 flex items-start gap-2">
                       <HelpCircle size={16} className="shrink-0 mt-0.5 text-amber-500" />
                       <div>
                         <b>Gợi ý hướng bảo vệ:</b> {currentRound.mentorHint}
@@ -2177,11 +2301,11 @@ export default function AIDefenseRoomScreen({
                   {/* Question Statement */}
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 flex items-center justify-center font-black text-sm shrink-0">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#F8BD57] via-[#F29B23] to-[#EE8420] text-slate-950 shadow-xs shadow-amber-500/25 flex items-center justify-center font-black text-sm shrink-0">
                         Q
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                        <div className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">
                           {speakingJury.name} chất vấn:
                         </div>
                         <h3 className="text-base sm:text-lg font-extrabold text-slate-950 dark:text-white leading-relaxed">
@@ -2191,11 +2315,12 @@ export default function AIDefenseRoomScreen({
                     </div>
 
                     {currentRound.evidenceRef ? (
-                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 px-4 py-3 text-xs space-y-1">
-                        <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 block">
-                          Ngữ cảnh Dự án Thật AI đang đọc:
+                      <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-900/50 px-4 py-3 text-xs space-y-1">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-slate-100">
+                          <FolderGit2 size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                          <span>Ngữ cảnh Dự án Thật AI đang đọc:</span>
                         </span>
-                        <p className="text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                        <p className="text-slate-700 dark:text-slate-300 font-mono text-[11.5px]">
                           {currentRound.evidenceRef}
                           {practiceEvidenceMeta?.demoUrl ? ` · Demo: ${practiceEvidenceMeta.demoUrl}` : ""}
                         </p>
@@ -2232,25 +2357,25 @@ export default function AIDefenseRoomScreen({
                           <button
                             type="button"
                             onClick={() => setDefenseMode("oral")}
-                            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer ${
+                            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${
                               defenseMode === "oral"
-                                ? "bg-white dark:bg-[#14161F] text-slate-950 dark:text-white shadow-2xs"
+                                ? "bg-white dark:bg-[#14161F] text-slate-950 dark:text-white border border-slate-200 dark:border-slate-700 shadow-2xs"
                                 : "text-slate-500 dark:text-slate-300"
                             }`}
                           >
-                            <Terminal size={13} />
+                            <Terminal size={13} className={defenseMode === "oral" ? "text-[#EE8420]" : undefined} />
                             <span>Tự trình bày</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setDefenseMode("sample")}
-                            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer ${
+                            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${
                               defenseMode === "sample"
-                                ? "bg-white dark:bg-[#14161F] text-slate-950 dark:text-white shadow-2xs"
+                                ? "bg-white dark:bg-[#14161F] text-slate-950 dark:text-white border border-slate-200 dark:border-slate-700 shadow-2xs"
                                 : "text-slate-500 dark:text-slate-300"
                             }`}
                           >
-                            <FileCode2 size={13} />
+                            <FileCode2 size={13} className={defenseMode === "sample" ? "text-[#EE8420]" : undefined} />
                             <span>Luận điểm gợi ý</span>
                           </button>
                         </div>
@@ -2258,23 +2383,23 @@ export default function AIDefenseRoomScreen({
                         <button
                           type="button"
                           onClick={handleToggleMic}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer ${
-                            isListeningMic
-                              ? "bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-slate-950"
-                              : "bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
-                          }`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
                         >
                           {isListeningMic && (
                             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                           )}
-                          {isListeningMic ? <MicOff size={13} /> : <Mic size={13} />}
+                          {isListeningMic ? (
+                            <MicOff size={14} className="text-rose-500" />
+                          ) : (
+                            <Mic size={14} className="text-indigo-500 dark:text-indigo-400" />
+                          )}
                           <span>{isListeningMic ? "Đang nghe..." : "Nhập giọng nói"}</span>
                         </button>
                       </div>
 
                       {defenseMode === "oral" ? (
                         <div className="space-y-3">
-                          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 p-4 focus-within:border-slate-400">
+                          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 p-4 focus-within:border-amber-400 dark:focus-within:border-amber-500/70 focus-within:ring-2 focus-within:ring-amber-500/15 focus-within:bg-white dark:focus-within:bg-slate-900/80 transition-all">
                             <textarea
                               rows={4}
                               value={studentSpeech}
@@ -2295,16 +2420,23 @@ export default function AIDefenseRoomScreen({
                                   key={kw}
                                   type="button"
                                   onClick={() => handleInsertKeyword(kw)}
-                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-amber-400/80 hover:bg-amber-50/80 dark:hover:bg-amber-950/30 hover:text-amber-900 dark:hover:text-amber-300 transition cursor-pointer"
                                 >
-                                  + {kw}
+                                  <span className="text-amber-500 mr-0.5">+</span>
+                                  {kw}
                                 </button>
                               ))}
                             </div>
                           </div>
 
                           <div className="flex items-center justify-between flex-wrap gap-2">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                            <span
+                              className={`text-xs ${
+                                studentSpeech.trim().length >= 10
+                                  ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                                  : "text-slate-500 dark:text-slate-400"
+                              }`}
+                            >
                               {studentSpeech.trim().length} ký tự (tối thiểu 10 ký tự)
                             </span>
                             <button
@@ -2329,13 +2461,13 @@ export default function AIDefenseRoomScreen({
                                 setStudentSpeech(arg.text);
                                 setDefenseMode("oral");
                               }}
-                              className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition cursor-pointer"
+                              className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:border-amber-300 dark:hover:border-amber-700/70 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition cursor-pointer"
                             >
                               <div className="flex items-center justify-between gap-2 text-xs font-bold mb-1">
                                 <span className="text-slate-900 dark:text-white">
                                   {arg.label}
                                 </span>
-                                <span className="text-slate-600 dark:text-slate-300 text-[11px]">
+                                <span className="text-amber-600 dark:text-amber-400 text-[11px] font-bold">
                                   Nạp luận điểm →
                                 </span>
                               </div>
@@ -2358,98 +2490,120 @@ export default function AIDefenseRoomScreen({
 
                   {/* STEP 2: DRILL-DOWN CHALLENGE */}
                   {(stagePhase === "drilldown_question" ||
-                    stagePhase === "drilldown_evaluating") && (
-                    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 space-y-4">
-                      {lastEvaluation && (
-                        <div className="p-3 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between flex-wrap gap-2">
-                          <span className="text-slate-700 dark:text-slate-200">
-                            <b>Đánh giá bước 1:</b> {lastEvaluation.feedback}
-                          </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-white px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
-                            {lastEvaluation.roundScore}/100
-                          </span>
-                        </div>
-                      )}
-
-                      <div>
-                        <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-                          {currentRound.drillDownChallenge.challengeTitle}
-                        </span>
-                        <h4 className="text-sm font-black text-slate-950 dark:text-white mt-0.5">
-                          {currentRound.drillDownChallenge.criticName} hỏi xoáy sâu:
-                        </h4>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-200 italic font-semibold">
-                        "{currentRound.drillDownChallenge.criticQuestion}"
-                      </div>
-
-                      <div className="space-y-2.5">
-                        {currentRound.drillDownChallenge.rebuttalOptions.map((reb, i) => (
-                          <button
-                            key={reb.id}
-                            type="button"
-                            disabled={stagePhase === "drilldown_evaluating"}
-                            onClick={() => void handleSelectRebuttal(reb.id)}
-                            className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/70 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition flex items-start gap-3 cursor-pointer disabled:opacity-50"
+                    stagePhase === "drilldown_evaluating") && (() => {
+                    const step1Accent = lastEvaluation
+                      ? getDefenseScoreAccent(lastEvaluation.roundScore)
+                      : null;
+                    return (
+                      <div className="p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-900/45 space-y-4">
+                        {lastEvaluation && step1Accent && (
+                          <div
+                            className="p-3.5 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200/90 dark:border-slate-800 text-xs flex items-start sm:items-center justify-between flex-wrap gap-2.5 shadow-2xs"
                           >
-                            <span className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center shrink-0">
-                              {String.fromCharCode(65 + i)}
+                            <span className="text-slate-700 dark:text-slate-200 leading-relaxed flex-1 min-w-[200px]">
+                              <b className="text-slate-900 dark:text-white">Đánh giá bước 1:</b>{" "}
+                              {lastEvaluation.feedback}
                             </span>
-                            <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 leading-relaxed">
-                              {reb.answer}
+                            <span
+                              className={`font-mono font-extrabold px-2.5 py-0.5 rounded-full shrink-0 ${step1Accent.pillCls}`}
+                            >
+                              {lastEvaluation.roundScore}/100
                             </span>
-                          </button>
-                        ))}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                            <BrainCircuit size={15} />
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
+                              {currentRound.drillDownChallenge.challengeTitle}
+                            </span>
+                            <h4 className="text-sm font-black text-slate-950 dark:text-white mt-0.5">
+                              {currentRound.drillDownChallenge.criticName} hỏi xoáy sâu:
+                            </h4>
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm text-slate-800 dark:text-slate-100 italic font-semibold shadow-2xs">
+                          "{currentRound.drillDownChallenge.criticQuestion}"
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {currentRound.drillDownChallenge.rebuttalOptions.map((reb, i) => (
+                            <button
+                              key={reb.id}
+                              type="button"
+                              disabled={stagePhase === "drilldown_evaluating"}
+                              onClick={() => void handleSelectRebuttal(reb.id)}
+                              className="group w-full text-left p-4 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900/80 hover:border-amber-400/90 dark:hover:border-amber-500/60 hover:bg-amber-50/45 dark:hover:bg-amber-950/20 hover:shadow-xs transition-all flex items-start gap-3 cursor-pointer disabled:opacity-50"
+                            >
+                              <span className="w-7 h-7 rounded-lg bg-slate-100/80 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 group-hover:bg-slate-900 group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0 transition-colors">
+                                {String.fromCharCode(65 + i)}
+                              </span>
+                              <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 leading-relaxed">
+                                {reb.answer}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* STEP 3: VERDICT */}
-                  {stagePhase === "verdict" && lastEvaluation && (
-                    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 space-y-4">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <h4 className="text-sm sm:text-base font-black text-slate-950 dark:text-white flex items-center gap-2">
-                          <Award size={18} className="text-amber-500" />
-                          <span>Kết quả đánh giá Vòng {currentRoundIdx + 1}</span>
-                        </h4>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span>Điểm vòng: {lastEvaluation.roundScore}/100</span>
-                        </span>
-                      </div>
-
-                      <div className="p-3.5 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200">
-                        {lastEvaluation.feedback}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800 flex-wrap gap-3">
-                        <span className="text-xs text-slate-600 dark:text-slate-300">
-                          {lastEvaluation.impactText && (
-                            <>
-                              Tác động kiến trúc: <b>{lastEvaluation.impactText}</b>
-                            </>
-                          )}
-                        </span>
-
-                        <button
-                          type="button"
-                          disabled={busyKey === "complete"}
-                          onClick={() => void handleNextOrFinish()}
-                          className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black text-slate-950 bg-gradient-to-r from-[#F8BD57] via-[#F29B23] to-[#EE8420] hover:brightness-105 shadow-md cursor-pointer disabled:opacity-50"
-                        >
-                          <span>
-                            {currentRoundIdx < rounds.length - 1
-                              ? "Sang vòng luyện tập kế tiếp"
-                              : busyKey === "complete"
-                              ? "Đang tổng hợp Readiness..."
-                              : "Hoàn tất Lượt Luyện Tập"}
+                  {stagePhase === "verdict" && lastEvaluation && (() => {
+                    const verdictAccent = getDefenseScoreAccent(lastEvaluation.roundScore);
+                    return (
+                      <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <h4 className="text-sm sm:text-base font-black text-slate-950 dark:text-white flex items-center gap-2">
+                            <Award size={18} className="text-amber-500" />
+                            <span>Kết quả đánh giá Vòng {currentRoundIdx + 1}</span>
+                          </h4>
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black ${verdictAccent.pillCls}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${verdictAccent.dotCls}`} />
+                            <span>Điểm vòng: {lastEvaluation.roundScore}/100</span>
                           </span>
-                          <ArrowRight size={14} />
-                        </button>
+                        </div>
+
+                        <div
+                          className="p-3.5 rounded-xl bg-white dark:bg-[#14161F] border border-slate-200/90 dark:border-slate-700 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200"
+                        >
+                          {lastEvaluation.feedback}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800 flex-wrap gap-3">
+                          <span className="text-xs text-slate-600 dark:text-slate-300">
+                            {lastEvaluation.impactText && (
+                              <>
+                                Tác động kiến trúc: <b>{lastEvaluation.impactText}</b>
+                              </>
+                            )}
+                          </span>
+
+                          <button
+                            type="button"
+                            disabled={busyKey === "complete"}
+                            onClick={() => void handleNextOrFinish()}
+                            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black text-slate-950 bg-gradient-to-r from-[#F8BD57] via-[#F29B23] to-[#EE8420] hover:brightness-105 shadow-md cursor-pointer disabled:opacity-50"
+                          >
+                            <span>
+                              {currentRoundIdx < rounds.length - 1
+                                ? "Sang vòng luyện tập kế tiếp"
+                                : busyKey === "complete"
+                                ? "Đang tổng hợp Readiness..."
+                                : "Hoàn tất Lượt Luyện Tập"}
+                            </span>
+                            <ArrowRight size={14} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
             </div>

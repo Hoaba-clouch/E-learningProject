@@ -1,16 +1,76 @@
 export interface AdminClassRecord {
   id: string;
+  sectionId?: string;
+  courseId?: string;
+  subjectId?: string;
   code: string;
+  sectionCode?: string;
   name: string;
+  semester?: string;
+  stageNumber?: number;
+  stageTitle?: string;
+  credits?: number;
+  instructorId?: string;
   teacher: string;
   students: number;
+  maxStudents?: number;
   progressPct: number;
   pendingDualReviews: number;
   health: "Tốt" | "Ổn định" | "Cần theo dõi";
+  status?: string;
   room: string;
   dockerImage: string;
   sandboxEnabled: boolean;
   aiDefenseEnabled: boolean;
+}
+
+export interface AdminSubjectSummary {
+  id: string;
+  subjectId: string;
+  code: string;
+  name: string;
+  stageNumber: number;
+  stageTitle: string;
+  credits: number;
+  dockerImage: string;
+  sectionCount: number;
+}
+
+export interface AdminInstructorOption {
+  id: string;
+  name: string;
+  email: string;
+  code: string;
+}
+
+export interface AdminClassEnrollmentItem {
+  id: string;
+  sectionId: string;
+  studentId: string;
+  studentCode: string;
+  name: string;
+  email: string;
+  status: string;
+  userStatus: string;
+  enrolledAt: string;
+}
+
+export interface AdminAvailableStudentOption {
+  id: string;
+  studentCode: string;
+  name: string;
+  email: string;
+  userStatus: string;
+}
+
+export interface AdminClassEnrollmentsResponse {
+  sectionId: string;
+  sectionCode: string;
+  courseName: string;
+  maxStudents: number;
+  enrolledCount: number;
+  enrollments: AdminClassEnrollmentItem[];
+  availableStudents: AdminAvailableStudentOption[];
 }
 
 export interface AdminServiceUnit {

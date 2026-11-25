@@ -14,9 +14,12 @@ import type {
 } from "./data/instructorData";
 import type {
   AdminAuditLog,
+  AdminClassEnrollmentsResponse,
   AdminClassRecord,
+  AdminInstructorOption,
   AdminJwtSession,
   AdminServiceUnit,
+  AdminSubjectSummary,
   PendingApprovalItem,
 } from "./data/adminData";
 
@@ -212,6 +215,28 @@ export function getStoredUser(role?: SessionRole): any | null {
   }
 }
 
+export function patchStoredUserCache(patch: Record<string, any>, role?: SessionRole) {
+  if (typeof window === "undefined") return null;
+  const targetRole = role || inferTabRole();
+  const base = getStoredUser(targetRole) || {};
+  const merged = { ...base, ...patch };
+  try {
+    window.localStorage.setItem(`${USER_INFO_KEY}.${targetRole}`, JSON.stringify(merged));
+    if (inferTabRole() === targetRole) {
+      window.localStorage.setItem(USER_INFO_KEY, JSON.stringify(merged));
+    }
+  } catch {
+    // Ignore storage quota warnings
+  }
+  window.dispatchEvent(
+    new CustomEvent("codemind-auth-updated", {
+      detail: { role: targetRole, user: merged },
+    })
+  );
+  window.dispatchEvent(new Event("codemind-marlo-data-changed"));
+  return merged;
+}
+
 export function clearSessionTokens(role?: SessionRole) {
   if (typeof window === "undefined") return;
   const rolesToClear: SessionRole[] = role
@@ -231,28 +256,17 @@ export function clearSessionTokens(role?: SessionRole) {
   }
 }
 
-const inFlightRoleSessions: Record<string, Promise<string | null> | undefined> = {};
+export function hasStoredSession(role?: SessionRole): boolean {
+  const tok = getToken(role);
+  return Boolean(tok && tok !== "mock-token");
+}
 
 export async function ensureRoleSession(
   role: SessionRole
 ): Promise<string | null> {
   if (typeof window === "undefined") return null;
   const existing = getToken(role);
-  if (existing && existing !== "mock-token") {
-    return existing;
-  }
-  if (!inFlightRoleSessions[role]) {
-    inFlightRoleSessions[role] = demoLogin(role)
-      .then((data) =>
-        data?.access_token && data.access_token !== "mock-token"
-          ? data.access_token
-          : null
-      )
-      .finally(() => {
-        delete inFlightRoleSessions[role];
-      });
-  }
-  return inFlightRoleSessions[role]!;
+  return existing && existing !== "mock-token" ? existing : null;
 }
 
 export async function logoutUser(role?: SessionRole): Promise<void> {
@@ -526,8 +540,15 @@ export async function submitCodeToSandbox(
       const data = await res.json();
       return data;
     }
+    if (res.status === 403 || res.status === 503 || res.status === 429) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || `Sandbox bị chặn (${res.status})`);
+    }
     throw new Error("Submission API returned non-OK");
-  } catch {
+  } catch (err: any) {
+    if (err instanceof Error && (err.message.includes("Sandbox") || err.message.includes("tạm dừng") || err.message.includes("tạm khóa"))) {
+      throw err;
+    }
     // ── Isolated Client-side Sandbox Engine with Real Edge Evaluation ────────
     // Normalize code to check logic
     const normalized = code.toLowerCase().replace(/\s+/g, "");
@@ -1612,10 +1633,13 @@ export async function saveInstructorMindmap(
   }
 }
 
-export async function fetchDualSubmissions(): Promise<DualSubmissionRecord[] | null> {
+export async function fetchDualSubmissions(
+  sectionId?: string
+): Promise<DualSubmissionRecord[] | null> {
   const token = (await ensureRoleSession("instructor").catch(() => null)) || getToken();
   try {
-    const res = await fetch(`${API_BASE}/v1/instructor/dual-submissions`, {
+    const query = sectionId ? `?section_id=${encodeURIComponent(sectionId)}` : "";
+    const res = await fetch(`${API_BASE}/v1/instructor/dual-submissions${query}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) return null;
@@ -1757,6 +1781,15 @@ export interface DefenseProjectOption {
   course: string;
   status: string;
   isFrozen?: boolean;
+  isMyProject?: boolean;
+  isAdvisor?: boolean;
+  isReviewer?: boolean;
+  canGradeCouncil?: boolean;
+  myCouncilRole?: "admin" | "advisor" | "reviewer" | "member" | "viewer" | string;
+  instructorId?: string;
+  instructorName?: string;
+  reviewerId?: string;
+  reviewerName?: string;
   hasDefensePackage?: boolean;
   demoUrl?: string;
   isGraded?: boolean;
@@ -1829,6 +1862,7 @@ export interface DefenseWorkspaceBundle {
   };
   projects: DefenseProjectOption[];
   courses: DefenseCourseToggleItem[];
+  instructors?: Array<{ id: string; name: string; email?: string }>;
   rubric: DefenseRubricConfig;
   sessions: DefenseSessionRecord[];
   dualSubmissions: DefenseDualSubmissionItem[];
@@ -2070,8 +2104,19 @@ export interface DefenseProjectDossier {
     status: string;
     sprint: string;
     isFrozen: boolean;
+    isMyProject?: boolean;
+    isAdvisor?: boolean;
+    isReviewer?: boolean;
+    canGradeCouncil?: boolean;
+    canManageCouncil?: boolean;
+    myCouncilRole?: "admin" | "advisor" | "reviewer" | "member" | "viewer" | string;
+    canEditPackage?: boolean;
+    editPackageBlockReason?: string;
     leaderUserId: string;
+    instructorId?: string;
     instructorName: string;
+    reviewerId?: string;
+    reviewerName?: string;
     dueDate: string;
     storyPointsBudget: number;
     repoUrl: string;
@@ -2086,6 +2131,7 @@ export interface DefenseProjectDossier {
     prsCount: number;
     epics: string[];
   };
+  instructors?: Array<{ id: string; name: string; email?: string }>;
   package: DefensePackageData;
   memberMetrics: DefenseMemberMetric[];
   recentTasks: Array<{
@@ -2284,6 +2330,8 @@ export async function submitLiveCouncilGradeApi(
 export interface AdminGovernanceBundle {
   users: AdminUserRecord[];
   classes: AdminClassRecord[];
+  subjects?: AdminSubjectSummary[];
+  instructors?: AdminInstructorOption[];
   aiServices: AdminServiceUnit[];
   jwtSessions: AdminJwtSession[];
   pendingApprovals: PendingApprovalItem[];
@@ -2313,6 +2361,8 @@ export async function fetchAdminGovernanceBundle(): Promise<AdminGovernanceBundl
         ? data.users.map((u: any, i: number) => mapAdminUserRow(u, i))
         : FALLBACK_ADMIN_USERS,
       classes: data.classes || [],
+      subjects: Array.isArray(data?.subjects) ? data.subjects : [],
+      instructors: Array.isArray(data?.instructors) ? data.instructors : [],
       aiServices: data.aiServices || [],
       jwtSessions: data.jwtSessions || [],
       pendingApprovals: data.pendingApprovals || [],
@@ -2409,17 +2459,55 @@ export async function resolveAdminApproval(
 }
 
 export async function createAdminClass(payload: {
-  code: string;
-  name: string;
-  teacher: string;
-  students: number;
+  mode?: "new_course" | "new_section";
+  course_id?: string;
+  section_code?: string;
+  code?: string;
+  name?: string;
+  instructor_id?: string;
+  teacher?: string;
+  semester?: string;
+  stage_number?: number;
+  credits?: number;
+  students?: number;
+  max_students?: number;
   room: string;
   dockerImage: string;
-}): Promise<AdminClassRecord | null> {
+}): Promise<{ classRecord: AdminClassRecord | null; error?: string }> {
   const token = (await ensureRoleSession("admin").catch(() => null)) || getToken();
   try {
     const res = await fetch(`${API_BASE}/v1/admin/classes`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { classRecord: null, error: data.detail || `Lỗi (${res.status})` };
+    }
+    return { classRecord: data?.class || null };
+  } catch {
+    return { classRecord: null, error: "Không thể kết nối máy chủ" };
+  }
+}
+
+export async function patchAdminClass(
+  classId: string,
+  payload: Partial<AdminClassRecord> & {
+    instructor_id?: string;
+    section_code?: string;
+    max_students?: number;
+    stage_number?: number;
+    status?: string;
+  }
+): Promise<AdminClassRecord | null> {
+  const token = (await ensureRoleSession("admin").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(`${API_BASE}/v1/admin/classes/${encodeURIComponent(classId)}`, {
+      method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -2434,25 +2522,65 @@ export async function createAdminClass(payload: {
   }
 }
 
-export async function patchAdminClass(
-  classId: string,
-  payload: Partial<AdminClassRecord>
-): Promise<AdminClassRecord | null> {
+export async function fetchAdminClassEnrollments(
+  sectionId: string
+): Promise<AdminClassEnrollmentsResponse | null> {
   const token = (await ensureRoleSession("admin").catch(() => null)) || getToken();
   try {
-    const res = await fetch(`${API_BASE}/v1/admin/classes/${classId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
+    const res = await fetch(
+      `${API_BASE}/v1/admin/classes/${encodeURIComponent(sectionId)}/enrollments`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
     if (!res.ok) return null;
-    const data = await res.json();
-    return data?.class || null;
+    return (await res.json()) as AdminClassEnrollmentsResponse;
   } catch {
     return null;
+  }
+}
+
+export async function enrollStudentInClassApi(
+  sectionId: string,
+  studentId: string
+): Promise<{ classRecord?: AdminClassRecord; error?: string }> {
+  const token = (await ensureRoleSession("admin").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/admin/classes/${encodeURIComponent(sectionId)}/enrollments`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ student_id: studentId }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    return { classRecord: data?.class };
+  } catch {
+    return { error: "Không thể kết nối máy chủ" };
+  }
+}
+
+export async function unenrollStudentFromClassApi(
+  sectionId: string,
+  studentId: string
+): Promise<{ classRecord?: AdminClassRecord; error?: string }> {
+  const token = (await ensureRoleSession("admin").catch(() => null)) || getToken();
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/admin/classes/${encodeURIComponent(sectionId)}/enrollments/${encodeURIComponent(studentId)}`,
+      {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || `Lỗi (${res.status})` };
+    return { classRecord: data?.class };
+  } catch {
+    return { error: "Không thể kết nối máy chủ" };
   }
 }
 
@@ -2620,6 +2748,61 @@ export interface StudentVideoProgressDto {
   updated_at?: string;
 }
 
+export interface TaughtCourseRef {
+  id: string;
+  subjectId: string;
+  code: string;
+  name: string;
+  semester: string;
+  credits: number;
+  studentCount: number;
+  avgProgressPct: number;
+  room: string;
+  health: string;
+}
+
+export interface MemberLearningSummary {
+  expPoints: number;
+  streakDays: number;
+  longestStreak: number;
+  selectedTitle: string;
+  leagueName: string;
+  radar: {
+    algorithm: number;
+    cleancode: number;
+    teamwork: number;
+    defense: number;
+    debugging: number;
+  };
+}
+
+export interface UserProfilePatchIn {
+  full_name?: string;
+  headline?: string;
+  bio?: string;
+  department?: string;
+  office_location?: string;
+  skills?: string[];
+  github_url?: string;
+  website_url?: string;
+  phone?: string;
+}
+
+export interface UserProfileResponse {
+  id: string;
+  full_name: string;
+  display_name: string;
+  avatar_url?: string;
+  headline?: string;
+  bio?: string;
+  department?: string;
+  office_location?: string;
+  skills?: string[];
+  github_url?: string;
+  website_url?: string;
+  phone?: string;
+}
+
 export interface StudentLearningOverview {
   user: {
     id: string;
@@ -2628,6 +2811,15 @@ export interface StudentLearningOverview {
     code: string;
     role?: string;
     background_theme?: string;
+    avatar_url?: string;
+    headline?: string;
+    bio?: string;
+    department?: string;
+    office_location?: string;
+    skills?: string[];
+    github_url?: string;
+    website_url?: string;
+    phone?: string;
   };
   profile: {
     exp_points: number;
@@ -2688,6 +2880,14 @@ export interface StudentLearningOverview {
     subjectId: string;
     code: string;
     name: string;
+    stageNumber?: number;
+    stageTitle?: string;
+    credits?: number;
+    enrolled?: boolean;
+    sectionId?: string;
+    sectionCode?: string;
+    semester?: string;
+    room?: string;
     teacher: string;
     sandboxEnabled: boolean;
     aiDefenseEnabled: boolean;
@@ -2980,6 +3180,62 @@ export async function claimXpQuestApi(payload: {
   }
 }
 
+export async function equipXpShopItemApi(
+  category: "avatar" | "mentor" | "chat" | "chat_skin" | "map" | "map_skin" | "badge",
+  itemId: string,
+  role: SessionRole = "student"
+): Promise<{ equipped_items?: Record<string, string>; error?: string }> {
+  const token = getToken(role);
+  if (!token) return {};
+  try {
+    const res = await fetch(`${API_BASE}/v1/student/xp-shop/equip`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ category, item_id: itemId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || "Không thể trang bị vật phẩm" };
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối Backend" };
+  }
+}
+
+export async function enrollStudentCourseApi(
+  courseOrSectionId: string
+): Promise<{
+  enrolled?: boolean;
+  sectionId?: string;
+  sectionCode?: string;
+  message?: string;
+  error?: string;
+}> {
+  const token = getToken("student");
+  if (!token) return { error: "Vui lòng đăng nhập tài khoản Học viên." };
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/student/courses/${encodeURIComponent(courseOrSectionId)}/enroll`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.detail || "Không thể ghi danh học phần." };
+    window.dispatchEvent(new CustomEvent("codemind-courses-updated"));
+    window.dispatchEvent(new Event("codemind-nav-updated"));
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối máy chủ." };
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // NHÁNH 2: ENGINEERING PROJECTS, TASK MANAGEMENT & KANBAN WORKSPACE API
 // ═════════════════════════════════════════════════════════════════════════════
@@ -3051,6 +3307,10 @@ export interface WorkspaceProjectDto {
   budgetStr?: string;
   lead?: string;
   instructor?: string;
+  instructorId?: string;
+  instructorName?: string;
+  reviewerId?: string;
+  reviewerName?: string;
   instructorAvatar?: string;
   finalScore?: number | null;
   evaluationStatus?: string | null;
@@ -3065,6 +3325,10 @@ export interface WorkspaceProjectDto {
   tasks: any[];
   isMyProject?: boolean;
   isLead?: boolean;
+  isAdvisor?: boolean;
+  isReviewer?: boolean;
+  canManageProject?: boolean;
+  canGradeProject?: boolean;
   leaderUserId?: string | null;
 }
 
@@ -3287,8 +3551,13 @@ export async function updateWorkspaceProjectApi(
     sprint?: string;
     due_date?: string;
     instructor?: string;
+    instructor_id?: string;
+    reviewer?: string;
+    reviewer_id?: string;
     team?: any[];
-  }
+  },
+  preferredRole?: SessionRole,
+  throwOnError: boolean = false
 ): Promise<WorkspaceProjectDto | null> {
   try {
     const res = await fetchWithAuthRetry(
@@ -3297,12 +3566,20 @@ export async function updateWorkspaceProjectApi(
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }
+      },
+      preferredRole
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (throwOnError) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Không thể cập nhật thông tin đồ án.");
+      }
+      return null;
+    }
     const data = await res.json();
     return data.project ?? null;
-  } catch {
+  } catch (err) {
+    if (throwOnError) throw err;
     return null;
   }
 }
@@ -4558,12 +4835,21 @@ export interface StudentAnalyticsItem {
   risk_label: string;
 }
 
-export async function fetchStudentsAnalyticsApi(courseCode?: string): Promise<StudentAnalyticsItem[]> {
+export async function fetchStudentsAnalyticsApi(
+  courseCode?: string,
+  sectionId?: string
+): Promise<StudentAnalyticsItem[]> {
   try {
     const token =
+      getToken("instructor") ||
+      getToken("admin") ||
       (await ensureRoleSession("instructor").catch(() => null)) ||
-      getToken("instructor");
-    const query = courseCode ? `?course_code=${encodeURIComponent(courseCode)}` : "";
+      getToken();
+    const params = new URLSearchParams();
+    if (sectionId) params.set("section_id", sectionId);
+    if (courseCode) params.set("course_code", courseCode);
+    const qs = params.toString();
+    const query = qs ? `?${qs}` : "";
     const res = await fetch(`${API_BASE}/v1/instructor/students-analytics${query}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
@@ -4681,13 +4967,17 @@ export interface ChapterSubmissionsOverview {
 export async function fetchInstructorChapterSubmissions(
   subjectId?: string,
   chapterNumber?: number,
-  statusFilter?: string
+  statusFilter?: string,
+  sectionId?: string
 ): Promise<ChapterSubmissionsOverview> {
   const token =
+    getToken("instructor") ||
+    getToken("admin") ||
     (await ensureRoleSession("instructor").catch(() => null)) ||
-    getToken("instructor");
+    getToken();
   const params = new URLSearchParams();
-  if (subjectId) params.set("subject_id", subjectId);
+  if (sectionId) params.set("section_id", sectionId);
+  else if (subjectId) params.set("subject_id", subjectId);
   if (typeof chapterNumber === "number") params.set("chapter_number", String(chapterNumber));
   if (statusFilter && statusFilter !== "all") params.set("status_filter", statusFilter);
   const q = params.toString() ? `?${params.toString()}` : "";
@@ -4822,11 +5112,22 @@ export interface TeamMemberRecord {
   userRole: "student" | "instructor" | "admin";
   role: string;
   initials: string;
+  avatarUrl?: string;
+  headline?: string;
+  bio?: string;
+  department?: string;
+  officeLocation?: string;
+  skills?: string[];
+  githubUrl?: string;
+  websiteUrl?: string;
+  phone?: string;
   hue: number;
   status: "in" | "remote" | "off";
   isAdvisor: boolean;
   isLead: boolean;
   projects: TeamMemberProjectRef[];
+  taughtCourses?: TaughtCourseRef[];
+  learningSummary?: MemberLearningSummary | null;
   openTasks: TeamMemberTaskRef[];
   doneTasksCount: number;
   commitsCount: number;
@@ -4838,6 +5139,8 @@ export interface TeamWorkspaceBundle {
   members: TeamMemberRecord[];
   total: number;
   inLabCount: number;
+  scopeRole?: SessionRole;
+  scopedProjectsCount?: number;
 }
 
 export async function fetchTeamMembersApi(role?: SessionRole): Promise<TeamWorkspaceBundle | null> {
@@ -4869,6 +5172,306 @@ export async function updateTeamMemberStatusApi(
     throw new Error(err.detail || "Không thể cập nhật trạng thái thành viên.");
   }
   return await res.json();
+}
+
+export async function uploadUserAvatarApi(
+  avatarDataUrl: string,
+  role?: SessionRole
+): Promise<{ avatar_url: string; user_id: string }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/users/me/avatar`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ avatar_data: avatarDataUrl }),
+    },
+    role
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tải ảnh đại diện lên máy chủ.");
+  }
+  const data = await res.json();
+  patchStoredUserCache({ avatar_url: data.avatar_url || avatarDataUrl }, role);
+  return data;
+}
+
+export async function deleteUserAvatarApi(
+  role?: SessionRole
+): Promise<{ avatar_url: string; user_id: string }> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/users/me/avatar`,
+    { method: "DELETE" },
+    role
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể gỡ ảnh đại diện.");
+  }
+  const data = await res.json();
+  patchStoredUserCache({ avatar_url: "" }, role);
+  return data;
+}
+
+export async function updateMyProfileApi(
+  payload: UserProfilePatchIn,
+  role?: SessionRole
+): Promise<UserProfileResponse> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/users/me`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    role
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể cập nhật thông tin cá nhân.");
+  }
+  const data = (await res.json()) as UserProfileResponse;
+  patchStoredUserCache(
+    {
+      full_name: data.full_name,
+      display_name: data.display_name,
+      name: data.full_name,
+      headline: data.headline ?? "",
+      bio: data.bio ?? "",
+      department: data.department ?? "",
+      office_location: data.office_location ?? "",
+      skills: Array.isArray(data.skills) ? data.skills : [],
+      github_url: data.github_url ?? "",
+      website_url: data.website_url ?? "",
+      phone: data.phone ?? "",
+    },
+    role
+  );
+  return data;
+}
+
+export interface McpToolSchemaProperty {
+  type?: string;
+  description?: string;
+  default?: any;
+  enum?: string[];
+}
+
+export interface McpToolInfo {
+  name: string;
+  description: string;
+  inputSchema?: {
+    type?: string;
+    required?: string[];
+    properties?: Record<string, McpToolSchemaProperty>;
+  };
+  access_mode: "read" | "write";
+  category: string;
+  allowed_roles: string[];
+  enforces_h2: boolean;
+  permitted: boolean;
+}
+
+export interface McpResourceInfo {
+  uri: string;
+  name: string;
+  description: string;
+  mimeType: string;
+}
+
+export interface McpPromptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+}
+
+export interface McpPromptInfo {
+  name: string;
+  description: string;
+  arguments: McpPromptArgument[];
+}
+
+export interface McpDatabaseSnapshot {
+  engine: string;
+  projects_count: number;
+  tasks_count: number;
+  commits_count: number;
+  defense_sessions_count: number;
+  sample_project_id: string;
+  sample_h2_task_id: string | null;
+  sample_h2_task_code: string | null;
+  sample_h2_parent_code: string | null;
+  sample_student_id: string;
+  sample_defense_session_id: string | null;
+}
+
+export interface McpServerInfoResponse {
+  server: {
+    name: string;
+    version: string;
+    transport: string[];
+    protocol_version: string;
+  };
+  database: McpDatabaseSnapshot;
+  rbac: {
+    authenticated: boolean;
+    current_role: string;
+    actor_name: string;
+    write_requires_auth: boolean;
+    council_only_tools: string[];
+  };
+  tools_count: number;
+  tools: McpToolInfo[];
+  resources_count: number;
+  resources: McpResourceInfo[];
+  prompts_count: number;
+  prompts: McpPromptInfo[];
+}
+
+export interface McpJsonRpcResponse {
+  jsonrpc: string;
+  id?: any;
+  result?: any;
+  error?: {
+    code: number;
+    message: string;
+    data?: any;
+  };
+  latency_ms?: number;
+  request_payload?: {
+    jsonrpc: "2.0";
+    id: number;
+    method: string;
+    params: Record<string, any>;
+  };
+}
+
+export interface McpAuditLogEntry {
+  id: string;
+  actor_user_id: string | null;
+  actor_label: string;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  target_label: string;
+  category: string;
+  decision: "allow" | "deny" | string;
+  reason_code: string;
+  created_at: string;
+}
+
+export function getMcpBaseUrl(): string {
+  return `${API_BASE}/v1/mcp/rpc`;
+}
+
+export async function fetchMcpInfoApi(
+  role?: SessionRole
+): Promise<McpServerInfoResponse> {
+  const res = await fetchWithAuthRetry(`${API_BASE}/v1/mcp/info`, {}, role);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tải thông tin CodeMind MCP Server.");
+  }
+  return (await res.json()) as McpServerInfoResponse;
+}
+
+export async function callMcpRpcApi(
+  method: string,
+  params: Record<string, any> = {},
+  role?: SessionRole
+): Promise<McpJsonRpcResponse> {
+  const requestPayload = {
+    jsonrpc: "2.0" as const,
+    id: Date.now(),
+    method,
+    params,
+  };
+  const started = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}/v1/mcp/rpc`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestPayload),
+    },
+    role
+  );
+  const ended = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const latency_ms = Math.max(1, Math.round(ended - started));
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok && !body?.error) {
+    throw new Error(body?.detail || `HTTP ${res.status} khi gọi MCP JSON-RPC.`);
+  }
+  return {
+    ...(body as McpJsonRpcResponse),
+    latency_ms,
+    request_payload: requestPayload,
+  };
+}
+
+export async function fetchMcpLogsApi(
+  role?: SessionRole,
+  limit: number = 40
+): Promise<{ count: number; logs: McpAuditLogEntry[] }> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/mcp/logs?limit=${encodeURIComponent(String(limit))}`,
+      {},
+      role
+    );
+    if (!res.ok) return { count: 0, logs: [] };
+    return (await res.json()) as { count: number; logs: McpAuditLogEntry[] };
+  } catch {
+    return { count: 0, logs: [] };
+  }
+}
+
+export async function resetAdminUserPasswordApi(userId: string): Promise<boolean> {
+  const token = (await ensureRoleSession("admin").catch(() => null)) || getToken("admin") || getToken();
+  try {
+    const res = await fetch(`${API_BASE}/v1/admin/users/${userId}/reset-password`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearAdminAiCacheApi(): Promise<boolean> {
+  const token = (await ensureRoleSession("admin").catch(() => null)) || getToken("admin") || getToken();
+  try {
+    const res = await fetch(`${API_BASE}/v1/admin/ai-services/clear-cache`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function recordAdminAuditLogApi(payload: {
+  action: string;
+  target: string;
+  type?: string;
+}): Promise<boolean> {
+  const token = (await ensureRoleSession("admin").catch(() => null)) || getToken("admin") || getToken();
+  try {
+    const res = await fetch(`${API_BASE}/v1/admin/audit-logs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 

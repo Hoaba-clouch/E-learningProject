@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import MarloSelect from "../MarloSelect";
 import {
   AlertTriangle,
   Award,
@@ -25,6 +26,7 @@ import {
   fetchDefenseProjectDossierApi,
   generateCouncilQuestionsApi,
   submitLiveCouncilGradeApi,
+  updateWorkspaceProjectApi,
   type CouncilQuestionsResult,
   type DefenseProjectDossier,
   type DefenseProjectOption,
@@ -115,7 +117,8 @@ export default function LiveCouncilCockpit({
         setCouncilMembers(
           ev?.isGraded && ev.councilMembers
             ? ev.councilMembers
-            : d.project.instructorName || "Hội đồng Bảo vệ Đồ án"
+            : [d.project.instructorName, d.project.reviewerName].filter(Boolean).join(" · ") ||
+              "Hội đồng Bảo vệ Đồ án"
         );
         setFeedback(
           ev?.isGraded && ev.feedback
@@ -161,6 +164,54 @@ export default function LiveCouncilCockpit({
     () => roundToTwo(0.35 * demoScore + 0.25 * archScore + 0.15 * processScore + 0.25 * defenseScore),
     [demoScore, archScore, processScore, defenseScore]
   );
+
+  const canGradeCouncil = Boolean(
+    role === "admin" || dossier?.project.canGradeCouncil
+  );
+  const canAssignAdvisor = role === "admin";
+  const canAssignReviewer = Boolean(
+    role === "admin" || dossier?.project.isAdvisor || dossier?.project.canManageCouncil
+  );
+  const [savingAssignment, setSavingAssignment] = useState(false);
+
+  const handleAssignCouncilMember = async (
+    kind: "advisor" | "reviewer",
+    nextInstructorId: string
+  ) => {
+    if (!dossier || savingAssignment) return;
+    setSavingAssignment(true);
+    try {
+      const updated = await updateWorkspaceProjectApi(
+        dossier.project.id,
+        kind === "advisor"
+          ? { instructor_id: nextInstructorId }
+          : { reviewer_id: nextInstructorId },
+        role,
+        true
+      );
+      if (updated) {
+        const refreshed = await fetchDefenseProjectDossierApi(dossier.project.id, role);
+        if (refreshed) {
+          setDossier(refreshed);
+          setCouncilMembers(
+            [refreshed.project.instructorName, refreshed.project.reviewerName]
+              .filter(Boolean)
+              .join(" · ") || "Hội đồng Bảo vệ Đồ án"
+          );
+        }
+        onGradedSuccess?.();
+        onNotify(
+          kind === "advisor"
+            ? `✓ Đã phân công GV Hướng dẫn mới: ${updated.instructorName || updated.instructor}`
+            : `✓ Đã phân công GV Phản biện: ${updated.reviewerName || "Chưa gán"}`
+        );
+      }
+    } catch (err: any) {
+      onNotify(`⚠️ ${err?.message || "Không thể cập nhật phân công Hội đồng."}`);
+    } finally {
+      setSavingAssignment(false);
+    }
+  };
 
   const handleRecalcMemberScores = () => {
     if (!dossier) return;
@@ -414,10 +465,20 @@ export default function LiveCouncilCockpit({
                 </div>
                 <p className="text-xs font-bold line-clamp-1">{p.name}</p>
                 <div
-                  className={`flex items-center gap-2 mt-1.5 text-[10px] ${
-                    active ? "opacity-85" : "text-slate-500 dark:text-slate-400"
+                  className={`flex items-center gap-1.5 flex-wrap mt-1 text-[10px] ${
+                    active ? "opacity-90" : "text-slate-500 dark:text-slate-400"
                   }`}
                 >
+                  <span className="font-semibold">
+                    {p.myCouncilRole === "admin"
+                      ? "Quản trị"
+                      : p.isAdvisor
+                      ? "GV Hướng dẫn"
+                      : p.isReviewer
+                      ? "GV Phản biện"
+                      : "Chỉ xem"}
+                  </span>
+                  <span>·</span>
                   <span>{p.doneTasksCount}/{p.totalTasksCount} task</span>
                   <span>·</span>
                   <span>{p.hasDefensePackage ? "Có Demo" : "Chưa có Demo"}</span>
@@ -451,6 +512,18 @@ export default function LiveCouncilCockpit({
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    <ShieldCheck size={12} className="text-amber-500" />
+                    <span>
+                      {role === "admin"
+                        ? "Quản trị Hội đồng"
+                        : dossier.project.isAdvisor
+                        ? "Bạn là GV Hướng dẫn"
+                        : dossier.project.isReviewer
+                        ? "Bạn là GV Phản biện"
+                        : "Ngoài Hội đồng chấm · Chỉ xem"}
+                    </span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                     <span
                       className={`h-2 w-2 rounded-full ${
                         dossier.project.isFrozen ? "bg-rose-500" : "bg-amber-500"
@@ -458,6 +531,62 @@ export default function LiveCouncilCockpit({
                     />
                     {dossier.project.isFrozen ? "Đã đóng băng (Frozen)" : "Đang mở nộp bài"}
                   </span>
+                </div>
+              </div>
+
+              {/* Hội đồng Chấm Đồ án (Hướng 2: GV Hướng dẫn + GV Phản biện) */}
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-[10.5px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 block mb-1">
+                    Giảng viên Hướng dẫn (GVHD)
+                  </span>
+                  {canAssignAdvisor && (dossier.instructors || []).length > 0 ? (
+                    <MarloSelect
+                      value={dossier.project.instructorId || ""}
+                      disabled={savingAssignment}
+                      onChange={(e) => void handleAssignCouncilMember("advisor", e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-900 dark:text-white"
+                    >
+                      {(dossier.instructors || [])
+                        .filter((inst) => inst.id !== dossier.project.reviewerId)
+                        .map((inst) => (
+                          <option key={inst.id} value={inst.id}>
+                            {inst.name}
+                          </option>
+                        ))}
+                    </MarloSelect>
+                  ) : (
+                    <div className="font-bold text-slate-900 dark:text-white py-1">
+                      {dossier.project.instructorName || "Chưa phân công"}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-[10.5px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 block mb-1">
+                    Giảng viên Phản biện (GVPB)
+                  </span>
+                  {canAssignReviewer && (dossier.instructors || []).length > 0 ? (
+                    <MarloSelect
+                      value={dossier.project.reviewerId || ""}
+                      disabled={savingAssignment}
+                      onChange={(e) => void handleAssignCouncilMember("reviewer", e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-900 dark:text-white"
+                    >
+                      <option value="">— Chưa phân công GVPB —</option>
+                      {(dossier.instructors || [])
+                        .filter((inst) => inst.id !== dossier.project.instructorId)
+                        .map((inst) => (
+                          <option key={inst.id} value={inst.id}>
+                            {inst.name}
+                          </option>
+                        ))}
+                    </MarloSelect>
+                  ) : (
+                    <div className="font-bold text-slate-900 dark:text-white py-1">
+                      {dossier.project.reviewerName || "Chưa phân công"}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -717,8 +846,13 @@ export default function LiveCouncilCockpit({
                 <button
                   type="button"
                   onClick={() => void handleGenerateQuestions()}
-                  disabled={loadingAI}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 px-3.5 py-2 text-xs font-bold hover:opacity-90 disabled:opacity-60 transition cursor-pointer shrink-0"
+                  disabled={loadingAI || !canGradeCouncil}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 px-3.5 py-2 text-xs font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer shrink-0"
+                  title={
+                    canGradeCouncil
+                      ? "Sinh câu hỏi gợi ý cho Hội đồng"
+                      : "Chỉ GVHD, GVPB của đồ án hoặc Admin mới được sinh câu hỏi Hội đồng"
+                  }
                 >
                   {loadingAI ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />}
                   <span>{loadingAI ? "Đang phân tích hồ sơ..." : "Gợi ý câu hỏi theo từng thành viên"}</span>
@@ -823,6 +957,22 @@ export default function LiveCouncilCockpit({
               </div>
             </div>
 
+            {!canGradeCouncil && (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100/90 dark:bg-slate-800/80 px-3.5 py-3 text-xs text-slate-700 dark:text-slate-200 flex items-start gap-2.5">
+                <Lock size={15} className="text-slate-500 shrink-0 mt-0.5" />
+                <div>
+                  <b className="block text-slate-900 dark:text-white">
+                    Chế độ Chỉ xem (Quy chế Chấm Đồ án Hướng 2)
+                  </b>
+                  <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                    Chỉ <b>GV Hướng dẫn ({dossier.project.instructorName || "—"})</b>,{" "}
+                    <b>GV Phản biện ({dossier.project.reviewerName || "chưa gán"})</b> hoặc{" "}
+                    <b>Quản trị viên</b> mới có quyền chấm điểm trên biên bản chính thức của đồ án này.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Checkboxes xác nhận kiểm tra trực tiếp */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
               <label className="flex items-center gap-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 px-2.5 py-2 cursor-pointer">
@@ -913,7 +1063,7 @@ export default function LiveCouncilCockpit({
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Kết luận Hội đồng
                 </label>
-                <select
+                <MarloSelect
                   value={verdict}
                   onChange={(e) => setVerdict(e.target.value as any)}
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-900 dark:text-white"
@@ -921,7 +1071,7 @@ export default function LiveCouncilCockpit({
                   <option value="pass">Đạt — Nghiệm thu</option>
                   <option value="pass_with_revisions">Đạt — Cần sửa nhẹ</option>
                   <option value="fail">Chưa đạt — Bảo vệ lại</option>
-                </select>
+                </MarloSelect>
               </div>
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -1042,20 +1192,43 @@ export default function LiveCouncilCockpit({
               <button
                 type="button"
                 onClick={() => void handleSubmitGrade()}
-                disabled={submitting}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 px-4 py-2.5 text-xs font-bold hover:opacity-90 disabled:opacity-60 transition cursor-pointer"
+                disabled={submitting || !canGradeCouncil}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 px-4 py-2.5 text-xs font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                title={
+                  canGradeCouncil
+                    ? "Chốt biên bản chấm Hội đồng"
+                    : "Bạn không thuộc Hội đồng chấm (GVHD/GVPB) của đồ án này"
+                }
               >
-                {submitting ? <RefreshCw size={14} className="animate-spin" /> : <Award size={14} />}
-                <span>{submitting ? "Đang lưu biên bản..." : "Chốt Biên bản & Công bố Điểm"}</span>
+                {submitting ? (
+                  <RefreshCw size={14} className="animate-spin" />
+                ) : !canGradeCouncil ? (
+                  <Lock size={14} />
+                ) : (
+                  <Award size={14} />
+                )}
+                <span>
+                  {submitting
+                    ? "Đang lưu biên bản..."
+                    : !canGradeCouncil
+                    ? "Khóa chấm điểm (Ngoài Hội đồng)"
+                    : "Chốt Biên bản & Công bố Điểm"}
+                </span>
               </button>
 
               <button
                 type="button"
+                disabled={!dossier.officialEvaluation && !canGradeCouncil}
                 onClick={handlePrintMinutes}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                title={
+                  !dossier.officialEvaluation && !canGradeCouncil
+                    ? "Đồ án chưa được Hội đồng chấm điểm chính thức nên chưa có biên bản để in."
+                    : undefined
+                }
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Printer size={14} />
-                <span>In Biên bản</span>
+                <span>{dossier.officialEvaluation ? "In Biên bản Chính thức" : "In Phiếu Chấm Nháp"}</span>
               </button>
             </div>
           </div>

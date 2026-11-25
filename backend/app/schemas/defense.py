@@ -46,8 +46,8 @@ class LiveCouncilMemberScoreIn(BaseModel):
     member_id: str
     name: str
     role: str = "Developer"
-    contribution_pct: float = 0.0
-    suggested_factor: float = 1.0
+    contribution_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+    suggested_factor: float = Field(default=1.0, ge=0.0, le=2.5)
     individual_score: float = Field(ge=0.0, le=10.0)
     asked_question: str = Field(default="", max_length=1000)
     live_qa_note: str = Field(default="", max_length=1000)

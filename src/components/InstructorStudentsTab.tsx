@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import MarloSelect from "./MarloSelect";
 import {
   Users,
   Search,
@@ -22,10 +23,13 @@ import {
   remindStudentApi,
   StudentAnalyticsItem,
 } from "../api";
+import type { CourseClass } from "../data/instructorData";
 
 interface InstructorStudentsTabProps {
   onNotify?: (msg: string) => void;
   activeCourseCode?: string;
+  activeSectionId?: string;
+  courses?: CourseClass[];
 }
 
 const COURSE_LIST = [
@@ -51,16 +55,18 @@ const COURSE_LIST = [
 export default function InstructorStudentsTab({
   onNotify,
   activeCourseCode = "",
+  activeSectionId = "",
+  courses,
 }: InstructorStudentsTabProps) {
   const [students, setStudents] = useState<StudentAnalyticsItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState(activeCourseCode);
+  const [selectedSectionId, setSelectedSectionId] = useState(activeSectionId || activeCourseCode);
   const [filterRisk, setFilterRisk] = useState<"all" | "at_risk" | "top_performer" | "on_track">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    setSelectedCourse(activeCourseCode);
-  }, [activeCourseCode]);
+    setSelectedSectionId(activeSectionId || activeCourseCode);
+  }, [activeSectionId, activeCourseCode]);
 
   // Modal nhắc nhở / thưởng XP
   const [activeStudent, setActiveStudent] = useState<StudentAnalyticsItem | null>(null);
@@ -71,12 +77,15 @@ export default function InstructorStudentsTab({
 
   useEffect(() => {
     void loadData();
-  }, [selectedCourse]);
+  }, [selectedSectionId]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await fetchStudentsAnalyticsApi(selectedCourse || undefined);
+      const hasDynamicCourses = Array.isArray(courses);
+      const data = hasDynamicCourses
+        ? await fetchStudentsAnalyticsApi(undefined, selectedSectionId || undefined)
+        : await fetchStudentsAnalyticsApi(selectedSectionId || undefined);
       setStudents(data);
     } catch {
       onNotify?.("Không thể tải danh sách học viên.");
@@ -209,21 +218,29 @@ export default function InstructorStudentsTab({
       {/* ─── THANH CÔNG CỤ LỌC & TÌM KIẾM ─────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Chọn Môn Học (Trong 16 Môn) */}
-          <div className="relative">
-            <select
-              value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
-              className="appearance-none pl-3 pr-8 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[#EE8420]/30 cursor-pointer"
-            >
-              {COURSE_LIST.map((c) => (
+          {/* Chọn Lớp Học Phần được phân công */}
+          <MarloSelect
+            value={selectedSectionId}
+            onChange={(e) => setSelectedSectionId(e.target.value)}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
+          >
+            {Array.isArray(courses) ? (
+              <>
+                <option value="">Tất cả lớp được phân công ({courses.length})</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.sectionId || c.id}>
+                    {c.sectionCode || c.code} — {c.name} ({c.studentCount} HV)
+                  </option>
+                ))}
+              </>
+            ) : (
+              COURSE_LIST.map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.name}
                 </option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
+              ))
+            )}
+          </MarloSelect>
 
           {/* Lọc Rủi ro */}
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">

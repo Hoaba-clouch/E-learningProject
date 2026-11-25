@@ -5,7 +5,7 @@
 
 /* Base Root Variables & Theming for Marlo Components */
 .marlo-scope {
-  --font: "Urbanist", system-ui, -apple-system, sans-serif;
+  --font: "Urbanist", "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
   --fs-2xs: 11px;
   --fs-xs: 12px;
   --fs-sm: 12.5px;
@@ -101,13 +101,12 @@
 }
 
 .marlo-scope .card {
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
   border-radius: var(--r-lg);
   padding: 18px 20px 20px;
   position: relative;
   border: 1px solid rgba(20, 22, 26, 0.08);
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
-  backdrop-filter: blur(8px);
 }
 
 .dark .marlo-scope .card, [data-theme="dark"] .marlo-scope .card {
@@ -206,8 +205,9 @@
   height: 24px;
   font-size: var(--fs-xs);
   white-space: nowrap;
-  background: var(--card-3);
-  color: var(--ink-2);
+  background: #F8FAFC;
+  color: #334155;
+  box-shadow: inset 0 0 0 1px #E2E8F0;
   border-radius: 99px;
   align-items: center;
   gap: 6px;
@@ -216,19 +216,27 @@
   display: inline-flex;
 }
 
+.dark .marlo-scope .pill,
+[data-theme="dark"] .marlo-scope .pill {
+  background: rgba(30, 41, 59, 0.85);
+  color: #E2E8F0;
+  box-shadow: inset 0 0 0 1px #334155;
+}
+
 .marlo-scope .pill:before {
   content: "";
-  background: currentColor;
+  background: var(--pill-dot, #64748B);
   border-radius: 50%;
   width: 6px;
   height: 6px;
+  flex-shrink: 0;
 }
 
-.marlo-scope .pill--good { background: var(--good-soft); color: var(--good); }
-.marlo-scope .pill--warn { background: var(--warn-soft); color: var(--warn); }
-.marlo-scope .pill--bad  { background: var(--bad-soft); color: var(--bad); }
-.marlo-scope .pill--info { background: var(--info-soft); color: var(--info); }
-.marlo-scope .pill--accent { background: var(--accent-soft); color: var(--accent-text); }
+.marlo-scope .pill--good { --pill-dot: #10B981; }
+.marlo-scope .pill--warn { --pill-dot: #F59E0B; }
+.marlo-scope .pill--bad  { --pill-dot: #EF4444; }
+.marlo-scope .pill--info { --pill-dot: #0EA5E9; }
+.marlo-scope .pill--accent { --pill-dot: #F59E0B; }
 .marlo-scope .pill--plain:before { display: none; }
 
 .marlo-scope .badge {
@@ -366,8 +374,8 @@
 }
 
 .marlo-scope .toolbar .input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--line-2);
+  box-shadow: 0 0 0 3px var(--well);
 }
 
 /* Hours by Week Bar Chart */
@@ -663,7 +671,7 @@
 }
 
 .marlo-scope .timer.is-on .timer__pill, .timer.is-on .timer__pill {
-  box-shadow: inset 0 0 0 1px var(--line), 0 0 0 4px var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--line-2), 0 0 0 3px var(--well);
 }
 
 /* Collapsed Rail Mode */
@@ -769,5 +777,268 @@
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* =====================================================================
+   MARLO AI CHAT SHELL (Authentic Typography, Motion & Prompt Controls)
+   ===================================================================== */
+.marlo-scope .ai-chat-shell {
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--r-xl);
+  box-shadow:
+    inset 0 0 0 1px var(--line-2),
+    0 2px 6px rgba(20, 22, 26, 0.08),
+    0 24px 60px -22px rgba(20, 22, 26, 0.34);
+}
+
+.dark .marlo-scope .ai-chat-shell,
+[data-theme="dark"] .marlo-scope .ai-chat-shell {
+  box-shadow:
+    inset 0 0 0 1px var(--line-2),
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 30px 70px -24px rgba(0, 0, 0, 0.65);
+}
+
+.marlo-scope .ai-chat-shell button,
+.marlo-scope .ai-chat-shell input,
+.marlo-scope .ai-chat-shell textarea {
+  font-family: inherit;
+}
+
+.marlo-scope .ai-chat-shell .thread__head {
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--card);
+  flex-shrink: 0;
+}
+
+.marlo-scope .ai-chat-shell .ai-ibtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 99px;
+  background: var(--card-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.15s ease;
+}
+
+.marlo-scope .ai-chat-shell .ai-ibtn:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.marlo-scope .ai-chat-shell .ai-ibtn:active {
+  transform: scale(0.94);
+}
+
+.marlo-scope .ai-chat-shell .ai-chip {
+  border-radius: 99px;
+  background: var(--card-2);
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  padding: 5px 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.marlo-scope .ai-chat-shell .ai-chip:hover:not(:disabled) {
+  background: var(--card-3);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.marlo-scope .ai-chat-shell .ai-chip:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.marlo-scope .ai-chat-shell .ai-chip:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.marlo-scope .ai-chat-shell .thread__msgs::-webkit-scrollbar {
+  width: 5px;
+}
+
+.marlo-scope .ai-chat-shell .thread__msgs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.marlo-scope .ai-chat-shell .thread__msgs::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 999px;
+}
+
+.marlo-scope .ai-chat-shell .msg {
+  animation: none;
+  max-width: 88%;
+}
+
+.marlo-scope .ai-chat-shell .msg__bubble {
+  background: var(--card-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: 18px 18px 18px 6px;
+  padding: 11px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.marlo-scope .ai-chat-shell .msg.is-mine .msg__bubble {
+  background: var(--thumb);
+  color: var(--on-thumb);
+  box-shadow: none;
+  border-radius: 18px 18px 6px 18px;
+}
+
+.marlo-scope .ai-chat-shell .msg.is-mine .msg__bubble p {
+  color: var(--on-thumb);
+}
+
+.marlo-scope .ai-chat-shell .ai-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 99px;
+  background: var(--grad);
+  color: var(--accent-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 8px 18px -10px var(--accent-to);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: filter 0.16s ease, transform 0.16s ease, opacity 0.16s ease;
+}
+
+.marlo-scope .ai-chat-shell .ai-send-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.marlo-scope .ai-chat-shell .ai-send-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.marlo-scope .ai-chat-shell .ai-send-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.marlo-scope .ai-chat-shell .ai-typing-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--accent);
+  animation: marloTypingWave 1.15s infinite ease-in-out;
+}
+
+@keyframes marloTypingWave {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0) scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1);
+  }
+}
+
+/* Marlo Frosted-Glass Floating AI Launcher */
+@keyframes marloLauncherIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.marlo-ai-launcher {
+  font-family: "Urbanist", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  background: rgba(255, 255, 255, 0.92);
+  color: #16171a;
+  border: 1px solid rgba(20, 22, 26, 0.09);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 2px 6px rgba(15, 23, 42, 0.06),
+    0 14px 32px -12px rgba(15, 23, 42, 0.22);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease,
+    background-color 0.22s ease;
+  animation: marloLauncherIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.marlo-ai-launcher:hover {
+  transform: translate3d(0, -2px, 0);
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(20, 22, 26, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 4px 10px rgba(15, 23, 42, 0.08),
+    0 18px 38px -12px rgba(15, 23, 42, 0.28);
+}
+
+.marlo-ai-launcher:active {
+  transform: translate3d(0, 0, 0) scale(0.97);
+}
+
+.dark .marlo-ai-launcher,
+[data-theme="dark"] .marlo-ai-launcher {
+  background: rgba(24, 26, 31, 0.9);
+  color: #f4f4f6;
+  border-color: rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.32),
+    0 18px 38px -10px rgba(0, 0, 0, 0.62);
+}
+
+.dark .marlo-ai-launcher:hover,
+[data-theme="dark"] .marlo-ai-launcher:hover {
+  background: rgba(30, 33, 40, 0.96);
+  border-color: rgba(255, 255, 255, 0.19);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 6px 14px rgba(0, 0, 0, 0.38),
+    0 22px 44px -10px rgba(0, 0, 0, 0.72);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marlo-ai-launcher {
+    animation: none;
   }
 }

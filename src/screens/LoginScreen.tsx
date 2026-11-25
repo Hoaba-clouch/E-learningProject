@@ -231,12 +231,21 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
   };
 
   const handleRoleSelect = (r: Role) => {
+    if (isSignUp && r === "admin") return;
     setRole(r);
-    const item = roleOptions.find((opt) => opt.id === r);
-    if (item) {
-      setEmailVal(item.email);
+    if (!isSignUp) {
+      const item = roleOptions.find((opt) => opt.id === r);
+      if (item) {
+        setEmailVal(item.email);
+      }
     }
   };
+
+  useEffect(() => {
+    if (isSignUp && role === "admin") {
+      setRole("student");
+    }
+  }, [isSignUp, role]);
 
   const handleTogglePeek = () => {
     setIsRevealed(!isRevealed);
@@ -428,8 +437,9 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
     if (ctaRef.current) lookAtEl(ctaRef.current, 0.5);
 
     const backendUp = await checkBackendHealth();
-    let resolvedRole: Role = role;
-    let isPendingApproval = !backendUp && isSignUp && role === "student";
+    const effectiveSignUpRole: "student" | "instructor" = role === "instructor" ? "instructor" : "student";
+    let resolvedRole: Role = isSignUp ? effectiveSignUpRole : role;
+    let isPendingApproval = !backendUp && isSignUp;
     let signedUser: any = null;
 
     if (backendUp) {
@@ -439,7 +449,7 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
               email: emailTrim,
               password: passwordVal,
               full_name: fullName.trim(),
-              role,
+              role: effectiveSignUpRole,
               user_code: userCode.trim() || undefined,
             })
           : await loginUser(emailTrim, passwordVal, rememberMe);
@@ -463,8 +473,7 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
           resolvedRole = authData.role;
         }
         signedUser = authData?.user || null;
-        isPendingApproval =
-          resolvedRole === "student" && authData?.user?.status === "pending";
+        isPendingApproval = Boolean(authData?.user?.status === "pending");
       } catch (err: any) {
         const msg = err?.message || "Email hoặc mật khẩu không chính xác";
         setIsBusy(false);
@@ -958,8 +967,10 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
 
                   {/* SLEEK ROLE SELECTOR PILLS */}
                   <div style={{ display: "flex", gap: "6px", marginBottom: "20px" }}>
-                    {roleOptions.map((r) => {
-                      const isSel = role === r.id;
+                    {roleOptions
+                      .filter((r) => !(isSignUp && r.id === "admin"))
+                      .map((r) => {
+                        const isSel = role === r.id;
                       return (
                         <button
                           key={r.id}
@@ -1229,7 +1240,7 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
                     </div>
 
                     {/* CTA Action button & Done Box */}
-                    {isSignUp && role === "student" && (
+                    {isSignUp && (
                       <p
                         style={{
                           fontSize: "0.75rem",
@@ -1238,7 +1249,7 @@ export default function LoginScreen({ theme, onToggleTheme, onLogin, onOpenIntro
                           margin: "0 0 10px",
                         }}
                       >
-                        Học viên mới đăng ký sẽ xem trang Giới thiệu và chờ Quản trị viên phê duyệt quyền vào học.
+                        Tài khoản {role === "instructor" ? "Giảng viên" : "Học viên"} mới đăng ký sẽ xem trang Giới thiệu và chờ Quản trị viên phê duyệt cấp quyền.
                       </p>
                     )}
                     <div className="actions">

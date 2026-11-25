@@ -31,6 +31,7 @@ import {
 
 interface CourseCatalogHubProps {
   onSelectCourse: (subjectId: SubjectId) => void;
+  onEnrollCourse?: (subject: SubjectModuleData) => void | Promise<void>;
   subjects?: SubjectModuleData[];
 }
 
@@ -181,7 +182,7 @@ function _getBaseVisualTheme(id: SubjectId) {
             {/* CRT Scanline Bar */}
             <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.3)_50%)] bg-[length:100%_4px] opacity-40" />
             {/* Live Packet Ping */}
-            <div className="absolute top-9 right-2.5 flex items-center gap-1 font-mono text-[8px] text-green-400/90 bg-green-950/60 px-1.5 py-0.5 rounded border border-green-800">
+            <div className="absolute top-9 right-2.5 flex items-center gap-1 font-mono text-[8px] text-green-400/90 bg-green-950/60 px-1.5 py-0.5 rounded-full border border-green-800">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-ping" />
               <span>12ms ping</span>
             </div>
@@ -390,7 +391,7 @@ function _getBaseVisualTheme(id: SubjectId) {
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             {/* Shimmering Gemini Aurora */}
             <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-gradient-to-br from-blue-500/20 via-indigo-500/20 to-rose-500/20 blur-xl animate-pulse" />
-            <div className="absolute top-9 right-2.5 flex items-center gap-1 text-[9px] font-mono text-amber-200 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800">
+            <div className="absolute top-9 right-2.5 flex items-center gap-1 text-[9px] font-mono text-amber-200 bg-amber-950/60 px-1.5 py-0.5 rounded-full border border-amber-800">
               <Sparkles size={11} className="text-amber-400" />
               <span>Gemini 2.5</span>
             </div>
@@ -498,8 +499,8 @@ const UNIFORM_WHITE_BORDER_HOVER = "group-hover:border-slate-300 dark:group-hove
 const WHITE_SPOTLIGHT = "rgba(255, 255, 255, 0.28)";
 const WHITE_HALO = "rgba(255, 255, 255, 0.22)";
 
-function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
-  const base = _getBaseVisualTheme(id);
+function getSubjectVisualTheme(id: string): SubjectVisualTheme {
+  const base = _getBaseVisualTheme(id as SubjectId);
   return {
     ...base,
     borderHover: UNIFORM_WHITE_BORDER_HOVER,
@@ -508,7 +509,7 @@ function getSubjectVisualTheme(id: SubjectId): SubjectVisualTheme {
   };
 }
 
-export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubProps) {
+export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: CourseCatalogHubProps) {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"roadmap" | "all">("roadmap");
   const allSubjects = subjects && subjects.length > 0 ? subjects : MULTI_CHAPTER_SUBJECTS;
@@ -530,16 +531,17 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
     return (
       <SpotlightCard
         key={`${sub.id}-${searchQuery}-${viewMode}`}
-        onClick={() => onSelectCourse(sub.id)}
+        onClick={() => onSelectCourse(sub.id as SubjectId)}
         spotlightColor={theme.spotlightColor}
         haloColor={theme.haloColor}
-        style={{ animationDelay: `${Math.min(idx * 60, 600)}ms` }}
-        className={`animate-card-stagger rounded-2xl border border-slate-200/90 dark:border-slate-800/80 bg-white/95 dark:bg-[#14161F] p-3.5 shadow-sm group-hover:shadow-[0_22px_45px_-12px_rgba(0,0,0,0.6)] group-hover:-translate-y-2 transition-all duration-300 cursor-pointer flex flex-col justify-between ${theme.borderHover}`}
+        wrapperClassName="animate-course-card"
+        style={{ animationDelay: `${30 + Math.min(idx, 16) * 55}ms` }}
+        className={`rounded-[22px] border border-[#EBE8E2] dark:border-white/10 bg-white dark:bg-[#1E1E22] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] group-hover:shadow-[0_20px_40px_-12px_rgba(0,0,0,0.45)] group-hover:-translate-y-1.5 cursor-pointer flex flex-col justify-between ${theme.borderHover}`}
       >
         <div>
           {/* 16:9 Thumbnail Banner with Custom Gradient, Font & Animation */}
           <div
-            className={`aspect-video w-full rounded-xl relative overflow-hidden bg-gradient-to-br ${theme.bgGradient} p-3 flex flex-col justify-between text-white select-none border border-white/10 shadow-inner group-hover:scale-[1.02] transition-transform duration-300`}
+            className={`aspect-video w-full rounded-2xl relative overflow-hidden bg-gradient-to-br ${theme.bgGradient} p-3 flex flex-col justify-between text-white select-none border border-white/10 shadow-inner group-hover:scale-[1.02] transition-transform duration-300`}
           >
             {/* Visual Dynamic Canvas Effect */}
             {theme.renderVisualEffect()}
@@ -552,7 +554,7 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
             {/* Top Bar inside Thumbnail */}
             <div className="flex items-center justify-between z-10">
               <span
-                className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded border shadow-xs ${theme.badgeStyle}`}
+                className={`font-mono text-[10px] font-bold px-2.5 py-0.5 rounded-full border shadow-xs ${theme.badgeStyle}`}
               >
                 {sub.code}
               </span>
@@ -588,6 +590,31 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
             <p className="text-[11px] font-mono text-slate-400 dark:text-slate-500 pt-0.5">
               {sub.chapters.length} chương · {sub.totalLessons} bài học · {sub.totalDuration}
             </p>
+            {typeof sub.enrolled === "boolean" && (
+              <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold ${
+                    sub.enrolled
+                      ? "border-slate-900/20 bg-slate-900 text-white dark:border-white/20 dark:bg-white dark:text-slate-950"
+                      : "border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300"
+                  }`}
+                >
+                  {sub.enrolled ? `Đã ghi danh · ${sub.sectionCode || `${sub.code}-N01`}` : "Chưa ghi danh · Xem trước"}
+                </span>
+                {!sub.enrolled && onEnrollCourse && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void onEnrollCourse(sub);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-900 hover:bg-black text-white dark:bg-white dark:hover:bg-slate-200 dark:text-slate-950 px-2.5 py-0.5 text-[10px] font-bold transition cursor-pointer"
+                  >
+                    + Ghi danh
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -653,7 +680,7 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm môn học, giảng viên..."
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-2xs"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-2xs"
             />
           </div>
         </div>
@@ -672,7 +699,7 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
             </button>
           </div>
           {filteredSubjects.length === 0 ? (
-            <div className="p-12 text-center text-sm text-slate-400 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
+            <div className="p-12 text-center text-sm text-slate-400 rounded-[22px] border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
               Không tìm thấy môn học nào khớp với từ khóa tìm kiếm.
             </div>
           ) : (
@@ -684,63 +711,67 @@ export function CourseCatalogHub({ onSelectCourse, subjects }: CourseCatalogHubP
       ) : viewMode === "roadmap" ? (
         /* ─── CASE 2: ROADMAP TIMELINE VIEW (PHÂN CHẶNG RÕ RÀNG) ─── */
         <div className="max-w-[1600px] w-full mx-auto px-1 sm:px-2 space-y-8">
-          {ROADMAP_STAGES.map((stage, stageIdx) => {
-            const stageSubjects = stage.subjectIds
-              .map((id) => allSubjects.find((s) => s.id === id))
-              .filter((s): s is SubjectModuleData => Boolean(s));
+          {(() => {
+            let globalCourseIdx = 0;
+            return ROADMAP_STAGES.map((stage) => {
+              const stageSubjects = allSubjects.filter((s) =>
+                typeof s.stageNumber === "number"
+                  ? s.stageNumber === Number(stage.stepNumber)
+                  : stage.subjectIds.includes(s.id as SubjectId)
+              );
 
-            if (stageSubjects.length === 0) return null;
+              if (stageSubjects.length === 0) return null;
 
-            // Compute stage progress average
-            const avgProgress = Math.round(
-              stageSubjects.reduce((acc, curr) => acc + curr.overallProgress, 0) / stageSubjects.length
-            );
+              // Compute stage progress average
+              const avgProgress = Math.round(
+                stageSubjects.reduce((acc, curr) => acc + curr.overallProgress, 0) / stageSubjects.length
+              );
 
-            return (
-              <div
-                key={stage.id}
-                style={{ animationDelay: `${stageIdx * 100}ms` }}
-                className="relative pl-6 sm:pl-8 border-l-2 border-slate-200 dark:border-slate-800 space-y-4 animate-card-stagger transition-all"
-              >
-                {/* Stage Milestone Indicator Icon on Timeline */}
-                <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-white dark:bg-slate-900 border-2 border-[#EE8420] dark:border-[#F4A43A] shadow-xs" />
+              return (
+                <div
+                  key={stage.id}
+                  className="relative pl-6 sm:pl-8 border-l-2 border-slate-200 dark:border-slate-800 space-y-4"
+                >
+                  {/* Stage Milestone Indicator Icon on Timeline */}
+                  <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-white dark:bg-slate-900 border-2 border-[#EE8420] dark:border-[#F4A43A] shadow-xs" />
 
-                {/* Stage Header Info */}
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-[11px] font-black px-2 py-0.5 rounded-md bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs">
-                        CHẶNG {stage.stepNumber}
-                      </span>
-                      <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                        {stage.title}
-                      </h2>
-                      <span className="text-xs text-slate-400 font-medium">
-                        • {stage.phase}
-                      </span>
+                  {/* Stage Header Info */}
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-[11px] font-black px-2.5 py-0.5 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs">
+                          CHẶNG {stage.stepNumber}
+                        </span>
+                        <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                          {stage.title}
+                        </h2>
+                        <span className="text-xs text-slate-400 font-medium">
+                          • {stage.phase}
+                        </span>
+                      </div>
+
+                      {/* Stage Progress summary */}
+                      <div className="flex items-center gap-2 text-xs font-mono">
+                        <span className="text-slate-500 dark:text-slate-400">Tiến độ:</span>
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {avgProgress}%
+                        </span>
+                        <span className="text-slate-400">({stageSubjects.length} môn)</span>
+                      </div>
                     </div>
-
-                    {/* Stage Progress summary */}
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      <span className="text-slate-500 dark:text-slate-400">Tiến độ:</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {avgProgress}%
-                      </span>
-                      <span className="text-slate-400">({stageSubjects.length} môn)</span>
-                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-4xl leading-relaxed">
+                      {stage.description}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-4xl leading-relaxed">
-                    {stage.description}
-                  </p>
-                </div>
 
-                {/* Stage Course Cards Grid (Spacious, fills wide screens cleanly) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 pt-1">
-                  {stageSubjects.map((sub, idx) => renderCard(sub, idx))}
+                  {/* Stage Course Cards Grid (Spacious, fills wide screens cleanly) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 pt-1">
+                    {stageSubjects.map((sub) => renderCard(sub, globalCourseIdx++))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       ) : (
         /* ─── CASE 3: ALL COURSES GRID (FULL 16 MÔN) ─────────────── */

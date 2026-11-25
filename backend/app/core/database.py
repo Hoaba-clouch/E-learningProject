@@ -261,6 +261,15 @@ CREATE TABLE IF NOT EXISTS users (
     locale VARCHAR(32) NOT NULL DEFAULT 'vi-VN',
     timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
     theme_preference VARCHAR(64) NOT NULL DEFAULT 'one-dark',
+    avatar_url LONGTEXT,
+    headline VARCHAR(191) DEFAULT '',
+    bio TEXT,
+    department VARCHAR(191) DEFAULT '',
+    office_location VARCHAR(191) DEFAULT '',
+    skills_json LONGTEXT,
+    github_url VARCHAR(255) DEFAULT '',
+    website_url VARCHAR(255) DEFAULT '',
+    phone VARCHAR(64) DEFAULT '',
     two_factor_enabled INT NOT NULL DEFAULT 0,
     failed_login_attempts INT NOT NULL DEFAULT 0,
     locked_until VARCHAR(64),
@@ -522,6 +531,38 @@ CREATE TABLE IF NOT EXISTS courses (
     updated_at VARCHAR(64) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS class_sections (
+    id VARCHAR(64) PRIMARY KEY,
+    course_id VARCHAR(64) NOT NULL,
+    section_code VARCHAR(64) NOT NULL UNIQUE,
+    semester VARCHAR(64) NOT NULL,
+    instructor_id VARCHAR(64),
+    teacher_name VARCHAR(191) NOT NULL,
+    room VARCHAR(191) NOT NULL DEFAULT 'Lab A3-201',
+    max_students INT NOT NULL DEFAULT 45,
+    docker_image VARCHAR(191) NOT NULL,
+    sandbox_enabled INT NOT NULL DEFAULT 1,
+    ai_defense_enabled INT NOT NULL DEFAULT 1,
+    avg_progress_pct INT NOT NULL DEFAULT 72,
+    pending_dual_reviews INT NOT NULL DEFAULT 0,
+    health VARCHAR(64) NOT NULL DEFAULT 'Ổn định',
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at VARCHAR(64) NOT NULL,
+    updated_at VARCHAR(64) NOT NULL,
+    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS class_enrollments (
+    id VARCHAR(64) PRIMARY KEY,
+    section_id VARCHAR(64) NOT NULL,
+    student_id VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    enrolled_at VARCHAR(64) NOT NULL,
+    UNIQUE(section_id, student_id),
+    FOREIGN KEY (section_id) REFERENCES class_sections(id) ON DELETE CASCADE,
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS dual_submissions (
     id VARCHAR(64) PRIMARY KEY,
     class_id VARCHAR(64) NOT NULL,
@@ -713,6 +754,7 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     radar_defense DOUBLE DEFAULT 10.0,
     owned_items_json LONGTEXT,
     claimed_quests_json LONGTEXT,
+    equipped_items_json LONGTEXT,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -798,6 +840,8 @@ CREATE TABLE IF NOT EXISTS engineering_projects (
     course_id VARCHAR(64) DEFAULT 'oop',
     instructor_id VARCHAR(64) DEFAULT 'instructor-demo',
     instructor_name VARCHAR(191) DEFAULT 'Cô Trần Thị B',
+    reviewer_id VARCHAR(64) DEFAULT '',
+    reviewer_name VARCHAR(191) DEFAULT '',
     leader_user_id VARCHAR(64) DEFAULT 'student-demo',
     sprint VARCHAR(64) NOT NULL DEFAULT 'Sprint 1 (Tuần 1 - 4)',
     kind VARCHAR(64) NOT NULL,
@@ -1027,6 +1071,14 @@ CREATE TABLE IF NOT EXISTS notifications (
     INDEX idx_notif_role (target_role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS notification_reads (
+    user_id VARCHAR(64) NOT NULL,
+    notification_id VARCHAR(64) NOT NULL,
+    read_at VARCHAR(64) NOT NULL,
+    PRIMARY KEY (user_id, notification_id),
+    INDEX idx_notif_reads_notif (notification_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 10. Security OTP
 CREATE TABLE IF NOT EXISTS security_otp_codes (
     id VARCHAR(64) PRIMARY KEY,
@@ -1092,6 +1144,55 @@ def _run_safe_migrations(conn: MySQLConnectionWrapper) -> None:
             created_at VARCHAR(64) NOT NULL,
             updated_at VARCHAR(64) NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
+        "ALTER TABLE users ADD COLUMN avatar_url LONGTEXT",
+        "ALTER TABLE users ADD COLUMN headline VARCHAR(191) DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN bio TEXT",
+        "ALTER TABLE users ADD COLUMN department VARCHAR(191) DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN office_location VARCHAR(191) DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN skills_json LONGTEXT",
+        "ALTER TABLE users ADD COLUMN github_url VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN website_url VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN phone VARCHAR(64) DEFAULT ''",
+        """CREATE TABLE IF NOT EXISTS class_sections (
+            id VARCHAR(64) PRIMARY KEY,
+            course_id VARCHAR(64) NOT NULL,
+            section_code VARCHAR(64) NOT NULL UNIQUE,
+            semester VARCHAR(64) NOT NULL,
+            instructor_id VARCHAR(64),
+            teacher_name VARCHAR(191) NOT NULL,
+            room VARCHAR(191) NOT NULL DEFAULT 'Lab A3-201',
+            max_students INT NOT NULL DEFAULT 45,
+            docker_image VARCHAR(191) NOT NULL,
+            sandbox_enabled INT NOT NULL DEFAULT 1,
+            ai_defense_enabled INT NOT NULL DEFAULT 1,
+            avg_progress_pct INT NOT NULL DEFAULT 72,
+            pending_dual_reviews INT NOT NULL DEFAULT 0,
+            health VARCHAR(64) NOT NULL DEFAULT 'Ổn định',
+            status VARCHAR(32) NOT NULL DEFAULT 'active',
+            created_at VARCHAR(64) NOT NULL,
+            updated_at VARCHAR(64) NOT NULL,
+            FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
+        """CREATE TABLE IF NOT EXISTS class_enrollments (
+            id VARCHAR(64) PRIMARY KEY,
+            section_id VARCHAR(64) NOT NULL,
+            student_id VARCHAR(64) NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'active',
+            enrolled_at VARCHAR(64) NOT NULL,
+            UNIQUE(section_id, student_id),
+            FOREIGN KEY (section_id) REFERENCES class_sections(id) ON DELETE CASCADE,
+            FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
+        "ALTER TABLE engineering_projects ADD COLUMN reviewer_id VARCHAR(64) DEFAULT ''",
+        "ALTER TABLE engineering_projects ADD COLUMN reviewer_name VARCHAR(191) DEFAULT ''",
+        "ALTER TABLE student_profiles ADD COLUMN equipped_items_json LONGTEXT",
+        """CREATE TABLE IF NOT EXISTS notification_reads (
+            user_id VARCHAR(64) NOT NULL,
+            notification_id VARCHAR(64) NOT NULL,
+            read_at VARCHAR(64) NOT NULL,
+            PRIMARY KEY (user_id, notification_id),
+            INDEX idx_notif_reads_notif (notification_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
     ]
     for stmt in alter_statements:
         try:
@@ -1100,8 +1201,325 @@ def _run_safe_migrations(conn: MySQLConnectionWrapper) -> None:
             pass
 
 
+DEFAULT_PROJECT_REVIEWERS: dict[str, tuple[str, str]] = {
+    "prj-codemind": ("usr-gv-02", "Thầy Nguyễn Phước"),
+    "prj-compiler": ("usr-gv-03", "Thầy Trần Minh Quân"),
+    "prj-devnet": ("usr-gv-02", "Thầy Nguyễn Phước"),
+    "prj-ecommerce": ("usr-gv-05", "TS. Lê Hoàng Mai"),
+    "prj-faceattend": ("usr-gv-04", "Thầy Đặng Quốc Bảo"),
+    "prj-medai": ("usr-gv-02", "Thầy Nguyễn Phước"),
+    "prj-pintos": ("usr-gv-04", "Thầy Đặng Quốc Bảo"),
+    "prj-security": ("usr-gv-03", "Thầy Trần Minh Quân"),
+}
+
+LEGACY_TEAM_ID_MAP: dict[str, tuple[str, str, str]] = {
+    "m1": ("usr-sv-01", "Nguyễn Bá Hòa", "hoa.nb@student.edu.vn"),
+    "m2": ("usr-sv-03", "Võ Nhật Huy", "huy.vn@student.edu.vn"),
+    "m3": ("usr-sv-04", "Phan Đình Nghị", "nghi.pd@student.edu.vn"),
+    "e1": ("usr-sv-08", "Trần Minh Tuấn", "tuan.tm@student.edu.vn"),
+    "e2": ("usr-sv-07", "Võ Ngọc Hà", "ha.vn@student.edu.vn"),
+    "a1": ("usr-sv-07", "Võ Ngọc Hà", "ha.vn@student.edu.vn"),
+    "a2": ("usr-sv-08", "Trần Minh Tuấn", "tuan.tm@student.edu.vn"),
+}
+
+
+def repair_relational_integrity(conn: MySQLConnectionWrapper) -> None:
+    """Chuẩn hóa toàn bộ khóa ngoại, GVHD/GVPB, thành viên nhóm, lịch hẹn và Mindmap Chương 2 CS201."""
+    # 1. Chuẩn hóa các cặp instructor_id <-> instructor_name bị lệch trên đồ án và lịch học thuật
+    instructor_name_fixes = [
+        ("%Lê Hoàng Mai%", "usr-gv-05", "TS. Lê Hoàng Mai"),
+        ("%Đặng Quốc Bảo%", "usr-gv-04", "Thầy Đặng Quốc Bảo"),
+        ("%Trần Minh Quân%", "usr-gv-03", "Thầy Trần Minh Quân"),
+        ("%Nguyễn Phước%", "usr-gv-02", "Thầy Nguyễn Phước"),
+        ("%Trần Thị B%", "usr-gv-01", "Cô Trần Thị B"),
+    ]
+    for pat, real_gid, real_gname in instructor_name_fixes:
+        conn.execute(
+            """UPDATE engineering_projects
+               SET instructor_id = ?, instructor_name = ?
+               WHERE (instructor_name LIKE ? OR instructor_label LIKE ?)
+                 AND (instructor_id IS NULL OR instructor_id != ?)""",
+            (real_gid, real_gname, pat, pat, real_gid),
+        )
+        conn.execute(
+            """UPDATE academic_schedules
+               SET instructor_id = ?, instructor_name = ?
+               WHERE instructor_name LIKE ? AND instructor_id != ?""",
+            (real_gid, real_gname, pat, real_gid),
+        )
+
+    # 2. Vá lịch có course_id không tồn tại ('class-devops' -> 'class-oop') & đồng bộ current_booked thật
+    conn.execute(
+        "UPDATE academic_schedules SET course_id = 'class-oop' WHERE course_id = 'class-devops'"
+    )
+    sched_rows = conn.execute("SELECT id, current_booked FROM academic_schedules").fetchall()
+    for sr in sched_rows:
+        cnt_r = conn.execute(
+            """SELECT COUNT(*) AS c FROM schedule_bookings
+               WHERE schedule_id = ? AND booking_status NOT IN ('cancelled', 'rejected')""",
+            (sr["id"],),
+        ).fetchone()
+        real_booked = int(cnt_r["c"] or 0) if cnt_r else 0
+        if int(sr["current_booked"] or 0) != real_booked:
+            conn.execute(
+                "UPDATE academic_schedules SET current_booked = ? WHERE id = ?",
+                (real_booked, sr["id"]),
+            )
+
+    # 3. Chuẩn hóa reviewer_id/reviewer_name (Hướng 2: GVHD + GV Phản biện) & team_json real user IDs
+    students = conn.execute(
+        "SELECT id, full_name, display_name, email FROM users WHERE role = 'student'"
+    ).fetchall()
+    stu_by_name: dict[str, dict[str, Any]] = {}
+    stu_by_id: dict[str, dict[str, Any]] = {}
+    for st in students:
+        sd = row_dict(st) or {}
+        stu_by_id[sd["id"]] = sd
+        for k in ("full_name", "display_name"):
+            nm = str(sd.get(k) or "").strip().lower()
+            if nm:
+                stu_by_name[nm] = sd
+
+    proj_rows = conn.execute("SELECT * FROM engineering_projects").fetchall()
+    for pr in proj_rows:
+        pd = row_dict(pr) or {}
+        pid = pd["id"]
+        inst_id = str(pd.get("instructor_id") or "").strip()
+        rev_id = str(pd.get("reviewer_id") or "").strip()
+        rev_name = str(pd.get("reviewer_name") or "").strip()
+        need_update = False
+
+        if not rev_id or rev_id == inst_id:
+            def_rev = DEFAULT_PROJECT_REVIEWERS.get(pid)
+            if def_rev and def_rev[0] != inst_id:
+                rev_id, rev_name = def_rev
+            elif inst_id != "usr-gv-02":
+                rev_id, rev_name = ("usr-gv-02", "Thầy Nguyễn Phước")
+            else:
+                rev_id, rev_name = ("usr-gv-03", "Thầy Trần Minh Quân")
+            need_update = True
+
+        leader_uid = str(pd.get("leader_user_id") or "").strip()
+        if leader_uid in LEGACY_TEAM_ID_MAP:
+            leader_uid = LEGACY_TEAM_ID_MAP[leader_uid][0]
+            need_update = True
+
+        try:
+            raw_team = json.loads(pd.get("team_json") or "[]")
+        except Exception:
+            raw_team = []
+        team_changed = False
+        normalized_team: list[dict[str, Any]] = []
+        seen_member_ids: set[str] = set()
+        if isinstance(raw_team, list):
+            for tm in raw_team:
+                if not isinstance(tm, dict):
+                    continue
+                tm_copy = dict(tm)
+                tid = str(tm_copy.get("id") or "").strip()
+                tname = str(tm_copy.get("name") or "").strip()
+                if tid in LEGACY_TEAM_ID_MAP:
+                    mapped_id, mapped_name, mapped_email = LEGACY_TEAM_ID_MAP[tid]
+                    tm_copy["id"] = mapped_id
+                    tm_copy["name"] = mapped_name
+                    tm_copy["email"] = mapped_email
+                    initials = "".join(w[:1] for w in mapped_name.split()[-2:]).upper()
+                    tm_copy["initials"] = initials
+                    tm_copy["avatar"] = initials[:1]
+                    tid = mapped_id
+                    team_changed = True
+                elif tid not in stu_by_id and tname.lower() in stu_by_name:
+                    matched_s = stu_by_name[tname.lower()]
+                    tm_copy["id"] = matched_s["id"]
+                    tm_copy["email"] = matched_s.get("email") or tm_copy.get("email") or ""
+                    tid = matched_s["id"]
+                    team_changed = True
+                if tid in seen_member_ids:
+                    team_changed = True
+                    continue
+                if tid:
+                    seen_member_ids.add(tid)
+                normalized_team.append(tm_copy)
+
+        if need_update or team_changed:
+            conn.execute(
+                """UPDATE engineering_projects
+                   SET reviewer_id = ?, reviewer_name = ?, leader_user_id = ?, team_json = ?
+                   WHERE id = ?""",
+                (
+                    rev_id,
+                    rev_name,
+                    leader_uid or pd.get("leader_user_id"),
+                    json.dumps(normalized_team if team_changed else raw_team, ensure_ascii=False),
+                    pid,
+                ),
+            )
+
+    # 4. Backfill engineering_tasks.assignee_user_id từ assignee_json
+    task_rows = conn.execute(
+        "SELECT id, assignee_user_id, assignee_json FROM engineering_tasks"
+    ).fetchall()
+    for tr in task_rows:
+        cur_auid = str(tr["assignee_user_id"] or "").strip()
+        if cur_auid and cur_auid in stu_by_id:
+            continue
+        try:
+            ass_obj = json.loads(tr["assignee_json"] or "{}")
+        except Exception:
+            ass_obj = {}
+        if not isinstance(ass_obj, dict):
+            continue
+        aid = str(ass_obj.get("id") or "").strip()
+        aname = str(ass_obj.get("name") or "").strip().lower()
+        resolved_uid = ""
+        if aid in LEGACY_TEAM_ID_MAP:
+            resolved_uid = LEGACY_TEAM_ID_MAP[aid][0]
+        elif aid in stu_by_id:
+            resolved_uid = aid
+        elif aname in stu_by_name:
+            resolved_uid = stu_by_name[aname]["id"]
+        if resolved_uid and resolved_uid != cur_auid:
+            conn.execute(
+                "UPDATE engineering_tasks SET assignee_user_id = ? WHERE id = ?",
+                (resolved_uid, tr["id"]),
+            )
+
+    # 5. Đảm bảo Chương 2 CS201 (oop-ch2) luôn có Master Mindmap chuẩn nếu đang rỗng
+    oop_row = conn.execute("SELECT id, chapters_json FROM courses WHERE id = 'class-oop'").fetchone()
+    if oop_row and oop_row["chapters_json"]:
+        try:
+            chs = json.loads(oop_row["chapters_json"])
+        except Exception:
+            chs = []
+        oop_updated = False
+        for ch in chs:
+            if isinstance(ch, dict) and ch.get("id") == "oop-ch2" and not ch.get("mindmapNodes"):
+                ch["mindmapGenerated"] = True
+                ch["status"] = "Đã phát hành"
+                ch["mindmapNodes"] = [
+                    {
+                        "id": "oop2-root",
+                        "type": "masterMindmapNode",
+                        "position": {"x": 40, "y": 170},
+                        "data": {
+                            "title": "Chương 2: Smart Pointers & RAII",
+                            "summary": "Quản lý vòng đời vùng nhớ Heap tự động & chống rò rỉ tài nguyên C++20",
+                            "tag": "CS201 · ROOT",
+                            "nodeType": "root",
+                            "masteryPct": 72,
+                            "xp": 180,
+                        },
+                    },
+                    {
+                        "id": "oop2-b1",
+                        "type": "masterMindmapNode",
+                        "position": {"x": 350, "y": 75},
+                        "data": {
+                            "title": "2.1 unique_ptr & Sở hữu độc quyền",
+                            "summary": "Zero-overhead wrapper, chỉ cho phép std::move, tự giải phóng khi thoát scope.",
+                            "tag": "Move Semantics",
+                            "nodeType": "branch",
+                            "masteryPct": 80,
+                        },
+                    },
+                    {
+                        "id": "oop2-b2",
+                        "type": "masterMindmapNode",
+                        "position": {"x": 350, "y": 255},
+                        "data": {
+                            "title": "2.2 shared_ptr & Reference Counting",
+                            "summary": "Control block đếm tham chiếu chia sẻ an toàn giữa các thành phần hệ thống.",
+                            "tag": "Shared Ownership",
+                            "nodeType": "branch",
+                            "masteryPct": 68,
+                        },
+                    },
+                    {
+                        "id": "oop2-l1",
+                        "type": "masterMindmapNode",
+                        "position": {"x": 670, "y": 140},
+                        "data": {
+                            "title": "weak_ptr phá Circular Reference",
+                            "summary": "Quan sát tài nguyên qua lock()/expired() mà không giữ cứng use_count.",
+                            "tag": "Edge Case",
+                            "nodeType": "leaf",
+                            "masteryPct": 60,
+                        },
+                    },
+                    {
+                        "id": "oop2-l2",
+                        "type": "masterMindmapNode",
+                        "position": {"x": 670, "y": 295},
+                        "data": {
+                            "title": "RAII Cache Pool (0 Memory Leak)",
+                            "summary": "Kiểm chứng Valgrind 0 bytes leaked khi thu hồi texture/connection ngoài scope.",
+                            "tag": "Docker Lab",
+                            "nodeType": "leaf",
+                            "masteryPct": 64,
+                        },
+                    },
+                ]
+                ch["mindmapEdges"] = [
+                    {
+                        "id": "oop2-e1",
+                        "source": "oop2-root",
+                        "target": "oop2-b1",
+                        "type": "smoothstep",
+                        "markerEnd": {"type": "arrowclosed", "color": "#94a3b8"},
+                        "style": {"strokeWidth": 1.75, "stroke": "#94a3b8", "strokeDasharray": "5 4"},
+                    },
+                    {
+                        "id": "oop2-e2",
+                        "source": "oop2-root",
+                        "target": "oop2-b2",
+                        "type": "smoothstep",
+                        "markerEnd": {"type": "arrowclosed", "color": "#94a3b8"},
+                        "style": {"strokeWidth": 1.75, "stroke": "#94a3b8", "strokeDasharray": "5 4"},
+                    },
+                    {
+                        "id": "oop2-e3",
+                        "source": "oop2-b2",
+                        "target": "oop2-l1",
+                        "type": "smoothstep",
+                        "markerEnd": {"type": "arrowclosed", "color": "#94a3b8"},
+                        "style": {"strokeWidth": 1.75, "stroke": "#94a3b8", "strokeDasharray": "5 4"},
+                    },
+                    {
+                        "id": "oop2-e4",
+                        "source": "oop2-b2",
+                        "target": "oop2-l2",
+                        "type": "smoothstep",
+                        "markerEnd": {"type": "arrowclosed", "color": "#94a3b8"},
+                        "style": {"strokeWidth": 1.75, "stroke": "#94a3b8", "strokeDasharray": "5 4"},
+                    },
+                ]
+                oop_updated = True
+        if oop_updated:
+            conn.execute(
+                "UPDATE courses SET chapters_json = ? WHERE id = 'class-oop'",
+                (json.dumps(chs, ensure_ascii=False),),
+            )
+
+    # 8. Đảm bảo tài khoản seed gốc không bị kẹt 2FA/lockout ngoài ý muốn từ phiên test cũ
+    conn.execute(
+        "UPDATE users SET two_factor_enabled = 0, failed_login_attempts = 0, locked_until = NULL WHERE id IN ('usr-adm-01', 'usr-gv-01', 'usr-gv-02', 'usr-sv-01', 'usr-sv-02')"
+    )
+    pol_row = conn.execute("SELECT value_json FROM system_settings WHERE key = 'policies'").fetchone()
+    if pol_row and pol_row.get("value_json"):
+        try:
+            pol_dict = json.loads(pol_row["value_json"])
+            if isinstance(pol_dict, dict) and pol_dict.get("require2FA") is True:
+                pol_dict["require2FA"] = False
+                conn.execute(
+                    "UPDATE system_settings SET value_json = ?, updated_at = ? WHERE key = 'policies'",
+                    (json.dumps(pol_dict), now_utc()),
+                )
+        except Exception:
+            pass
+
+
 def init_db() -> None:
-    """Khởi tạo toàn bộ 43 bảng CSDL chuẩn mực trên MySQL 8.0 và seed dữ liệu ban đầu."""
+    """Khởi tạo toàn bộ CSDL chuẩn mực trên MySQL 8.0, seed dữ liệu và đồng bộ toàn vẹn quan hệ."""
     _ensure_mysql_db_exists()
     with db() as conn:
         conn.executescript(MYSQL_DDL_SCHEMA)
@@ -1113,6 +1531,7 @@ def init_db() -> None:
         seed_kanban_workspace(conn)
         from app.services.seed_git_hub import seed_git_hub_workspace
         seed_git_hub_workspace(conn)
+        repair_relational_integrity(conn)
 
 
 def seed_data(conn: MySQLConnectionWrapper) -> None:

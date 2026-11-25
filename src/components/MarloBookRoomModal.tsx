@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import MarloSelect from "./MarloSelect";
 import { X, AlertTriangle, Check } from "lucide-react";
 import type {
   AcademicScheduleItem,
@@ -265,27 +266,27 @@ export default function MarloBookRoomModal({
               <label className="text-xs font-bold text-slate-700 dark:text-slate-200 block mb-1.5">
                 Phân loại lịch
               </label>
-              <select
+              <MarloSelect
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23]"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none"
               >
                 <option value="exam">Ca thi định kỳ</option>
                 <option value="defense">Hội đồng bảo vệ đồ án</option>
                 <option value="office_hours">Tư vấn cố vấn 1-1</option>
                 <option value="review">Review tiến độ & PR</option>
                 <option value="lab">Thực hành Sandbox Lab</option>
-              </select>
+              </MarloSelect>
             </div>
 
             <div>
               <label className="text-xs font-bold text-slate-700 dark:text-slate-200 block mb-1.5">
                 Học phần / Khóa học
               </label>
-              <select
+              <MarloSelect
                 value={courseId}
                 onChange={(e) => setCourseId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23]"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none"
               >
                 {courses.length === 0 ? (
                   <option value="class-capstone">CS499 · Đồ án Tốt nghiệp</option>
@@ -296,7 +297,7 @@ export default function MarloBookRoomModal({
                     </option>
                   ))
                 )}
-              </select>
+              </MarloSelect>
             </div>
           </div>
 
@@ -305,10 +306,10 @@ export default function MarloBookRoomModal({
               <label className="text-xs font-bold text-slate-700 dark:text-slate-200 block mb-1.5">
                 Gắn Đồ án (tùy chọn)
               </label>
-              <select
+              <MarloSelect
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23]"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none"
               >
                 <option value="">Không gắn đồ án cụ thể</option>
                 {projects.map((p) => (
@@ -316,7 +317,7 @@ export default function MarloBookRoomModal({
                     {p.code} · {p.name}
                   </option>
                 ))}
-              </select>
+              </MarloSelect>
             </div>
 
             <div>
@@ -339,7 +340,7 @@ export default function MarloBookRoomModal({
               <label className="text-xs font-bold text-slate-700 dark:text-slate-200 block mb-1.5">
                 Phân công Giảng viên phụ trách
               </label>
-              <select
+              <MarloSelect
                 value={instructorId}
                 onChange={(e) => {
                   const id = e.target.value;
@@ -347,14 +348,14 @@ export default function MarloBookRoomModal({
                   const found = instructors.find((i) => i.id === id);
                   if (found) setInstructorName(found.display_name);
                 }}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none focus:border-[#f29b23]"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none"
               >
                 {instructors.map((inst) => (
                   <option key={inst.id} value={inst.id}>
                     {inst.display_name} ({inst.email})
                   </option>
                 ))}
-              </select>
+              </MarloSelect>
             </div>
           )}
 
@@ -363,7 +364,7 @@ export default function MarloBookRoomModal({
               <label className="text-xs font-bold text-slate-700 dark:text-slate-200">
                 Phòng tổ chức / Link họp trực tuyến <span className="text-rose-500">*</span>
               </label>
-              <select
+              <MarloSelect
                 value={presetRooms.includes(roomOrLink) ? roomOrLink : ""}
                 onChange={(e) => {
                   if (e.target.value) {
@@ -372,7 +373,7 @@ export default function MarloBookRoomModal({
                   }
                 }}
                 aria-label="Chọn nhanh phòng mẫu"
-                className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 outline-none"
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 outline-none"
               >
                 <option value="">Chọn nhanh phòng mẫu...</option>
                 {presetRooms.map((r) => (
@@ -380,7 +381,7 @@ export default function MarloBookRoomModal({
                     {r}
                   </option>
                 ))}
-              </select>
+              </MarloSelect>
             </div>
             <input
               type="text"

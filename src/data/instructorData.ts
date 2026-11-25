@@ -98,13 +98,23 @@ export interface Chapter {
 
 export interface CourseClass {
   id: string;
+  sectionId?: string;
+  courseId?: string;
   subjectId: string;
   code: string;
+  sectionCode?: string;
   name: string;
   semester: string;
+  stageNumber?: number;
+  stageTitle?: string;
+  credits?: number;
+  instructorId?: string;
+  teacher?: string;
   dockerImage?: string;
   studentCount: number;
+  maxStudents?: number;
   avgProgressPct: number;
+  enrolled?: boolean;
   chapters: Chapter[];
 }
 

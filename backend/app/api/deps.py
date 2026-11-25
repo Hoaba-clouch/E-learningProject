@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -10,6 +11,119 @@ from app.core.security import TOKENS, decode_token, sha256, uid
 from app.core.timezone import now_utc
 
 security = HTTPBearer(auto_error=False)
+
+DEFAULT_SYSTEM_POLICIES: dict[str, Any] = {
+    "budgetCap": 500.0,
+    "guardrailRefuseAnswer": True,
+    "rateLimit20PerHour": True,
+    "dockerNetworkNone": True,
+    "require2FA": False,
+    "blockConcurrentIP": True,
+    "autoLockFailedAttempts": True,
+}
+
+
+def load_system_policies(conn: Any) -> dict[str, Any]:
+    """Đọc cấu hình chính sách An ninh & AI Guardrail từ bảng system_settings."""
+    merged = dict(DEFAULT_SYSTEM_POLICIES)
+    row = conn.execute("SELECT value_json FROM system_settings WHERE key='policies'").fetchone()
+    if row and row.get("value_json"):
+        try:
+            parsed = json.loads(row["value_json"])
+            if isinstance(parsed, dict):
+                merged.update(parsed)
+        except Exception:
+            pass
+    return merged
+
+
+def assert_ai_service_active(
+    conn: Any,
+    service_id: str,
+    service_label: str,
+    *,
+    check_budget: bool = True,
+) -> dict[str, Any]:
+    """Kiểm tra công tắc dịch vụ AI của Admin (503) và trần ngân sách AI tháng (429)."""
+    svc = conn.execute("SELECT active FROM ai_service_units WHERE id=?", (service_id,)).fetchone()
+    if svc and not svc["active"]:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Dịch vụ {service_label} hiện đang tạm dừng bởi Quản trị viên.",
+        )
+    policies = load_system_policies(conn)
+    if check_budget:
+        budget_cap = float(policies.get("budgetCap", 500.0) or 500.0)
+        cost_row = conn.execute("SELECT COALESCE(SUM(estimated_cost), 0) AS total_cost FROM ai_service_units").fetchone()
+        total_cost = float(cost_row["total_cost"] or 0.0) if cost_row else 0.0
+        if total_cost >= budget_cap:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Ngân sách AI tháng (${total_cost:.2f}/${budget_cap:.0f}) đã chạm trần giới hạn do Quản trị viên cấu hình.",
+            )
+    return policies
+
+
+def assert_sandbox_enabled_for_exercise(
+    conn: Any,
+    user: dict[str, Any],
+    exercise_id: str = "",
+    *,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Kiểm tra cả dịch vụ svc-docker (503) lẫn công tắc sandboxEnabled của lớp học phần (403)."""
+    docker_svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-docker'").fetchone()
+    if docker_svc and not docker_svc["active"]:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Docker CI/CD Isolated Sandbox Pool đang được Quản trị viên tạm dừng bảo trì.",
+        )
+    policies = load_system_policies(conn)
+    course = None
+    ex_clean = (exercise_id or "").strip()
+
+    if session_id:
+        sess = conn.execute("SELECT course_code FROM learning_sessions WHERE id=?", (session_id,)).fetchone()
+        if sess and sess.get("course_code"):
+            course = conn.execute("SELECT id, code, subject_id, sandbox_enabled FROM courses WHERE code=?", (sess["course_code"],)).fetchone()
+
+    if not course and ex_clean:
+        if ex_clean == "exercise-deque":
+            course = conn.execute("SELECT id, code, subject_id, sandbox_enabled FROM courses WHERE id='class-oop'").fetchone()
+        elif ex_clean.startswith("ex-"):
+            parts = ex_clean[3:].rsplit("-", 1)
+            subj_guess = parts[0] if len(parts) == 2 and parts[1].isdigit() else ex_clean[3:]
+            course = conn.execute(
+                "SELECT id, code, subject_id, sandbox_enabled FROM courses WHERE subject_id=?",
+                (subj_guess,),
+            ).fetchone()
+        if not course:
+            course = conn.execute(
+                "SELECT id, code, subject_id, sandbox_enabled FROM courses WHERE chapters_json LIKE ? LIMIT 1",
+                (f'%"{ex_clean}"%',),
+            ).fetchone()
+
+    if course:
+        if not course["sandbox_enabled"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Quản trị viên đã tạm khóa Docker Sandbox cho học phần {course['code']}.",
+            )
+        if (user.get("role") or "").lower() == "student":
+            enr_sec = conn.execute(
+                """SELECT cs.section_code, cs.sandbox_enabled
+                   FROM class_enrollments ce
+                   JOIN class_sections cs ON cs.id = ce.section_id
+                   WHERE ce.student_id = ? AND cs.course_id = ? AND ce.status = 'active'
+                   LIMIT 1""",
+                (user["id"], course["id"]),
+            ).fetchone()
+            if enr_sec and not enr_sec["sandbox_enabled"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Quản trị viên đã tạm khóa Docker Sandbox cho lớp học phần {enr_sec['section_code']}.",
+                )
+    return policies
 
 
 def log_audit(
@@ -84,6 +198,12 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            if user and user["status"] not in ("active", "pending"):
+                TOKENS.pop(raw_token, None)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Tài khoản của bạn đã bị khóa hoặc ngừng hoạt động",
+                )
             membership = conn.execute(
                 "SELECT role, organization_id FROM memberships WHERE user_id=? LIMIT 1",
                 (user_id,),
@@ -203,11 +323,12 @@ def block_pending_student(
         return
 
     with db() as conn:
-        row = conn.execute("SELECT status FROM users WHERE id=?", (user_id,)).fetchone()
+        row = conn.execute("SELECT status, role FROM users WHERE id=?", (user_id,)).fetchone()
         if row and row["status"] == "pending":
+            role_label = "giảng viên" if (row.get("role") or "").lower() == "instructor" else "học viên"
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Tài khoản học viên đang chờ Quản trị viên phê duyệt cấp quyền vào học. Bạn hiện chỉ có thể xem trang giới thiệu.",
+                detail=f"Tài khoản {role_label} đang chờ Quản trị viên phê duyệt cấp quyền. Bạn hiện chỉ có thể xem trang giới thiệu.",
             )
 
 

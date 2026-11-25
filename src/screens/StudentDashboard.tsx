@@ -1,5 +1,10 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useMarloPageEntrance, animateMarloCards, animateMarloRows } from "../utils/marloAnimations";
+import gsap from "gsap";
+import {
+  animateMarloCards,
+  animateMarloRows,
+  useMarloPageEntrance,
+} from "../utils/marloAnimations";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -71,6 +76,49 @@ const badgeLabel: Record<BadgeFrame, string> = {
   explorer: "OOP Explorer",
 };
 
+interface OverviewSnapshotCache {
+  userKey: string;
+  studentName: string;
+  totalXp: number;
+  streakDays: number;
+  learningOverview: StudentLearningOverview | null;
+  projectsList: CNTTProjectItem[];
+  selectedProjectId: string;
+  upcomingSchedules: AcademicScheduleItem[];
+}
+
+let overviewSnapshotCache: OverviewSnapshotCache | null = null;
+
+function mapWorkspaceProjects(rows: any[]): CNTTProjectItem[] {
+  return rows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    client: p.client,
+    course: p.course,
+    kind: p.kind,
+    status: p.status,
+    progress: p.progress,
+    tasksDone: p.tasksDone,
+    tasksTotal: p.tasksTotal,
+    dueText: p.dueText,
+    storyPoints: p.storyPoints,
+    pointsBurned: p.pointsBurned,
+    budgetStr: p.budgetStr,
+    instructor: p.instructor,
+    instructorAvatar: p.instructorAvatar,
+    totalXp: p.totalXp,
+    members: p.members || [],
+    fav: p.fav,
+    colorHex: p.colorHex,
+    tlStart: p.tlStart,
+    tlWidth: p.tlWidth,
+    tlColor: p.tlColor,
+    isMyProject: p.isMyProject,
+    isLead: p.isLead,
+    leaderUserId: p.leaderUserId,
+  }));
+}
+
 export default function StudentDashboard({
   avatarStyle,
   skillMapSkin,
@@ -83,70 +131,33 @@ export default function StudentDashboard({
   onLogout,
   onOpenCommandPalette,
 }: Props) {
-  const [totalXp, setTotalXp] = useState(0);
-  const [streakDays, setStreakDays] = useState(0);
+  const initialStoredUser = getStoredUser("student");
+  const currentUserCacheKey = String(initialStoredUser?.id || initialStoredUser?.user_code || "guest");
+  const cachedSnap =
+    overviewSnapshotCache && overviewSnapshotCache.userKey === currentUserCacheKey
+      ? overviewSnapshotCache
+      : null;
+
+  const [totalXp, setTotalXp] = useState(cachedSnap?.totalXp ?? 0);
+  const [streakDays, setStreakDays] = useState(cachedSnap?.streakDays ?? 0);
   const [studentName, setStudentName] = useState(
-    () => getStoredUser("student")?.name || getStoredUser("student")?.full_name || "Học viên"
+    () => cachedSnap?.studentName || initialStoredUser?.name || initialStoredUser?.full_name || "Học viên"
   );
-  const [learningOverview, setLearningOverview] = useState<StudentLearningOverview | null>(null);
-  const [projectsList, setProjectsList] = useState<CNTTProjectItem[]>([]);
-  const [upcomingSchedules, setUpcomingSchedules] = useState<AcademicScheduleItem[]>([]);
+  const [learningOverview, setLearningOverview] = useState<StudentLearningOverview | null>(
+    cachedSnap?.learningOverview ?? null
+  );
+  const [projectsList, setProjectsList] = useState<CNTTProjectItem[]>(cachedSnap?.projectsList ?? []);
+  const [projectsLoaded, setProjectsLoaded] = useState(Boolean(cachedSnap));
+  const [upcomingSchedules, setUpcomingSchedules] = useState<AcademicScheduleItem[]>(
+    cachedSnap?.upcomingSchedules ?? []
+  );
+  const [schedulesLoaded, setSchedulesLoaded] = useState(Boolean(cachedSnap));
 
   useEffect(() => {
     let active = true;
-    const loadOverview = () => {
-      fetchStudentLearningOverview().then((data) => {
-        if (!active || !data) return;
-        setLearningOverview(data);
-        if (typeof data.profile?.exp_points === "number") setTotalXp(data.profile.exp_points);
-        if (typeof data.profile?.current_streak === "number") setStreakDays(data.profile.current_streak);
-        if (data.user?.name) setStudentName(data.user.name);
-      });
-    };
-    loadOverview();
-    window.addEventListener("codemind-xp-updated", loadOverview);
-    window.addEventListener("codemind-courses-updated", loadOverview);
 
-    fetchKanbanWorkspace().then((ws) => {
-      if (!active || !ws) return;
-      const rows = Array.isArray(ws.projects) ? ws.projects : [];
-      setProjectsList(
-        rows.map((p) => ({
-          id: p.id,
-          name: p.name,
-          client: p.client,
-          course: p.course,
-          kind: p.kind,
-          status: p.status,
-          progress: p.progress,
-          tasksDone: p.tasksDone,
-          tasksTotal: p.tasksTotal,
-          dueText: p.dueText,
-          storyPoints: p.storyPoints,
-          pointsBurned: p.pointsBurned,
-          budgetStr: p.budgetStr,
-          instructor: p.instructor,
-          instructorAvatar: p.instructorAvatar,
-          totalXp: p.totalXp,
-          members: p.members || [],
-          fav: p.fav,
-          colorHex: p.colorHex,
-          tlStart: p.tlStart,
-          tlWidth: p.tlWidth,
-          tlColor: p.tlColor,
-          isMyProject: p.isMyProject,
-          isLead: p.isLead,
-          leaderUserId: p.leaderUserId,
-        }))
-      );
-      setSelectedProjectId((prev) => {
-        if (prev && rows.some((p) => p.id === prev)) return prev;
-        return rows[0]?.id || "";
-      });
-    });
-
-    fetchSchedulesApi(undefined, "student").then((items) => {
-      if (!active || !Array.isArray(items)) return;
+    const processSchedules = (items: AcademicScheduleItem[] | null | undefined) => {
+      if (!Array.isArray(items)) return [];
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
       const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
@@ -156,12 +167,94 @@ export default function StudentDashboard({
           : a.start_hour - b.start_hour
       );
       const upcoming = sorted.filter((s) => s.schedule_date >= todayKey && s.status !== "cancelled");
-      setUpcomingSchedules((upcoming.length > 0 ? upcoming : sorted).slice(0, 3));
-    });
+      return (upcoming.length > 0 ? upcoming : sorted).slice(0, 3);
+    };
+
+    const loadAllOverviewData = async () => {
+      const [ovRes, wsRes, schRes] = await Promise.allSettled([
+        fetchStudentLearningOverview(),
+        fetchKanbanWorkspace(),
+        fetchSchedulesApi(undefined, "student"),
+      ]);
+      if (!active) return;
+
+      const ovData = ovRes.status === "fulfilled" ? ovRes.value : null;
+      const wsData = wsRes.status === "fulfilled" ? wsRes.value : null;
+      const schData = schRes.status === "fulfilled" ? schRes.value : null;
+
+      let nextXp = overviewSnapshotCache?.totalXp ?? 0;
+      let nextStreak = overviewSnapshotCache?.streakDays ?? 0;
+      let nextName = initialStoredUser?.name || initialStoredUser?.full_name || "Học viên";
+
+      if (ovData) {
+        setLearningOverview(ovData);
+        if (typeof ovData.profile?.exp_points === "number") {
+          nextXp = ovData.profile.exp_points;
+          setTotalXp(nextXp);
+        }
+        if (typeof ovData.profile?.current_streak === "number") {
+          nextStreak = ovData.profile.current_streak;
+          setStreakDays(nextStreak);
+        }
+        if (ovData.user?.name) {
+          nextName = ovData.user.name;
+          setStudentName(nextName);
+        }
+      }
+
+      let nextProjects = overviewSnapshotCache?.projectsList ?? [];
+      let nextSelectedProjectId = overviewSnapshotCache?.selectedProjectId ?? "";
+      if (wsData) {
+        const rows = Array.isArray(wsData.projects) ? wsData.projects : [];
+        nextProjects = mapWorkspaceProjects(rows);
+        setProjectsList(nextProjects);
+        nextSelectedProjectId =
+          nextSelectedProjectId && nextProjects.some((p) => p.id === nextSelectedProjectId)
+            ? nextSelectedProjectId
+            : nextProjects[0]?.id || "";
+        setSelectedProjectId((prev) =>
+          prev && nextProjects.some((p) => p.id === prev) ? prev : nextProjects[0]?.id || ""
+        );
+      }
+      setProjectsLoaded(true);
+
+      let nextSchedules = overviewSnapshotCache?.upcomingSchedules ?? [];
+      if (Array.isArray(schData)) {
+        nextSchedules = processSchedules(schData);
+        setUpcomingSchedules(nextSchedules);
+      }
+      setSchedulesLoaded(true);
+
+      overviewSnapshotCache = {
+        userKey: currentUserCacheKey,
+        studentName: nextName,
+        totalXp: nextXp,
+        streakDays: nextStreak,
+        learningOverview: ovData ?? overviewSnapshotCache?.learningOverview ?? null,
+        projectsList: nextProjects,
+        selectedProjectId: nextSelectedProjectId,
+        upcomingSchedules: nextSchedules,
+      };
+    };
+
+    const loadOverviewOnly = () => {
+      fetchStudentLearningOverview().then((data) => {
+        if (!active || !data) return;
+        setLearningOverview(data);
+        if (typeof data.profile?.exp_points === "number") setTotalXp(data.profile.exp_points);
+        if (typeof data.profile?.current_streak === "number") setStreakDays(data.profile.current_streak);
+        if (data.user?.name) setStudentName(data.user.name);
+      });
+    };
+
+    void loadAllOverviewData();
+    window.addEventListener("codemind-xp-updated", loadOverviewOnly);
+    window.addEventListener("codemind-courses-updated", loadOverviewOnly);
+
     return () => {
       active = false;
-      window.removeEventListener("codemind-xp-updated", loadOverview);
-      window.removeEventListener("codemind-courses-updated", loadOverview);
+      window.removeEventListener("codemind-xp-updated", loadOverviewOnly);
+      window.removeEventListener("codemind-courses-updated", loadOverviewOnly);
     };
   }, []);
 
@@ -338,7 +431,9 @@ export default function StudentDashboard({
   }, [learningOverview]);
 
   // ─── ACTIVE FOCUSED PROJECT (Giải quyết triệt để: Biết chính xác tiến độ của dự án nào) ───
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(
+    () => cachedSnap?.selectedProjectId ?? ""
+  );
   const [workScope, setWorkScope] = useState<"project" | "all">("project");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
 
@@ -410,7 +505,7 @@ export default function StudentDashboard({
           done: tasksDone,
           moving: tasksMoving,
           waiting: tasksWaiting,
-          navigate: () => onNavigate("workspace"),
+          navigate: () => onNavigate("kanban"),
           navTitle: `Xem nhiệm vụ của ${p.name}`,
         },
         row2: {
@@ -454,7 +549,7 @@ export default function StudentDashboard({
           done: doneTasks,
           moving: movingTasks,
           waiting: waitingTasks,
-          navigate: () => onNavigate("workspace"),
+          navigate: () => onNavigate("kanban"),
           navTitle: "Xem toàn bộ nhiệm vụ",
         },
         row2: {
@@ -587,9 +682,8 @@ export default function StudentDashboard({
       current.map((task) => {
         if (task.id === id) {
           const nextDone = !task.done;
-          setTotalXp((xp) => (nextDone ? xp + task.xp : Math.max(0, xp - task.xp)));
           setLastToggledTaskId(id);
-          setToastMessage(nextDone ? "Marked done." : "Marked not done.");
+          setToastMessage(nextDone ? "Đã đánh dấu hoàn thành mục kế hoạch." : "Đã bỏ đánh dấu hoàn thành.");
           if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
           toastTimerRef.current = setTimeout(() => {
             setToastMessage(null);
@@ -608,14 +702,12 @@ export default function StudentDashboard({
     setTasks((current) =>
       current.map((task) => {
         if (task.id === targetId) {
-          const prevDone = !task.done;
-          setTotalXp((xp) => (prevDone ? xp + task.xp : Math.max(0, xp - task.xp)));
-          return { ...task, done: prevDone };
+          return { ...task, done: !task.done };
         }
         return task;
       })
     );
-    setToastMessage("Action undone.");
+    setToastMessage("Đã hoàn tác thao tác.");
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => {
       setToastMessage(null);
@@ -623,15 +715,22 @@ export default function StudentDashboard({
   };
 
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const asideProjectRef = useRef<HTMLDivElement>(null);
+  const scheduleListRef = useRef<HTMLDivElement>(null);
+  const workStandsRef = useRef<HTMLDivElement>(null);
 
   useMarloPageEntrance(dashboardRef, (el) => {
     const cards = el.querySelectorAll(".marlo-card");
     if (cards.length > 0) {
-      animateMarloCards(cards, { stagger: 0.055, y: 24 });
+      animateMarloCards(cards, { y: 24, stagger: 0.055, duration: 0.72 });
     }
-    const rows = el.querySelectorAll(".marlo-row");
-    if (rows.length > 0) {
-      animateMarloRows(rows, { y: 12, stagger: 0.03, delay: 0.22 });
+    const capRows = el.querySelectorAll(".cap__row");
+    if (capRows.length > 0) {
+      animateMarloRows(capRows, { x: -12, y: 0, stagger: 0.06, delay: 0.2, duration: 0.55 });
+    }
+    const listRows = el.querySelectorAll(".marlo-row:not(.cap__row), .marlo-schedule-row");
+    if (listRows.length > 0) {
+      animateMarloRows(listRows, { y: 10, stagger: 0.035, delay: 0.3, duration: 0.5 });
     }
   });
 
@@ -640,16 +739,18 @@ export default function StudentDashboard({
       {/* ─── 1. TOP HEADER (MARLO PAGE HEAD) ─── */}
       <header className="marlo-card mb-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-slate-200/90 dark:border-slate-800">
         <div className="min-w-0 flex-1">
-          <div className="theme-primary-text text-xs font-bold uppercase tracking-wider flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <div className="marlo-eyebrow theme-primary-text text-xs font-bold uppercase tracking-wider flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span>CodeMind Campus</span>
             <span className="text-slate-300 dark:text-slate-700">·</span>
             <span>Khoa Công nghệ Thông tin & AI</span>
           </div>
           <MarloTitle
+            key="greeting-title"
             text={`${greeting}, ${studentName}`}
+            staggerMs={12}
             className="mt-0.5 text-2xl sm:text-3xl font-black tracking-tight text-slate-950 dark:text-white leading-tight"
           />
-          <div className="mt-1 flex flex-wrap items-center gap-2">
+          <div className="marlo-hero-lead mt-1 flex flex-wrap items-center gap-2">
             <p className="min-w-0 text-xs text-[#62656b] dark:text-[#a0a3a9]">
               Lộ trình kỹ sư công nghệ C++20, AI Socratic Mentor & tiến độ học tập hôm nay.
             </p>
@@ -663,7 +764,7 @@ export default function StudentDashboard({
         {/* Stats Chips & Quick Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
+            <div className="marlo-stat-chip flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
               <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-500 shrink-0">
                 <Flame size={14} className="fill-amber-500" />
               </div>
@@ -675,7 +776,7 @@ export default function StudentDashboard({
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
+            <div className="marlo-stat-chip flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
               <div className="p-1.5 rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-400 shrink-0">
                 <Star size={14} className="fill-teal-500" />
               </div>
@@ -687,7 +788,7 @@ export default function StudentDashboard({
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
+            <div className="marlo-stat-chip flex items-center gap-2.5 rounded-xl px-3 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 text-slate-900 dark:text-white shadow-2xs">
               <div className="p-1.5 rounded-lg bg-[#f29b23]/15 text-[#f29b23] shrink-0">
                 <Trophy size={14} />
               </div>
@@ -703,7 +804,7 @@ export default function StudentDashboard({
           {/* Quick Primary Actions */}
           <button
             onClick={() => onNavigate("defense-room")}
-            className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 active:scale-95 transition cursor-pointer shadow-2xs"
+            className="marlo-stat-chip magnetic inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 active:scale-95 transition-colors duration-150 cursor-pointer shadow-2xs"
             title="Mở phòng mô phỏng bảo vệ đồ án 1:1 với Hội đồng AI Tech Lead"
           >
             <ShieldCheck size={15} className="text-slate-500 dark:text-slate-400 shrink-0" />
@@ -713,7 +814,7 @@ export default function StudentDashboard({
 
           <button
             onClick={() => onNavigate("kanban")}
-            className="btn-marlo-primary btn--primary magnetic flex items-center gap-2"
+            className="marlo-stat-chip btn-marlo-primary btn--primary magnetic flex items-center gap-2"
           >
             <Columns3 size={15} className="text-[#1c1304] shrink-0" />
             <span>Bảng Kanban</span>
@@ -729,32 +830,30 @@ export default function StudentDashboard({
           
           {/* 🌟 A. TIẾP TỤC HỌC TẬP (CONTINUE LEARNING HERO - NỀN TẢNG HỌC LẬP TRÌNH CODEMIND AI) */}
           <div className="marlo-card rounded-[28px] sm:rounded-[32px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-7 shadow-xs relative overflow-hidden">
-            {/* Ambient subtle glow */}
-            <div className="absolute -right-20 -top-20 w-64 h-64 bg-amber-500/10 dark:bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-
             {/* Top Bar: Course Category & Progress Stats */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100 dark:border-slate-800/80">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="marlo-hero-chip w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
                   <BookOpen size={17} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                     {focusLearning.courseCode} · Khóa học đang theo dõi
                   </div>
                   <div className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>{focusLearning.courseName}</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="truncate">{focusLearning.courseName}</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                   </div>
                 </div>
               </div>
 
               {/* Progress Chip */}
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                  Đã hoàn thành {focusLearning.pct}%
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="marlo-hero-chip inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-50 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>Đã hoàn thành <MarloNumber value={focusLearning.pct} suffix="%" durationMs={550} /></span>
                 </span>
-                <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 font-mono">
+                <span className="marlo-hero-chip text-xs font-semibold text-slate-400 dark:text-slate-500 font-mono">
                   {focusLearning.doneCount}/{focusLearning.totalLessons} bài
                 </span>
               </div>
@@ -765,18 +864,19 @@ export default function StudentDashboard({
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="pill pill--accent font-mono text-[10.5px] font-bold tracking-wide">
+                    <span className="marlo-hero-chip pill pill--accent font-mono text-[10.5px] font-bold tracking-wide">
                       CHƯƠNG {focusLearning.resumeLesson.chapterNumber} · BÀI {focusLearning.resumeLesson.displayCode}
                     </span>
-                    <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
-                      {focusLearning.resumeLesson.done ? "Đã hoàn thành" : "Đang học"}
+                    <span className="marlo-hero-chip inline-flex items-center gap-1.5 text-[10.5px] font-bold px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span>{focusLearning.resumeLesson.done ? "Đã hoàn thành" : "Đang học"}</span>
                     </span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1">
+                    <span className="marlo-hero-chip text-xs text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1">
                       <Clock size={12} />
                       <span>{focusLearning.resumeLesson.duration}</span>
                     </span>
-                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                      <Sparkles size={12} />
+                    <span className="marlo-hero-chip text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      <Sparkles size={12} className="text-amber-500" />
                       <span>+{focusLearning.resumeLesson.xp} XP</span>
                     </span>
                   </div>
@@ -784,7 +884,7 @@ export default function StudentDashboard({
                   <h2 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-2.5 leading-snug tracking-tight">
                     {focusLearning.resumeLesson.cleanTitle}
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed max-w-xl line-clamp-2">
+                  <p className="marlo-hero-lead text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed max-w-xl line-clamp-2">
                     {focusLearning.resumeLesson.lead}
                   </p>
 
@@ -800,7 +900,7 @@ export default function StudentDashboard({
                             })
                           : onNavigate("workspace")
                       }
-                      className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-xs font-black text-[#1C1304] bg-gradient-to-r from-[#F8BD57] via-[#F29B23] to-[#EE8420] hover:brightness-105 active:scale-95 shadow-md shadow-amber-500/20 transition cursor-pointer"
+                      className="marlo-hero-cta magnetic inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-xs font-black text-[#1C1304] bg-gradient-to-r from-[#F8BD57] via-[#F29B23] to-[#EE8420] hover:brightness-105 active:scale-95 shadow-md shadow-amber-500/20 transition-[filter,background-color] duration-150 cursor-pointer"
                     >
                       <PlayCircle size={16} strokeWidth={2.4} />
                       <span>Vào Code Lab & Học tiếp ngay</span>
@@ -809,7 +909,7 @@ export default function StudentDashboard({
 
                     <button
                       onClick={() => onNavigate("defense-room")}
-                      className="inline-flex items-center justify-center rounded-2xl w-10 h-10 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#EE8420] hover:border-[#EE8420]/50 transition cursor-pointer shadow-2xs active:scale-95"
+                      className="marlo-hero-cta inline-flex items-center justify-center rounded-2xl w-10 h-10 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#EE8420] hover:border-[#EE8420]/50 transition-colors duration-150 cursor-pointer shadow-2xs active:scale-95"
                       title="Phòng Phản Biện AI (Live)"
                     >
                       <ShieldCheck size={18} />
@@ -825,7 +925,7 @@ export default function StudentDashboard({
                             })
                           : onNavigate("workspace")
                       }
-                      className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
+                      className="marlo-hero-cta inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-150 cursor-pointer shadow-2xs"
                     >
                       <Layers size={14} className="text-[#EE8420]" />
                       <span>Xem Mindmap chương</span>
@@ -842,7 +942,7 @@ export default function StudentDashboard({
                             })
                           : onNavigate("workspace")
                       }
-                      className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
+                      className="marlo-hero-cta inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-150 cursor-pointer shadow-2xs"
                     >
                       <MessageSquareText size={14} className="text-amber-500" />
                       <span>Hỏi AI Socratic Mentor</span>
@@ -851,14 +951,17 @@ export default function StudentDashboard({
                 </div>
 
                 {/* Progress Visual Box */}
-                <div className="w-full md:w-56 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 shrink-0">
+                <div className="marlo-progress-box w-full md:w-56 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 shrink-0">
                   <div className="flex items-center justify-between text-xs font-bold">
                     <span className="text-slate-500 dark:text-slate-400">Tiến độ môn học</span>
-                    <span className="text-slate-900 dark:text-white font-mono">{focusLearning.pct}%</span>
+                    <span className="text-slate-900 dark:text-white font-mono">
+                      <MarloNumber value={focusLearning.pct} suffix="%" durationMs={850} delayMs={220} />
+                    </span>
                   </div>
                   <div className="mt-2 h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-[#EE8420] transition-all duration-700"
+                      key={`focus-bar-${focusLearning.subjectId}`}
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-[#EE8420] transition-[width] duration-500 ease-out"
                       style={{ width: `${focusLearning.pct}%` }}
                     />
                   </div>
@@ -948,11 +1051,9 @@ export default function StudentDashboard({
                           ? onOpenWorkspace({ subjectId: m.subjectId, tab: "video" })
                           : onNavigate("workspace")
                       }
-                      className={`relative rounded-2xl border p-3.5 transition-all cursor-pointer ${
+                      className={`marlo-milestone relative rounded-2xl border p-3.5 transition-[border-color,background-color,box-shadow] duration-150 cursor-pointer hover:shadow-md ${
                         m.active
-                          ? "border-[#EE8420] bg-amber-50/20 dark:bg-amber-950/20 shadow-xs ring-1 ring-[#EE8420]/30"
-                          : m.done
-                          ? "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10"
+                          ? "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/60 shadow-xs"
                           : "border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 hover:border-slate-300 dark:hover:border-slate-700"
                       }`}
                     >
@@ -960,16 +1061,11 @@ export default function StudentDashboard({
                         <span className="text-[10px] font-bold font-mono uppercase text-slate-400">
                           {m.step}
                         </span>
-                        <span
-                          className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
-                            m.done
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
-                              : m.active
-                              ? "bg-amber-100 text-amber-900 dark:bg-amber-950/70 dark:text-amber-300"
-                              : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                          }`}
-                        >
-                          {m.status}
+                        <span className="inline-flex items-center gap-1.5 text-[9.5px] font-bold px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 whitespace-nowrap shrink-0">
+                          {(m.done || m.active) && (
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.done ? "bg-emerald-500" : "bg-amber-500"}`} />
+                          )}
+                          <span>{m.status}</span>
                         </span>
                       </div>
                       <div className="mt-2 text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
@@ -986,7 +1082,7 @@ export default function StudentDashboard({
           </div>
 
           {/* 🌟 C. WHERE THE WORK STANDS HERO SECTION (Strictly Black, Amber, Grey - Marlo Authentic & Reactive to Selected Project) */}
-          <div className="marlo-card rounded-[28px] sm:rounded-[32px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-7 shadow-xs select-none">
+          <div ref={workStandsRef} className="marlo-card rounded-[28px] sm:rounded-[32px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-7 shadow-xs select-none">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
@@ -1003,10 +1099,10 @@ export default function StudentDashboard({
                         setWorkScope("project");
                         setProjectMenuOpen(!projectMenuOpen);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-all cursor-pointer shadow-2xs"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-2xs"
                       title="Bấm để chọn đồ án khác"
                     >
-                      <FolderKanban size={13} />
+                      <FolderKanban size={13} className="text-amber-500" />
                       <span>
                         {workScope === "project"
                           ? selectedProject
@@ -1031,12 +1127,13 @@ export default function StudentDashboard({
                               type="button"
                               onClick={() => {
                                 setSelectedProjectId(p.id);
+                                if (overviewSnapshotCache) overviewSnapshotCache.selectedProjectId = p.id;
                                 setWorkScope("project");
                                 setProjectMenuOpen(false);
                               }}
                               className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left text-xs transition cursor-pointer ${
                                 isCur
-                                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20"
+                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-950 dark:text-white font-bold border border-slate-200 dark:border-slate-700"
                                   : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                               }`}
                             >
@@ -1109,41 +1206,48 @@ export default function StudentDashboard({
 
             {/* Quick Project Switcher Horizontal Pills Bar */}
             {workScope === "project" && (
-              <div className="mb-5 pb-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center gap-2 overflow-x-auto scrollbar-none pt-0.5">
+              <div className="mb-5 pb-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center gap-2 overflow-x-auto scrollbar-none pt-0.5 min-h-[44px]">
                 <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
                   <FolderKanban size={13} />
                   <span>Chọn đồ án:</span>
                 </span>
-                {projectsList.map((p) => {
-                  const isActive = p.id === selectedProjectId;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedProjectId(p.id);
-                        setWorkScope("project");
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
-                        isActive
-                          ? "bg-[#141619] dark:bg-white text-white dark:text-slate-950 shadow-2xs scale-102"
-                          : "bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                      }`}
-                    >
-                      <span>{p.name.split(" - ")[0]}</span>
-                      <span className={`text-[10px] font-mono font-semibold ${isActive ? "text-amber-400 dark:text-amber-600" : "text-slate-400"}`}>
-                        {Math.round(p.progress * 100)}%
-                      </span>
-                    </button>
-                  );
-                })}
+                {!projectsLoaded && projectsList.length === 0 ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-28 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                    <div className="h-7 w-24 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                  </div>
+                ) : (
+                  projectsList.map((p) => {
+                    const isActive = p.id === selectedProjectId;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProjectId(p.id);
+                          setWorkScope("project");
+                        }}
+                        className={`marlo-proj-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-colors duration-150 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                          isActive
+                            ? "bg-[#141619] dark:bg-white text-white dark:text-slate-950 shadow-2xs"
+                            : "bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        <span>{p.name.split(" - ")[0]}</span>
+                        <span className={`text-[10px] font-mono font-semibold ${isActive ? "text-amber-400 dark:text-amber-600" : "text-slate-400"}`}>
+                          {Math.round(p.progress * 100)}%
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             )}
 
             {/* Rows: Tasks, Projects/Story Points, Reviews */}
-            <div className="space-y-3 sm:space-y-4">
+            <div key={`caps-${workScope}`} className="space-y-3 sm:space-y-4">
               {/* 1. Tasks Row */}
-              <div className="cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200">
+              <div className="marlo-row cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors duration-150">
                 <div className="flex items-center gap-3 w-36 shrink-0">
                   <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 group-hover:bg-amber-500/10 group-hover:text-amber-500 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0 transition-colors">
                     <Check size={16} strokeWidth={2.4} />
@@ -1153,10 +1257,10 @@ export default function StudentDashboard({
 
                 <div className="w-20 shrink-0">
                   <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
-                    <MarloNumber key={`r1-t-${workStats.row1.total}`} value={workStats.row1.total} durationMs={400} />
+                    <MarloNumber value={workStats.row1.total} durationMs={380} />
                   </div>
                   <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
-                    <MarloNumber key={`r1-d-${workStats.row1.done}`} value={workStats.row1.done} durationMs={400} /> done
+                    <MarloNumber value={workStats.row1.done} durationMs={380} /> done
                   </div>
                 </div>
 
@@ -1164,29 +1268,29 @@ export default function StudentDashboard({
                 <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
                   {workStats.row1.done > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row1.done), animationDelay: "0.04s" }}
-                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row1.done) }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Done: ${workStats.row1.done}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r1-cd-${workStats.row1.done}`} value={workStats.row1.done} durationMs={400} delayMs={0} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row1.done} durationMs={380} /></span>
                     </div>
                   )}
                   {workStats.row1.moving > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row1.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.04s" }}
-                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row1.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Moving: ${workStats.row1.moving}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r1-cm-${workStats.row1.moving}`} value={workStats.row1.moving} durationMs={400} delayMs={0} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row1.moving} durationMs={380} /></span>
                     </div>
                   )}
                   {workStats.row1.waiting > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row1.waiting), animationDelay: "0.04s" }}
-                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row1.waiting) }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Waiting: ${workStats.row1.waiting}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r1-cw-${workStats.row1.waiting}`} value={workStats.row1.waiting} durationMs={400} delayMs={0} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row1.waiting} durationMs={380} /></span>
                     </div>
                   )}
                 </div>
@@ -1194,7 +1298,7 @@ export default function StudentDashboard({
                 <button
                   type="button"
                   onClick={workStats.row1.navigate}
-                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
+                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors duration-150 cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
                   title={workStats.row1.navTitle}
                 >
                   <ArrowUpRight size={15} />
@@ -1202,7 +1306,7 @@ export default function StudentDashboard({
               </div>
 
               {/* 2. Projects or Story Points Row */}
-              <div className="cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200">
+              <div className="marlo-row cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors duration-150">
                 <div className="flex items-center gap-3 w-36 shrink-0">
                   <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 group-hover:bg-amber-500/10 group-hover:text-amber-500 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0 transition-colors">
                     {workStats.row2.icon === "points" ? (
@@ -1216,10 +1320,10 @@ export default function StudentDashboard({
 
                 <div className="w-20 shrink-0">
                   <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
-                    <MarloNumber key={`r2-t-${workStats.row2.total}`} value={workStats.row2.total} durationMs={400} delayMs={40} />
+                    <MarloNumber value={workStats.row2.total} durationMs={380} delayMs={30} />
                   </div>
                   <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
-                    <MarloNumber key={`r2-d-${workStats.row2.done}`} value={workStats.row2.done} durationMs={400} delayMs={40} /> done
+                    <MarloNumber value={workStats.row2.done} durationMs={380} delayMs={30} /> done
                   </div>
                 </div>
 
@@ -1227,29 +1331,29 @@ export default function StudentDashboard({
                 <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
                   {workStats.row2.done > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row2.done), animationDelay: "0.08s" }}
-                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row2.done) }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Done: ${workStats.row2.done}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r2-cd-${workStats.row2.done}`} value={workStats.row2.done} durationMs={400} delayMs={40} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row2.done} durationMs={380} delayMs={30} /></span>
                     </div>
                   )}
                   {workStats.row2.moving > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row2.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.08s" }}
-                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row2.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Moving: ${workStats.row2.moving}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r2-cm-${workStats.row2.moving}`} value={workStats.row2.moving} durationMs={400} delayMs={40} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row2.moving} durationMs={380} delayMs={30} /></span>
                     </div>
                   )}
                   {workStats.row2.waiting > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row2.waiting), animationDelay: "0.08s" }}
-                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row2.waiting) }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Waiting: ${workStats.row2.waiting}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r2-cw-${workStats.row2.waiting}`} value={workStats.row2.waiting} durationMs={400} delayMs={40} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row2.waiting} durationMs={380} delayMs={30} /></span>
                     </div>
                   )}
                 </div>
@@ -1257,7 +1361,7 @@ export default function StudentDashboard({
                 <button
                   type="button"
                   onClick={workStats.row2.navigate}
-                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
+                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors duration-150 cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
                   title={workStats.row2.navTitle}
                 >
                   <ArrowUpRight size={15} />
@@ -1265,7 +1369,7 @@ export default function StudentDashboard({
               </div>
 
               {/* 3. Reviews Row */}
-              <div className="cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200">
+              <div className="marlo-row cap__row group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-2 px-2.5 -mx-2.5 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors duration-150">
                 <div className="flex items-center gap-3 w-36 shrink-0">
                   <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 group-hover:bg-amber-500/10 group-hover:text-amber-500 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0 transition-colors">
                     <Eye size={16} strokeWidth={2} />
@@ -1275,10 +1379,10 @@ export default function StudentDashboard({
 
                 <div className="w-20 shrink-0">
                   <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight font-mono tabular-nums">
-                    <MarloNumber key={`r3-t-${workStats.row3.total}`} value={workStats.row3.total} durationMs={400} delayMs={80} />
+                    <MarloNumber value={workStats.row3.total} durationMs={380} delayMs={60} />
                   </div>
                   <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tabular-nums">
-                    <MarloNumber key={`r3-d-${workStats.row3.done}`} value={workStats.row3.done} durationMs={400} delayMs={80} /> done
+                    <MarloNumber value={workStats.row3.done} durationMs={380} delayMs={60} /> done
                   </div>
                 </div>
 
@@ -1286,29 +1390,29 @@ export default function StudentDashboard({
                 <div className="flex-1 flex items-center gap-2 sm:gap-2.5 h-10 min-w-0">
                   {workStats.row3.done > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row3.done), animationDelay: "0.12s" }}
-                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row3.done) }}
+                      className="cap__seg h-10 rounded-full bg-[#14161a] dark:bg-white text-white dark:text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Done: ${workStats.row3.done}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r3-cd-${workStats.row3.done}`} value={workStats.row3.done} durationMs={400} delayMs={80} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row3.done} durationMs={380} delayMs={60} /></span>
                     </div>
                   )}
                   {workStats.row3.moving > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row3.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)", animationDelay: "0.12s" }}
-                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row3.moving), background: "linear-gradient(to right, #f59e0b, #fbbf24)" }}
+                      className="cap__seg h-10 rounded-full text-slate-950 flex items-center justify-end px-4 font-bold text-xs shadow-2xs min-w-[36px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Moving: ${workStats.row3.moving}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r3-cm-${workStats.row3.moving}`} value={workStats.row3.moving} durationMs={400} delayMs={80} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row3.moving} durationMs={380} delayMs={60} /></span>
                     </div>
                   )}
                   {workStats.row3.waiting > 0 && (
                     <div
-                      style={{ flex: Math.max(1, workStats.row3.waiting), animationDelay: "0.12s" }}
-                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-all duration-300"
+                      style={{ flex: Math.max(1, workStats.row3.waiting) }}
+                      className="cap__seg h-10 rounded-full bg-[#e5e7eb] dark:bg-[#232733] text-slate-700 dark:text-slate-300 flex items-center justify-end px-3.5 font-bold text-xs min-w-[32px] cursor-pointer transition-[flex-grow] duration-300"
                       title={`Waiting: ${workStats.row3.waiting}`}
                     >
-                      <span className="tabular-nums"><MarloNumber key={`r3-cw-${workStats.row3.waiting}`} value={workStats.row3.waiting} durationMs={400} delayMs={80} /></span>
+                      <span className="tabular-nums"><MarloNumber value={workStats.row3.waiting} durationMs={380} delayMs={60} /></span>
                     </div>
                   )}
                 </div>
@@ -1316,7 +1420,7 @@ export default function StudentDashboard({
                 <button
                   type="button"
                   onClick={workStats.row3.navigate}
-                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
+                  className="cap__go w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors duration-150 cursor-pointer shadow-2xs shrink-0 active:scale-95 ml-auto sm:ml-0"
                   title={workStats.row3.navTitle}
                 >
                   <ArrowUpRight size={15} />
@@ -1346,7 +1450,7 @@ export default function StudentDashboard({
 
             {/* CARD 1: ACTIVE TASKS (In progress & Up next) */}
             {tasks.filter((t) => !t.done).length > 0 && (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs overflow-hidden">
+              <div className="marlo-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs overflow-hidden">
                 <div className="divide-y divide-slate-100/90 dark:divide-slate-800/70">
                   {tasks
                     .filter((t) => !t.done)
@@ -1354,7 +1458,7 @@ export default function StudentDashboard({
                       <div
                         key={task.id}
                         onClick={() => toggleTask(task.id)}
-                        className="group flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer select-none"
+                        className="marlo-row group flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer select-none"
                       >
                         {/* Checkbox + Title + Subtitle */}
                         <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
@@ -1370,7 +1474,7 @@ export default function StudentDashboard({
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                              <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700">
                                 {task.projectName}
                               </span>
                               <h4 className="text-[13.5px] font-medium leading-snug text-slate-900 dark:text-slate-100 transition-colors truncate">
@@ -1407,7 +1511,7 @@ export default function StudentDashboard({
 
             {/* CARD 2: DONE LATELY */}
             {tasks.filter((t) => t.done).length > 0 && (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs overflow-hidden">
+              <div className="marlo-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs overflow-hidden">
                 <div className="flex items-center justify-between px-4 sm:px-5 pt-3.5 pb-2.5">
                   <h3 className="text-[13px] font-semibold text-slate-900 dark:text-white">
                     Done lately
@@ -1424,7 +1528,7 @@ export default function StudentDashboard({
                       <div
                         key={task.id}
                         onClick={() => toggleTask(task.id)}
-                        className="group flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer select-none bg-slate-50/20 dark:bg-slate-900/30"
+                        className="marlo-row group flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer select-none bg-slate-50/20 dark:bg-slate-900/30"
                       >
                         <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
                           <button
@@ -1469,86 +1573,100 @@ export default function StudentDashboard({
 
         {/* ═══ RIGHT ASIDE STACK (MARLO METRICS & ROTAS LIÊN KẾT TRỰC TIẾP DỰ ÁN) ═══ */}
         <aside className="space-y-5">
-          {selectedProject ? (
-            <>
-              {/* 1. MARLO TASK STATUS DONUT (Gắn trực tiếp với dự án đang chọn) */}
-              <MarloActivityRing
-                className="marlo-card"
-                size={128}
-                centerValue={selectedProgressPct}
-                centerLabel="tiến độ"
-                title={selectedProject.name.split(" - ")[0]}
-                subtitle={`Sprint · ${selectedProject.tasksDone}/${selectedProject.tasksTotal} task`}
-                actionText="Bảng Kanban"
-                onAction={() => onNavigate("kanban")}
-                segments={[
-                  {
-                    id: "upnext",
-                    label: "Chờ làm",
-                    value: Math.max(10, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4) / Math.max(1, selectedProject.tasksTotal) * 100)),
-                    count: Math.max(0, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4)),
-                    color: "#cbd5e1"
-                  },
-                  {
-                    id: "prog",
-                    label: "Đang làm",
-                    value: Math.max(15, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6) / Math.max(1, selectedProject.tasksTotal) * 100)),
-                    count: Math.max(0, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6)),
-                    color: "#f97316"
-                  },
-                  {
-                    id: "review",
-                    label: "Cần review",
-                    value: 15,
-                    count: 0,
-                    color: "#64748b"
-                  },
-                  {
-                    id: "done",
-                    label: "Đã hoàn thành",
-                    value: selectedProgressPct,
-                    count: selectedProject.tasksDone,
-                    color: "#1e293b"
-                  },
-                ]}
-              />
-
-              {/* 2. MARLO SPRINT CAPACITY BAR (Gắn với số Story Points của dự án đang chọn) */}
-              <div className="marlo-card">
-                <MarloCapacityBar
-                  title={`Năng lực: ${selectedProject.name.split(" - ")[0]}`}
-                  subtitle={`Phân bổ ${selectedProject.storyPoints} Story Points`}
-                  items={[
-                    { id: "done", label: "Đã xong", count: selectedProject.pointsBurned, color: "#14161a" },
-                    { id: "prog", label: "Đang làm", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.6), color: "#f59e0b" },
-                    { id: "review", label: "Review", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.25), color: "#fbbf24" },
-                    { id: "backlog", label: "Tồn đọng", count: Math.max(0, selectedProject.storyPoints - selectedProject.pointsBurned - Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.85)), color: "#94a3b8" },
+          <div ref={asideProjectRef} className="space-y-5">
+            {selectedProject ? (
+              <>
+                {/* 1. MARLO TASK STATUS DONUT (Gắn trực tiếp với dự án đang chọn) */}
+                <MarloActivityRing
+                  className="marlo-aside-card"
+                  size={128}
+                  centerValue={selectedProgressPct}
+                  centerLabel="tiến độ"
+                  title={selectedProject.name.split(" - ")[0]}
+                  subtitle={`Sprint · ${selectedProject.tasksDone}/${selectedProject.tasksTotal} task`}
+                  actionText="Bảng Kanban"
+                  onAction={() => onNavigate("kanban")}
+                  segments={[
+                    {
+                      id: "upnext",
+                      label: "Chờ làm",
+                      value: Math.max(10, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4) / Math.max(1, selectedProject.tasksTotal) * 100)),
+                      count: Math.max(0, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.4)),
+                      color: "#cbd5e1"
+                    },
+                    {
+                      id: "prog",
+                      label: "Đang làm",
+                      value: Math.max(15, Math.round(((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6) / Math.max(1, selectedProject.tasksTotal) * 100)),
+                      count: Math.max(0, Math.round((selectedProject.tasksTotal - selectedProject.tasksDone) * 0.6)),
+                      color: "#f97316"
+                    },
+                    {
+                      id: "review",
+                      label: "Cần review",
+                      value: 15,
+                      count: 0,
+                      color: "#64748b"
+                    },
+                    {
+                      id: "done",
+                      label: "Đã hoàn thành",
+                      value: selectedProgressPct,
+                      count: selectedProject.tasksDone,
+                      color: "#1e293b"
+                    },
                   ]}
                 />
+
+                {/* 2. MARLO SPRINT CAPACITY BAR (Gắn với số Story Points của dự án đang chọn) */}
+                <div className="marlo-aside-card">
+                  <MarloCapacityBar
+                    title={`Năng lực: ${selectedProject.name.split(" - ")[0]}`}
+                    subtitle={`Phân bổ ${selectedProject.storyPoints} Story Points`}
+                    items={[
+                      { id: "done", label: "Đã xong", count: selectedProject.pointsBurned, color: "#14161a" },
+                      { id: "prog", label: "Đang làm", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.6), color: "#f59e0b" },
+                      { id: "review", label: "Review", count: Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.25), color: "#fbbf24" },
+                      { id: "backlog", label: "Tồn đọng", count: Math.max(0, selectedProject.storyPoints - selectedProject.pointsBurned - Math.round((selectedProject.storyPoints - selectedProject.pointsBurned) * 0.85)), color: "#94a3b8" },
+                    ]}
+                  />
+                </div>
+              </>
+            ) : !projectsLoaded ? (
+              <>
+                <div className="marlo-card surface rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-3 animate-pulse min-h-[252px]">
+                  <div className="h-4 w-36 rounded bg-slate-200 dark:bg-slate-800" />
+                  <div className="h-36 rounded-xl bg-slate-100 dark:bg-slate-800/60" />
+                </div>
+                <div className="marlo-card surface rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-2.5 animate-pulse min-h-[144px]">
+                  <div className="h-3.5 w-40 rounded bg-slate-200 dark:bg-slate-800" />
+                  <div className="h-8 rounded-xl bg-slate-100 dark:bg-slate-800/60" />
+                  <div className="h-4 w-56 rounded bg-slate-100 dark:bg-slate-800/60" />
+                </div>
+              </>
+            ) : (
+              <div className="marlo-aside-card surface rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-3 text-center">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+                  <FolderKanban size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Chưa tham gia đồ án nào
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Tạo đồ án đầu tiên hoặc đồng ý lời mời từ Nhóm trưởng để theo dõi Sprint &amp; Story Points.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("projects")}
+                  className="w-full py-2 px-3 rounded-xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 text-xs font-bold transition cursor-pointer"
+                >
+                  Tạo / Xem Đồ Án →
+                </button>
               </div>
-            </>
-          ) : (
-            <div className="marlo-card surface rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-3 text-center">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
-                <FolderKanban size={20} />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Chưa tham gia đồ án nào
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Tạo đồ án đầu tiên hoặc đồng ý lời mời từ Nhóm trưởng để theo dõi Sprint &amp; Story Points.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate("projects")}
-                className="w-full py-2 px-3 rounded-xl bg-[#EE8420] hover:bg-[#d97316] text-slate-950 text-xs font-bold transition cursor-pointer"
-              >
-                Tạo / Xem Đồ Án →
-              </button>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* 3. CA THI & HẸN GẶP HÔM NAY (TODAY'S BOOKED SESSIONS) */}
           <div className="marlo-card surface rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-3">
@@ -1568,56 +1686,64 @@ export default function StudentDashboard({
             </div>
 
             {/* Live Academic Schedules & Appointments */}
-            {upcomingSchedules.length === 0 ? (
-              <div
-                onClick={() => onNavigate("schedule")}
-                className="marlo-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition cursor-pointer text-xs text-slate-500 dark:text-slate-400"
-              >
-                Chưa có ca thi hoặc lịch hẹn sắp tới. Bấm để xem toàn bộ lịch học vụ.
-              </div>
-            ) : (
-              upcomingSchedules.map((sch) => {
-                const fmtH = (h: number) => {
-                  const total = Math.max(0, Math.round(h * 60));
-                  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-                };
-                const parts = (sch.schedule_date || "").split("-");
-                const dateShort = parts.length === 3 ? `${parts[2]}/${parts[1]}` : sch.schedule_date;
-                const bStatus = sch.my_booking?.booking_status;
-                const badge = bStatus === "confirmed"
-                  ? { label: "Đã xác nhận", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/60" }
-                  : bStatus === "pending"
-                  ? { label: "Chờ GV duyệt", cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/60" }
-                  : sch.is_locked
-                  ? { label: "Đã khóa", cls: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/60" }
-                  : { label: "Đang mở", cls: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200/80 dark:border-blue-800/60" };
+            <div ref={scheduleListRef} className="space-y-2.5 min-h-[152px]">
+              {!schedulesLoaded && upcomingSchedules.length === 0 ? (
+                <div className="space-y-2.5">
+                  <div className="h-[68px] rounded-xl bg-slate-100/80 dark:bg-slate-800/60 animate-pulse" />
+                  <div className="h-[68px] rounded-xl bg-slate-100/80 dark:bg-slate-800/60 animate-pulse" />
+                </div>
+              ) : upcomingSchedules.length === 0 ? (
+                <div
+                  onClick={() => onNavigate("schedule")}
+                  className="marlo-schedule-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition-[border-color,background-color] duration-150 cursor-pointer text-xs text-slate-500 dark:text-slate-400"
+                >
+                  Chưa có ca thi hoặc lịch hẹn sắp tới. Bấm để xem toàn bộ lịch học vụ.
+                </div>
+              ) : (
+                upcomingSchedules.map((sch) => {
+                  const fmtH = (h: number) => {
+                    const total = Math.max(0, Math.round(h * 60));
+                    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+                  };
+                  const parts = (sch.schedule_date || "").split("-");
+                  const dateShort = parts.length === 3 ? `${parts[2]}/${parts[1]}` : sch.schedule_date;
+                  const bStatus = sch.my_booking?.booking_status;
+                  const badge = bStatus === "confirmed"
+                    ? { label: "Đã xác nhận", dot: "bg-emerald-500" }
+                    : bStatus === "pending"
+                    ? { label: "Chờ GV duyệt", dot: "bg-amber-500" }
+                    : sch.is_locked
+                    ? { label: "Đã khóa", dot: "bg-rose-500" }
+                    : { label: "Đang mở", dot: "bg-sky-500" };
 
-                return (
-                  <div
-                    key={sch.id}
-                    onClick={() => onNavigate("schedule")}
-                    className="marlo-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-[#EE8420] transition cursor-pointer space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="font-bold text-slate-900 dark:text-white truncate">
-                        {sch.title}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-full border font-semibold text-[10px] shrink-0 ${badge.cls}`}>
-                        {badge.label}
-                      </span>
+                  return (
+                    <div
+                      key={sch.id}
+                      onClick={() => onNavigate("schedule")}
+                      className="marlo-schedule-row p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600 transition-[border-color,background-color] duration-150 cursor-pointer space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-bold text-slate-900 dark:text-white truncate">
+                          {sch.title}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-[10px] shrink-0">
+                          <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                          <span>{badge.label}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                        <Clock size={12} className="text-[#EE8420] shrink-0" />
+                        <span>
+                          {dateShort} · {fmtH(sch.start_hour)} – {fmtH(sch.end_hour)}
+                        </span>
+                        <span>·</span>
+                        <span className="truncate font-sans">{sch.room_or_link}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                      <Clock size={12} className="text-[#EE8420] shrink-0" />
-                      <span>
-                        {dateShort} · {fmtH(sch.start_hour)} – {fmtH(sch.end_hour)}
-                      </span>
-                      <span>·</span>
-                      <span className="truncate font-sans">{sch.room_or_link}</span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
         </aside>
       </div>

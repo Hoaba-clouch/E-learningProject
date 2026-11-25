@@ -168,21 +168,26 @@ def _build_contextual_fallback(
         if any(k in lower for k in ("test 5", "ca biên", "edge case", "rỗng", "deque", "visit", "maxlen", "fifo", "page")):
             if policy == "refuse_answer":
                 return (
-                    "[Socratic Guardrail]: Hệ thống không cung cấp mã nguồn giải sẵn để đảm bảo tư duy phản biện. "
-                    "Gợi ý: Hãy kiểm tra lại điều kiện lọc đầu vào trước khi đẩy `page` vào `deque(maxlen=3)` (đặc biệt với chuỗi rỗng hoặc toàn khoảng trắng)."
+                    "[Socratic Guardrail]: Hệ thống không cung cấp mã nguồn giải sẵn để đảm bảo tư duy phản biện.\n"
+                    "- **Điểm cần kiểm tra:** Điều kiện lọc đầu vào trước khi đẩy `page` vào `deque(maxlen=3)`.\n"
+                    "- **Ca biên lưu ý:** Chuỗi rỗng `\"\"` hoặc chuỗi chỉ chứa khoảng trắng.\n"
+                    "> Câu hỏi gợi mở: Bạn nên đặt câu lệnh kiểm tra điều kiện ở trước hay sau bước `append()`?"
                 )
             return (
-                "Với bài toán hàng đợi giới hạn phần tử, `deque(maxlen=3)` chỉ tự loại phần tử cũ chứ không tự lọc chuỗi rỗng. "
-                "Bạn cần đặt điều kiện kiểm tra đầu vào ở trước bước `append()` như thế nào?"
+                "### Gợi ý xử lý hàng đợi giới hạn phần tử\n"
+                "- `deque(maxlen=3)` chỉ tự loại phần tử cũ nhất, **không tự lọc chuỗi rỗng**.\n"
+                "> Câu hỏi gợi mở: Bạn cần đặt điều kiện kiểm tra đầu vào ở trước bước `append()` như thế nào?"
             )
         if policy == "refuse_answer":
             return (
-                "[Socratic Guardrail]: Mình không cung cấp code lời giải hoàn chỉnh. "
-                "Bạn hãy cho biết đang làm bài tập hoặc phần nào để mình gợi ý từng bước cụ thể nhé."
+                "[Socratic Guardrail]: Mình không cung cấp code lời giải hoàn chỉnh.\n"
+                "- Hãy cho mình biết tên **bài tập** hoặc **đoạn logic** bạn đang viết.\n"
+                "> Câu hỏi gợi mở: Bạn đang vướng ở bước xử lý nào để mình gợi ý từng nấc?"
             )
         return (
-            "Mình đã nhận câu hỏi của bạn. Hãy nói rõ phần bạn đang vướng (kiến thức bài học, câu quiz hay bước nào trong bài tập) "
-            "để mình gợi ý đúng trọng tâm nhé."
+            "### Mình đã tiếp nhận câu hỏi\n"
+            "- Bạn hãy nêu rõ phần đang vướng (**Lý thuyết**, **Quiz** hay **Bài tập chương**).\n"
+            "> Câu hỏi gợi mở: Đoạn khái niệm hoặc test case nào đang làm bạn khựng lại?"
         )
 
     view_mode = str(ctx.get("view_mode") or "lecture").strip().lower()
@@ -201,34 +206,42 @@ def _build_contextual_fallback(
         hint_line = ""
         if ex_hints:
             idx = min(max((hint_level or 1) - 1, 0), len(ex_hints) - 1)
-            hint_line = f" Gợi ý nấc {idx + 1} cho **{ex_title or 'bài tập hiện tại'}**: {ex_hints[idx]}"
+            hint_line = f"\n- **Gợi ý Nấc {idx + 1}** cho **{ex_title or 'bài tập hiện tại'}**: {ex_hints[idx]}"
         elif ex_reqs:
-            hint_line = f" Gợi ý khởi đầu cho **{ex_title or 'bài tập hiện tại'}**: Hãy bắt đầu từ yêu cầu `{ex_reqs[0]}`."
+            hint_line = f"\n- **Gợi ý khởi đầu** cho **{ex_title or 'bài tập hiện tại'}**: Bắt đầu từ yêu cầu `{ex_reqs[0]}`."
         elif takeaways:
-            hint_line = f" Gợi ý trọng tâm: Hãy bám sát nguyên lý `{takeaways[0]}`."
-        return f"[Socratic Guardrail]: Mình không đưa code lời giải hoàn chỉnh để bạn tự làm chủ tư duy.{hint_line}"
+            hint_line = f"\n- **Gợi ý trọng tâm:** Bám sát nguyên lý `{takeaways[0]}`."
+        return (
+            "[Socratic Guardrail]: Mình không đưa code lời giải hoàn chỉnh để bạn tự làm chủ tư duy."
+            f"{hint_line}\n"
+            "> Câu hỏi gợi mở: Theo gợi ý trên, bước kiểm tra đầu tiên bạn sẽ viết là gì?"
+        )
 
     if asking_exercise and (ex_title or ex_reqs or ex_hints):
         lvl = hint_level or 1
         chosen_hint = ex_hints[min(lvl - 1, len(ex_hints) - 1)] if ex_hints else (ex_reqs[0] if ex_reqs else str(ctx.get("exercise_objective") or ""))
-        req_note = f"\n- Yêu cầu đầu tiên cần giải quyết: {ex_reqs[0]}" if ex_reqs else ""
+        req_note = f"\n- **Yêu cầu đầu tiên cần giải quyết:** `{ex_reqs[0]}`" if ex_reqs else ""
         return (
-            f"Bạn đang ở bài tập **{ex_title or 'Thực hành chương'}**.\n"
+            f"### Hướng dẫn Socratic · {ex_title or 'Bài tập Thực hành'}\n"
             f"- **Gợi ý Nấc {lvl}:** {chosen_hint}{req_note}\n"
-            "Bạn thử triển khai phần này rồi gửi ý tưởng hoặc lỗi gặp phải để mình gợi ý bước tiếp theo nhé!"
+            "> Câu hỏi gợi mở: Bạn thử phác thảo hướng cài đặt rồi gửi lại ý tưởng hoặc lỗi gặp phải nhé!"
         )
 
     if view_mode == "quiz" and quiz_q:
         focus = takeaways[0] if takeaways else (lesson_title or "nguyên lý cốt lõi của bài học")
         return (
-            f"Với câu hỏi quiz hiện tại (\"{quiz_q}\"), bạn hãy đối chiếu từng lựa chọn với nguyên lý: **{focus}** "
-            "và thử loại trừ các phương án gây phụ thuộc cứng hoặc vi phạm ràng buộc đề bài. Bạn đang phân vân giữa 2 phương án nào?"
+            "### Gợi ý phân tích Quiz\n"
+            f"- **Câu hỏi hiện tại:** {quiz_q}\n"
+            f"- **Trục đối chiếu:** Kiểm tra từng phương án dựa trên nguyên lý **{focus}** và loại trừ đáp án gây phụ thuộc cứng.\n"
+            "> Câu hỏi gợi mở: Bạn đang phân vân giữa 2 phương án nào nhất?"
         )
 
-    takeaway_line = f" Ý cốt lõi: {takeaways[0]}." if takeaways else ""
+    takeaway_line = f"\n- **Ý cốt lõi:** {takeaways[0]}" if takeaways else ""
     return (
-        f"Trong nội dung **{lesson_title or 'hiện tại'}**,{takeaway_line} "
-        "Bạn muốn mình giải thích kỹ hơn cơ chế nào hoặc gợi ý phần áp dụng nào?"
+        f"### Trọng tâm · {lesson_title or 'Bài học hiện tại'}"
+        f"{takeaway_line}\n"
+        "- Bạn có thể hỏi sâu về cơ chế chạy, ví dụ minh họa hoặc lỗi thường gặp.\n"
+        "> Câu hỏi gợi mở: Bạn muốn mình phân tích kỹ hơn cơ chế nào trong phần này?"
     )
 
 
@@ -263,7 +276,7 @@ def ask_socratic_with_policy(
         prompt_parts.append(
             f"Câu hỏi của học viên (xin lời giải/đáp án): {message.strip()}\n"
             "Hãy từ chối đưa code giải sẵn hoàn chỉnh một cách lịch sự trong 1 câu, "
-            "sau đó đưa ngay 1 gợi ý cụ thể bám sát đúng bài tập/câu hỏi hiện tại + 1 câu hỏi dẫn dắt bước tiếp theo."
+            "sau đó đưa ngay 1 gạch đầu dòng gợi ý cụ thể bám sát đúng bài tập/câu hỏi hiện tại + kết bằng '> Câu hỏi gợi mở: ...'."
         )
         llm = generate_text(
             prompt="\n\n".join(prompt_parts),
@@ -271,10 +284,10 @@ def ask_socratic_with_policy(
                 "Bạn là Gia sư lập trình Socratic CodeMind AI bằng tiếng Việt. "
                 "TUYỆT ĐỐI KHÔNG viết code lời giải hoàn chỉnh hay sửa hộ toàn bộ hàm. "
                 "KHÔNG chào hỏi mở bài lại ('Chào bạn, mình là...') và KHÔNG giảng lại định nghĩa chung chung của bài học. "
-                "Phải bám sát đúng NGỮ CẢNH HỌC TẬP HIỆN TẠI và trả lời ngắn gọn (tối đa 4 câu)."
+                "Phải bám sát đúng NGỮ CẢNH HỌC TẬP HIỆN TẠI, trình bày gọn bằng Markdown (`**từ khóa**`, `` `hàm/biến` ``, gạch đầu dòng `- `, và kết bằng `> Câu hỏi gợi mở: ...`)."
             ),
             temperature=0.3,
-            max_output_tokens=360,
+            max_output_tokens=550,
             history=history,
         )
         if llm and llm.get("text"):
@@ -318,10 +331,11 @@ def ask_socratic_with_policy(
             "2. Luôn nhận thức rõ VỊ TRÍ ĐANG MỞ trong phần NGỮ CẢNH HỌC TẬP HIỆN TẠI (đặc biệt khi học viên đang ở Bài tập Thực hành Chương hoặc Quiz — phải gọi đúng tên bài tập/yêu cầu/câu quiz đang mở).\n"
             "3. Nếu học viên xin gợi ý, hướng dẫn làm bài, hỏi bước tiếp theo hoặc hỏi đang ở đâu: chỉ rõ bài/phần đang làm rồi đưa ngay 1-3 gạch đầu dòng gợi ý Socratic CỤ THỂ, có tính hành động theo đúng nấc gợi ý, và kết bằng 1 câu hỏi gợi mở.\n"
             "4. TUYỆT ĐỐI KHÔNG viết sẵn trọn bộ code lời giải để copy-paste; nếu đang ở Quiz chưa nộp thì không tiết lộ đáp án đúng A/B/C/D.\n"
-            "5. Văn phong tự nhiên, súc tích, rõ ràng, không rườm rà."
+            "5. Định dạng trả lời rõ ràng bằng Markdown gọn mắt: dùng `### Tiêu đề ngắn` khi tách ý, `**in đậm**` cho khái niệm trọng tâm, `` `tên hàm/lệnh` `` cho mã nguồn ngắn, `- ` hoặc `1. ` cho các bước/ý chính, và kết thúc gợi ý bằng dòng `> Câu hỏi gợi mở: ...`.\n"
+            "6. Văn phong tự nhiên, súc tích, không rườm rà."
         ),
         temperature=0.4,
-        max_output_tokens=600,
+        max_output_tokens=950,
         history=history,
     )
     if llm and llm.get("text"):
@@ -366,14 +380,15 @@ def generate_copilot_suggestion(
         ),
         system_instruction=(
             "Bạn là Trợ giảng AI Co-Pilot dành cho Giảng viên Kỹ thuật Phần mềm trên hệ thống CodeMind AI. "
-            "Hãy đưa ra đề xuất chuyên môn cụ thể (test cases biên Docker/Valgrind, câu hỏi phản biện hội đồng 1:1, rubric chấm kép hoặc phương án hỗ trợ lớp yếu) bằng tiếng Việt rõ ràng, gạch đầu dòng súc tích (tối đa 6 dòng)."
+            "Hãy đưa ra đề xuất chuyên môn cụ thể (test cases biên Docker/Valgrind, câu hỏi phản biện hội đồng 1:1, rubric chấm kép hoặc phương án hỗ trợ lớp yếu) bằng tiếng Việt rõ ràng, súc tích (3–5 ý hoàn chỉnh).\n"
+            "ĐỊNH DẠNG BẮT BUỘC: Mở đầu bằng `### Tiêu đề ngắn`, mỗi ý CHỈ dùng một kiểu đánh dấu đầu dòng (`1. ` hoặc `- `, tuyệt đối KHÔNG ghép `- 1.`), bôi đậm `**điểm nhấn/chỉ số**`, bọc `` `Docker/Valgrind/code` `` bằng backtick, và kết thúc trọn vẹn bằng 1 dòng `> Gợi ý triển khai: ...`."
         ),
         temperature=0.4,
-        max_output_tokens=420,
+        max_output_tokens=1000,
     )
     if llm and llm.get("text"):
         return {
-            "reply": llm["text"],
+            "reply": llm["reply"] if "reply" in llm else llm["text"],
             "model": llm["model"],
             "input_tokens": llm.get("input_tokens", 0),
             "output_tokens": llm.get("output_tokens", 0),
@@ -383,28 +398,35 @@ def generate_copilot_suggestion(
     if any(k in q for k in ("test", "edge", "ca kiểm thử", "docker", "valgrind")):
         fallback = (
             f"[{course_code} · Docker Test Suggestion]\n"
-            "• Nên bổ sung ít nhất 2 Edge Case bắt buộc:\n"
-            "  1) Kiểm tra rò rỉ bộ nhớ / tài nguyên bằng Valgrind (0 bytes leaked) hoặc đóng kết nối sau exception.\n"
-            "  2) Stress test đầu vào biên (chuỗi rỗng, null pointer hoặc kích thước 10^5 trong < 500ms)."
+            "### Đề xuất 2 Edge Cases bắt buộc\n"
+            "1. **Kiểm tra bộ nhớ với `Valgrind`**: Đảm bảo `0 bytes leaked` và đóng mọi resource khi ném exception.\n"
+            "2. **Stress test đầu vào biên**: Xử lý an toàn `\"\"`, `nullptr` và tập `10^5` phần tử trong `< 500ms`.\n"
+            "> Gợi ý triển khai: Gắn ngay hai test này vào bộ chấm CI tự động ở tab *Giáo trình & Test Cases*."
         )
     elif any(k in q for k in ("phản biện", "vấn đáp", "3d", "hội đồng", "rubric")):
         fallback = (
             f"[{course_code} · 3D Defense Probe]\n"
-            "• Câu hỏi xoáy sâu đề xuất cho Hội đồng AI:\n"
-            "  1) 'Nếu bỏ cơ chế bảo vệ hiện tại, điều gì xảy ra tại runtime dưới tải cao?'\n"
-            "  2) 'Giải thích trade-off về độ phức tạp thời gian & bộ nhớ trong commit mới nhất của em.'"
+            "### Bộ câu hỏi xoáy sâu Hội đồng AI 3D\n"
+            "1. *\"Nếu bỏ cơ chế kiểm tra biên hiện tại, điều gì xảy ra tại runtime dưới tải cao?\"*\n"
+            "2. *\"Giải thích trade-off về độ phức tạp thời gian & bộ nhớ trong commit mới nhất của em.\"*\n"
+            "> Gợi ý triển khai: Đặt trọng số **40%** cho khả năng giải thích nguyên nhân gốc."
         )
-    elif any(k in q for k in ("mindmap", "yếu", "sơ đồ", "khái niệm")):
+    elif any(k in q for k in ("mindmap", "yếu", "sơ đồ", "khái niệm", "quiz")):
         fallback = (
             f"[{course_code} · Master Mindmap Analysis]\n"
-            "• Dữ liệu lớp cho thấy nhánh Edge Case & Quản lý bộ nhớ đang có tỷ lệ nắm vững < 55%. "
-            "Đề xuất gắn thêm 1 mini-quiz trước bài Lab Docker và phát thông báo ôn tập nhánh yếu."
+            "### Điểm yếu cần gia cố (< 55%)\n"
+            "- Nhánh **Edge Case & Quản lý bộ nhớ** đang có tỷ lệ nắm vững dưới ngưỡng đạt.\n"
+            "1. Bổ sung **2 câu Quiz bẫy** về `virtual destructor` và `Object Slicing` trước giờ Lab.\n"
+            "→ Hành động: Gửi nhắc nhở ôn tập kèm hint Nấc 1 cho nhóm sinh viên có tiến độ chậm.\n"
+            "> Gợi ý triển khai: Mở tab *Sơ đồ & Nhánh yếu* để phát bài luyện tập 5 phút."
         )
     else:
         fallback = (
             f"[{course_code} · Instructor Co-Pilot]\n"
-            f"Tôi đã ghi nhận yêu cầu: \"{prompt.strip()}\". "
-            "Bạn có thể mở Tab Giáo trình & Test Cases để tạo bài giảng hoặc Tab Chấm CI/CD để đối chiếu biên bản Phản biện."
+            "### Tổng hợp yêu cầu Co-Pilot\n"
+            f"- Đã ghi nhận: **\"{prompt.strip()}\"**\n"
+            "- Mở tab **Giáo trình & Test Cases** để soạn bài Lab/Quiz hoặc tab **Chấm CI/CD** để đối chiếu biên bản phản biện.\n"
+            "> Gợi ý triển khai: Bạn có thể chọn nhanh một mẫu tác vụ bên dưới để tôi sinh đề chi tiết hơn."
         )
     return {
         "reply": fallback,

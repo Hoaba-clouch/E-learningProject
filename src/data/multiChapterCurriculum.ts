@@ -58,10 +58,18 @@ export interface ChapterItem {
 }
 
 export interface SubjectModuleData {
-  id: SubjectId;
+  id: SubjectId | (string & {});
   code: string;
   name: string;
   semester: string;
+  stageNumber?: number;
+  stageTitle?: string;
+  credits?: number;
+  enrolled?: boolean;
+  sectionId?: string;
+  sectionCode?: string;
+  teacher?: string;
+  room?: string;
   category: string;
   instructor: string;
   instructorRole: string;

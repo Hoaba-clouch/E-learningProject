@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import MarloSelect from "./MarloSelect";
 import {
   Code2,
   CheckCircle2,
@@ -85,10 +86,10 @@ export function InstructorChapterGradingView({
   const courseOptionsList =
     classes.length > 0
       ? [
-          { id: "", label: `Tất cả ${classes.length} Môn học` },
+          { id: "", label: `Tất cả ${classes.length} Lớp học phần` },
           ...classes.map((c) => ({
-            id: c.subjectId || c.id.replace(/^class-/, ""),
-            label: `${c.code || ""} • ${c.name}`.trim(),
+            id: c.id || c.subjectId || "",
+            label: `${(c as any).sectionCode || c.code || ""} • ${c.name}`.trim(),
           })),
         ]
       : COURSE_OPTIONS;
@@ -105,10 +106,12 @@ export function InstructorChapterGradingView({
     setLoading(true);
     try {
       const chapterNum = selectedChapter ? parseInt(selectedChapter, 10) : undefined;
+      const matchedClass = classes.find((c) => c.id === selectedSubject);
       const res = await fetchInstructorChapterSubmissions(
-        selectedSubject || undefined,
+        matchedClass ? matchedClass.subjectId : selectedSubject || undefined,
         chapterNum,
-        selectedStatus
+        selectedStatus,
+        matchedClass ? matchedClass.id : undefined
       );
       setSubmissions(res.submissions || []);
       setSummary(res.summary || {
@@ -258,37 +261,31 @@ export function InstructorChapterGradingView({
       <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Lọc Môn học */}
-          <div className="relative">
-            <select
-              value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="appearance-none pl-3 pr-8 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
-            >
-              {courseOptionsList.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={13} className="absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <MarloSelect
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
+          >
+            {courseOptionsList.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </MarloSelect>
 
           {/* Lọc Chương */}
-          <div className="relative">
-            <select
-              value={selectedChapter}
-              onChange={(e) => setSelectedChapter(e.target.value)}
-              className="appearance-none pl-3 pr-8 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
-            >
-              <option value="">Tất cả các chương</option>
-              <option value="1">Chương 1</option>
-              <option value="2">Chương 2</option>
-              <option value="3">Chương 3</option>
-              <option value="4">Chương 4</option>
-              <option value="5">Chương 5</option>
-            </select>
-            <ChevronDown size={13} className="absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <MarloSelect
+            value={selectedChapter}
+            onChange={(e) => setSelectedChapter(e.target.value)}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
+          >
+            <option value="">Tất cả các chương</option>
+            <option value="1">Chương 1</option>
+            <option value="2">Chương 2</option>
+            <option value="3">Chương 3</option>
+            <option value="4">Chương 4</option>
+            <option value="5">Chương 5</option>
+          </MarloSelect>
 
           {/* Lọc Trạng thái */}
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl">

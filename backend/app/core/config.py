@@ -80,8 +80,20 @@ for _chunk in (_raw_gemini_keys + "," + _single_gemini_key).replace("\n", ",").s
         _parsed_keys.append(_k)
 
 GEMINI_API_KEYS: list[str] = _parsed_keys
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite"
-GEMINI_FALLBACK_MODEL: str = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3-flash-preview").strip() or "gemini-3-flash-preview"
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-4-hydrogen").strip() or "gemini-4-hydrogen"
+GEMINI_FALLBACK_MODEL: str = (
+    os.getenv(
+        "GEMINI_FALLBACK_MODEL",
+        "gemini-3.5-flash-lite,gemini-3-flash-preview,gemini-3.1-flash-lite",
+    ).strip()
+    or "gemini-3.5-flash-lite,gemini-3-flash-preview,gemini-3.1-flash-lite"
+)
+_parsed_fallback_models: list[str] = []
+for _fb in GEMINI_FALLBACK_MODEL.split(","):
+    _fb_clean = _fb.strip()
+    if _fb_clean and _fb_clean != GEMINI_MODEL and _fb_clean not in _parsed_fallback_models:
+        _parsed_fallback_models.append(_fb_clean)
+GEMINI_FALLBACK_MODELS: list[str] = _parsed_fallback_models
 try:
     GEMINI_TIMEOUT_SEC: float = max(3.0, min(30.0, float(os.getenv("GEMINI_TIMEOUT_SEC", "10"))))
 except ValueError:

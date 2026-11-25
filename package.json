@@ -1,6 +1,16 @@
 {
   "name": "figma-make-app",
   "private": true,
+  "license": "UNLICENSED",
+  "author": {
+    "name": "Nguyễn Bá Hòa",
+    "email": "bahoa12346@gmail.com",
+    "url": "https://github.com/Hoaba-clouch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hoaba-clouch/E-learningProject.git"
+  },
   "version": "1.0.0",
   "type": "module",
   "scripts": {

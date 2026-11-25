@@ -10,6 +10,7 @@ import {
   Clock,
 } from "lucide-react";
 import type { KanbanTask, TeamMember } from "../screens/KanbanBoard";
+import MarloSegmentedControl from "./MarloSegmentedControl";
 
 interface Props {
   tasks: KanbanTask[];
@@ -145,65 +146,37 @@ export default function KanbanInstructorReviewView({
         </div>
       </div>
 
-      {/* ─── Filter Pills ─── */}
+      {/* ─── Filter Pills (Marlo Liquid Elastic Pill) ─── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setFilterView("pending")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              filterView === "pending"
-                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <span>Cần thẩm định ngay</span>
-            <span className="px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[10px]">
-              {pendingTasks.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilterView("verified")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              filterView === "verified"
-                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <span>Đã nghiệm thu (Verified)</span>
-            <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px]">
-              {verifiedTasks.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilterView("revision")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              filterView === "revision"
-                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <span>Đã yêu cầu sửa</span>
-            <span className="px-1.5 py-0.2 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 text-[10px]">
-              {revisionTasks.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilterView("all")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              filterView === "all"
-                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            Tất cả ({pendingTasks.length + verifiedTasks.length + revisionTasks.length})
-          </button>
+        <div className="max-w-full overflow-x-auto scrollbar-none">
+          <MarloSegmentedControl<"pending" | "verified" | "revision" | "all">
+            value={filterView}
+            onChange={(val) => setFilterView(val)}
+            label="Lọc trạng thái nghiệm thu"
+            size="sm"
+            tone="dark"
+            options={[
+              {
+                id: "pending",
+                label: "Cần thẩm định ngay",
+                badge: pendingTasks.length,
+              },
+              {
+                id: "verified",
+                label: "Đã nghiệm thu (Verified)",
+                badge: verifiedTasks.length,
+              },
+              {
+                id: "revision",
+                label: "Đã yêu cầu sửa",
+                badge: revisionTasks.length,
+              },
+              {
+                id: "all",
+                label: `Tất cả (${pendingTasks.length + verifiedTasks.length + revisionTasks.length})`,
+              },
+            ]}
+          />
         </div>
 
         <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -265,18 +238,18 @@ export default function KanbanInstructorReviewView({
                         </span>
                       )}
                       {isVerified ? (
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold border border-emerald-200/80 dark:border-emerald-800 flex items-center gap-1">
-                          <CheckCircle2 size={12} />
+                        <span className="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                          <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
                           <span>Đã Nghiệm Thu (+{Math.max(50, task.points * 10)} XP)</span>
                         </span>
                       ) : isRevision ? (
-                        <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] font-bold border border-rose-200/80 dark:border-rose-800 flex items-center gap-1">
-                          <AlertCircle size={12} />
+                        <span className="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                          <AlertCircle size={12} className="text-rose-500 shrink-0" />
                           <span>Đã yêu cầu sinh viên sửa lại</span>
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-bold border border-amber-200/80 dark:border-amber-800 flex items-center gap-1">
-                          <Clock size={12} />
+                        <span className="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                          <Clock size={12} className="text-amber-500 shrink-0" />
                           <span>Chờ Giảng viên duyệt</span>
                         </span>
                       )}
@@ -290,8 +263,8 @@ export default function KanbanInstructorReviewView({
                     </h4>
 
                     {task.reviewFeedback && (
-                      <div className="text-xs text-rose-700 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200/70 dark:border-rose-800/60">
-                        <span className="font-bold">Nhận xét Giảng viên: </span>
+                      <div className="text-xs text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <span className="font-bold text-slate-900 dark:text-white">Nhận xét Giảng viên: </span>
                         {task.reviewFeedback}
                       </div>
                     )}

@@ -19,6 +19,7 @@ import {
   Mail,
 } from "lucide-react";
 import gsap from "gsap";
+import MarloSelect from "./MarloSelect";
 import type { Project } from "../data/kanbanProjects";
 import {
   fetchTeamMembersApi,
@@ -659,23 +660,17 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Phân loại kỹ thuật
               </label>
-              <div className="relative">
-                <select
-                  value={kind}
-                  onChange={(e) => setKind(e.target.value)}
-                  className="w-full appearance-none px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-sm font-normal text-slate-900 dark:text-white outline-none focus:border-[#EE8420] focus:ring-2 focus:ring-[#EE8420]/25 transition-all shadow-2xs pr-9 cursor-pointer"
-                >
-                  {KIND_OPTIONS.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={15}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                />
-              </div>
+              <MarloSelect
+                value={kind}
+                onChange={(e) => setKind(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-[#131417] text-sm font-normal text-slate-900 dark:text-white outline-none transition-all shadow-2xs cursor-pointer"
+              >
+                {KIND_OPTIONS.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </MarloSelect>
             </div>
 
             <div>
@@ -883,7 +878,7 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <select
+                      <MarloSelect
                         value={c.role}
                         onChange={(e) => handleRoleChange(c.id, e.target.value)}
                         className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
@@ -893,7 +888,7 @@ export function MarloNewProjectModal({ isOpen, onClose, onCreateProject }: NewPr
                             {r}
                           </option>
                         ))}
-                      </select>
+                      </MarloSelect>
                       <button
                         type="button"
                         onClick={() => handleRemoveCollaborator(c.id)}

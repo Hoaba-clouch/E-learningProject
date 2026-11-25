@@ -76,42 +76,63 @@ export default function KanbanActivityStreamView({
     };
   }, [projectId]);
 
-  const defaultActor = teamMembers[0]?.name || "Thành viên Dự án";
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const safeMembers = Array.isArray(teamMembers) ? teamMembers : [];
+  const defaultActor = safeMembers[0]?.name || "Thành viên Dự án";
 
   const rawEvents: ActivityEvent[] = useMemo(() => {
     const events: ActivityEvent[] = [];
 
     // 1. Real Task Audit Logs from MySQL engineering_tasks
-    for (const task of tasks) {
+    for (const task of safeTasks) {
       const logs = Array.isArray(task.auditLogs) ? task.auditLogs : [];
-      logs.forEach((log, idx) => {
+      logs.forEach((rawLog, idx) => {
+        if (!rawLog || typeof rawLog !== "object") return;
+        const log = rawLog as Record<string, unknown>;
+        const toCol = String(log.toColumn ?? log.to_column ?? "").trim();
+        const fromCol = String(log.fromColumn ?? log.from_column ?? "").trim();
+        const actionText = String(log.action ?? "").trim();
+        const detailText = String(log.detail ?? log.note ?? "").trim();
+
+        const statusProbe = (toCol || actionText).toLowerCase();
         const isDoneCol =
-          log.toColumn.includes("Hoàn thành") ||
-          log.toColumn.includes("Đã nghiệm thu") ||
-          log.toColumn.toLowerCase().includes("done") ||
-          log.toColumn.toLowerCase().includes("verified");
-        const actorName = log.user || task.assignee?.name || defaultActor;
+          statusProbe.includes("hoàn thành") ||
+          statusProbe.includes("đã nghiệm thu") ||
+          statusProbe.includes("done") ||
+          statusProbe.includes("verified");
+
+        const actorName =
+          String(log.user ?? log.actor ?? "").trim() || task.assignee?.name || defaultActor;
+        const transitionLabel =
+          fromCol && toCol
+            ? `${fromCol} → ${toCol}`
+            : toCol || actionText || "Cập nhật trạng thái";
+        const badge = toCol || (actionText ? "MCP / Audit" : "Cập nhật");
+        const sub = detailText
+          ? `${task.epic || "Hạng mục Đồ án"} • ${detailText}`
+          : `${task.epic || "Hạng mục Đồ án"} • Đồng bộ CSDL MySQL`;
+        const time = String(log.timestamp ?? "").trim() || "Vừa xong";
+
         events.push({
           id: `aud-${task.id}-${idx}`,
           type: isDoneCol ? "task_done" : "commit",
           actor: actorName,
           avatar: getGivenNameInitial(actorName),
           avatarColor: isDoneCol ? "bg-emerald-600" : "bg-amber-600",
-          role: "Thành viên Scrum",
-          title: `[#${task.code}] ${task.title} (${log.fromColumn} → ${log.toColumn})`,
-          sub: `${task.epic || "Hạng mục Đồ án"} • Đồng bộ CSDL MySQL`,
-          time: log.timestamp || "Vừa xong",
-          badge: log.toColumn,
-          badgeColor: isDoneCol
-            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-            : "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+          role: log.actor && !log.user ? "MCP Agent" : "Thành viên Scrum",
+          title: `[#${task.code}] ${task.title} (${transitionLabel})`,
+          sub,
+          time,
+          badge,
+          badgeColor:
+            "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80",
           taskId: task.id,
         });
       });
 
       // 2. Real H2 dependency unlocks
       if (task.dependsOn) {
-        const depTask = tasks.find(
+        const depTask = safeTasks.find(
           (t) => t.id === task.dependsOn || t.code === task.dependsOn
         );
         if (depTask && (depTask.column === "done" || depTask.column === "verified")) {
@@ -126,7 +147,8 @@ export default function KanbanActivityStreamView({
             sub: `Task tiền đề #${depTask.code} đã đạt trạng thái Hoàn thành`,
             time: "Đã xác thực",
             badge: "Mở khóa H2",
-            badgeColor: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+            badgeColor:
+              "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80",
             taskId: task.id,
           });
         }
@@ -134,9 +156,12 @@ export default function KanbanActivityStreamView({
     }
 
     // 3. Real Git Commits from MySQL git_commits
-    for (const c of gitCommits) {
+    const safeCommits = Array.isArray(gitCommits) ? gitCommits : [];
+    for (const c of safeCommits) {
       const matchedTask = c.taskCode
-        ? tasks.find((t) => t.code.toUpperCase() === String(c.taskCode).toUpperCase())
+        ? safeTasks.find(
+            (t) => String(t.code || "").toUpperCase() === String(c.taskCode).toUpperCase()
+          )
         : undefined;
       const authorName = c.author?.name || defaultActor;
       events.push({
@@ -146,45 +171,51 @@ export default function KanbanActivityStreamView({
         avatar: getGivenNameInitial(authorName),
         avatarColor: "bg-blue-600",
         role: c.author?.role || "Developer",
-        title: c.message,
-        sub: `Nhánh ${c.branch} · +${c.stats?.additions ?? 0} / -${c.stats?.deletions ?? 0} lines${
-          c.taskCode ? ` · Task #${c.taskCode}` : ""
-        }`,
+        title: c.message || "Cập nhật commit",
+        sub: `Nhánh ${c.branch || "main"} · +${c.stats?.additions ?? 0} / -${
+          c.stats?.deletions ?? 0
+        } lines${c.taskCode ? ` · Task #${c.taskCode}` : ""}`,
         time: c.timeAgo || c.date || "Đã lưu",
         badge: "Git Commit",
-        badgeColor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+        badgeColor:
+          "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80",
         sha: c.sha,
         taskId: matchedTask?.id,
       });
     }
 
     // 4. Real Git Pull Requests from MySQL git_pull_requests
-    for (const pr of gitPrs) {
+    const safePrs = Array.isArray(gitPrs) ? gitPrs : [];
+    for (const pr of safePrs) {
       const matchedTask = pr.taskCode
-        ? tasks.find((t) => t.code.toUpperCase() === String(pr.taskCode).toUpperCase())
+        ? safeTasks.find(
+            (t) => String(t.code || "").toUpperCase() === String(pr.taskCode).toUpperCase()
+          )
         : undefined;
       const authorName = pr.author?.name || defaultActor;
+      const prStatus = String(pr.status || "open");
       events.push({
         id: `gpr-${pr.id}`,
         type: "pr_merged",
         actor: authorName,
         avatar: getGivenNameInitial(authorName),
-        avatarColor: pr.status === "merged" ? "bg-purple-600" : "bg-emerald-600",
+        avatarColor: prStatus === "merged" ? "bg-purple-600" : "bg-emerald-600",
         role: pr.author?.role || "Reviewer",
         title: `PR #${pr.prNumber}: ${pr.title}`,
         sub: `${pr.sourceBranch} → ${pr.targetBranch} · AI Score ${pr.aiReviewScore ?? 0}/100${
           pr.taskCode ? ` · Task #${pr.taskCode}` : ""
         }`,
-        time: pr.status === "merged" ? "Merged" : pr.status.toUpperCase(),
-        badge: pr.status === "merged" ? "PR Merged" : `PR ${pr.status}`,
-        badgeColor: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
+        time: prStatus === "merged" ? "Merged" : prStatus.toUpperCase(),
+        badge: prStatus === "merged" ? "PR Merged" : `PR ${prStatus}`,
+        badgeColor:
+          "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80",
         sha: pr.dodSha256?.slice(0, 7),
         taskId: matchedTask?.id,
       });
     }
 
     return events;
-  }, [tasks, gitCommits, gitPrs, defaultActor]);
+  }, [safeTasks, gitCommits, gitPrs, defaultActor]);
 
   // Build real 16-week heatmap from project commits + tasks timestamps
   const heatmapCells: HeatmapCellInput[] = useMemo(() => {
@@ -211,9 +242,10 @@ export default function KanbanActivityStreamView({
         actsByDate[dk] = (actsByDate[dk] || 0) + 1;
       }
     }
-    for (const t of tasks) {
+    for (const t of safeTasks) {
       for (const lg of t.auditLogs || []) {
-        const dk = parseDateIso(lg.timestamp);
+        if (!lg || typeof lg !== "object") continue;
+        const dk = parseDateIso(String((lg as Record<string, unknown>).timestamp ?? ""));
         if (dk) {
           actsByDate[dk] = (actsByDate[dk] || 0) + 1;
         }
@@ -245,11 +277,11 @@ export default function KanbanActivityStreamView({
       });
     }
     return out;
-  }, [gitCommits, tasks]);
+  }, [gitCommits, safeTasks]);
 
   const totalEstHours = useMemo(
-    () => tasks.reduce((sum, t) => sum + (Number(t.estimateHours) || 0), 0),
-    [tasks]
+    () => safeTasks.reduce((sum, t) => sum + (Number(t.estimateHours) || 0), 0),
+    [safeTasks]
   );
 
   const filteredEvents = useMemo(() => {
@@ -262,7 +294,7 @@ export default function KanbanActivityStreamView({
       {/* ─── 1. REAL STUDY & COMMIT HEATMAP (16 WEEKS) ─── */}
       <MarloActivityHeatmap
         title="Biểu Đồ Nhiệt Đóng Góp & Nhịp Độ Thực Hành Code (16 Tuần)"
-        subtitle={`${gitCommits.length} commits thực tế · ${gitPrs.length} Pull Requests · ${totalEstHours} giờ công ước tính · ${teamMembers.length} thành viên`}
+        subtitle={`${gitCommits.length} commits thực tế · ${gitPrs.length} Pull Requests · ${totalEstHours} giờ công ước tính · ${safeMembers.length} thành viên`}
         cells={heatmapCells}
       />
 
@@ -321,7 +353,7 @@ export default function KanbanActivityStreamView({
           ) : (
             filteredEvents.map((event, idx) => {
               const linkedTask = event.taskId
-                ? tasks.find((t) => t.id === event.taskId)
+                ? safeTasks.find((t) => t.id === event.taskId)
                 : undefined;
               return (
                 <div

@@ -9,10 +9,32 @@ export const DEFAULT_TEAM_MEMBER_RECORDS: TeamMemberRecord[] = [
     "userRole": "instructor",
     "role": "Giảng viên / Cố vấn Hội đồng",
     "initials": "CB",
+    "headline": "Giảng viên Chính · Kiến trúc Phần mềm & Trình biên dịch",
+    "department": "Khoa CNTT · Bộ môn Kỹ nghệ Phần mềm",
+    "officeLocation": "Phòng Lab A3-201 · Tiếp SV: Thứ 3 & 5 (14:00–17:00)",
+    "bio": "Giảng viên hướng dẫn đồ án chuyên ngành và thành viên Hội đồng Phản biện CodeMind Campus. Tập trung vào Clean Architecture, quản lý bộ nhớ C++20, React 19 và quy trình Git/Kanban chuẩn doanh nghiệp.",
+    "skills": ["C++20 & OOP", "Compiler AST", "Clean Architecture", "React 19", "Code Review & CI/CD"],
+    "githubUrl": "https://github.com/tran-thi-b-codemind",
+    "websiteUrl": "https://codemind.edu.vn/faculty/tran-thi-b",
+    "phone": "0903 812 401",
     "hue": 1,
     "status": "in",
     "isAdvisor": true,
     "isLead": false,
+    "taughtCourses": [
+      {
+        "id": "class-oop",
+        "subjectId": "oop",
+        "code": "CS201",
+        "name": "Lập trình Hướng đối tượng & Cấu trúc Dữ liệu",
+        "semester": "Học kỳ 1 / 2026",
+        "credits": 3,
+        "studentCount": 42,
+        "avgProgressPct": 74,
+        "room": "Lab A3-201",
+        "health": "Ổn định"
+      }
+    ],
     "projects": [
       {
         "id": "prj-codemind",
@@ -53,10 +75,19 @@ export const DEFAULT_TEAM_MEMBER_RECORDS: TeamMemberRecord[] = [
     "userRole": "instructor",
     "role": "Giảng viên / Cố vấn Hội đồng",
     "initials": "TP",
+    "headline": "Giảng viên · Hệ thống Phân tán, Backend & DevOps",
+    "department": "Khoa CNTT · Bộ môn Hệ thống Thông tin & Cloud",
+    "officeLocation": "Phòng Lab B2-304 · Tiếp SV: Thứ 4 & 6 (09:00–11:30)",
+    "bio": "Phụ trách các học phần FastAPI, Kiến trúc Hệ thống Phân tán (Kafka/Redis), AI-Native Web App và Docker CI/CD.",
+    "skills": ["FastAPI & Python", "Distributed Systems", "Kafka & Redis", "Docker & CI/CD"],
+    "githubUrl": "https://github.com/nguyen-phuoc-codemind",
+    "websiteUrl": "https://codemind.edu.vn/faculty/nguyen-phuoc",
+    "phone": "0908 441 209",
     "hue": 2,
     "status": "in",
     "isAdvisor": true,
     "isLead": false,
+    "taughtCourses": [],
     "projects": [
       {
         "id": "prj-ecommerce",

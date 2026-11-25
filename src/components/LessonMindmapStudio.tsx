@@ -36,6 +36,7 @@ const nodeTypes = {
 interface LessonMindmapStudioProps {
   subjectId: string;
   chapterTitle?: string;
+  chapterLessonIds?: string[];
   mentorMascot: MentorMascot;
   instructorMindmapNodes?: any[];
   instructorMindmapEdges?: any[];
@@ -175,6 +176,7 @@ function FitViewButton() {
 export function LessonMindmapStudio({
   subjectId,
   chapterTitle,
+  chapterLessonIds,
   mentorMascot,
   instructorMindmapNodes,
   instructorMindmapEdges,
@@ -195,44 +197,190 @@ export function LessonMindmapStudio({
     TREE_MINDMAP_DATA[subjectId] || TREE_MINDMAP_DATA.oop;
 
   const isNodeCompletedForStudent = useCallback(
-    (title: string, nodeId: string, fallbackPct: number) => {
-      if (completedLessonIds && completedLessonIds.size > 0) {
-        if (completedLessonIds.has(nodeId)) return true;
-        const m = title.match(/^(\d+\.\d+)/);
-        if (m && completedLessonIds.has(m[1])) return true;
+    (
+      title: string,
+      nodeId: string,
+      tag?: string,
+      explicitLessonId?: string,
+      branchIndex?: number
+    ) => {
+      if (!completedLessonIds || completedLessonIds.size === 0) {
+        return false;
       }
-      return completedLessonIds ? false : fallbackPct >= 80;
+      if (completedLessonIds.has(nodeId)) return true;
+      if (explicitLessonId && completedLessonIds.has(explicitLessonId)) return true;
+      const m = title.match(/^\s*(\d+\.\d+)/);
+      if (m && completedLessonIds.has(m[1])) return true;
+      if (tag && chapterLessonIds && chapterLessonIds.length > 0) {
+        const mTag = tag.match(/bài\s*(\d+)/i);
+        if (mTag) {
+          const lessonKey = chapterLessonIds[Number(mTag[1]) - 1];
+          if (lessonKey && completedLessonIds.has(lessonKey)) return true;
+        }
+      }
+      if (
+        typeof branchIndex === "number" &&
+        chapterLessonIds &&
+        chapterLessonIds[branchIndex] &&
+        completedLessonIds.has(chapterLessonIds[branchIndex])
+      ) {
+        return true;
+      }
+      return false;
     },
-    [completedLessonIds]
+    [completedLessonIds, chapterLessonIds]
   );
 
   const currentData: SubjectTreeData = useMemo(() => {
+    const chapterDoneRatio =
+      chapterLessonIds && chapterLessonIds.length > 0 && completedLessonIds
+        ? Math.round(
+            (chapterLessonIds.filter((lid) => completedLessonIds.has(lid)).length /
+              chapterLessonIds.length) *
+              100
+          )
+        : null;
+
     if (mindmapSource !== "instructor" || !hasInstructorMap) {
+      const stdParentMap = new Map<string, string>();
+      for (const e of baseData.edges) {
+        stdParentMap.set(e.target, e.source);
+      }
+      const stdBranchDone = new Map<string, boolean>();
+      let bIdx = 0;
+      for (const n of baseData.nodes) {
+        if (n.data.nodeType === "branch") {
+          const done = isNodeCompletedForStudent(
+            n.data.title,
+            n.id,
+            n.data.badge,
+            undefined,
+            bIdx
+          );
+          stdBranchDone.set(n.id, done);
+          bIdx += 1;
+        }
+      }
+      const branchValues = Array.from(stdBranchDone.values());
+      const rootPct =
+        chapterDoneRatio !== null
+          ? chapterDoneRatio
+          : branchValues.length > 0
+          ? Math.round((branchValues.filter(Boolean).length / branchValues.length) * 100)
+          : 0;
+
       return {
         ...baseData,
         title: chapterTitle ? `${baseData.title} · ${chapterTitle}` : baseData.title,
         nodes: baseData.nodes.map((n) => {
-          const isDone =
-            n.data.nodeType === "root"
-              ? n.data.status === "completed"
-              : isNodeCompletedForStudent(n.data.title, n.id, n.data.progressPct);
+          if (n.data.nodeType === "root") {
+            const rootDone = rootPct >= 100;
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                status: rootDone ? ("completed" as const) : ("in-progress" as const),
+                progressPct: rootPct,
+              },
+            };
+          }
+          if (n.data.nodeType === "branch") {
+            const isDone = Boolean(stdBranchDone.get(n.id));
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                status: isDone ? ("completed" as const) : ("in-progress" as const),
+                progressPct: isDone ? 100 : 0,
+              },
+            };
+          }
+          const pid = stdParentMap.get(n.id);
+          const leafDone =
+            isNodeCompletedForStudent(n.data.title, n.id, n.data.badge) ||
+            Boolean(pid && stdBranchDone.get(pid));
           return {
             ...n,
             data: {
               ...n.data,
-              status: isDone ? ("completed" as const) : ("in-progress" as const),
-              progressPct: isDone ? 100 : n.data.progressPct,
+              status: leafDone ? ("completed" as const) : ("in-progress" as const),
+              progressPct: leafDone ? 100 : 0,
             },
           };
         }),
       };
     }
+
+    const mappedEdges = (instructorMindmapEdges || []).map((e: any, idx: number) => ({
+      id: String(e.id || `inst-e-${idx}`),
+      source: String(e.source),
+      target: String(e.target),
+    }));
+    const instParentMap = new Map<string, string>();
+    for (const e of mappedEdges) {
+      instParentMap.set(e.target, e.source);
+    }
+
+    const instBranchDone = new Map<string, boolean>();
+    let instBranchIdx = 0;
+    (instructorMindmapNodes || []).forEach((n: any, idx: number) => {
+      const nType =
+        n.data?.nodeType === "root"
+          ? "root"
+          : n.data?.nodeType === "leaf"
+          ? "leaf"
+          : "branch";
+      if (nType === "branch") {
+        const nid = String(n.id || `inst-n-${idx}`);
+        const done = isNodeCompletedForStudent(
+          String(n.data?.title || ""),
+          nid,
+          String(n.data?.tag || ""),
+          n.data?.lessonId ? String(n.data.lessonId) : undefined,
+          instBranchIdx
+        );
+        instBranchDone.set(nid, done);
+        instBranchIdx += 1;
+      }
+    });
+
+    const instBranchVals = Array.from(instBranchDone.values());
+    const instRootPct =
+      chapterDoneRatio !== null
+        ? chapterDoneRatio
+        : instBranchVals.length > 0
+        ? Math.round((instBranchVals.filter(Boolean).length / instBranchVals.length) * 100)
+        : 0;
+
     const mappedNodes = (instructorMindmapNodes || []).map((n: any, idx: number) => {
+      const nid = String(n.id || `inst-n-${idx}`);
       const title = n.data?.title || "Khái niệm Giảng viên";
-      const pct = Number(n.data?.masteryPct ?? 75);
-      const isDone = isNodeCompletedForStudent(title, String(n.id || `inst-n-${idx}`), pct);
+      const nType = (
+        n.data?.nodeType === "root"
+          ? "root"
+          : n.data?.nodeType === "leaf"
+          ? "leaf"
+          : "branch"
+      ) as "root" | "branch" | "leaf";
+
+      let personalPct = 0;
+      let isDone = false;
+      if (nType === "root") {
+        personalPct = instRootPct;
+        isDone = instRootPct >= 100;
+      } else if (nType === "branch") {
+        isDone = Boolean(instBranchDone.get(nid));
+        personalPct = isDone ? 100 : 0;
+      } else {
+        const pid = instParentMap.get(nid);
+        isDone =
+          isNodeCompletedForStudent(title, nid, String(n.data?.tag || "")) ||
+          Boolean(pid && instBranchDone.get(pid));
+        personalPct = isDone ? 100 : 0;
+      }
+
       return {
-        id: String(n.id || `inst-n-${idx}`),
+        id: nid,
         type: "compactTreeNode" as const,
         position: n.position || { x: 40 + idx * 240, y: 120 },
         data: {
@@ -240,31 +388,31 @@ export function LessonMindmapStudio({
           badge: n.data?.tag || "Master Map",
           summary: n.data?.summary || "",
           status: (isDone ? "completed" : "in-progress") as "completed" | "in-progress",
-          progressPct: isDone ? 100 : pct,
+          progressPct: personalPct,
           xp: n.data?.xp ? Number(n.data.xp) : undefined,
-          nodeType: (n.data?.nodeType === "root"
-            ? "root"
-            : n.data?.nodeType === "leaf"
-            ? "leaf"
-            : "branch") as "root" | "branch" | "leaf",
+          nodeType: nType,
           tone: "blue",
         },
       };
     });
-    const mappedEdges = (instructorMindmapEdges || []).map((e: any, idx: number) => ({
-      id: String(e.id || `inst-e-${idx}`),
-      source: String(e.source),
-      target: String(e.target),
-    }));
+
+    const dynamicTakeaways = mappedNodes
+      .filter((n) => n.data.summary && n.data.summary.trim().length > 10)
+      .map((n) => `${n.data.title}: ${n.data.summary.trim()}`);
+
     return {
       ...baseData,
       title: `Master Mindmap Giảng viên · ${chapterTitle || baseData.subjectCode}`,
       nodes: mappedNodes,
       edges: mappedEdges,
+      quickSummary:
+        dynamicTakeaways.length > 0 ? dynamicTakeaways : baseData.quickSummary,
     };
   }, [
     baseData,
+    chapterLessonIds,
     chapterTitle,
+    completedLessonIds,
     hasInstructorMap,
     instructorMindmapEdges,
     instructorMindmapNodes,
@@ -419,11 +567,32 @@ export function LessonMindmapStudio({
       });
     }
 
-    // 3. Xây dựng danh sách Nodes ReactFlow
+    // 3. Xây dựng danh sách Nodes ReactFlow (giữ nguyên tọa độ Giảng viên kéo thả nếu không chồng lấp)
+    const visibleRawNodes = currentData.nodes.filter((n) => visibleIds.has(n.id));
+    let useSavedInstructorPositions = mindmapSource === "instructor" && visibleRawNodes.length > 0;
+    if (useSavedInstructorPositions) {
+      for (let i = 0; i < visibleRawNodes.length; i++) {
+        const pi = visibleRawNodes[i].position;
+        if (!pi || !Number.isFinite(pi.x) || !Number.isFinite(pi.y)) {
+          useSavedInstructorPositions = false;
+          break;
+        }
+        for (let j = i + 1; j < visibleRawNodes.length; j++) {
+          const pj = visibleRawNodes[j].position;
+          if (!pj || (Math.abs(pi.x - pj.x) < 120 && Math.abs(pi.y - pj.y) < 75)) {
+            useSavedInstructorPositions = false;
+            break;
+          }
+        }
+        if (!useSavedInstructorPositions) break;
+      }
+    }
+
     const cNodes: Node[] = [];
-    for (const rawNode of currentData.nodes) {
-      if (!visibleIds.has(rawNode.id)) continue;
-      const pos = positions.get(rawNode.id) || rawNode.position;
+    for (const rawNode of visibleRawNodes) {
+      const pos = useSavedInstructorPositions
+        ? rawNode.position
+        : positions.get(rawNode.id) || rawNode.position;
       const children = (childrenMap.get(rawNode.id) || []).filter((cid) =>
         nodeMap.has(cid)
       );
@@ -464,8 +633,6 @@ export function LessonMindmapStudio({
     const cEdges: Edge[] = [];
     for (const rawEdge of currentData.edges) {
       if (visibleIds.has(rawEdge.source) && visibleIds.has(rawEdge.target)) {
-        const targetNode = nodeMap.get(rawEdge.target);
-        const sourceNode = nodeMap.get(rawEdge.source);
         const isFromRoot = rawEdge.source === rootNodeId;
 
         // Đường nối đơn sắc chuẩn kiến trúc (clean architectural line)
@@ -498,7 +665,7 @@ export function LessonMindmapStudio({
       visibleCount: cNodes.length,
       totalCount: currentData.nodes.length,
     };
-  }, [currentData, rootNodeId, childrenMap, parentMap, nodeMap, expandedNodeIds, toggleNode]);
+  }, [currentData, rootNodeId, childrenMap, parentMap, nodeMap, expandedNodeIds, toggleNode, mindmapSource]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(computedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);

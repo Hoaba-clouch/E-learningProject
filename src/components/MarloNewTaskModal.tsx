@@ -8,8 +8,8 @@ import {
   CheckSquare,
   ListTodo,
   Check,
-  ChevronDown,
 } from "lucide-react";
+import MarloSelect from "./MarloSelect";
 import type { KanbanTask, TeamMember, Priority, ChecklistItem } from "../screens/KanbanBoard";
 
 interface MarloNewTaskModalProps {
@@ -19,6 +19,7 @@ interface MarloNewTaskModalProps {
   teamMembers: TeamMember[];
   currentProjectName?: string;
   projects?: { id: string; name: string; team?: TeamMember[] }[];
+  availableTasks?: KanbanTask[];
 }
 
 export default function MarloNewTaskModal({
@@ -28,6 +29,7 @@ export default function MarloNewTaskModal({
   teamMembers,
   currentProjectName = "CodeMind AI Campus",
   projects = [],
+  availableTasks = [],
 }: MarloNewTaskModalProps) {
   const [title, setTitle] = useState("");
   const [project, setProject] = useState(currentProjectName);
@@ -46,6 +48,7 @@ export default function MarloNewTaskModal({
   });
   const [points, setPoints] = useState(5);
   const [priority, setPriority] = useState<Priority>("medium");
+  const [dependsOn, setDependsOn] = useState("");
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
   const [isClosing, setIsClosing] = useState(false);
@@ -144,6 +147,7 @@ export default function MarloNewTaskModal({
       dueDate: formattedDue,
       epic: project,
       epicColor: "#f97316",
+      ...(dependsOn ? { dependsOn } : {}),
       checklist: checklist,
       definitionOfDone: [
         { id: `dod-1-${Date.now()}`, text: "Clean code 3 tầng phân tách & Lint pass", done: false },
@@ -155,6 +159,7 @@ export default function MarloNewTaskModal({
 
     onAddTask(newTask);
     setTitle("");
+    setDependsOn("");
     setChecklist([]);
     setNewChecklistText("");
     handleClose();
@@ -219,26 +224,23 @@ export default function MarloNewTaskModal({
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Đồ án
               </label>
-              <div className="relative">
-                <select
-                  value={project}
-                  onChange={(e) => setProject(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition cursor-pointer"
-                >
-                  {projects.length > 0 ? (
-                    projects.map((p) => (
-                      <option key={p.id} value={p.name} className="dark:bg-[#181d28]">
-                        {p.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value={project} className="dark:bg-[#181d28]">
-                      {project}
+              <MarloSelect
+                value={project}
+                onChange={(e) => setProject(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white transition cursor-pointer"
+              >
+                {projects.length > 0 ? (
+                  projects.map((p) => (
+                    <option key={p.id} value={p.name}>
+                      {p.name}
                     </option>
-                  )}
-                </select>
-                <ChevronDown size={14} className="pointer-events-none absolute right-3 top-3 text-slate-400" />
-              </div>
+                  ))
+                ) : (
+                  <option value={project}>
+                    {project}
+                  </option>
+                )}
+              </MarloSelect>
             </div>
 
             {/* Assignee */}
@@ -246,20 +248,17 @@ export default function MarloNewTaskModal({
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Thành viên phụ trách
               </label>
-              <div className="relative">
-                <select
-                  value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition cursor-pointer"
-                >
-                  {activeProjectMembers.map((m) => (
-                    <option key={m.id} value={m.id} className="dark:bg-[#181d28]">
-                      {m.name} ({m.role})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="pointer-events-none absolute right-3 top-3 text-slate-400" />
-              </div>
+              <MarloSelect
+                value={assigneeId}
+                onChange={(e) => setAssigneeId(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white transition cursor-pointer"
+              >
+                {activeProjectMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.role})
+                  </option>
+                ))}
+              </MarloSelect>
             </div>
           </div>
 
@@ -348,19 +347,40 @@ export default function MarloNewTaskModal({
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
               Mức độ ưu tiên
             </label>
-            <div className="relative">
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/30 dark:focus:ring-white/15 transition cursor-pointer"
-              >
-                <option value="low" className="dark:bg-[#181d28]">Thấp (P2)</option>
-                <option value="medium" className="dark:bg-[#181d28]">Trung bình (P1)</option>
-                <option value="high" className="dark:bg-[#181d28]">Cao (P0)</option>
-              </select>
-              <ChevronDown size={14} className="pointer-events-none absolute right-3 top-3 text-slate-400" />
-            </div>
+            <MarloSelect
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as Priority)}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white transition cursor-pointer"
+            >
+              <option value="low">Thấp (P2)</option>
+              <option value="medium">Trung bình (P1)</option>
+              <option value="high">Cao (P0)</option>
+            </MarloSelect>
           </div>
+
+          {/* Task tiền đề (H2 Hard Constraint) */}
+          {availableTasks.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Task tiền đề (Ràng buộc H2)
+              </label>
+              <MarloSelect
+                value={dependsOn}
+                onChange={(e) => setDependsOn(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#181d28] px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white transition cursor-pointer"
+              >
+                <option value="">Không có ràng buộc H2</option>
+                {availableTasks.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    #{t.code} · {t.title}
+                  </option>
+                ))}
+              </MarloSelect>
+              <p className="mt-1 text-[10.5px] text-slate-400">
+                Task mới chỉ có thể hoàn thành sau khi task tiền đề đã đạt Done.
+              </p>
+            </div>
+          )}
 
           {/* 🌟 USER-REQUESTED ENHANCEMENT: CHECKLIST SECTION */}
           <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">

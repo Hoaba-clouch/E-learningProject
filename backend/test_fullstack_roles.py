@@ -127,9 +127,16 @@ def test_synchronized_three_roles_pipeline() -> None:
     assert "Bounded Page Tracker" not in ex_ref_data["assistant_message"]
     assert "visit(" not in ex_ref_data["assistant_message"]
 
-    def_start = client.post(
+    def_blocked = client.post(
         "/v1/defense/sessions",
         json={"project_id": "prj-codemind", "class_id": "class-oop"},
+        headers=stu_headers,
+    )
+    assert def_blocked.status_code == 403, def_blocked.text
+
+    def_start = client.post(
+        "/v1/defense/sessions",
+        json={"project_id": "prj-compiler", "class_id": "class-oop"},
         headers=stu_headers,
     )
     assert def_start.status_code == 201, def_start.text
@@ -176,7 +183,7 @@ def test_synchronized_three_roles_pipeline() -> None:
 
     courses_res = client.get("/v1/courses", headers=inst_headers)
     assert courses_res.status_code == 200, courses_res.text
-    assert len(courses_res.json()["courses"]) >= 6
+    assert 3 <= len(courses_res.json()["courses"]) < 16
 
     ch_res = client.post(
         "/v1/instructor/courses/class-oop/chapters",
@@ -258,7 +265,7 @@ def test_synchronized_three_roles_pipeline() -> None:
         headers=adm_headers,
     )
     assert cls_toggle.status_code == 200, cls_toggle.text
-    courses_after_toggle = client.get("/v1/courses", headers=inst_headers).json()["courses"]
+    courses_after_toggle = client.get("/v1/courses", headers=adm_headers).json()["courses"]
     devops_course = next(c for c in courses_after_toggle if c["id"] == "class-devops")
     assert devops_course["sandboxEnabled"] is False
 
