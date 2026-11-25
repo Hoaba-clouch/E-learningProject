@@ -129,7 +129,7 @@ function MindmapCanvas({
   const { fitView } = useReactFlow();
 
   return (
-    <div className="h-[600px] xl:h-[680px] w-full rounded-2xl border-2 border-slate-200/90 dark:border-slate-800 bg-radial from-slate-50 via-white to-slate-100/90 dark:from-[#181d2a] dark:via-[#131722] dark:to-[#0f121a] overflow-hidden relative shadow-sm">
+    <div className="h-[600px] xl:h-[680px] w-full rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-[#f8fafc] dark:bg-[#10131a] overflow-hidden relative shadow-2xs">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -137,14 +137,14 @@ function MindmapCanvas({
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.16 }}
         minZoom={0.25}
         maxZoom={1.6}
       >
-        <Background color="#94a3b8" gap={22} size={1.2} className="opacity-60 dark:opacity-40" />
+        <Background color="#64748b" gap={22} size={1.15} className="opacity-35 dark:opacity-30" />
         <Controls
           position="top-left"
-          className="!bg-white/95 dark:!bg-slate-900/95 !border-slate-200 dark:!border-slate-700 !shadow-md !rounded-xl overflow-hidden backdrop-blur-sm"
+          className="!bg-white/95 dark:!bg-slate-900/95 !border-slate-200 dark:!border-slate-700 !shadow-sm !rounded-xl overflow-hidden"
         />
         {showMiniMap && (
           <MiniMap
@@ -352,6 +352,26 @@ export function LessonMindmapStudio({
         ? Math.round((instBranchVals.filter(Boolean).length / instBranchVals.length) * 100)
         : 0;
 
+    const BRANCH_PALETTE = ["blue", "purple", "emerald", "cyan", "rose"];
+    const instBranchTone = new Map<string, string>();
+    let toneBranchCounter = 0;
+    (instructorMindmapNodes || []).forEach((n: any, idx: number) => {
+      const nType =
+        n.data?.nodeType === "root"
+          ? "root"
+          : n.data?.nodeType === "leaf"
+          ? "leaf"
+          : "branch";
+      if (nType === "branch") {
+        const nid = String(n.id || `inst-n-${idx}`);
+        instBranchTone.set(
+          nid,
+          n.data?.tone || BRANCH_PALETTE[toneBranchCounter % BRANCH_PALETTE.length]
+        );
+        toneBranchCounter += 1;
+      }
+    });
+
     const mappedNodes = (instructorMindmapNodes || []).map((n: any, idx: number) => {
       const nid = String(n.id || `inst-n-${idx}`);
       const title = n.data?.title || "Khái niệm Giảng viên";
@@ -379,6 +399,11 @@ export function LessonMindmapStudio({
         personalPct = isDone ? 100 : 0;
       }
 
+      const inheritedTone =
+        nType === "branch"
+          ? instBranchTone.get(nid) || "blue"
+          : instBranchTone.get(instParentMap.get(nid) || "") || n.data?.tone || "blue";
+
       return {
         id: nid,
         type: "compactTreeNode" as const,
@@ -391,7 +416,7 @@ export function LessonMindmapStudio({
           progressPct: personalPct,
           xp: n.data?.xp ? Number(n.data.xp) : undefined,
           nodeType: nType,
-          tone: "blue",
+          tone: inheritedTone,
         },
       };
     });
@@ -458,12 +483,15 @@ export function LessonMindmapStudio({
     };
   }, [currentData]);
 
-  // Khi đổi môn học hoặc rootNodeId thay đổi, mở nốt root tương ứng
+  // Khi đổi môn học hoặc rootNodeId thay đổi, mở root + nhánh đầu tiên để cây hiển thị có chiều sâu ngay lập tức
   useEffect(() => {
     if (rootNodeId) {
-      setExpandedNodeIds((prev) => (prev.has(rootNodeId) ? prev : new Set([rootNodeId])));
+      const firstBranch = (childrenMap.get(rootNodeId) || [])[0];
+      const nextInitial = new Set<string>([rootNodeId]);
+      if (firstBranch) nextInitial.add(firstBranch);
+      setExpandedNodeIds(nextInitial);
     }
-  }, [rootNodeId, subjectId]);
+  }, [rootNodeId, subjectId, childrenMap]);
 
   // Toggle mở rộng / thu gọn 1 node
   const toggleNode = useCallback((nodeId: string) => {
@@ -588,6 +616,10 @@ export function LessonMindmapStudio({
       }
     }
 
+    const resolvedToneByNode = new Map<string, string>();
+    const FALLBACK_TONES = ["blue", "purple", "emerald", "cyan", "rose"];
+    let fallbackIdx = 0;
+
     const cNodes: Node[] = [];
     for (const rawNode of visibleRawNodes) {
       const pos = useSavedInstructorPositions
@@ -606,13 +638,18 @@ export function LessonMindmapStudio({
         while (parentMap.has(currId)) {
           const pid = parentMap.get(currId)!;
           const pNode = nodeMap.get(pid);
-          if (pNode?.data.tone) {
-            effectiveTone = pNode.data.tone;
+          if (pNode?.data.tone || resolvedToneByNode.has(pid)) {
+            effectiveTone = pNode?.data.tone || resolvedToneByNode.get(pid);
             break;
           }
           currId = pid;
         }
       }
+      if (!effectiveTone && rawNode.data.nodeType === "branch") {
+        effectiveTone = FALLBACK_TONES[fallbackIdx % FALLBACK_TONES.length];
+        fallbackIdx += 1;
+      }
+      resolvedToneByNode.set(rawNode.id, effectiveTone || "blue");
 
       cNodes.push({
         id: rawNode.id,
@@ -620,7 +657,7 @@ export function LessonMindmapStudio({
         position: pos,
         data: {
           ...rawNode.data,
-          tone: effectiveTone,
+          tone: effectiveTone || "blue",
           hasChildren,
           isExpanded,
           childrenCount: children.length,
@@ -629,14 +666,20 @@ export function LessonMindmapStudio({
       });
     }
 
-    // 4. Xây dựng danh sách Edges ReactFlow (Clean Architectural Lines)
+    // 4. Xây dựng danh sách Edges ReactFlow: Nét liền thanh mảnh, nhấn nhẹ nhánh đang mở / hoàn thành
     const cEdges: Edge[] = [];
     for (const rawEdge of currentData.edges) {
       if (visibleIds.has(rawEdge.source) && visibleIds.has(rawEdge.target)) {
         const isFromRoot = rawEdge.source === rootNodeId;
+        const targetNode = nodeMap.get(rawEdge.target);
+        const isTargetCompleted = targetNode?.data.status === "completed";
+        const isTargetExpanded = expandedNodeIds.has(rawEdge.target);
 
-        // Đường nối đơn sắc chuẩn kiến trúc (clean architectural line)
-        const strokeColor = "#94a3b8";
+        const strokeColor = isTargetCompleted
+          ? "#10b981"
+          : isTargetExpanded || isFromRoot
+          ? "#64748b"
+          : "#94a3b8";
 
         cEdges.push({
           id: rawEdge.id,
@@ -646,8 +689,8 @@ export function LessonMindmapStudio({
           type: "default",
           style: {
             stroke: strokeColor,
-            strokeWidth: isFromRoot ? 2 : 1.5,
-            strokeDasharray: "5 4",
+            strokeWidth: isFromRoot ? 1.85 : 1.4,
+            opacity: isTargetCompleted ? 0.72 : isFromRoot ? 0.85 : 0.55,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
@@ -678,14 +721,11 @@ export function LessonMindmapStudio({
   return (
     <ReactFlowProvider>
       <div key={`mindmap-studio-${subjectId}`} className="space-y-3">
-        {/* Clean Architectural Lines CSS */}
+        {/* Subtle Clean Edge Hover */}
         <style>{`
-          .react-flow__edge-path {
-            stroke-dasharray: 6 4 !important;
-          }
           .react-flow__edge:hover .react-flow__edge-path {
             stroke-width: 2.2px !important;
-            stroke: #475569 !important;
+            opacity: 1 !important;
           }
         `}</style>
 
@@ -697,19 +737,16 @@ export function LessonMindmapStudio({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-200">
                   {currentData.subjectCode}
                 </span>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <GitBranch size={16} className="text-blue-600" />
+                  <GitBranch size={15} className="text-slate-500 dark:text-slate-400" />
                   <span>{currentData.title}</span>
                 </h3>
               </div>
-              <p className="text-[11px] text-[#62656b] dark:text-[#a0a3a9] mt-0.5 flex items-center gap-1.5 flex-wrap">
-                <span>Cây tri thức mở rộng lũy tiến: Ban đầu thu gọn ở các bài học chính.</span>
-                <span className="text-amber-600 dark:text-amber-400 font-medium">
-                  Nhấp vào bài học hoặc nút [+] để sổ ra các nhánh khái niệm chi tiết.
-                </span>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Cây tri thức mở rộng lũy tiến — nhấp vào bài học hoặc nút <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">[+]</span> để mở chi tiết từng nhánh.
               </p>
             </div>
 
@@ -790,8 +827,8 @@ export function LessonMindmapStudio({
                       onClick={handleExpandAll}
                       className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
                         isAllExpanded && !isMainCollapsed
-                          ? "bg-blue-600 border-blue-600 text-white shadow-xs"
-                          : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-300"
+                          ? "bg-[#141619] border-[#141619] text-white dark:bg-white dark:border-white dark:text-[#141619] shadow-xs"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
                       }`}
                       title="Mở rộng toàn bộ cây"
                     >
@@ -810,8 +847,8 @@ export function LessonMindmapStudio({
                 onClick={() => setShowMiniMap((v) => !v)}
                 className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
                   showMiniMap
-                    ? "bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/60"
-                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700"
+                    ? "bg-[#141619] border-[#141619] text-white dark:bg-white dark:border-white dark:text-[#141619]"
+                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300"
                 }`}
                 title="Bản đồ thu nhỏ"
               >

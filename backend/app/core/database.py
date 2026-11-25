@@ -679,6 +679,45 @@ CREATE TABLE IF NOT EXISTS instructor_session_actions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. Student Learning Progress & Chapter Exercises
+CREATE TABLE IF NOT EXISTS student_quiz_attempts (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    subject_id VARCHAR(64) NOT NULL,
+    lesson_id VARCHAR(64) NOT NULL,
+    chapter_id VARCHAR(64) NOT NULL,
+    section_id VARCHAR(64) NOT NULL DEFAULT '',
+    quiz_version VARCHAR(64) NOT NULL,
+    questions_json LONGTEXT NOT NULL,
+    answers_json LONGTEXT NOT NULL,
+    results_json LONGTEXT NOT NULL,
+    score INT NOT NULL DEFAULT 0,
+    total INT NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'in_progress',
+    created_at VARCHAR(64) NOT NULL,
+    submitted_at VARCHAR(64) NOT NULL DEFAULT '',
+    INDEX idx_quiz_user_lesson (user_id, subject_id, lesson_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sandbox_runs (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    exercise_id VARCHAR(64) NOT NULL,
+    source_sha256 VARCHAR(64) NOT NULL,
+    evaluation_json LONGTEXT NOT NULL,
+    created_at VARCHAR(64) NOT NULL,
+    INDEX idx_sandbox_user_exercise (user_id, exercise_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS git_evidence_snapshots (
+    project_id VARCHAR(64) PRIMARY KEY,
+    repo_slug VARCHAR(191) NOT NULL,
+    snapshot_json LONGTEXT NOT NULL,
+    verified_at VARCHAR(64) NOT NULL,
+    last_error TEXT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS student_lesson_progress (
     id VARCHAR(64) PRIMARY KEY,
     user_id VARCHAR(64) NOT NULL,
@@ -1099,6 +1138,8 @@ CREATE TABLE IF NOT EXISTS security_otp_codes (
 def _run_safe_migrations(conn: MySQLConnectionWrapper) -> None:
     """Chạy các ALTER TABLE an toàn cho CSDL MySQL 8.0 đang tồn tại."""
     alter_statements = [
+        "ALTER TABLE submissions ADD COLUMN evaluation_json LONGTEXT",
+        "ALTER TABLE student_chapter_submissions ADD COLUMN evidence_json LONGTEXT",
         "ALTER TABLE student_profiles ADD COLUMN last_activity_date VARCHAR(32) DEFAULT ''",
         "ALTER TABLE student_chapter_submissions ADD COLUMN status VARCHAR(32) DEFAULT 'pending'",
         "ALTER TABLE student_chapter_submissions ADD COLUMN instructor_grade DOUBLE DEFAULT NULL",

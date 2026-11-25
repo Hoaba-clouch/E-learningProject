@@ -27,6 +27,8 @@ class SocraticHistoryTurn(BaseModel):
 
 
 class SocraticWorkspaceContext(BaseModel):
+    lesson_id: str | None = None
+    quiz_attempt_id: str | None = None
     view_mode: str | None = None
     subject_id: str | None = None
     subject_code: str | None = None

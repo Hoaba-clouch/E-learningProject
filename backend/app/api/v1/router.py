@@ -11,6 +11,7 @@ from app.api.v1.defense import router as defense_router
 from app.api.v1.git_hub import router as git_hub_router
 from app.api.v1.instructor import router as instructor_router
 from app.api.v1.kanban import router as kanban_router
+from app.api.v1.lesson_qna import router as lesson_qna_router
 from app.api.v1.lms import router as lms_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.schedules import router as schedules_router
@@ -24,6 +25,7 @@ _active_learning_deps = [Depends(block_pending_student)]
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(courses_router, dependencies=_active_learning_deps)
 api_v1_router.include_router(lms_router, dependencies=_active_learning_deps)
+api_v1_router.include_router(lesson_qna_router, dependencies=_active_learning_deps)
 api_v1_router.include_router(student_learning_router, dependencies=_active_learning_deps)
 api_v1_router.include_router(submissions_router, dependencies=_active_learning_deps)
 api_v1_router.include_router(ai_router, dependencies=_active_learning_deps)

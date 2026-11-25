@@ -22,6 +22,11 @@ import {
   Box,
   Cloud,
   CheckCircle2,
+  Lock,
+  KeyRound,
+  ArrowRight,
+  BookOpen,
+  Compass,
 } from "lucide-react";
 import {
   MULTI_CHAPTER_SUBJECTS,
@@ -32,6 +37,8 @@ import {
 interface CourseCatalogHubProps {
   onSelectCourse: (subjectId: SubjectId) => void;
   onEnrollCourse?: (subject: SubjectModuleData) => void | Promise<void>;
+  onOpenJoinByCode?: () => void;
+  splitByEnrollment?: boolean;
   subjects?: SubjectModuleData[];
 }
 
@@ -509,9 +516,15 @@ function getSubjectVisualTheme(id: string): SubjectVisualTheme {
   };
 }
 
-export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: CourseCatalogHubProps) {
+export function CourseCatalogHub({
+  onSelectCourse,
+  onEnrollCourse,
+  onOpenJoinByCode,
+  splitByEnrollment = false,
+  subjects,
+}: CourseCatalogHubProps) {
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"roadmap" | "all">("roadmap");
+  const [viewMode, setViewMode] = useState<"roadmap" | "all">("all");
   const allSubjects = subjects && subjects.length > 0 ? subjects : MULTI_CHAPTER_SUBJECTS;
 
   const filteredSubjects = allSubjects.filter((sub) => {
@@ -523,10 +536,13 @@ export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: C
   });
 
   const isSearching = searchQuery.trim().length > 0;
+  const enrolledSubjects = filteredSubjects.filter((s) => s.enrolled === true);
+  const discoverSubjects = filteredSubjects.filter((s) => s.enrolled !== true);
 
-  // Single Course Card Renderer with Spotlight Card (Hiệu ứng 4)
+  // Single Course Card Renderer with Spotlight Card (Ẩn hoàn toàn mã lớp CS201-N01 rối mắt phía Học viên)
   const renderCard = (sub: SubjectModuleData, idx: number) => {
     const theme = getSubjectVisualTheme(sub.id);
+    const isUnenrolledStudentCard = splitByEnrollment && sub.enrolled !== true;
 
     return (
       <SpotlightCard
@@ -579,7 +595,7 @@ export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: C
             </div>
           </div>
 
-          {/* Course Name & Teacher */}
+          {/* Course Name & Teacher (Không hiển thị mã lớp học phần N01 rối mắt) */}
           <div className="pt-2.5 space-y-1">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-black dark:group-hover:text-white group-hover:translate-x-0.5 transition-all line-clamp-2 leading-snug">
               {sub.name}
@@ -590,51 +606,58 @@ export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: C
             <p className="text-[11px] font-mono text-slate-400 dark:text-slate-500 pt-0.5">
               {sub.chapters.length} chương · {sub.totalLessons} bài học · {sub.totalDuration}
             </p>
-            {typeof sub.enrolled === "boolean" && (
-              <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold ${
-                    sub.enrolled
-                      ? "border-slate-900/20 bg-slate-900 text-white dark:border-white/20 dark:bg-white dark:text-slate-950"
-                      : "border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300"
-                  }`}
-                >
-                  {sub.enrolled ? `Đã ghi danh · ${sub.sectionCode || `${sub.code}-N01`}` : "Chưa ghi danh · Xem trước"}
-                </span>
-                {!sub.enrolled && onEnrollCourse && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void onEnrollCourse(sub);
-                    }}
-                    className="inline-flex items-center gap-1 rounded-full bg-slate-900 hover:bg-black text-white dark:bg-white dark:hover:bg-slate-200 dark:text-slate-950 px-2.5 py-0.5 text-[10px] font-bold transition cursor-pointer"
-                  >
-                    + Ghi danh
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Compact Progress Bar */}
-        <div className="pt-3">
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono mb-1">
-            <span className="group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-colors">Tiến độ</span>
-            <span className="font-bold text-slate-700 dark:text-slate-300 font-mono group-hover:scale-105 transition-transform">
-              {sub.overallProgress}%
+        {/* Footer: Enrolled Course Progress vs Unenrolled Discover CTA */}
+        {isUnenrolledStudentCard ? (
+          <div className="pt-3 mt-3 border-t border-slate-100 dark:border-white/[0.07] flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              <Lock size={11.5} />
+              <span>Xem đề cương</span>
             </span>
+            {onEnrollCourse ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onEnrollCourse(sub);
+                }}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-slate-950 px-3 py-1 text-[11px] font-bold transition cursor-pointer shadow-2xs"
+              >
+                <span>Đăng ký học</span>
+                <ArrowRight size={11} />
+              </button>
+            ) : (
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                Chi tiết →
+              </span>
+            )}
           </div>
-          <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative group-hover:h-2 transition-all">
-            <div
-              className="h-full rounded-full bg-slate-800 dark:bg-slate-200 transition-all duration-500 relative group-hover:shadow-[0_0_12px_rgba(255,255,255,0.4)]"
-              style={{ width: `${sub.overallProgress}%` }}
-            >
-              <div className="absolute inset-0 f8-shimmer" />
+        ) : (
+          <div className="pt-3">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono mb-1">
+              <span className="group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-colors">
+                Tiến độ học tập
+              </span>
+              <span className="font-bold text-slate-700 dark:text-slate-300 font-mono group-hover:scale-105 transition-transform">
+                {sub.overallProgress}%
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative group-hover:h-2 transition-all">
+              <div
+                className={`h-full rounded-full transition-all duration-500 relative ${
+                  sub.overallProgress >= 100
+                    ? "bg-emerald-500"
+                    : "bg-slate-800 dark:bg-slate-200"
+                }`}
+                style={{ width: `${sub.overallProgress}%` }}
+              >
+                <div className="absolute inset-0 f8-shimmer" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </SpotlightCard>
     );
   };
@@ -659,13 +682,24 @@ export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: C
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Mode Switcher: Lộ trình vs Tất cả với hiệu ứng Marlo Liquid Rubberband Pill */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {splitByEnrollment && onOpenJoinByCode && (
+            <button
+              type="button"
+              onClick={onOpenJoinByCode}
+              className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 px-3.5 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer shadow-2xs"
+            >
+              <KeyRound size={13.5} />
+              <span>Nhập mã lớp</span>
+            </button>
+          )}
+
+          {/* Mode Switcher: Tất cả vs Theo lộ trình */}
           <MarloSegmentedControl
             value={viewMode}
             options={[
-              { id: "roadmap", label: "Theo lộ trình", icon: <Milestone size={13} /> },
-              { id: "all", label: "Tất cả môn", icon: <LayoutGrid size={13} /> },
+              { id: "all", label: "Phân nhóm khóa học", icon: <LayoutGrid size={13} /> },
+              { id: "roadmap", label: "Theo lộ trình 5 chặng", icon: <Milestone size={13} /> },
             ]}
             onChange={(val) => setViewMode(val as "roadmap" | "all")}
             size="sm"
@@ -680,7 +714,7 @@ export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: C
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm môn học, giảng viên..."
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-2xs"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-white outline-none focus:border-slate-400 dark:focus:border-slate-600 transition shadow-2xs"
             />
           </div>
         </div>
@@ -688,12 +722,12 @@ export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: C
 
       {/* ─── CASE 1: SEARCH ACTIVE ─────────────────────────────────── */}
       {isSearching ? (
-        <div className="max-w-[1600px] w-full mx-auto px-1 sm:px-2 space-y-4">
+        <div className="max-w-[1600px] w-full mx-auto px-1 sm:px-2 space-y-6">
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>Kết quả tìm kiếm cho: "{searchQuery}" ({filteredSubjects.length} môn)</span>
             <button
               onClick={() => setSearchQuery("")}
-              className="text-blue-600 hover:underline cursor-pointer"
+              className="text-slate-700 dark:text-slate-300 font-semibold hover:underline cursor-pointer"
             >
               Xóa tìm kiếm
             </button>
@@ -702,11 +736,104 @@ export function CourseCatalogHub({ onSelectCourse, onEnrollCourse, subjects }: C
             <div className="p-12 text-center text-sm text-slate-400 rounded-[22px] border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
               Không tìm thấy môn học nào khớp với từ khóa tìm kiếm.
             </div>
+          ) : splitByEnrollment ? (
+            <div className="space-y-8">
+              {enrolledSubjects.length > 0 && (
+                <section className="space-y-3.5">
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={16} className="text-emerald-500" />
+                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
+                      Khóa học đang học ({enrolledSubjects.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+                    {enrolledSubjects.map((sub, idx) => renderCard(sub, idx))}
+                  </div>
+                </section>
+              )}
+              {discoverSubjects.length > 0 && (
+                <section className="space-y-3.5">
+                  <div className="flex items-center gap-2">
+                    <Compass size={16} className="text-slate-500 dark:text-slate-400" />
+                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
+                      Khám phá khóa học mới ({discoverSubjects.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+                    {discoverSubjects.map((sub, idx) => renderCard(sub, idx))}
+                  </div>
+                </section>
+              )}
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
               {filteredSubjects.map((sub, idx) => renderCard(sub, idx))}
             </div>
           )}
+        </div>
+      ) : splitByEnrollment && viewMode === "all" ? (
+        /* ─── CASE 2A: TÁCH RÕ 2 KHU RÀNH MẠCH CHO HỌC VIÊN (ĐANG HỌC vs KHÁM PHÁ MỚI) ─── */
+        <div className="max-w-[1600px] w-full mx-auto px-1 sm:px-2 space-y-10">
+          {/* KHU 1: KHÓA HỌC ĐANG HỌC */}
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  Khóa học đang học
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  {enrolledSubjects.length} môn
+                </span>
+              </div>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Các môn bạn đã đăng ký và đang tích lũy tiến độ trong học kỳ
+              </span>
+            </div>
+
+            {enrolledSubjects.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-white/60 dark:bg-slate-900/50 p-8 text-center space-y-2">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  Bạn chưa đăng ký môn học nào trong học kỳ này
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Hãy chọn một môn ở mục Khám phá khóa học mới bên dưới hoặc bấm Nhập mã lớp từ Giảng viên để bắt đầu học.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+                {enrolledSubjects.map((sub, idx) => renderCard(sub, idx))}
+              </div>
+            )}
+          </section>
+
+          {/* KHU 2: KHÁM PHÁ KHÓA HỌC MỚI */}
+          <section className="space-y-4 pt-6 border-t border-slate-200/80 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <Compass size={18} className="text-slate-500 dark:text-slate-400 shrink-0" />
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  Khám phá khóa học mới
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  {discoverSubjects.length} môn mở đăng ký
+                </span>
+              </div>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Bấm vào môn để xem trước đề cương chi tiết hoặc chọn lớp học phần để mở khóa bài học
+              </span>
+            </div>
+
+            {discoverSubjects.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/50 p-6 text-center text-xs text-slate-500">
+                Bạn đã đăng ký toàn bộ các môn học trong chương trình đào tạo!
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+                {discoverSubjects.map((sub, idx) => renderCard(sub, idx))}
+              </div>
+            )}
+          </section>
         </div>
       ) : viewMode === "roadmap" ? (
         /* ─── CASE 2: ROADMAP TIMELINE VIEW (PHÂN CHẶNG RÕ RÀNG) ─── */

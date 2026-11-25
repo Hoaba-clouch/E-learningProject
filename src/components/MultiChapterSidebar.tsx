@@ -112,7 +112,7 @@ function ChapterLessonGroup({
       <div
         ref={pillRef}
         aria-hidden="true"
-        className="pointer-events-none opacity-0 absolute z-0 rounded-[14px] bg-white dark:bg-slate-800/95 border border-amber-300/90 dark:border-amber-500/45 shadow-[0_2px_10px_rgba(15,23,42,0.06)] ring-1 ring-amber-400/15"
+        className="pointer-events-none opacity-0 absolute z-0 rounded-[14px] bg-white dark:bg-slate-800/95 border border-slate-200/90 dark:border-slate-700/90 shadow-[0_2px_10px_rgba(15,23,42,0.06)]"
       />
 
       {chapter.lessons.map((lesson, lIdx) => {
@@ -170,10 +170,10 @@ function ChapterLessonGroup({
               <div
                 className={`p-1.5 rounded-lg shrink-0 transition-all duration-200 ${
                   isActive
-                    ? "bg-amber-100/90 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-500/30"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-2xs"
                     : lesson.status === "done"
-                    ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                    ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
                 }`}
               >
                 {lesson.type === "video" ? (
@@ -300,10 +300,10 @@ function ChapterLessonGroup({
           </div>
         </div>
         <span
-          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 border-0 outline-none ring-0 ${
+          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 border ${
             activeKey === `exercise-${chapter.id}`
-              ? "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300"
-              : "bg-amber-100/70 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300"
+              ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/80"
           }`}
         >
           +{((chapter as any).dbAssignment?.points ?? 100)} XP
@@ -342,7 +342,7 @@ function ChapterLessonGroup({
           <div
             className={`p-1.5 rounded-lg shrink-0 transition-colors duration-200 ${
               activeKey === `mindmap-${chapter.id}`
-                ? "bg-amber-100/90 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-500/30"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-2xs"
                 : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
             }`}
           >
@@ -370,10 +370,10 @@ function ChapterLessonGroup({
           </div>
         </div>
         <span
-          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 border-0 outline-none ring-0 ${
+          className={`relative z-10 text-xs font-bold font-mono px-2 py-0.5 rounded-md shrink-0 transition-colors duration-150 border ${
             activeKey === `mindmap-${chapter.id}`
-              ? "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+              ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/80"
           }`}
         >
           Toàn chương
@@ -486,7 +486,7 @@ export function MultiChapterSidebar({
       {/* ─── SIDEBAR HEADER: SUBJECT & OVERALL PROGRESS ───────────── */}
       <div className="border-b border-slate-200 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-900/50">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+          <span className="font-mono text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200">
             {subject.code} · {subject.semester}
           </span>
           <button

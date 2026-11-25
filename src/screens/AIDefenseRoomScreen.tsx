@@ -1969,16 +1969,18 @@ export default function AIDefenseRoomScreen({
           {staffTab === "rubric" && renderRubricPanel()}
         </div>
       ) : studentTab === "official" ? (
-        <OfficialDefenseResultView
-          dossier={studentDossier}
-          practiceCount={sessions.length}
-          onGoToDossier={() => setStudentTab("dossier")}
-          onGoToPractice={() => setStudentTab("practice")}
-          onNotify={showToast}
-        />
+        <div key="student-tab-official">
+          <OfficialDefenseResultView
+            dossier={studentDossier}
+            practiceCount={sessions.length}
+            onGoToDossier={() => setStudentTab("dossier")}
+            onGoToPractice={() => setStudentTab("practice")}
+            onNotify={showToast}
+          />
+        </div>
       ) : studentTab === "history" ? (
         /* ── STUDENT HISTORY TAB ── */
-        <div className="space-y-6">
+        <div key="student-tab-history" className="space-y-6">
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">
               Các phiên Phản Biện AI của bạn ({sessions.length})
@@ -2029,7 +2031,7 @@ export default function AIDefenseRoomScreen({
         </div>
       ) : studentTab === "dossier" ? (
         /* ── STUDENT DEFENSE DOSSIER TAB (ALWAYS ACCESSIBLE EVEN DURING ACTIVE PRACTICE) ── */
-        <div className="space-y-4">
+        <div key="student-tab-dossier" className="space-y-4">
           {studentDossier ? (
             <DefensePackagePanel
               dossier={studentDossier}
@@ -2061,7 +2063,7 @@ export default function AIDefenseRoomScreen({
         </div>
       ) : (
         /* ── STUDENT AI MOCK PRACTICE TAB ── */
-        <div className="space-y-6">
+        <div key="student-tab-practice" className="space-y-6">
 
           {/* Responsive 3 Jury Cards (1 col < xl, 3 cols >= xl -> zero clipping at 871px) */}
           <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -2150,7 +2152,7 @@ export default function AIDefenseRoomScreen({
             {/* LEFT: LOBBY OR ACTIVE TRIBUNAL STAGE */}
             <div className="space-y-4">
               {!liveDefenseId ? (
-                <div className="rounded-[28px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-6 sm:p-7 space-y-5 shadow-xs">
+                <div key="practice-lobby-card" className="rounded-[28px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-6 sm:p-7 space-y-5 shadow-xs">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div>
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100/90 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700">
@@ -2258,7 +2260,7 @@ export default function AIDefenseRoomScreen({
                   </div>
                 </div>
               ) : (
-                <div className="rounded-[28px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-7 space-y-5 shadow-xs">
+                <div key={`practice-live-${liveDefenseId}-r${currentRoundIdx}-${stagePhase}`} className="rounded-[28px] border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#14161F] p-5 sm:p-7 space-y-5 shadow-xs">
                   {/* Top Round & Phase Banner */}
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2.5 flex-wrap">

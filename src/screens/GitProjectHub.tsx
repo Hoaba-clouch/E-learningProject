@@ -11,20 +11,9 @@ import {
 import OdometerNumber from "../components/OdometerNumber";
 import MarloNumber from "../components/MarloNumber";
 import {
-  GitPrReviewPanel,
-  GitNewCommitModal,
-  GitNewPrModal,
-} from "../components/GitPrReviewPanel";
-import {
-  applyPrAiFixApi,
-  approvePrPeerReviewApi,
-  createGitPullRequestApi,
   fetchGitHubWorkspaceApi,
   fetchProjectArchitectureApi,
   generateProjectArchitectureApi,
-  mergeGitPullRequestApi,
-  pushGitCommitApi,
-  requestChangesPrApi,
   saveProjectArchitectureApi,
   syncGitHubLiveApi,
   updateGitHubRepoApi,
@@ -92,6 +81,17 @@ import {
   X,
   FolderKanban,
 } from "lucide-react";
+
+function isGitHubRepositoryUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.host.toLowerCase() === "github.com"
+      && !url.username && !url.password && !url.search && !url.hash
+      && /^\/[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}\/?$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
 
 // ─── Staggered Animation Timing Delays (Simulating organic branch tree growth) ──
 const NODE_ANIM_DELAYS: Record<string, number> = {
@@ -1005,6 +1005,9 @@ const INITIAL_ARCH_EDGES: Edge[] = [
 
 // ─── Git Commit Data Model for Interactive Graph ────────────────────────────
 export interface GitCommitItem {
+  statsKnown?: boolean;
+  url?: string;
+  parentShas?: string[];
   id: string;
   sha: string;
   author: {
@@ -1028,249 +1031,6 @@ export interface GitCommitItem {
   cx: number;
   cy: number;
 }
-
-const GIT_COMMITS: GitCommitItem[] = [
-  {
-    id: "c-1",
-    sha: "001a4fc",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "main",
-    branchLabel: "main",
-    branchColor: "#2563eb",
-    message: "TE9CA72: Khởi tạo repo cấu trúc 3-tier, Dockerfile & branching model",
-    date: "28/10/2026 09:15",
-    timeAgo: "10 ngày trước",
-    stats: { additions: 240, deletions: 0, files: 3 },
-    filesChanged: ["backend/app/main.py", "docker-compose.yml", "README.md"],
-    cx: 70,
-    cy: 45,
-  },
-  {
-    id: "c-2",
-    sha: "14b98c2",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "feature/ci-cd-pipeline",
-    branchLabel: "feature/ci-cd-pipeline",
-    branchColor: "#8b5cf6",
-    message: "TE9CA72: Tách nhánh feature/ci-cd-pipeline từ main, cấu hình CI/CD và môi trường staging",
-    date: "29/10/2026 10:30",
-    timeAgo: "21 ngày trước",
-    stats: { additions: 110, deletions: 5, files: 2 },
-    filesChanged: [".github/workflows/ci.yml", "package.json"],
-    cx: 170,
-    cy: 105,
-  },
-  {
-    id: "c-3",
-    sha: "b579f87",
-    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "TE9CA7A-JWT",
-    branchLabel: "TE9CA7A-JWT",
-    branchColor: "#f59e0b",
-    message: "TE22C19: Khởi tạo module Auth, schemas User và bảng cơ sở dữ liệu users",
-    date: "30/10/2026 14:20",
-    timeAgo: "20 ngày trước",
-    stats: { additions: 185, deletions: 4, files: 3 },
-    filesChanged: ["backend/app/models/user.py", "backend/app/schemas/auth.py", "backend/app/core/security.py"],
-    cx: 260,
-    cy: 165,
-  },
-  {
-    id: "c-4",
-    sha: "89f3a12",
-    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "feature/te9ca74-kien-truc-3-tang",
-    branchLabel: "feature/te9ca74-kien-truc-3-tang",
-    branchColor: "#06b6d4",
-    message: "TE35D77: Xây dựng cấu trúc kiến trúc 3-tier FastAPI + React",
-    date: "31/10/2026 11:00",
-    timeAgo: "19 ngày trước",
-    stats: { additions: 230, deletions: 12, files: 4 },
-    filesChanged: ["backend/app/services/evaluator.py", "docker/sandbox.Dockerfile", "backend/app/core/config.py"],
-    cx: 340,
-    cy: 225,
-  },
-  {
-    id: "c-5",
-    sha: "5149fb7",
-    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "TE9CA7A-JWT",
-    branchLabel: "TE9CA7A-JWT",
-    branchColor: "#f59e0b",
-    message: "TE22C19: Xây dựng JWT authentication, hash Passlib Bcrypt 12 rounds và endpoint /login",
-    date: "01/11/2026 16:40",
-    timeAgo: "18 ngày trước",
-    stats: { additions: 295, deletions: 8, files: 5 },
-    filesChanged: ["backend/app/api/v1/endpoints/auth.py", "backend/app/core/security.py", "src/screens/LoginScreen.tsx"],
-    cx: 420,
-    cy: 165,
-  },
-  {
-    id: "c-6",
-    sha: "9c23b81",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "feature/te9ca79-khoi-tao-Backend-FastAPI",
-    branchLabel: "feature/te9ca79-khoi-tao-Backend-FastAPI",
-    branchColor: "#10b981",
-    message: "TE14F82: Cấu hình Redis Cache connection pool và Logger middleware trên backend",
-    date: "02/11/2026 09:30",
-    timeAgo: "17 ngày trước",
-    stats: { additions: 74, deletions: 3, files: 2 },
-    filesChanged: ["backend/app/core/redis.py", "backend/app/middlewares/logging.py"],
-    cx: 490,
-    cy: 285,
-  },
-  {
-    id: "c-7",
-    sha: "3a78c10",
-    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "feature/te9ca74-kien-truc-3-tang",
-    branchLabel: "feature/te9ca74-kien-truc-3-tang",
-    branchColor: "#06b6d4",
-    message: "TE35D77: Thiết lập giới hạn cgroups v2 (RAM 256MB, CPU 1 core) và 5 test cases ẩn",
-    date: "02/11/2026 15:15",
-    timeAgo: "17 ngày trước",
-    stats: { additions: 145, deletions: 6, files: 3 },
-    filesChanged: ["backend/app/services/evaluator.py", "backend/app/models/testcases.py"],
-    cx: 560,
-    cy: 225,
-  },
-  {
-    id: "c-8",
-    sha: "c8e41a9",
-    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "feature/ci-cd-pipeline",
-    branchLabel: "feature/ci-cd-pipeline",
-    branchColor: "#8b5cf6",
-    message: "TE22C19: Merge PR #04 'TE9CA7A-JWT' vào pipeline sau khi vượt qua CI audit",
-    date: "03/11/2026 11:20",
-    timeAgo: "16 ngày trước",
-    stats: { additions: 85, deletions: 2, files: 2 },
-    filesChanged: ["backend/app/api/v1/router.py", "backend/app/core/database.py"],
-    cx: 640,
-    cy: 105,
-  },
-  {
-    id: "c-9",
-    sha: "d4bdc7d",
-    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "feature/ci-cd-pipeline",
-    branchLabel: "feature/ci-cd-pipeline",
-    branchColor: "#8b5cf6",
-    message: "TE35D77: Merge PR #05 vào feature/ci-cd-pipeline (Đạt 100% test coverage)",
-    date: "03/11/2026 18:00",
-    timeAgo: "16 ngày trước",
-    stats: { additions: 92, deletions: 5, files: 3 },
-    filesChanged: ["backend/app/api/v1/router.py", "backend/app/services/analytics.py"],
-    cx: 720,
-    cy: 105,
-  },
-  {
-    id: "c-10",
-    sha: "77817ef",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "main",
-    branchLabel: "main",
-    branchColor: "#2563eb",
-    message: "TE9CA72: Release v1.0.0: Nghiệm thu Sprint 1 & 2 lên Production Staging",
-    date: "04/11/2026 09:00",
-    timeAgo: "15 ngày trước",
-    stats: { additions: 140, deletions: 10, files: 4 },
-    filesChanged: ["dist/index.html", "vercel.json", "docker-compose.prod.yml"],
-    cx: 810,
-    cy: 45,
-  },
-  {
-    id: "c-11",
-    sha: "a41b782",
-    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "huy",
-    branchLabel: "huy",
-    branchColor: "#ec4899",
-    message: "HOTFIX-01: Vá lỗ hổng bảo mật CVE-2026-8812 SQL parameter escape tại tầng repository",
-    date: "04/11/2026 14:15",
-    timeAgo: "15 ngày trước",
-    stats: { additions: 28, deletions: 6, files: 2 },
-    filesChanged: ["backend/app/core/database.py", "backend/app/api/deps.py"],
-    cx: 890,
-    cy: 345,
-  },
-  {
-    id: "c-12",
-    sha: "e812d33",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "main",
-    branchLabel: "main",
-    branchColor: "#2563eb",
-    message: "HOTFIX-01: Merge bản vá vào main (Đóng gói phát hành khẩn cấp Tag v1.0.1)",
-    date: "04/11/2026 16:30",
-    timeAgo: "15 ngày trước",
-    stats: { additions: 35, deletions: 4, files: 2 },
-    filesChanged: ["CHANGELOG.md", "backend/app/core/database.py"],
-    cx: 970,
-    cy: 45,
-  },
-  {
-    id: "c-13",
-    sha: "3d91cf4",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "feature/ci-cd-pipeline",
-    branchLabel: "feature/ci-cd-pipeline",
-    branchColor: "#8b5cf6",
-    message: "HOTFIX-01: Đồng bộ bản vá về feature/ci-cd-pipeline",
-    date: "04/11/2026 17:00",
-    timeAgo: "15 ngày trước",
-    stats: { additions: 22, deletions: 2, files: 2 },
-    filesChanged: ["backend/app/core/database.py", "tests/test_sql_injection.py"],
-    cx: 1030,
-    cy: 105,
-  },
-  {
-    id: "c-14",
-    sha: "2103bbf",
-    author: { name: "Phan Đình Nghị", role: "Backend / Database", avatar: "N", color: "#9333ea" },
-    branch: "feature/ci-cd-pipeline",
-    branchLabel: "feature/ci-cd-pipeline",
-    branchColor: "#8b5cf6",
-    message: "TE61A04: Cắt nhánh chuẩn bị đóng gói nghiệm thu Sprint 3 trên pipeline",
-    date: "05/11/2026 10:45",
-    timeAgo: "14 ngày trước",
-    stats: { additions: 180, deletions: 14, files: 5 },
-    filesChanged: ["backend/app/version.py", "package.json", "docs/release_notes.md"],
-    cx: 1110,
-    cy: 105,
-  },
-  {
-    id: "c-15",
-    sha: "62e08ab",
-    author: { name: "Võ Nhật Huy", role: "Frontend / Fullstack", avatar: "H", color: "#16a34a" },
-    branch: "huy",
-    branchLabel: "huy",
-    branchColor: "#ec4899",
-    message: "TE61A04: Tinh chỉnh UI, cập nhật manifest và chạy trọn bộ 48 ca kiểm thử E2E Cypress",
-    date: "05/11/2026 16:30",
-    timeAgo: "14 ngày trước",
-    stats: { additions: 115, deletions: 8, files: 4 },
-    filesChanged: ["cypress/e2e/auth.cy.ts", "cypress/e2e/editor.cy.ts", "src/App.tsx"],
-    cx: 1200,
-    cy: 345,
-  },
-  {
-    id: "c-16",
-    sha: "7323c97",
-    author: { name: "Nguyễn Bá Hòa", role: "Leader / Architect", avatar: "H", color: "#2563eb" },
-    branch: "main",
-    branchLabel: "main",
-    branchColor: "#2563eb",
-    message: "TE61A04: Release v1.2.0: Nghiệm thu toàn diện đồ án và bàn giao Production",
-    date: "06/11/2026 14:00",
-    timeAgo: "Hôm qua",
-    stats: { additions: 310, deletions: 15, files: 6 },
-    filesChanged: ["src/screens/GitProjectHub.tsx", "src/App.tsx", "backend/app/version.py"],
-    cx: 1300,
-    cy: 45,
-  },
-];
 
 function AnimatedNumber({
   value,
@@ -1451,9 +1211,9 @@ const GitRepoConfigModal = memo(function GitRepoConfigModal({
   const cleanDraft = draftRepoUrl.trim();
   const cleanInitial = initialRepoUrl.trim();
   const isConnectedExact = cleanDraft.length > 0 && cleanDraft === cleanInitial;
-  const validPreviewUrl = /^https?:\/\//i.test(cleanDraft)
+  const validPreviewUrl = isGitHubRepositoryUrl(cleanDraft)
     ? cleanDraft
-    : /^https?:\/\//i.test(cleanInitial)
+    : isGitHubRepositoryUrl(cleanInitial)
     ? cleanInitial
     : "";
 
@@ -1462,8 +1222,8 @@ const GitRepoConfigModal = memo(function GitRepoConfigModal({
     !PRESET_TARGET_BRANCHES.some((opt) => opt.value === draftTargetBranch);
 
   const handleSubmit = async () => {
-    if (!cleanDraft || !/^https?:\/\//i.test(cleanDraft)) {
-      setValidationError("Vui lòng nhập URL GitHub hợp lệ bắt đầu bằng https:// hoặc http://");
+    if (!isGitHubRepositoryUrl(cleanDraft)) {
+      setValidationError("Nhập https://github.com/OWNER/REPOSITORY; không thêm thông tin đăng nhập, query hoặc đường dẫn PR.");
       inputRef.current?.focus();
       return;
     }
@@ -1683,9 +1443,9 @@ const GitRepoConfigModal = memo(function GitRepoConfigModal({
               )}
             </div>
             <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-800 dark:text-blue-300">
-              <li>Tự động lấy commit history và ánh xạ sang <strong>Cây phân nhánh DAG</strong>.</li>
-              <li>Tự động quét Pull Request qua <strong>CodeMind AI AST Reviewer</strong>.</li>
-              <li>Kiểm định liêm chính AI và phân bổ đóng góp giữa các thành viên nhóm.</li>
+              <li>Đọc mẫu commit thật và các SHA cha từ GitHub khi đồng bộ.</li>
+              <li>Đọc PR, trạng thái kiểm thử và review cho từng head SHA.</li>
+              <li>Chế độ chỉ đọc: thao tác push, review và merge thực hiện trên GitHub.</li>
             </ul>
           </div>
         </div>
@@ -1760,6 +1520,11 @@ export default function GitProjectHub({
   const [mergeStrategy, setMergeStrategy] = useState<string>("squash");
   const [webhookActive, setWebhookActive] = useState<boolean>(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string>("");
+  const [evidenceVerified, setEvidenceVerified] = useState(false);
+  const [evidenceTruncated, setEvidenceTruncated] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const workspaceRequestId = useRef(0);
+  const requestedProjectId = useRef(initialProjectId);
   const [commits, setCommits] = useState<GitCommitItem[]>([]);
   const [pullRequests, setPullRequests] = useState<GitPullRequestRecord[]>([]);
   const [selectedPr, setSelectedPr] = useState<GitPullRequestRecord | null>(null);
@@ -1781,9 +1546,6 @@ export default function GitProjectHub({
   );
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [prActionLoading, setPrActionLoading] = useState<string | null>(null);
-  const [showNewCommitModal, setShowNewCommitModal] = useState(false);
-  const [showNewPrModal, setShowNewPrModal] = useState(false);
 
   const activeProjectSummary = useMemo(
     () => projectsList.find((p) => p.id === activeProjectId) || projectsList[0] || null,
@@ -1820,32 +1582,33 @@ export default function GitProjectHub({
     );
     showToast(
       nextLocked
-        ? `Đã đóng băng Repository & khóa Sprint Kanban của dự án ${activeProjectId} — Sinh viên không thể Commit / PR / Merge.`
+        ? `Đã đóng băng thao tác nộp bài trong ứng dụng cho dự án ${activeProjectId}. Bảo vệ nhánh GitHub cần được cấu hình riêng.`
         : `Đã mở khóa Repository & Sprint Kanban dự án ${activeProjectId} — Sinh viên có thể tiếp tục nộp bài.`
     );
   };
 
   const handleExportGitCsv = () => {
     const csvCell = (val: unknown) => {
-      const s = String(val ?? "").replace(/"/g, '""');
+      const raw = String(val ?? "");
+      const s = (/^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw).replace(/"/g, '""');
       return `"${s}"`;
     };
     const lines: string[] = [];
     lines.push("BAO CAO KIEM DINH GIT PROJECT HUB");
-    lines.push(`Du an,${csvCell(activeProjectId)},Repo,${csvCell(repoSlug)},Diem Van hoa Git,${metricsState.gitCultureScore}`);
+    lines.push(`Du an,${csvCell(activeProjectId)},Repo,${csvCell(repoSlug)},Nguon,GitHub REST,Xac minh luc,${csvCell(lastSyncedAt)},Da xac minh,${evidenceVerified}`);
     lines.push("");
     lines.push("PHAN BO DONG GOP THANH VIEN (50% SP / 30% Commit / 20% DoD)");
     lines.push("Thanh vien,Vai tro,Ty trong (%),So Commit,Story Points,Them dong,Xoa dong,Xep hang");
     memberAnalytics.forEach((m) => {
       lines.push(
-        [m.name, m.role, m.sharePct, m.commitsCount, m.storyPointsDone, m.additions, m.deletions, m.grade]
+        [m.name, m.role, m.sharePct, m.commitsCount, m.storyPointsDone, "Unknown", "Unknown", "Not graded"]
           .map(csvCell)
           .join(",")
       );
     });
     lines.push("");
-    lines.push("DANH SACH PULL REQUEST & CON DAU DOD");
-    lines.push("PR #,Tieu de,Tac gia,Nhanh nguon,Nhanh dich,Task,AI Score,Trang thai,Peer Reviewer,DoD SHA-256");
+    lines.push("DANH SACH PULL REQUEST - MAU GITHUB");
+    lines.push("PR #,Tieu de,Tac gia,Nhanh nguon,Nhanh dich,Task,Head SHA,Trang thai,Peer Reviewer,Test evidence");
     pullRequests.forEach((pr) => {
       lines.push(
         [
@@ -1855,10 +1618,10 @@ export default function GitProjectHub({
           pr.sourceBranch,
           pr.targetBranch,
           pr.taskCode || "",
-          pr.aiReviewScore,
+          pr.headSha || "Unknown",
           pr.status,
           pr.peerReviewer || "",
-          pr.dodSha256 || "",
+          pr.testEvidence?.testsPassed ? "Passing check at head SHA" : "Unverified or not passing",
         ]
           .map(csvCell)
           .join(",")
@@ -1975,10 +1738,15 @@ export default function GitProjectHub({
   const [branchFilter, setBranchFilter] = useState<string>("all");
 
   const loadGitWorkspace = useCallback(async (pid: string, preserveSelectedPrId?: string) => {
+    const requestId = ++workspaceRequestId.current;
     setLoadingWorkspace(true);
     try {
       const data = await fetchGitHubWorkspaceApi(pid || undefined, role);
-      if (!data) return;
+      if (requestId !== workspaceRequestId.current) return;
+      if (!data) {
+        setSyncError("Không tải được Git Hub. Dữ liệu đang hiển thị là lần xác minh trước.");
+        return;
+      }
       const projList = data.projects || [];
       setProjectsList(projList);
       if (!projList.length || !data.repository) {
@@ -1988,6 +1756,8 @@ export default function GitProjectHub({
         setMergeStrategy("squash");
         setWebhookActive(false);
         setLastSyncedAt("");
+        setEvidenceVerified(false);
+        setEvidenceTruncated(false);
         setCommits([]);
         setSelectedCommit(null);
         setPullRequests([]);
@@ -2012,6 +1782,9 @@ export default function GitProjectHub({
       setMergeStrategy(data.repository.defaultMergeStrategy || "squash");
       setWebhookActive(Boolean(data.repository.webhookActive));
       setLastSyncedAt(data.repository.lastSyncedAt || "");
+      setEvidenceVerified(Boolean(data.repository.evidenceVerified));
+      setEvidenceTruncated(Boolean(data.repository.truncated));
+      setSyncError(data.repository.lastSyncError || null);
       setMetricsState(data.metrics);
       setProjectTasks(data.projectTasks || []);
       setMemberAnalytics(data.memberAnalytics || []);
@@ -2033,7 +1806,7 @@ export default function GitProjectHub({
       });
       void loadArchitecture(resolvedId);
     } finally {
-      setLoadingWorkspace(false);
+      if (requestId === workspaceRequestId.current) setLoadingWorkspace(false);
     }
   }, [loadArchitecture, role]);
 
@@ -2043,21 +1816,21 @@ export default function GitProjectHub({
       return;
     }
     const cleanUrl = targetUrl.trim();
-    if (!cleanUrl || !cleanUrl.startsWith("http")) {
+    if (!isGitHubRepositoryUrl(cleanUrl)) {
       showToast("Vui lòng nhập URL GitHub hợp lệ (https://...)");
       return;
     }
     setIsSyncingLive(true);
     setActionError(null);
     try {
-      setRepoUrl(cleanUrl);
       const res = await syncGitHubLiveApi(activeProjectId, cleanUrl, role);
       if (res.error) {
-        showToast(res.error);
+        setSyncError(res.error);
+        return;
       } else {
-        const modeLabel = res.isRemoteLive ? "Live GitHub API" : "Đồng bộ cục bộ";
+        setSyncError(null);
         showToast(
-          `[${modeLabel}] Repo ${res.repoSlug || cleanUrl}: ${res.commitsSynced || 0} commits & Sơ đồ kiến trúc đã cập nhật!`
+          `[GitHub REST] ${res.repoSlug || cleanUrl}: đã xác minh ${res.commitsSynced || 0} commit và ${res.prsSynced || 0} PR trong mẫu gần đây.`
         );
       }
       await loadGitWorkspace(activeProjectId, selectedPr?.id);
@@ -2065,7 +1838,7 @@ export default function GitProjectHub({
       setDiagramAnimKey((k) => k + 1);
       setStatAnimKey((k) => k + 1);
     } catch (err: any) {
-      showToast("Lỗi đồng bộ repo: " + (err?.message || "Kiểm tra kết nối"));
+      setSyncError("Lỗi đồng bộ repo: " + (err?.message || "Kiểm tra kết nối"));
     } finally {
       setIsSyncingLive(false);
     }
@@ -2121,7 +1894,7 @@ export default function GitProjectHub({
         if (res.title) setDynamicArchTitle(res.title);
         if (res.techStack) setDynamicTechStack(res.techStack);
         setDiagramAnimKey((k) => k + 1);
-        showToast("AI đã quét và tái cấu trúc sơ đồ kiến trúc từ Repo thành công!");
+        showToast("Đã tải sơ đồ kiến trúc mẫu. Sơ đồ này không phải kết quả quét mã nguồn GitHub.");
       }
     } finally {
       setIsGeneratingArch(false);
@@ -2135,6 +1908,20 @@ export default function GitProjectHub({
   useEffect(() => {
     setMemberFilter("all");
     setBranchFilter("all");
+    if (requestedProjectId.current !== activeProjectId) {
+      requestedProjectId.current = activeProjectId;
+      setRepoUrl("");
+      setRepoSlug("");
+      setEvidenceVerified(false);
+      setEvidenceTruncated(false);
+      setSyncError(null);
+      setLastSyncedAt("");
+      setCommits([]);
+      setSelectedCommit(null);
+      setPullRequests([]);
+      setSelectedPr(null);
+      setMemberAnalytics([]);
+    }
     void loadGitWorkspace(activeProjectId);
   }, [activeProjectId, loadGitWorkspace]);
 
@@ -2144,7 +1931,7 @@ export default function GitProjectHub({
     nextMergeStrategy: string
   ) => {
     const cleanUrl = nextRepoUrl.trim();
-    if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
+    if (!isGitHubRepositoryUrl(cleanUrl)) {
       showToast("Vui lòng nhập URL GitHub hợp lệ (https://...)");
       return;
     }
@@ -2173,149 +1960,10 @@ export default function GitProjectHub({
       setMergeStrategy(nextMergeStrategy);
     }
     handleCloseRepoModal();
+    // Reload the configuration first so old repository evidence is never relabelled
+    // as evidence from a newly configured repository when its first sync fails.
+    await loadGitWorkspace(activeProjectId);
     await handleApplyRepoUrl(cleanUrl);
-  };
-
-  const handlePushNewCommit = async (payload: {
-    branch: string;
-    message: string;
-    task_code?: string;
-    author_name?: string;
-    files_changed: string[];
-    additions?: number;
-    deletions?: number;
-  }): Promise<boolean> => {
-    const res = await pushGitCommitApi(activeProjectId, payload, role);
-    if (res.error) {
-      showToast(res.error);
-      return false;
-    }
-    if (res.commit) {
-      await loadGitWorkspace(activeProjectId, selectedPr?.id);
-      setSelectedCommit(res.commit as GitCommitItem);
-      setTopoAnimKey((k) => k + 1);
-      const taskHint = res.linkedTaskUpdated
-        ? ` · Tự động chuyển Task #${res.linkedTaskUpdated} sang Đang làm trên Kanban`
-        : "";
-      showToast(
-        `Đã ghi nhận commit ${res.commit.sha}${
-          (res.xp_awarded || 0) > 0 ? ` (+${res.xp_awarded} XP)` : ""
-        }${taskHint}`
-      );
-    }
-    return true;
-  };
-
-  const handleCreateNewPr = async (payload: {
-    title: string;
-    description: string;
-    source_branch: string;
-    target_branch: string;
-    task_code?: string;
-    code_snippet: string;
-  }): Promise<boolean> => {
-    setActionError(null);
-    const res = await createGitPullRequestApi(activeProjectId, payload, role);
-    if (res.error) {
-      setActionError(res.error);
-      showToast(res.error);
-      return false;
-    }
-    if (res.pullRequest) {
-      await loadGitWorkspace(activeProjectId, res.pullRequest.id);
-      setViewMode("prs");
-      const taskHint = res.linkedTaskUpdated
-        ? ` · Tự động chuyển Task #${res.linkedTaskUpdated} sang Đang làm trên Kanban`
-        : "";
-      showToast(`Đã tạo PR #${String(res.pullRequest.prNumber).padStart(2, "0")} & chạy AST Scanner${taskHint}`);
-    }
-    return true;
-  };
-
-  const handleAiFixPr = async (prId: string) => {
-    setActionError(null);
-    setPrActionLoading("ai-fix");
-    try {
-      const res = await applyPrAiFixApi(prId, role);
-      if (res.error) {
-        setActionError(res.error);
-        return;
-      }
-      await loadGitWorkspace(activeProjectId, prId);
-      showToast("Đã áp dụng bản vá bảo mật 1-Click từ CodeMind AI!");
-    } finally {
-      setPrActionLoading(null);
-    }
-  };
-
-  const handlePeerApprovePr = async (prId: string, comment: string, reviewerName?: string) => {
-    setActionError(null);
-    setPrActionLoading("peer-approve");
-    try {
-      const res = await approvePrPeerReviewApi(
-        prId,
-        { comment, reviewer_name: reviewerName },
-        role
-      );
-      if (res.error) {
-        setActionError(res.error);
-        return;
-      }
-      await loadGitWorkspace(activeProjectId, prId);
-      showToast(
-        isInstructor
-          ? "Giảng viên đã ký phê duyệt DoD cho Pull Request!"
-          : "Đã ký Peer Review Approve cho Pull Request!"
-      );
-    } finally {
-      setPrActionLoading(null);
-    }
-  };
-
-  const handleRequestChangesPr = async (prId: string, comment: string, reviewerName?: string) => {
-    setActionError(null);
-    setPrActionLoading("request-changes");
-    try {
-      const res = await requestChangesPrApi(
-        prId,
-        { comment, reviewer_name: reviewerName },
-        role
-      );
-      if (res.error) {
-        setActionError(res.error);
-        return;
-      }
-      await loadGitWorkspace(activeProjectId, prId);
-      showToast("Đã gửi yêu cầu chỉnh sửa (Request Changes) cho Pull Request!");
-    } finally {
-      setPrActionLoading(null);
-    }
-  };
-
-  const handleMergePr = async (prId: string, strategy: string) => {
-    setActionError(null);
-    setPrActionLoading("merge");
-    try {
-      const res = await mergeGitPullRequestApi(prId, strategy, role);
-      if (res.error) {
-        setActionError(res.error);
-        return;
-      }
-      await loadGitWorkspace(activeProjectId, prId);
-      const stratLabel =
-        strategy === "rebase"
-          ? "Rebase Merge"
-          : strategy === "merge"
-          ? "Merge Commit"
-          : "Squash Merge";
-      showToast(
-        `Đã ${stratLabel} & đóng dấu SHA-256 DoD${
-          res.updatedTaskCode ? ` (Task #${res.updatedTaskCode} → Hoàn thành)` : ""
-        }${(res.xp_awarded || 0) > 0 ? ` • +${res.xp_awarded} XP` : ""}`
-      );
-    } finally {
-      setPrActionLoading(null);
-    }
   };
 
   const uniqueAuthors = useMemo(() => {
@@ -2340,107 +1988,16 @@ export default function GitProjectHub({
         });
       }
     });
-    if (map.size === 0) {
-      return [
-        { name: "main", color: "#2563eb", cy: 45, count: 0 },
-        { name: "develop", color: "#10b981", cy: 105, count: 0 },
-      ];
-    }
     return Array.from(map.values()).sort((a, b) => a.cy - b.cy);
   }, [commits]);
 
   const dynamicTopoEdges = useMemo(() => {
-    if (commits.length === 0) return [];
-    const edges: Array<{
-      key: string;
-      d: string;
-      color: string;
-      dashed?: boolean;
-      width?: number;
-    }> = [];
-
-    const lastCommitByBranch = new Map<string, GitCommitItem>();
-    const firstBranchSeen = new Set<string>();
-
-    for (let i = 0; i < commits.length; i++) {
-      const c = commits[i];
-      const b = c.branch || "main";
-      const msgLow = (c.message || "").toLowerCase();
-
-      if (!firstBranchSeen.has(b)) {
-        firstBranchSeen.add(b);
-        if (b !== "main" && b !== "master") {
-          let parentCommit: GitCommitItem | undefined;
-          for (let j = i - 1; j >= 0; j--) {
-            const pb = commits[j].branch || "main";
-            if (pb === "develop" && b !== "develop") {
-              parentCommit = commits[j];
-              break;
-            }
-            if (pb === "main" || pb === "master") {
-              parentCommit = commits[j];
-              break;
-            }
-          }
-          if (!parentCommit && i > 0) parentCommit = commits[0];
-          if (parentCommit) {
-            const midX = (parentCommit.cx + c.cx) / 2;
-            edges.push({
-              key: `branch-out-${c.id}`,
-              d: `M ${parentCommit.cx} ${parentCommit.cy} C ${midX} ${parentCommit.cy}, ${midX} ${c.cy}, ${c.cx} ${c.cy}`,
-              color: c.branchColor || "#6366f1",
-              width: 3,
-            });
-          }
-        }
-      } else {
-        const prevSame = lastCommitByBranch.get(b);
-        if (prevSame) {
-          edges.push({
-            key: `intra-${c.id}`,
-            d: `M ${prevSame.cx} ${prevSame.cy} L ${c.cx} ${c.cy}`,
-            color: c.branchColor || prevSame.branchColor || "#2563eb",
-            width: 3,
-          });
-        }
-      }
-
-      if ((b === "main" || b === "master" || b === "develop") && i > 0) {
-        const isMergeMsg =
-          msgLow.includes("merge") ||
-          msgLow.includes("pr #") ||
-          msgLow.includes("pull request") ||
-          msgLow.includes("release");
-        if (isMergeMsg) {
-          let sourceCommit: GitCommitItem | undefined;
-          for (let j = i - 1; j >= 0; j--) {
-            const candidate = commits[j];
-            const cb = (candidate.branch || "").toLowerCase();
-            if (cb !== b.toLowerCase() && msgLow.includes(cb)) {
-              sourceCommit = candidate;
-              break;
-            }
-          }
-          if (!sourceCommit && commits[i - 1].branch !== b) {
-            sourceCommit = commits[i - 1];
-          }
-          if (sourceCommit) {
-            const midX = (sourceCommit.cx + c.cx) / 2;
-            edges.push({
-              key: `merge-in-${c.id}`,
-              d: `M ${sourceCommit.cx} ${sourceCommit.cy} C ${midX} ${sourceCommit.cy}, ${midX} ${c.cy}, ${c.cx} ${c.cy}`,
-              color: sourceCommit.branchColor || "#a855f7",
-              dashed: true,
-              width: 2.5,
-            });
-          }
-        }
-      }
-
-      lastCommitByBranch.set(b, c);
-    }
-
-    return edges;
+    const bySha = new Map(commits.map((commit) => [commit.sha, commit]));
+    return commits.flatMap((commit) => (commit.parentShas || []).flatMap((sha) => {
+      const parent = bySha.get(sha);
+      if (!parent) return [];
+      return [{ key: `${parent.id}-${commit.id}`, d: `M ${parent.cx} ${parent.cy} L ${commit.cx} ${commit.cy}`, color: commit.branchColor, width: 3 }];
+    }));
   }, [commits]);
 
   const filteredCommits = useMemo(() => {
@@ -2902,7 +2459,7 @@ export default function GitProjectHub({
                       webhookActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
                     }`}
                   />
-                  {webhookActive ? "Webhook Tự động" : "Webhook Tạm dừng"}
+                  Chỉ đọc · GitHub REST
                 </span>
               </>
             )}
@@ -2917,7 +2474,7 @@ export default function GitProjectHub({
             Sơ đồ Kiến trúc Hệ thống & Git Project Hub
           </h1>
           <p className="mt-1 text-sm text-[#62656b] dark:text-[#a0a3a9] max-w-4xl">
-            Cây phân nhánh Git Graph đồng bộ thời gian thực, CodeMind AI AST Reviewer 2 lớp, Sơ đồ Kiến trúc phân tầng & Thẩm định DoD SHA-256.
+            Lịch sử commit và minh chứng PR lấy từ GitHub. Đối chiếu Task → PR → kiểm thử → review theo cùng một SHA.
           </p>
         </div>
 
@@ -3008,6 +2565,13 @@ export default function GitProjectHub({
         </div>
       </header>
 
+      {syncError && <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200">{syncError} Dữ liệu đã xác minh trước đó được giữ lại.</div>}
+      {projectsList.length > 0 && <section className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:bg-blue-950/30 dark:text-blue-200 space-y-2">
+        <p>{evidenceVerified ? `Xác minh gần nhất: ${formatSyncTimestamp(lastSyncedAt)}.` : "Chưa có dữ liệu GitHub được xác minh. Hãy đồng bộ kho công khai đã cấu hình."} Mẫu tối đa: 30 commit trên nhánh cấu hình và 10 PR cập nhật gần đây.{evidenceTruncated ? " Kho có thêm lịch sử ngoài mẫu này." : ""}</p>
+        <p>Chế độ chỉ đọc. Push, tạo PR, chạy test và review trên GitHub rồi đồng bộ lại. Phê duyệt phải độc lập và khớp SHA hiện tại; check có tên kiểm thử mới được tính là minh chứng test. Cấu hình đóng băng chỉ khóa thao tác trong ứng dụng.</p>
+        <button type="button" onClick={() => void handleApplyRepoUrl(repoUrl)} disabled={isSyncingLive || !repoUrl || isRepoFrozen} className="btn-marlo-secondary disabled:opacity-50">{isSyncingLive ? "Đang xác minh…" : "Đồng bộ minh chứng GitHub"}</button>
+      </section>}
+
       {loadingWorkspace && projectsList.length === 0 ? (
         <section className="marlo-card rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
           Đang tải dữ liệu Git Project Hub từ hệ thống...
@@ -3097,7 +2661,7 @@ export default function GitProjectHub({
               Quản trị viên • Kiểm toán Tuân thủ Git & Đóng băng Nhánh Nộp bài
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Kiểm soát trạng thái bảo vệ nhánh trước giờ bảo vệ đồ án. Khi bật Đóng băng, sinh viên chỉ được xem dữ liệu và không thể đẩy Commit hay Merge PR mới.
+              Đóng băng thao tác nộp bài và đồng bộ trong ứng dụng. Trạng thái này không thay đổi quyền ghi hoặc quy tắc bảo vệ nhánh trên GitHub.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -3129,7 +2693,7 @@ export default function GitProjectHub({
         <section className="rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 p-3.5 flex items-center gap-2.5 text-xs text-amber-900 dark:text-amber-200">
           <Lock size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <span>
-            <strong>Chế độ Đóng băng (Freeze):</strong> Quản trị viên đã khóa quyền ghi trên Repository dự án này để phục vụ bảo vệ đồ án. Các nút tạo Commit, PR, Đồng bộ và Merge tạm thời bị khóa.
+            <strong>Chế độ Đóng băng (Freeze):</strong> Thao tác nộp bài và đồng bộ trong ứng dụng đang khóa. Quyền ghi và quy tắc bảo vệ nhánh trên GitHub do chủ kho cấu hình riêng.
           </span>
         </section>
       )}
@@ -3138,15 +2702,15 @@ export default function GitProjectHub({
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
         <div key="metric-git-score" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Điểm Văn hóa Git</span>
+            <span>Commit đã xác minh</span>
             <ShieldCheck size={16} className="text-slate-400 dark:text-slate-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-              <AnimatedNumber value={metricsState.gitCultureScore} decimals={1} key={`score-${statAnimKey}-${activeProjectId}`} />
+              <AnimatedNumber value={metricsState.totalCommits} key={`score-${statAnimKey}-${activeProjectId}`} />
             </span>
             <span className="pill pill--plain text-[10.5px] font-bold">
-              {metricsState.gitCultureScore >= 90 ? "Hạng A+ (Chuẩn)" : "Đạt chuẩn"}
+              Mẫu GitHub
             </span>
           </div>
           <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
@@ -3156,23 +2720,19 @@ export default function GitProjectHub({
 
         <div key="metric-ai-integrity" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Kiểm định Liêm chính AI</span>
+            <span>Chuỗi minh chứng hoàn thành</span>
             <CheckCircle2 size={16} className="text-slate-400 dark:text-slate-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-              <AnimatedNumber value={metricsState.aiIntegrityPct} suffix="%" key={`integ-${statAnimKey}-${activeProjectId}`} />
+              {pullRequests.filter((pr) => pr.hasCompletedTaskProof).length}
             </span>
             <span className="pill pill--plain text-[10.5px] font-bold">
-              {metricsState.aiIntegrityPct >= 90
-                ? "Liêm chính cao"
-                : metricsState.aiIntegrityPct >= 75
-                ? "Cần lưu ý"
-                : "Cảnh báo AST/AI"}
+              PR đủ minh chứng
             </span>
           </div>
           <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Cadence Variance {metricsState.cadenceVarianceHours}h — theo dõi nhịp độ & cảnh báo AST.
+            Đã merge, test đạt và có review cho cùng SHA.
           </p>
         </div>
 
@@ -3198,7 +2758,7 @@ export default function GitProjectHub({
 
         <div key="metric-diagram" className="marlo-card rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Pull Requests & AST</span>
+            <span>Pull Requests GitHub</span>
             <Boxes size={16} className="text-slate-400 dark:text-slate-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
@@ -3210,7 +2770,7 @@ export default function GitProjectHub({
             </span>
           </div>
           <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Kiến trúc {archComponentCount} Components + Quét bảo mật AST 2 lớp.
+            Trạng thái và review được đọc từ GitHub REST.
           </p>
         </div>
       </section>
@@ -3223,7 +2783,7 @@ export default function GitProjectHub({
             { id: "topology", label: "Cây nhánh Git", icon: <Network size={15} /> },
             {
               id: "prs",
-              label: "Pull Requests & AST",
+              label: "PR & Minh chứng",
               icon: <GitPullRequest size={15} />,
               badge: pullRequests.filter((p) => p.status !== "merged").length || undefined,
             },
@@ -3248,25 +2808,32 @@ export default function GitProjectHub({
 
       {/* MODE 0: PULL REQUESTS & CODEMIND AI 2-TIER REVIEW */}
       {viewMode === "prs" && (
-        <GitPrReviewPanel
-          role={role}
-          isFrozen={isRepoFrozen}
-          members={memberAnalytics}
-          pullRequests={pullRequests}
-          selectedPr={selectedPr}
-          onSelectPr={(pr) => {
-            setActionError(null);
-            setSelectedPr(pr);
-          }}
-          onOpenNewPrModal={() => setShowNewPrModal(true)}
-          onAiFix={handleAiFixPr}
-          onPeerApprove={handlePeerApprovePr}
-          onRequestChanges={handleRequestChangesPr}
-          onMerge={handleMergePr}
-          onOpenDefenseRoom={onNavigate ? () => onNavigate("defense-room") : undefined}
-          actionLoading={prActionLoading}
-          actionError={actionError}
-        />
+        <section className="space-y-3" aria-label="Minh chứng Pull Request GitHub">
+          {repoUrl && <a href={`${repoUrl}/pulls`} target="_blank" rel="noreferrer" className="btn-marlo-secondary inline-flex items-center gap-2"><ExternalLink size={14} /> Mở Pull Requests trên GitHub</a>}
+          {pullRequests.length === 0 && <p className="rounded-xl border border-dashed p-6 text-sm text-slate-500">{evidenceVerified ? "Không có PR trong mẫu GitHub đã đồng bộ." : "Chưa đồng bộ PR được xác minh."}</p>}
+          {pullRequests.map((pr) => (
+            <article key={pr.id} className="marlo-card rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div><a href={pr.url} target="_blank" rel="noreferrer" className="font-bold hover:underline">#{pr.prNumber} {pr.title}</a><p className="mt-1 text-xs text-slate-500">{pr.author.name} · {pr.sourceBranch} → {pr.targetBranch}</p></div>
+                <span className="pill pill--plain">{pr.status}</span>
+              </div>
+              <p className="text-xs">Task: <strong>{pr.taskCode ? `#${pr.taskCode}` : "Chưa có mã task khớp rõ ràng"}</strong> · {pr.hasCompletedTaskProof ? "Đủ minh chứng hoàn thành" : "Chưa đủ minh chứng hoàn thành"}</p>
+              <p className="font-mono text-xs break-all">Head SHA: {pr.headSha || "Chưa xác minh"}</p>
+              <div className="grid md:grid-cols-2 gap-3 text-xs">
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3 space-y-2">
+                  <strong>Kiểm thử: {pr.testEvidence?.testsPassed ? "Đạt tại SHA này" : pr.testEvidence?.testsKnown ? "Chưa đạt / còn check chưa hoàn tất" : "Chưa xác minh được test"}</strong>
+                  {!pr.testEvidence?.complete && <p>Không đủ dữ liệu check để kết luận.</p>}
+                  {pr.testEvidence?.checks.map((check, index) => <p key={`${check.name}-${index}`}><a href={check.url} target="_blank" rel="noreferrer" className="underline">{check.name || "Unnamed check"}</a> · {check.conclusion || check.status}</p>)}
+                </div>
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3 space-y-2">
+                  <strong>Review: {pr.reviewEvidence?.approved ? "Có phê duyệt độc lập tại SHA này" : "Chưa có phê duyệt hợp lệ tại SHA này"}</strong>
+                  {!pr.reviewEvidence?.complete && <p>Danh sách review chưa đầy đủ.</p>}
+                  {pr.reviewEvidence?.reviews.map((review, index) => <p key={review.id || index}><a href={review.url} target="_blank" rel="noreferrer" className="underline">{review.reviewer || "Unknown reviewer"}: {review.state}</a> · <span className="font-mono">{review.commitSha?.slice(0, 12)}</span></p>)}
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
       )}
 
       {/* MODE 1: THE REAL INTERACTIVE GITDIAGRAM CANVAS (FULL-WIDTH 100% EXPANSIVE VIEW) */}
@@ -3304,11 +2871,11 @@ export default function GitProjectHub({
                   <button
                     onClick={handleGenerateArchitecture}
                     disabled={isGeneratingArch || (isStudent && isRepoFrozen)}
-                    title="AI quét mã nguồn Repo và tự động sinh sơ đồ kiến trúc phân tầng động"
+                    title="Tải sơ đồ kiến trúc mẫu của hệ thống"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-100/80 hover:bg-purple-200/80 dark:bg-purple-950/60 dark:text-purple-300 dark:hover:bg-purple-900/80 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-0 outline-none ring-0 shadow-none"
                   >
                     <Sparkles size={13} className={isGeneratingArch ? "animate-spin text-purple-600" : "text-purple-500"} />
-                    {isGeneratingArch ? "AI đang quét..." : "AI Trích xuất Kiến trúc"}
+                    {isGeneratingArch ? "Đang tải mẫu..." : "Tải mẫu Kiến trúc"}
                   </button>
 
                   <button
@@ -3596,7 +3163,7 @@ export default function GitProjectHub({
               </h2>
               <div className="flex flex-wrap items-center gap-2 mt-1">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Hệ thống tự động ghi nhận commit từ git push &amp; Webhook và liên kết mã Task Kanban. Rê chuột vào từng điểm commit để xem chi tiết.
+                  Lịch sử commit trên nhánh đã cấu hình, đọc từ GitHub REST khi đồng bộ. Cạnh nối dùng SHA cha thật trong mẫu; mã Task chỉ gắn khi khớp rõ ràng.
                 </p>
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700/80">
                   <span className="text-xs">✋</span>
@@ -3609,13 +3176,13 @@ export default function GitProjectHub({
             <div className="flex flex-wrap items-center gap-2">
               {isStudent && (
                 <button
-                  onClick={() => setShowNewCommitModal(true)}
-                  disabled={isRepoFrozen}
-                  title={isRepoFrozen ? "Repository đang bị đóng băng (Freeze)" : "Ghi nhận Commit mới lên Git Graph"}
+                  onClick={() => void handleApplyRepoUrl(repoUrl)}
+                  disabled={isRepoFrozen || isSyncingLive}
+                  title="Đọc commit thật từ GitHub"
                   className="btn-marlo-primary btn--primary inline-flex items-center gap-1.5 text-xs py-1.5 px-3 shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus size={14} />
-                  <span>Ghi nhận Commit (+10 XP)</span>
+                  <span>Đồng bộ Commit GitHub</span>
                 </button>
               )}
 
@@ -3782,26 +3349,6 @@ export default function GitProjectHub({
                 </g>
               ))}
 
-              {/* Main Trunk */}
-              <path
-                id="topo-main-path"
-                className="topo-path-main"
-                d={`M 50 45 L ${svgWidth - 40} 45`}
-                fill="none"
-                stroke="#2563eb"
-                strokeWidth="3"
-              />
-              {!showRepoModal && !showNewCommitModal && !showNewPrModal && !archDrawerOpen && (
-                <g>
-                  <circle r="8" fill="#38bdf8" opacity="0.28">
-                    <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="4.2s" repeatCount="indefinite" begin="0.3s" />
-                  </circle>
-                  <circle r="4.5" fill="#38bdf8">
-                    <animateMotion path={`M 50 45 L ${svgWidth - 40} 45`} dur="4.2s" repeatCount="indefinite" begin="0.3s" />
-                  </circle>
-                </g>
-              )}
-
               {/* Dynamic DAG Branch Split, Intra-Branch & Merge Curves */}
               {dynamicTopoEdges.map((edge) => (
                 <path
@@ -3810,7 +3357,6 @@ export default function GitProjectHub({
                   fill="none"
                   stroke={edge.color}
                   strokeWidth={edge.width || 2.8}
-                  strokeDasharray={edge.dashed ? "5 3" : undefined}
                   opacity={(memberFilter !== "all" || branchFilter !== "all") ? 0.35 : 0.88}
                 />
               ))}
@@ -3918,7 +3464,7 @@ export default function GitProjectHub({
                           strokeWidth={2}
                           strokeLinejoin="round"
                         >
-                          {c.sha}
+                          {c.sha.slice(0, 12)}
                         </text>
                       </>
                     )}
@@ -3986,7 +3532,7 @@ export default function GitProjectHub({
                       {hoveredCommit.branch}
                     </span>
                     <span className="text-emerald-400 font-bold">
-                      +{hoveredCommit.stats.additions} / -{hoveredCommit.stats.deletions} ({hoveredCommit.stats.files} tệp)
+                      {hoveredCommit.statsKnown ? `+${hoveredCommit.stats.additions} / -${hoveredCommit.stats.deletions} (${hoveredCommit.stats.files} tệp)` : "Chưa tải thống kê diff"}
                     </span>
                     <span>{hoveredCommit.timeAgo}</span>
                   </div>
@@ -4046,7 +3592,7 @@ export default function GitProjectHub({
                     Các tệp tin mã nguồn được chỉnh sửa ({selectedCommit.filesChanged.length} tệp):
                   </span>
                   <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
-                    +{selectedCommit.stats.additions} dòng / -{selectedCommit.stats.deletions} dòng
+                    {selectedCommit.statsKnown ? `+${selectedCommit.stats.additions} / -${selectedCommit.stats.deletions}` : "Chưa tải thống kê diff"}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
@@ -4115,7 +3661,7 @@ export default function GitProjectHub({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="font-mono font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 shrink-0">
-                        {c.sha}
+                        {c.sha.slice(0, 12)}
                       </span>
                       <span className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-[380px]">{c.message}</span>
                       <span
@@ -4136,7 +3682,7 @@ export default function GitProjectHub({
                         <span className="text-slate-700 dark:text-slate-300">{c.author.name}</span>
                       </div>
                       <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                        +{c.stats.additions} / -{c.stats.deletions}
+                        {c.statsKnown ? `+${c.stats.additions} / -${c.stats.deletions}` : "Diff chưa xác minh"}
                       </span>
                       <span className="text-slate-400 dark:text-slate-500 text-[11px]">{c.timeAgo}</span>
                     </div>
@@ -4155,10 +3701,10 @@ export default function GitProjectHub({
           <div className="border-b border-slate-100 dark:border-slate-800 pb-4 animate-box-stagger-1">
             <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <BarChart3 size={18} className="text-blue-600 dark:text-blue-400" />
-              Thống kê Đóng góp Nhóm & Tính Liêm chính Mã Nguồn (Anti-Freerider 50/30/20)
+              Chỉ báo Đóng góp tham khảo (50/30/20)
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Tính toán tự động từ CSDL MySQL: 50% Story Points hoàn thành + 30% Commit/PR + 20% DoD Review của {memberAnalytics.length || 3} thành viên.
+              50% Story Points nội bộ + 30% commit trong mẫu + 20% tham gia PR. Tên tác giả Git chưa được liên kết với danh tính học viên.
             </p>
           </div>
 
@@ -4193,7 +3739,7 @@ export default function GitProjectHub({
                     Commits: <span className="font-bold text-slate-700 dark:text-slate-200"><OdometerNumber value={m.commitsCount} /></span> commits • SP Done: <span className="font-bold text-blue-600 dark:text-blue-400">{m.storyPointsDone} SP</span>
                   </div>
                   <div>
-                    Thêm dòng: <span className="font-bold text-emerald-600 dark:text-emerald-400">+<OdometerNumber value={m.additions} /></span> / -{m.deletions} dòng
+                    Thống kê dòng thay đổi: chưa xác minh
                   </div>
                   <div className="truncate font-sans">Nhiệm vụ: {m.tasksSummary}</div>
                 </div>
@@ -4206,15 +3752,15 @@ export default function GitProjectHub({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-slate-100 text-sm">
                 <ShieldCheck size={18} className="text-emerald-600 dark:text-emerald-400" />
-                <span>Báo cáo Xác thực Liêm chính & Chống Gian lận AI (AI Anti-Cheating)</span>
+                <span>Phạm vi dữ liệu GitHub</span>
               </div>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white dark:bg-slate-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-slate-200 dark:border-slate-800 font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                NHỊP ĐỘ HỢP LỆ
+                MẪU GITHUB
               </span>
             </div>
             <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-              Toàn bộ <span className="font-bold font-mono text-slate-900 dark:text-white"><OdometerNumber value={metricsState.totalCommits} /></span> commit trong repo đều có khoảng thời gian ngắt quãng tự nhiên (Cadence Variance: <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400"><AnimatedNumber value={metricsState.cadenceVarianceHours} decimals={1} suffix="h" key={`cv-${statAnimKey}-${activeProjectId}`} /></span>), không có hiện tượng nạp hàng loạt file mã nguồn trong 1 giây (Bulk AI Dump). Tỷ lệ commit kèm mã task Kanban đạt <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400"><AnimatedNumber value={metricsState.taskLinkedPct} suffix="%" key={`cr-${statAnimKey}-${activeProjectId}`} /></span>.
+              Mẫu hiện có {metricsState.totalCommits} commit; {metricsState.taskLinkedPct}% có mã task khớp rõ ràng. Chưa xác minh thống kê diff, danh tính GitHub với tài khoản học viên, hoặc kết luận liêm chính AI. Tỷ trọng là chỉ báo tham khảo từ task nội bộ và mẫu Git, không phải điểm đánh giá.
             </p>
           </div>
         </div>
@@ -4235,7 +3781,7 @@ export default function GitProjectHub({
                 </h2>
               </div>
               <p className="text-xs text-[#62656b] dark:text-[#a0a3a9] mt-1 max-w-3xl leading-relaxed">
-                Chu trình 6 bước khép kín từ nhận task Kanban, tách nhánh chuẩn hóa, commit có mã task, kiểm thử sandbox tự động, quy trình Review 2 lớp (AI Bot + Peer Review), chiến lược Merge phù hợp, đến nghiệm thu thẩm định liêm chính.
+                Quy trình tham khảo: nhận task, tách nhánh, commit có mã task, chạy test và review trên GitHub, merge rồi đồng bộ minh chứng. Ứng dụng đọc dữ liệu đã đồng bộ và không tự push hoặc merge.
               </p>
             </div>
           </div>
@@ -4448,7 +3994,7 @@ export default function GitProjectHub({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-700 dark:text-slate-300 space-y-1.5 shadow-2xs">
                   <div className="text-blue-900 dark:text-blue-400 font-bold text-[10px] uppercase">Quy trình Review & Merge chi tiết:</div>
                   <div className="text-slate-600 dark:text-slate-400">
-                    • <strong className="text-slate-800 dark:text-slate-200">Lớp 1 (CodeMind AI Bot):</strong> Tự động quét CVE lỗ hổng, AST complexity, AST blast radius.
+                    • <strong className="text-slate-800 dark:text-slate-200">Kiểm thử:</strong> Chạy workflow test trên GitHub cho SHA của PR và kiểm tra kết quả trước khi merge.
                   </div>
                   <div className="text-slate-600 dark:text-slate-400">
                     • <strong className="text-slate-800 dark:text-slate-200">Lớp 2 (Peer Review chéo):</strong> Tối thiểu 1 thành viên khác ({memberAnalytics.length > 0 ? memberAnalytics.map((m) => m.name.split(" ").slice(-1)[0]).join(" / ") : "Thành viên nhóm"}) hoặc Giảng viên duyệt diff và Approve.
@@ -4621,23 +4167,6 @@ export default function GitProjectHub({
         onSave={handleSaveRepoSync}
       />
 
-      <GitNewCommitModal
-        isOpen={showNewCommitModal}
-        onClose={() => setShowNewCommitModal(false)}
-        onSubmit={handlePushNewCommit}
-        members={memberAnalytics}
-        tasks={projectTasks}
-        existingBranches={uniqueBranches.map((b) => b.name)}
-      />
-
-      <GitNewPrModal
-        isOpen={showNewPrModal}
-        onClose={() => setShowNewPrModal(false)}
-        onSubmit={handleCreateNewPr}
-        tasks={projectTasks}
-        defaultTargetBranch={targetBranch}
-        existingBranches={uniqueBranches.map((b) => b.name)}
-      />
     </div>
   );
 }

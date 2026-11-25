@@ -1,392 +1,179 @@
+﻿"""Executable Python grading with explicit provenance and no synthetic passes."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import hashlib
 import json
-import re
 from typing import Any
-from app.core.security import sha256, uid
-from app.core.timezone import now_utc
+import uuid
 
-
-def evaluate_code(code: str) -> tuple[int, list[tuple[str, str, str]]]:
-    """
-    Đánh giá mã nguồn Python nộp bài (tương thích 100% pipeline test_layered_api & test_api).
-    Trả về: (passed_count, [(status, message, duration_ms), ...])
-    """
-    normalized = code.replace(" ", "").replace("\t", "")
-    has_guard = "ifnotpage:" in normalized or "ifnotpage" in normalized
-    has_append = "history.append(page)" in normalized
-
-    passed = 5 if has_guard and has_append else 4 if has_append else 0
-    messages = [
-        ("passed", "Giữ tối đa ba phần tử bằng deque(maxlen=3)."),
-        ("passed", "Trang mới được thêm vào đúng thứ tự."),
-        ("passed", "Lịch sử trả về dạng list."),
-        ("passed", "Xử lý input thông thường."),
-        (
-            "passed" if has_guard else "failed",
-            "Không thêm chuỗi rỗng trước khi append."
-            if has_guard
-            else "Chuỗi rỗng vẫn được thêm; cần guard trước append.",
-        ),
-    ]
-    return passed, [(status, message, "8") for status, message in messages]
-
-
-_NETWORK_EGRESS_PATTERNS = (
-    "socket.socket",
-    "urllib.request",
-    "requests.get(",
-    "requests.post(",
-    "httpx.",
-    "aiohttp.",
-    "curl ",
-    "wget ",
-    "fetch('http",
-    'fetch("http',
-    "axios.get(",
-    "axios.post(",
-    "boost::asio::ip::tcp",
+from app.services.python_runner import (
+    DockerPythonRunner, MAX_TEST_CASES, RUNNER_VERSION, SOURCE_LIMIT_BYTES, RunnerUnavailable,
 )
 
+DEQUE_CASES = [
+    {"id": 1, "title": "Khởi tạo lịch sử rỗng", "input": "[]", "expectedOutput": "[]"},
+    {"id": 2, "title": "Giữ thứ tự các trang đã duyệt", "input": '["/home", "/catalog"]', "expectedOutput": '["/home", "/catalog"]'},
+    {"id": 3, "title": "Chỉ giữ ba trang mới nhất", "input": '["/home", "/p1", "/p2", "/p3"]', "expectedOutput": '["/p1", "/p2", "/p3"]'},
+    {"id": 4, "title": "Lịch sử trả về kiểu list", "input": '["/home"]', "expectedOutput": '["/home"]'},
+    {"id": 5, "title": "Bỏ qua chuỗi rỗng, khoảng trắng và None", "input": '["/home", "", "   ", null]', "expectedOutput": '["/home"]', "isEdgeCase": True},
+]
 
-def _lookup_course_test_cases(
-    conn: Any,
-    exercise_id: str,
-) -> tuple[list[dict[str, Any]], str]:
-    """Tìm bộ Docker Test Cases thật từ courses.chapters_json nếu exercise_id khớp chương/môn."""
-    if conn is None or not exercise_id:
-        return [], ""
-    ex_low = exercise_id.strip().lower()
-    try:
-        rows = conn.execute(
-            "SELECT id, subject_id, code, docker_image, chapters_json FROM courses"
-        ).fetchall()
-    except Exception:
-        return [], ""
+# Trusted adapter runs only in Docker. Each test imports a fresh submission.
+DEQUE_HARNESS = '''import json
+import runpy
+import sys
 
-    for r in rows:
-        subj = str(r.get("subject_id") or "").lower()
-        cid = str(r.get("id") or "").lower()
-        code_str = str(r.get("code") or "").lower()
-        docker_img = str(r.get("docker_image") or "codemind/sandbox-runner:latest")
+pages = json.loads(sys.stdin.read())
+ns = runpy.run_path("/workspace/submission.py")
+if "PageTracker" in ns:
+    tracker = ns["PageTracker"](maxlen=3)
+    visit = tracker.visit
+    get_recent = getattr(tracker, "get_recent", None) or getattr(tracker, "get_history", None)
+    def history():
+        return get_recent() if get_recent else list(tracker.history)
+else:
+    visit = ns["visit"]
+    def history():
+        return list(ns["history"])
+for page in pages:
+    visit(page)
+result = history()
+if not isinstance(result, list):
+    raise TypeError("History must be a list")
+print(json.dumps(result, ensure_ascii=False))
+'''
+
+
+def _hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _lookup_course_test_cases(conn: Any, exercise_id: str) -> tuple[list[dict[str, Any]], str]:
+    """Resolve an exact assignment ID, never silently grade another chapter."""
+    if conn is None:
+        return [], ""
+    rows = conn.execute("SELECT id, subject_id, code, docker_image, chapters_json FROM courses").fetchall()
+    for row in rows:
         try:
-            chapters = json.loads(r.get("chapters_json") or "[]")
-        except Exception:
-            chapters = []
-        for ch_idx, ch in enumerate(chapters, start=1):
-            ch_id = str(ch.get("id") or "").lower()
-            for asg in ch.get("assignments") or []:
-                asg_id = str(asg.get("id") or "").lower()
-                tcs = asg.get("testCases") or []
-                if not tcs:
-                    continue
-                if ex_low in {asg_id, ch_id, f"{subj}-ch{ch_idx}", f"{subj}-ch{ch_idx}-lab"}:
-                    return tcs, docker_img
-        if ex_low in {subj, cid, code_str} or (subj and ex_low.startswith(f"{subj}-")):
-            for ch in chapters:
-                for asg in ch.get("assignments") or []:
-                    tcs = asg.get("testCases") or []
-                    if tcs:
-                        return tcs, docker_img
+            chapters = json.loads(row.get("chapters_json") or "[]")
+        except (TypeError, ValueError):
+            continue
+        for chapter in chapters:
+            if chapter.get("status") == "Bản nháp":
+                continue
+            for assignment in chapter.get("assignments") or []:
+                if str(assignment.get("id") or "") == exercise_id:
+                    return assignment.get("testCases") or [], ""
     return [], ""
 
 
-def _evaluate_deque_sandbox(
-    code: str,
-    language: str,
-    exercise_id: str,
-    *,
-    network_violated: bool,
-) -> dict[str, Any]:
-    normalized = "".join(code.lower().split())
-    has_guard = any(
-        token in normalized
-        for token in (
-            "ifnotpage:",
-            "ifnotpage.strip():",
-            "if(!page)",
-            "if(page==null",
-            "page.trim().isempty()",
-            "page.trim().length()==0",
-            "len(page.strip())>0",
-            "len(page)>0",
-            "ifpageandpage.strip():",
-            "ifpage:",
-        )
-    )
-    has_append = any(
-        token in normalized
-        for token in ("append", "push", "addlast", "add(")
-    )
-
-    is_python = language.lower() == "python"
-    test1 = (has_append or "maxlen" in normalized) and not network_violated
-    test2 = has_append and not network_violated
-    test3 = has_append and not network_violated
-    test4 = has_append and not network_violated
-    test5 = has_guard and has_append and not network_violated
-
-    net_err = "Vi phạm chính sách bảo mật Sandbox (--network=none): Phát hiện lời gọi kết nối mạng ra ngoài!"
-    test_cases = [
-        {
-            "id": 1,
-            "title": "Khởi tạo Bounded Queue giới hạn 3 phần tử (maxlen=3)",
-            "is_edge_case": False,
-            "status": "passed" if test1 else "failed",
-            "input": "tracker = PageTracker(maxlen=3)" if is_python else "PageTracker tracker = new PageTracker();",
-            "expected_output": "capacity == 3; size == 0",
-            "actual_output": net_err if network_violated else ("capacity == 3; size == 0" if test1 else "Queue not initialized properly"),
-            "duration_ms": 7,
-            "memory_mb": 14.1,
-        },
-        {
-            "id": 2,
-            "title": "Duyệt theo thứ tự FIFO khi chưa đầy bộ nhớ đệm",
-            "is_edge_case": False,
-            "status": "passed" if test2 else "failed",
-            "input": 'tracker.visit("/home"); tracker.visit("/catalog");',
-            "expected_output": '["/home", "/catalog"]',
-            "actual_output": net_err if network_violated else ('["/home", "/catalog"]' if test2 else "[]"),
-            "duration_ms": 8,
-            "memory_mb": 14.2,
-        },
-        {
-            "id": 3,
-            "title": "Tự động đẩy phần tử cũ nhất khi vượt quá giới hạn 3 trang",
-            "is_edge_case": False,
-            "status": "passed" if test3 else "failed",
-            "input": 'visit("/home") -> visit("/p1") -> visit("/p2") -> visit("/p3")',
-            "expected_output": '["/p1", "/p2", "/p3"] (phần tử "/home" bị loại bỏ)',
-            "actual_output": net_err if network_violated else ('["/p1", "/p2", "/p3"]' if test3 else '["/home", "/p1", "/p2", "/p3"]'),
-            "duration_ms": 9,
-            "memory_mb": 14.2,
-        },
-        {
-            "id": 4,
-            "title": "Lịch sử trả về đúng định dạng danh sách (list / array)",
-            "is_edge_case": False,
-            "status": "passed" if test4 else "failed",
-            "input": "tracker.get_history()",
-            "expected_output": "Kiểu dữ liệu: list / List<String>, không rỗng",
-            "actual_output": net_err if network_violated else ("Type: list, length=3" if test4 else "Type mismatch or None"),
-            "duration_ms": 6,
-            "memory_mb": 14.0,
-        },
-        {
-            "id": 5,
-            "title": 'Ca kiểm thử biên [EDGE CASE]: Bỏ qua chuỗi rỗng "" và khoảng trắng',
-            "is_edge_case": True,
-            "status": "passed" if test5 else "failed",
-            "input": 'tracker.visit(""); tracker.visit("   "); tracker.visit(None / null)',
-            "expected_output": "Lịch sử không bị thêm phần tử rỗng. Độ dài giữ nguyên.",
-            "actual_output": (
-                net_err
-                if network_violated
-                else (
-                    "Đã chặn phần tử rỗng thành công qua Guard Clause"
-                    if test5
-                    else 'Hàng đợi bị nhiễm phần tử rỗng: [..., "", "   "]. Thiếu guard clause kiểm tra chuỗi rỗng trước khi append!'
-                )
-            ),
-            "duration_ms": 11,
-            "memory_mb": 14.4,
-            **(
-                {"failure_reason": net_err}
-                if network_violated
-                else (
-                    {}
-                    if test5
-                    else {
-                        "failure_reason": "Thiếu điều kiện kiểm tra chuỗi rỗng: `if not page or not page.strip(): return` hoặc `if (page == null || page.trim().isEmpty()) return;`"
-                    }
-                )
-            ),
-        },
-    ]
-
-    passed_count = sum(1 for tc in test_cases if tc["status"] == "passed")
-    return {
-        "id": f"sandbox-{uid()[:8]}",
-        "exercise_id": exercise_id,
-        "status": "passed" if passed_count == len(test_cases) else "failed",
-        "passed_count": passed_count,
-        "total_count": len(test_cases),
-        "execution_time_ms": 41,
-        "memory_mb": 14.4,
-        "container_id": "fastapi-docker-runner-node04 (Seccomp --network=none)",
-        "test_cases": test_cases,
-        "sha256": sha256(code),
-        "timestamp": now_utc(),
-    }
+def _normalize_output(value: str) -> str:
+    return value.replace("\r\n", "\n").rstrip("\n")
 
 
 def evaluate_sandbox_detailed(
-    code: str,
-    language: str = "python",
-    exercise_id: str = "exercise-deque",
-    *,
-    network_isolated: bool = True,
-    conn: Any = None,
+    code: str, language: str = "python", exercise_id: str = "exercise-deque", *,
+    network_isolated: bool = True, conn: Any = None,
 ) -> dict[str, Any]:
-    """Chấm điểm Sandbox Docker theo từng môn/ngôn ngữ và kiểm soát chính sách --network=none."""
-    code_low = (code or "").lower()
-    network_violated = bool(
-        network_isolated and any(pat in code_low for pat in _NETWORK_EGRESS_PATTERNS)
-    )
+    """Execute finite stdin/stdout cases in Docker, or explicitly return not_run.
 
-    ex_clean = (exercise_id or "exercise-deque").strip()
-    if ex_clean == "exercise-deque":
-        return _evaluate_deque_sandbox(
-            code,
-            language,
-            ex_clean,
-            network_violated=network_violated,
-        )
-
-    lang_low = (language or "python").strip().lower()
-    stripped_lines = [
-        ln.strip()
-        for ln in (code or "").splitlines()
-        if ln.strip() and not ln.strip().startswith(("#", "//", "--", "/*"))
-    ]
-    non_trivial = len(stripped_lines) >= 3 and len("".join(stripped_lines)) >= 35
-    has_structure = bool(
-        re.search(
-            r"\b(class|struct|def|function|const|select|create|public|virtual|template|interface|export)\b",
-            code_low,
-        )
-    )
-    has_logic = bool(
-        re.search(
-            r"(\breturn\b|\bif\b|\bfor\b|\bwhile\b|\bswitch\b|\bwhere\b|\bjoin\b|\bgroup\s+by\b|std::|=>)",
-            code_low,
-        )
-    )
-    has_edge_guard = bool(
-        re.search(
-            r"(\bif\s*\(|\bif\s+not\b|\bnullptr\b|\bnull\b|\bempty\(\)|\blen\(|\bsize\(\)|\btry\b|\bcatch\b|\bcoalesce\b|\bis\s+not\s+null\b|\boverride\b|\bunique_ptr\b)",
-            code_low,
-        )
-    )
-    has_todo_stub = any(tok in code_low for tok in ("todo:", "pass # todo", "throw new error('not implemented')"))
-
-    db_tcs, docker_img = _lookup_course_test_cases(conn, ex_clean)
-    if not docker_img:
-        docker_img = {
-            "cpp": "codemind/cpp20-sandbox:latest",
-            "c++": "codemind/cpp20-sandbox:latest",
-            "c": "codemind/cpp20-sandbox:latest",
-            "sql": "codemind/postgres16-sandbox:latest",
-            "typescript": "codemind/node20-ts-sandbox:latest",
-            "javascript": "codemind/node20-ts-sandbox:latest",
-            "java": "codemind/jdk21-sandbox:latest",
-        }.get(lang_low, "codemind/python312-sandbox:latest")
-
-    raw_specs: list[dict[str, Any]] = []
-    if db_tcs:
-        for idx, tc in enumerate(db_tcs, start=1):
-            raw_specs.append(
-                {
-                    "id": idx,
-                    "title": str(tc.get("title") or f"Test Case #{idx}"),
-                    "is_edge_case": bool(tc.get("isEdgeCase")),
-                    "input": str(tc.get("input") or f"run_case_{idx}()"),
-                    "expected_output": str(tc.get("expectedOutput") or "PASS (Exit code 0)"),
-                }
-            )
-    else:
-        lang_label = lang_low.upper()
-        raw_specs = [
-            {
-                "id": 1,
-                "title": f"[{lang_label}] Biên dịch & kiểm tra cấu trúc định danh ({ex_clean})",
-                "is_edge_case": False,
-                "input": f"compile_and_lint({ex_clean}, lang='{lang_low}')",
-                "expected_output": "Exit code 0 · Cấu trúc hàm/lớp hợp lệ",
-            },
-            {
-                "id": 2,
-                "title": f"[{lang_label}] Kiểm thử luồng nghiệp vụ chuẩn (Standard Case)",
-                "is_edge_case": False,
-                "input": "standard_workload_input()",
-                "expected_output": "Kết quả đầu ra khớp đặc tả đề bài",
-            },
-            {
-                "id": 3,
-                "title": f"[{lang_label}] Kiểm thử độ phức tạp & tài nguyên bộ nhớ",
-                "is_edge_case": False,
-                "input": "benchmark_dataset(N=1000)",
-                "expected_output": "Thời gian < 500ms · Không rò rỉ bộ nhớ",
-            },
-            {
-                "id": 4,
-                "title": f"[{lang_label}] [EDGE CASE] Xử lý giá trị rỗng / biên / ngoại lệ an toàn",
-                "is_edge_case": True,
-                "input": "edge_boundary_input(empty_or_null)",
-                "expected_output": "Bảo vệ biên an toàn (Guard Clause / Null-safety)",
-            },
-        ]
-
-    net_err = "Bị chặn bởi Seccomp / Docker `--network=none`: Không được phép mở kết nối mạng trong Sandbox."
-    built_cases: list[dict[str, Any]] = []
-    for idx, spec in enumerate(raw_specs, start=1):
-        is_edge = bool(spec["is_edge_case"])
-        if network_violated:
-            passed = False
-            actual = net_err
-            reason = net_err
-        elif not non_trivial or has_todo_stub:
-            passed = False
-            actual = "Mã nguồn chưa hoàn thiện hoặc chỉ chứa khung trống (stub)."
-            reason = "Cần triển khai đầy đủ thân hàm/lớp thay vì để trống hoặc giữ stub TODO."
-        elif idx == 1:
-            passed = has_structure
-            actual = spec["expected_output"] if passed else "Không tìm thấy khai báo hàm/lớp/truy vấn hợp lệ."
-            reason = "" if passed else "Thiếu cấu trúc khai báo (`class`, `def`, `function`, `SELECT`...)."
-        elif is_edge:
-            passed = has_structure and has_logic and has_edge_guard
-            actual = (
-                spec["expected_output"]
-                if passed
-                else "Chưa có Guard Clause bảo vệ biên (null/nullptr/empty/bounds/override)."
-            )
-            reason = (
-                ""
-                if passed
-                else "Bổ sung kiểm tra biên (`if`, `nullptr`/`null`/`empty()`, `unique_ptr`/`override` hoặc `WHERE ... IS NOT NULL`)."
-            )
-        else:
-            passed = has_structure and has_logic
-            actual = spec["expected_output"] if passed else "Thiếu luồng xử lý logic hoặc câu lệnh trả kết quả."
-            reason = "" if passed else "Cần cài đặt biểu thức tính toán / điều kiện / trả về kết quả đúng đặc tả."
-
-        tc_item: dict[str, Any] = {
-            "id": idx,
-            "title": spec["title"],
-            "is_edge_case": is_edge,
-            "status": "passed" if passed else "failed",
-            "input": spec["input"],
-            "expected_output": spec["expected_output"],
-            "actual_output": actual,
-            "duration_ms": 6 + idx * 2,
-            "memory_mb": round(12.8 + idx * 0.4, 1),
-        }
-        if reason:
-            tc_item["failure_reason"] = reason
-        built_cases.append(tc_item)
-
-    passed_count = sum(1 for tc in built_cases if tc["status"] == "passed")
-    net_tag = "--network=none" if network_isolated else "--network=bridge"
-    return {
-        "id": f"sandbox-{uid()[:8]}",
-        "exercise_id": ex_clean,
-        "status": "passed" if passed_count == len(built_cases) else "failed",
-        "passed_count": passed_count,
-        "total_count": len(built_cases),
-        "execution_time_ms": sum(int(tc["duration_ms"]) for tc in built_cases),
-        "memory_mb": max((float(tc["memory_mb"]) for tc in built_cases), default=14.0),
-        "container_id": f"{docker_img} (Seccomp {net_tag})",
-        "test_cases": built_cases,
-        "sha256": sha256(code),
-        "timestamp": now_utc(),
+    Always enforce network isolation, including when an older system policy
+    allows networking. Assignment image names are data, not commands: only the
+    operator-controlled CODEMIND_PYTHON_IMAGE is used, pinned to its local ID.
+    """
+    ex_id = (exercise_id or "exercise-deque").strip()
+    result: dict[str, Any] = {
+        "id": f"sandbox-{uuid.uuid4().hex[:16]}", "exercise_id": ex_id,
+        "status": "not_run", "execution_status": "not_run", "passed_count": 0,
+        "executed_count": 0, "total_count": 0, "execution_time_ms": 0,
+        "memory_mb": None, "container_id": None, "test_cases": [],
+        "sha256": _hash(code), "timestamp": datetime.now(timezone.utc).isoformat(),
+        "runner": RUNNER_VERSION,
+        "provenance": {
+            "runner_version": RUNNER_VERSION, "code_sha256": _hash(code),
+            "language": language.lower(), "network_isolated": True,
+            "memory_measurement": "not_measured", "duration_measurement": "host_wall_clock_including_container_startup",
+        },
     }
+    if language.strip().lower() not in ("python", "python3", "py"):
+        result["message"] = "Runner hiện chỉ hỗ trợ Python. Ngôn ngữ này chưa được thực thi hoặc chấm điểm."
+        return result
+    if not code.strip() or len(code.encode("utf-8")) > SOURCE_LIMIT_BYTES:
+        result["message"] = "Mã nguồn phải có nội dung và không vượt quá 128 KiB."
+        return result
+    harness = DEQUE_HARNESS if ex_id == "exercise-deque" else None
+    cases = DEQUE_CASES if harness else _lookup_course_test_cases(conn, ex_id)[0]
+    if not cases or len(cases) > MAX_TEST_CASES:
+        result["message"] = f"Bài tập cần có từ 1 đến {MAX_TEST_CASES} test case stdin/stdout do giảng viên cấu hình. Chưa chạy mã."
+        return result
+    for case in cases:
+        if not isinstance(case, dict) or not isinstance(case.get("input"), str) or not isinstance(case.get("expectedOutput"), str):
+            result["message"] = "Test case cần chuỗi input/expectedOutput; chưa chạy mã."
+            return result
+        if len(case["input"].encode("utf-8")) > 16384 or len(case["expectedOutput"].encode("utf-8")) > 65536:
+            result["message"] = "Input/expectedOutput vượt giới hạn runner; chưa chạy mã."
+            return result
+    result["total_count"] = len(cases)
+    result["provenance"]["test_suite_sha256"] = _hash(json.dumps(cases, ensure_ascii=False, sort_keys=True))
+    result["provenance"]["contract"] = "deque-adapter-v1" if harness else "stdin-stdout-v1"
+    runner = DockerPythonRunner()
+    result["provenance"]["image"] = runner.image
+    try:
+        runner.prepare()
+    except RunnerUnavailable as exc:
+        result.update(status="unavailable", execution_status="unavailable", message=str(exc))
+        return result
+    result["provenance"]["image_id"] = runner.image_id
+    unavailable = False
+    for index, case in enumerate(cases, 1):
+        row: dict[str, Any] = {
+            "id": index, "title": str(case.get("title") or f"Test #{index}"),
+            "is_edge_case": bool(case.get("isEdgeCase")), "input": case["input"],
+            "expected_output": case["expectedOutput"], "status": "not_run",
+            "actual_output": "", "duration_ms": 0, "memory_mb": None,
+        }
+        if not unavailable:
+            try:
+                run = runner.run_case(
+                    code, case["input"], timeout_ms=case.get("timeoutMs", 5000),
+                    memory_limit_mb=case.get("memoryLimitMb", 128), harness=harness,
+                )
+                row.update(run)
+                row["actual_output"] = run["stdout"]
+                if not run["executed"]:
+                    unavailable = True
+                    row.update(status="unavailable", failure_reason=run["runner_error"])
+                else:
+                    result["executed_count"] += 1
+                    if run["timed_out"]:
+                        row.update(status="failed", failure_reason="Vượt giới hạn thời gian thực thi.")
+                    elif run["output_truncated"]:
+                        row.update(status="failed", failure_reason="Output vượt giới hạn 64 KiB.")
+                    elif run["exit_code"] != 0:
+                        row.update(status="failed", failure_reason="Chương trình kết thúc với lỗi; xem stderr.")
+                    elif _normalize_output(run["stdout"]) == _normalize_output(case["expectedOutput"]):
+                        row["status"] = "passed"
+                    else:
+                        row.update(status="failed", failure_reason="Stdout khác expectedOutput.")
+            except RunnerUnavailable as exc:
+                unavailable = True
+                row.update(status="unavailable", failure_reason=str(exc))
+        result["test_cases"].append(row)
+    result["passed_count"] = sum(row["status"] == "passed" for row in result["test_cases"])
+    result["execution_time_ms"] = sum(row["duration_ms"] for row in result["test_cases"])
+    result["container_id"] = next((row.get("container_id") for row in result["test_cases"] if row.get("container_id")), None)
+    result["execution_status"] = "unavailable" if unavailable else "executed"
+    result["status"] = "unavailable" if unavailable else ("passed" if result["passed_count"] == len(cases) else "failed")
+    result["message"] = "Chưa chạy đủ bộ kiểm thử do runner không sẵn sàng." if unavailable else "Kết quả thực thi Python trong Docker; chưa đo peak memory hoặc đạo văn."
+    return result
+
+
+def evaluate_code(code: str) -> tuple[int, list[tuple[str, str, str]]]:
+    """Legacy adapter: all results originate from the real runner."""
+    result = evaluate_sandbox_detailed(code)
+    return result["passed_count"], [
+        (case["status"], case.get("failure_reason") or case["title"], str(case["duration_ms"]))
+        for case in result["test_cases"]
+    ]
+

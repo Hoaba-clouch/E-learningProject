@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from app.api.deps import current_user, get_optional_current_user, record_audit_log
 from app.api.v1.auth import serialize_shared_profile_fields
 from app.core.database import db, row_dict
+from app.services.github_evidence import GitHubEvidenceError, has_completed_task_proof, load_snapshot, parse_github_repo
 from app.core.security import uid
 from app.core.timezone import now_utc
 from app.schemas.kanban import (
@@ -233,205 +234,83 @@ def _normalize_team(raw_team: list[dict[str, Any]]) -> tuple[list[dict[str, Any]
 
 
 def _extract_repo_slug_from_url(repo_url: str | None) -> str:
-    raw = (repo_url or "").strip()
-    if not raw:
+    try:
+        return parse_github_repo(repo_url or "")[1]
+    except GitHubEvidenceError:
         return ""
-    parsed = urlparse(raw)
-    parts = [p for p in parsed.path.split("/") if p]
-    if len(parts) >= 2:
-        return f"{parts[0].lower()}/{parts[1].removesuffix('.git').lower()}"
-    if len(parts) == 1:
-        return parts[0].removesuffix(".git").lower()
-    return ""
 
 
 def _url_matches_project_repo(url: str | None, repo_obj: Any | None) -> bool:
-    clean = (url or "").strip()
-    if not (clean.startswith("http://") or clean.startswith("https://")):
-        return False
-    low = clean.rstrip("/").lower()
     if not repo_obj:
-        return "github.com/" in low
+        return False
+    parsed = urlparse((url or "").strip())
+    if (parsed.scheme != "https" or parsed.netloc.lower() != "github.com"
+            or parsed.username or parsed.password or parsed.query or parsed.fragment):
+        return False
+    parts = parsed.path.strip("/").split("/")
+    if len(parts) != 4:
+        return False
     rd = dict(repo_obj)
-    slug = str(rd.get("repo_slug") or rd.get("repoSlug") or "").strip().lower()
-    repo_url = str(rd.get("repo_url") or rd.get("repoUrl") or "").strip().rstrip("/").lower()
-    if slug and f"github.com/{slug}" in low:
-        return True
-    if repo_url and low.startswith(repo_url):
-        return True
-    if not slug and not repo_url:
-        return "github.com/" in low
-    return False
+    expected = str(rd.get("repo_slug") or rd.get("repoSlug") or "").lower()
+    return bool(expected and "/".join(parts[:2]).lower() == expected and (
+        (parts[2] == "commit" and re.fullmatch(r"[0-9a-fA-F]{40}", parts[3]))
+        or (parts[2] == "pull" and re.fullmatch(r"[1-9][0-9]*", parts[3]))))
 
 
-def _build_project_git_maps(
-    conn: Any,
-) -> tuple[
-    dict[str, dict[str, Any]],
-    dict[tuple[str, str], list[dict[str, Any]]],
-    dict[tuple[str, str], list[dict[str, Any]]],
-]:
+def _build_project_git_maps(conn: Any) -> tuple[dict, dict, dict]:
+    """Expose only records fetched from GitHub, never legacy seeded Git rows."""
     repo_rows = conn.execute("SELECT * FROM git_repositories").fetchall()
-    commit_rows = conn.execute(
-        "SELECT * FROM git_commits ORDER BY position_order DESC, created_at DESC"
-    ).fetchall()
-    pr_rows = conn.execute(
-        "SELECT * FROM git_pull_requests ORDER BY pr_number DESC"
-    ).fetchall()
-
-    commits_count_by_proj: dict[str, int] = {}
-    commits_by_proj_code: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for cr in commit_rows:
-        pid = cr["project_id"]
-        commits_count_by_proj[pid] = commits_count_by_proj.get(pid, 0) + 1
-        code_key = str(cr["task_code"] or "").strip().lstrip("#").upper()
-        if code_key:
-            commits_by_proj_code.setdefault((pid, code_key), []).append(
-                {
-                    "id": cr["id"],
-                    "sha": cr["sha"],
-                    "branch": cr["branch"],
-                    "message": cr["message"],
-                    "authorName": cr["author_name"],
-                    "timeAgo": cr["time_ago_label"] or cr["committed_at_label"] or "",
-                }
-            )
-
-    repo_url_lookup: dict[str, str] = {}
-    for rr in repo_rows:
-        repo_url_lookup[rr["project_id"]] = str(rr["repo_url"] or "").rstrip("/")
-
-    open_prs_by_proj: dict[str, int] = {}
-    merged_prs_by_proj: dict[str, int] = {}
-    total_prs_by_proj: dict[str, int] = {}
-    prs_by_proj_code: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for pr in pr_rows:
-        pid = pr["project_id"]
-        st = str(pr["status"] or "open").lower()
-        total_prs_by_proj[pid] = total_prs_by_proj.get(pid, 0) + 1
-        if st == "merged":
-            merged_prs_by_proj[pid] = merged_prs_by_proj.get(pid, 0) + 1
-        else:
-            open_prs_by_proj[pid] = open_prs_by_proj.get(pid, 0) + 1
-        code_key = str(pr["task_code"] or "").strip().lstrip("#").upper()
-        if code_key:
-            base_url = repo_url_lookup.get(pid) or "https://github.com/Hoaba-clouch/E-learningProject"
-            prs_by_proj_code.setdefault((pid, code_key), []).append(
-                {
-                    "id": pr["id"],
-                    "prNumber": int(pr["pr_number"]),
-                    "title": pr["title"],
-                    "status": st,
-                    "sourceBranch": pr["source_branch"],
-                    "targetBranch": pr["target_branch"],
-                    "aiReviewScore": int(pr["ai_review_score"] or 90),
-                    "peerApproved": bool(pr["peer_approved"]),
-                    "prUrl": f"{base_url}/pull/{int(pr['pr_number'])}",
-                }
-            )
-
-    repo_by_proj: dict[str, dict[str, Any]] = {}
+    repo_by_proj, commits_by_proj_code, prs_by_proj_code = {}, {}, {}
     for rr in repo_rows:
         pid = rr["project_id"]
+        snapshot, last_error = load_snapshot(conn, pid, rr["repo_slug"])
+        if snapshot and snapshot.get("branch") != rr["target_branch"]:
+            snapshot = None
+        commits = snapshot.get("commits", []) if snapshot else []
+        prs = snapshot.get("pullRequests", []) if snapshot else []
         repo_by_proj[pid] = {
-            "repoUrl": rr["repo_url"],
-            "repoSlug": rr["repo_slug"],
-            "targetBranch": rr["target_branch"] or "main",
-            "webhookActive": bool(rr["webhook_active"]),
-            "lastSyncedAt": rr["last_synced_at"] or "",
-            "commitsCount": commits_count_by_proj.get(pid, 0),
-            "openPrsCount": open_prs_by_proj.get(pid, 0),
-            "mergedPrsCount": merged_prs_by_proj.get(pid, 0),
-            "totalPrsCount": total_prs_by_proj.get(pid, 0),
+            "repoUrl": rr["repo_url"], "repoSlug": rr["repo_slug"],
+            "targetBranch": rr["target_branch"], "webhookActive": False,
+            "lastSyncedAt": snapshot["fetchedAt"] if snapshot else "",
+            "evidenceVerified": bool(snapshot), "lastSyncError": last_error,
+            "commitsCount": len(commits), "openPrsCount": sum(p["status"] == "open" for p in prs),
+            "mergedPrsCount": sum(p["status"] == "merged" for p in prs), "totalPrsCount": len(prs),
         }
-
+        for commit in commits:
+            code = str(commit.get("taskCode") or "").upper()
+            if code:
+                commits_by_proj_code.setdefault((pid, code), []).append({
+                    "id": commit["id"], "sha": commit["sha"], "branch": commit["branch"],
+                    "message": commit["message"], "authorName": commit["author"]["name"],
+                    "timeAgo": commit["date"], "url": commit["url"], "evidenceSource": "github-rest"})
+        for pr in prs:
+            code = str(pr.get("taskCode") or "").upper()
+            if code:
+                prs_by_proj_code.setdefault((pid, code), []).append({**pr, "prUrl": pr["url"]})
     return repo_by_proj, commits_by_proj_code, prs_by_proj_code
 
 
-def _build_task_git_activity(
-    submission_url: str | None,
-    repo_summary: dict[str, Any] | None,
-    commits_list: list[dict[str, Any]],
-    prs_list: list[dict[str, Any]],
-) -> dict[str, Any]:
+def _build_task_git_activity(submission_url: str | None, repo_summary: dict[str, Any] | None,
+                             commits_list: list[dict[str, Any]], prs_list: list[dict[str, Any]]) -> dict[str, Any]:
     latest_pr = prs_list[0] if prs_list else None
     latest_commit = commits_list[0] if commits_list else None
-    has_proof = (
-        bool(commits_list)
-        or bool(prs_list)
-        or _url_matches_project_repo(submission_url or "", repo_summary)
-    )
     return {
-        "commits": commits_list[:6],
-        "pullRequests": prs_list[:4],
-        "commitsCount": len(commits_list),
+        "commits": commits_list[:6], "pullRequests": prs_list[:4], "commitsCount": len(commits_list),
         "latestCommitSha": latest_commit["sha"] if latest_commit else None,
         "latestPrNumber": latest_pr["prNumber"] if latest_pr else None,
         "latestPrStatus": latest_pr["status"] if latest_pr else None,
         "latestPrUrl": latest_pr["prUrl"] if latest_pr else None,
-        "hasValidGitProof": has_proof,
+        "hasValidGitProof": bool(repo_summary and repo_summary.get("evidenceVerified")
+                                 and any(has_completed_task_proof(pr) for pr in prs_list)),
     }
 
 
 def _fetch_single_task_git_activity(conn: Any, task_row: Any) -> dict[str, Any]:
+    repos, commits, prs = _build_project_git_maps(conn)
     pid = task_row["project_id"]
-    code_key = str(task_row["code"] or "").strip().lstrip("#").upper()
-    repo_row = conn.execute("SELECT * FROM git_repositories WHERE project_id=?", (pid,)).fetchone()
-    repo_dict = (
-        {
-            "repoUrl": repo_row["repo_url"],
-            "repoSlug": repo_row["repo_slug"],
-        }
-        if repo_row
-        else None
-    )
-    commits_list: list[dict[str, Any]] = []
-    prs_list: list[dict[str, Any]] = []
-    if code_key:
-        c_rows = conn.execute(
-            """SELECT * FROM git_commits
-               WHERE project_id=? AND upper(task_code)=upper(?)
-               ORDER BY position_order DESC, created_at DESC""",
-            (pid, code_key),
-        ).fetchall()
-        commits_list = [
-            {
-                "id": cr["id"],
-                "sha": cr["sha"],
-                "branch": cr["branch"],
-                "message": cr["message"],
-                "authorName": cr["author_name"],
-                "timeAgo": cr["time_ago_label"] or cr["committed_at_label"] or "",
-            }
-            for cr in c_rows
-        ]
-        p_rows = conn.execute(
-            """SELECT * FROM git_pull_requests
-               WHERE project_id=? AND upper(task_code)=upper(?)
-               ORDER BY pr_number DESC""",
-            (pid, code_key),
-        ).fetchall()
-        base_url = (repo_dict["repoUrl"] if repo_dict else "https://github.com/Hoaba-clouch/E-learningProject").rstrip("/")
-        prs_list = [
-            {
-                "id": pr["id"],
-                "prNumber": int(pr["pr_number"]),
-                "title": pr["title"],
-                "status": str(pr["status"] or "open").lower(),
-                "sourceBranch": pr["source_branch"],
-                "targetBranch": pr["target_branch"],
-                "aiReviewScore": int(pr["ai_review_score"] or 90),
-                "peerApproved": bool(pr["peer_approved"]),
-                "prUrl": f"{base_url}/pull/{int(pr['pr_number'])}",
-            }
-            for pr in p_rows
-        ]
-    return _build_task_git_activity(
-        task_row["submission_url"],
-        repo_dict,
-        commits_list,
-        prs_list,
-    )
+    code = str(task_row["code"] or "").strip().lstrip("#").upper()
+    return _build_task_git_activity(task_row["submission_url"], repos.get(pid),
+                                    commits.get((pid, code), []), prs.get((pid, code), []))
 
 
 def _normalize_audit_logs(raw_logs: Any, fallback_col: str = "") -> list[dict[str, Any]]:
@@ -861,70 +740,28 @@ def _serialize_project(
     }
 
 
-def _check_git_proof_for_done(
-    conn: Any,
-    user: dict[str, Any],
-    task_row: Any,
-    target_col: str,
-    candidate_submission_url: str | None = None,
-) -> None:
+def _check_git_proof_for_done(conn: Any, user: dict[str, Any], task_row: Any, target_col: str,
+                              candidate_submission_url: str | None = None) -> None:
     if str(user.get("role") or "").lower() != "student":
         return
-
     pid = task_row["project_id"]
-    repo_row = conn.execute(
-        "SELECT * FROM git_repositories WHERE project_id=?",
-        (pid,),
-    ).fetchone()
-    expected_repo = (
-        repo_row["repo_slug"] if repo_row and repo_row["repo_slug"] else "GitHub Repo dự án"
-    )
-
-    if candidate_submission_url is not None and candidate_submission_url.strip():
-        if not _url_matches_project_repo(candidate_submission_url, repo_row):
-            hint_url = (
-                f"https://github.com/{repo_row['repo_slug']}"
-                if repo_row and repo_row["repo_slug"]
-                else "https://github.com/..."
-            )
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Link minh chứng không thuộc kho lưu trữ của dự án ({expected_repo}). "
-                    f"Vui lòng dán link Commit/PR từ {hint_url}."
-                ),
-            )
-
-    if target_col == "done" and task_row["column_id"] not in ("done", "verified"):
-        code_key = str(task_row["code"] or "").strip().lstrip("#").upper()
-        commit_cnt = 0
-        pr_cnt = 0
-        if code_key:
-            c_row = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM git_commits WHERE project_id=? AND upper(task_code)=upper(?)",
-                (pid, code_key),
-            ).fetchone()
-            p_row = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM git_pull_requests WHERE project_id=? AND upper(task_code)=upper(?)",
-                (pid, code_key),
-            ).fetchone()
-            commit_cnt = int(c_row["cnt"] or 0) if c_row else 0
-            pr_cnt = int(p_row["cnt"] or 0) if p_row else 0
-
-        effective_url = (
-            candidate_submission_url
-            if candidate_submission_url is not None
-            else task_row["submission_url"]
-        ) or ""
-        if commit_cnt == 0 and pr_cnt == 0 and not _url_matches_project_repo(effective_url, repo_row):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Chưa có minh chứng Git cho task #{task_row['code']}: Sinh viên cần có ít nhất "
-                    f"1 Commit/PR gắn mã #{task_row['code']} trên Git Hub hoặc dán link Commit/PR hợp lệ "
-                    f"thuộc {expected_repo} trước khi chuyển sang Hoàn thành."
-                ),
-            )
+    repo = conn.execute("SELECT * FROM git_repositories WHERE project_id=?", (pid,)).fetchone()
+    if candidate_submission_url and not _url_matches_project_repo(candidate_submission_url, repo):
+        raise HTTPException(status_code=422, detail="Evidence must be an exact HTTPS GitHub commit/PR URL in the configured repository.")
+    if target_col != "done" or task_row["column_id"] in ("done", "verified"):
+        return
+    snapshot, _ = load_snapshot(conn, pid, repo["repo_slug"]) if repo else (None, None)
+    code = str(task_row["code"] or "").strip().lstrip("#").upper()
+    prs = snapshot.get("pullRequests", []) if snapshot and snapshot.get("branch") == repo["target_branch"] else []
+    valid = [pr for pr in prs if pr.get("taskCode") == code and has_completed_task_proof(pr)]
+    effective_url = candidate_submission_url if candidate_submission_url is not None else task_row["submission_url"]
+    if effective_url:
+        url = effective_url.strip().rstrip("/").lower()
+        valid = [pr for pr in valid if url in (pr["url"].lower(), f"https://github.com/{repo['repo_slug']}/commit/{pr['headSha']}".lower())]
+    if not valid:
+        raise HTTPException(status_code=422, detail=(
+            f"Task #{code} needs a synced, explicitly linked merged GitHub PR, a passing test check and an independent approval for that PR head SHA. "
+            "A repository URL, local demo row, or unverified commit/PR cannot complete the task. Sync GitHub after tests and review finish."))
 
 
 def _check_h2_constraint(conn: Any, task_row: Any, target_col: str) -> None:

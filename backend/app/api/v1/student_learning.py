@@ -7,6 +7,7 @@ from typing import Any
 import urllib.error
 import urllib.request
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
 from app.api.deps import current_user, record_audit_log
 from app.api.v1.auth import serialize_shared_profile_fields
@@ -16,6 +17,8 @@ from app.core.timezone import now_utc
 from app.schemas.student import (
     ChapterExerciseSubmitIn,
     LessonCompleteIn,
+    QuizStartIn,
+    QuizAnswerIn,
     VideoNoteCreateIn,
     VideoProgressIn,
     XpQuestClaimIn,
@@ -23,6 +26,7 @@ from app.schemas.student import (
     XpShopPurchaseIn,
 )
 from app.services.analytics import track_event
+from app.services.quiz_grading import resolve_lesson, quiz_questions, quiz_version, grade_answer, public_attempt, public_course_chapters
 
 router = APIRouter(tags=["Student Learning (Branch 1)"])
 
@@ -314,7 +318,7 @@ def _build_student_course_payload(
         "teacher": display_sec["teacher_name"] if display_sec else course_row["teacher_name"],
         "sandboxEnabled": bool(display_sec["sandbox_enabled"] if display_sec else course_row["sandbox_enabled"]),
         "aiDefenseEnabled": bool(display_sec["ai_defense_enabled"] if display_sec else course_row["ai_defense_enabled"]),
-        "chapters": json.loads(course_row["chapters_json"] or "[]"),
+        "chapters": public_course_chapters(course_row["chapters_json"]),
     }
 
 
@@ -336,54 +340,28 @@ def _lookup_lesson_xp(conn: Any, subject_id: str, lesson_id: str, fallback_xp: i
 
 
 def _verify_github_repo(owner: str, repo: str) -> dict[str, Any]:
-    """Kiểm tra repo công khai thật qua GitHub REST API (timeout ngắn 3s, fallback an toàn)."""
-    api_url = f"https://api.github.com/repos/{owner}/{repo}"
-    req = urllib.request.Request(
-        api_url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "CodeMind-AI-LMS/2.0",
-        },
-    )
+    """Record a real commit SHA when reachable; never turn a network error into a pass."""
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "CodeMind-AI-LMS/2.0"}
     try:
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
-            return {
-                "reachable": True,
-                "exists": True,
-                "size_kb": int(data.get("size") or 0),
-                "language": data.get("language") or "Code",
-                "default_branch": data.get("default_branch") or "main",
-                "stargazers": int(data.get("stargazers_count") or 0),
-                "note": f"Đã xác thực repo công khai ({data.get('default_branch', 'main')}, {int(data.get('size') or 0)} KB).",
-            }
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return {
-                "reachable": True,
-                "exists": False,
-                "size_kb": 0,
-                "note": "Không tìm thấy repository công khai trên GitHub (404 hoặc repo đang để Private).",
-            }
-        return {
-            "reachable": False,
-            "exists": True,
-            "size_kb": 64,
-            "note": f"GitHub API trả mã {exc.code} (rate limit/tạm hạn chế); sử dụng kiểm thử cấu trúc Sandbox cục bộ.",
-        }
-    except Exception:
-        return {
-            "reachable": False,
-            "exists": True,
-            "size_kb": 64,
-            "note": "Không kết nối được GitHub API ngoài mạng lúc nộp; sử dụng kiểm thử cấu trúc Sandbox cục bộ.",
-        }
+        request = urllib.request.Request(f"https://api.github.com/repos/{owner}/{repo}/commits?per_page=1", headers=headers)
+        with urllib.request.urlopen(request, timeout=5) as response:
+            commits = json.loads(response.read(2_000_000).decode("utf-8"))
+        sha = commits[0].get("sha", "") if isinstance(commits, list) and commits else ""
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            return {"commit_sha": "", "note": "Chưa xác minh được commit của repository."}
+        return {"commit_sha": sha, "note": f"Đã ghi nhận commit {sha[:12]} từ GitHub; giảng viên sẽ kiểm tra phiên bản này."}
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, TypeError):
+        return {"commit_sha": "", "note": "Chưa xác minh được GitHub (repo riêng tư, rỗng hoặc kết nối lỗi). Bài đã được tiếp nhận và cần giảng viên kiểm tra."}
 
 
 def _serialize_chapter_submission(row: Any) -> dict[str, Any]:
+    evidence = json.loads(row.get("evidence_json") or "{}")
+    has_grade = row.get("instructor_grade") is not None
     effective_score = row["instructor_grade"] if row.get("instructor_grade") is not None else row["score"]
     row_status = row.get("status") or "pending"
-    if row_status == "revision_requested":
+    if not has_grade:
+        grade_label = "ĐÃ NHẬN BÀI · CHỜ GIẢNG VIÊN KIỂM TRA"
+    elif row_status == "revision_requested":
         grade_label = "YÊU CẦU CHỈNH SỬA & NỘP LẠI"
     elif row_status == "flagged" or effective_score < 7.0:
         grade_label = "CẦN RÀ SOÁT ĐỘ TIN CẬY"
@@ -411,6 +389,9 @@ def _serialize_chapter_submission(row: Any) -> dict[str, Any]:
         "valgrindLeaks": int(row.get("valgrind_leaks") or 0),
         "antiPlagiarismScore": row["anti_plagiarism_score"],
         "gradeLabel": grade_label,
+        "evaluation_status": "teacher_graded" if has_grade else "pending_review",
+        "evidence": evidence,
+        "metrics_verified": False,
         "rubric": json.loads(row["rubric_json"] or "[]"),
         "aiFeedback": json.loads(row["ai_feedback_json"] or "{}"),
         "status": row_status,
@@ -769,10 +750,10 @@ def save_student_video_progress(
     now = now_utc()
     if payload.duration_seconds > 0:
         watched_pct = round(min(100.0, (payload.watched_seconds / payload.duration_seconds) * 100.0), 1)
-        is_completed = 1 if (watched_pct >= 80.0 or (payload.completed and payload.watched_seconds >= 15)) else 0
+        is_completed = 1 if watched_pct >= 90.0 else 0
     else:
-        is_completed = 1 if (payload.completed and payload.watched_seconds >= 15) else 0
-        watched_pct = 100.0 if is_completed else min(79.0, round(payload.watched_seconds * 4.0, 1))
+        is_completed = 0
+        watched_pct = 0.0
 
     with db() as conn:
         existing = conn.execute(
@@ -821,126 +802,110 @@ def save_student_video_progress(
     }
 
 
+@router.post("/student/quiz-attempts", status_code=201)
+def start_quiz_attempt(payload: QuizStartIn, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Chỉ học viên được làm Quiz.")
+    with db() as conn:
+        course, section = _require_student_course_enrollment(conn, user, payload.subject_id)
+        if not course:
+            raise HTTPException(status_code=404, detail="Không tìm thấy môn học.")
+        payload = payload.model_copy(update={"subject_id": course["subject_id"]})
+        try:
+            chapter, lesson, _ = resolve_lesson(course, payload.lesson_id)
+            questions = quiz_questions(lesson)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if not questions:
+            raise HTTPException(status_code=422, detail="Bài học chưa có Quiz được giảng viên cấu hình trên server.")
+        if not payload.restart:
+            previous = conn.execute("SELECT * FROM student_quiz_attempts WHERE user_id=? AND subject_id=? AND lesson_id=? ORDER BY created_at DESC, id DESC LIMIT 1",
+                                    (user["id"], payload.subject_id, lesson["id"])).fetchone()
+            if (previous and previous["quiz_version"] == quiz_version(questions)
+                    and previous["section_id"] == (section["id"] if section else "")):
+                return public_attempt(previous)
+        attempt_id = uid()
+        conn.execute("""INSERT INTO student_quiz_attempts
+            (id,user_id,subject_id,lesson_id,chapter_id,section_id,quiz_version,questions_json,answers_json,results_json,score,total,status,created_at,submitted_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,0,?,'in_progress',?,'')""",
+            (attempt_id, user["id"], payload.subject_id, lesson["id"], chapter["id"], section["id"] if section else "",
+             quiz_version(questions), json.dumps(questions, ensure_ascii=False), "{}", "[]", len(questions), now_utc()))
+        row = conn.execute("SELECT * FROM student_quiz_attempts WHERE id=?", (attempt_id,)).fetchone()
+    return public_attempt(row)
+
+
+@router.post("/student/quiz-attempts/{attempt_id}/answers")
+def answer_quiz_question(attempt_id: str, payload: QuizAnswerIn, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    with db() as conn:
+        row = conn.execute("SELECT * FROM student_quiz_attempts WHERE id=? AND user_id=? FOR UPDATE", (attempt_id, user["id"])).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lần làm Quiz của bạn.")
+        course, section = _require_student_course_enrollment(conn, user, row["subject_id"])
+        if not course or (row["section_id"] and (not section or section["id"] != row["section_id"])):
+            raise HTTPException(status_code=403, detail="Lần làm Quiz không thuộc lớp hiện tại.")
+        questions = json.loads(row["questions_json"])
+        answers = json.loads(row["answers_json"] or "{}")
+        try:
+            results = grade_answer(questions, answers, payload.question_id, payload.option_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        finished = len(results) == len(questions)
+        conn.execute("""UPDATE student_quiz_attempts SET answers_json=?, results_json=?, score=?, status=?, submitted_at=? WHERE id=?""",
+                     (json.dumps(answers), json.dumps(results, ensure_ascii=False), sum(r["is_correct"] for r in results),
+                      "submitted" if finished else "in_progress", row.get("submitted_at") or (now_utc() if finished else ""), attempt_id))
+        updated = conn.execute("SELECT * FROM student_quiz_attempts WHERE id=?", (attempt_id,)).fetchone()
+    return public_attempt(updated)
+
+
 @router.post("/student/lessons/complete")
-def complete_student_lesson(
-    payload: LessonCompleteIn,
-    user: dict[str, Any] = Depends(current_user),
-) -> dict[str, Any]:
-    """Đánh dấu hoàn thành bài học hoặc lưu điểm Quiz; tự động cộng XP chuẩn server (chống cộng trùng)."""
-    if payload.quiz_score < 0 or payload.quiz_total < 0 or payload.quiz_score > payload.quiz_total:
-        raise HTTPException(
-            status_code=422,
-            detail="Điểm Quiz không hợp lệ (quiz_score không thể lớn hơn quiz_total hoặc nhỏ hơn 0).",
-        )
-    if payload.quiz_total > 0 and (payload.quiz_score / payload.quiz_total) < 0.6:
-        raise HTTPException(
-            status_code=422,
-            detail="Cần trả lời đúng tối thiểu 60% câu hỏi Checkpoint Quiz để hoàn thành bài học.",
-        )
-    user_id = user["id"]
+def complete_student_lesson(payload: LessonCompleteIn, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    """Only server-graded attempts complete a quiz lesson; award XP once per canonical lesson."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Chỉ học viên được ghi nhận hoàn thành bài học.")
     now = now_utc()
     with db() as conn:
-        course, _ = _require_student_course_enrollment(conn, user, payload.subject_id)
-        if course:
-            try:
-                chapters = json.loads(course.get("chapters_json") or "[]")
-            except Exception:
-                chapters = []
-            if chapters:
-                matched_lesson = None
-                for c_idx, ch in enumerate(chapters):
-                    for l_idx, ls in enumerate(ch.get("lessons") or []):
-                        disp_code = f"{c_idx + 1}.{l_idx + 1}"
-                        ls_title = str(ls.get("title") or "").strip()
-                        if (
-                            ls.get("id") == payload.lesson_id
-                            or disp_code == payload.lesson_id
-                            or ls_title.startswith(f"{payload.lesson_id} ")
-                            or ls_title.startswith(f"{payload.lesson_id}:")
-                        ):
-                            if ch.get("status") == "Bản nháp" or ls.get("status") == "Bản nháp":
-                                raise HTTPException(
-                                    status_code=403,
-                                    detail="Bài học hoặc chương này đang ở trạng thái Bản nháp, chưa phát hành cho học viên.",
-                                )
-                            matched_lesson = ls
-                            break
-                    if matched_lesson:
-                        break
-                if matched_lesson is None:
-                    static_code_match = re.fullmatch(r"(\d+)\.(\d+)", payload.lesson_id.strip())
-                    if static_code_match:
-                        ch_num = int(static_code_match.group(1))
-                        ls_num = int(static_code_match.group(2))
-                        if not (1 <= ch_num <= 12 and 1 <= ls_num <= 12):
-                            raise HTTPException(
-                                status_code=404,
-                                detail=f"Không tìm thấy bài học '{payload.lesson_id}' trong giáo trình môn học.",
-                            )
-                    else:
-                        raise HTTPException(
-                            status_code=404,
-                            detail=f"Không tìm thấy bài học '{payload.lesson_id}' trong giáo trình môn học.",
-                        )
-        prof = _ensure_profile(conn, user_id)
-        existing = conn.execute(
-            "SELECT * FROM student_lesson_progress WHERE user_id=? AND subject_id=? AND lesson_id=?",
-            (user_id, payload.subject_id, payload.lesson_id),
-        ).fetchone()
+        course, section = _require_student_course_enrollment(conn, user, payload.subject_id)
+        if not course:
+            raise HTTPException(status_code=404, detail="Không tìm thấy môn học.")
+        try:
+            chapter, lesson, display_code = resolve_lesson(course, payload.lesson_id)
+            questions = quiz_questions(lesson)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        subject_id, lesson_id = course["subject_id"], lesson["id"]
+        score, total = 0, 0
+        if questions:
+            attempt = conn.execute("SELECT * FROM student_quiz_attempts WHERE id=? AND user_id=? AND subject_id=? AND lesson_id=?",
+                                   (payload.quiz_attempt_id or "", user["id"], subject_id, lesson_id)).fetchone()
+            if (not attempt or attempt["status"] != "submitted" or attempt["quiz_version"] != quiz_version(questions)
+                    or attempt["section_id"] != (section["id"] if section else "")
+                    or attempt["total"] != len(questions) or attempt["score"] * 100 < attempt["total"] * 60):
+                raise HTTPException(status_code=422, detail="Cần hoàn thành Quiz trên server và đạt ít nhất 60%. Nếu đề đã thay đổi, hãy làm lại Quiz.")
+            score, total = attempt["score"], attempt["total"]
+        _ensure_profile(conn, user["id"])
+        # Serialize concurrent completions on the student's profile, not only the optional progress row.
+        conn.execute("SELECT exp_points FROM student_profiles WHERE user_id=? FOR UPDATE", (user["id"],)).fetchone()
+        existing = conn.execute("""SELECT * FROM student_lesson_progress
+            WHERE user_id=? AND subject_id IN (?,?,?) AND lesson_id IN (?,?)
+            ORDER BY completed_at DESC LIMIT 1""",
+            (user["id"], subject_id, course["id"], course.get("code") or subject_id, lesson_id, display_code)).fetchone()
         xp_awarded = 0
         if not existing:
-            xp_awarded = _lookup_lesson_xp(conn, payload.subject_id, payload.lesson_id, payload.xp)
-            conn.execute(
-                """INSERT INTO student_lesson_progress(
-                       id, user_id, subject_id, chapter_id, lesson_id, status, quiz_score, quiz_total, xp_earned, completed_at
-                   ) VALUES(?,?,?,?,?,'done',?,?,?,?)""",
-                (
-                    uid(),
-                    user_id,
-                    payload.subject_id,
-                    payload.chapter_id,
-                    payload.lesson_id,
-                    payload.quiz_score,
-                    payload.quiz_total,
-                    xp_awarded,
-                    now,
-                ),
-            )
-            if xp_awarded > 0:
-                conn.execute(
-                    """UPDATE student_profiles
-                       SET exp_points = exp_points + ?,
-                           radar_algorithm = LEAST(100.0, radar_algorithm + 0.5)
-                       WHERE user_id=?""",
-                    (xp_awarded, user_id),
-                )
+            xp_awarded = min(500, max(0, int(lesson.get("xp") or 50)))
+            conn.execute("""INSERT INTO student_lesson_progress
+                (id,user_id,subject_id,chapter_id,lesson_id,status,quiz_score,quiz_total,xp_earned,completed_at)
+                VALUES(?,?,?,?,?,'done',?,?,?,?)""",
+                (uid(),user["id"],subject_id,chapter["id"],lesson_id,score,total,xp_awarded,now))
+            conn.execute("UPDATE student_profiles SET exp_points=exp_points+? WHERE user_id=?", (xp_awarded,user["id"]))
         else:
-            conn.execute(
-                """UPDATE student_lesson_progress
-                   SET quiz_score = GREATEST(quiz_score, ?), quiz_total = GREATEST(quiz_total, ?), completed_at=?
-                   WHERE id=?""",
-                (payload.quiz_score, payload.quiz_total, now, existing["id"]),
-            )
-        _update_streak_on_activity(conn, user_id)
-        _recalculate_course_avg_progress(conn, payload.subject_id)
-        updated_prof = conn.execute("SELECT exp_points, current_streak FROM student_profiles WHERE user_id=?", (user_id,)).fetchone()
-        new_xp = int(updated_prof["exp_points"] if updated_prof else prof["exp_points"])
-        new_streak = int(updated_prof["current_streak"] if updated_prof else prof["current_streak"])
-
-    track_event(
-        user_id,
-        None,
-        "student_lesson_completed",
-        {"subject_id": payload.subject_id, "lesson_id": payload.lesson_id, "xp_awarded": xp_awarded},
-    )
-    return {
-        "status": "completed",
-        "subject_id": payload.subject_id,
-        "lesson_id": payload.lesson_id,
-        "xp_awarded": xp_awarded,
-        "total_xp": new_xp,
-        "current_streak": new_streak,
-    }
+            conn.execute("""UPDATE student_lesson_progress SET subject_id=?,chapter_id=?,lesson_id=?,quiz_score=?,quiz_total=?,completed_at=? WHERE id=?""",
+                         (subject_id,chapter["id"],lesson_id,score,total,now,existing["id"]))
+        _update_streak_on_activity(conn, user["id"])
+        _recalculate_course_avg_progress(conn, subject_id)
+        profile = conn.execute("SELECT exp_points,current_streak FROM student_profiles WHERE user_id=?", (user["id"],)).fetchone()
+    track_event(user["id"],None,"student_lesson_completed",{"subject_id":subject_id,"lesson_id":lesson_id,"xp_awarded":xp_awarded})
+    return {"status":"completed","subject_id":subject_id,"lesson_id":lesson_id,"xp_awarded":xp_awarded,
+            "total_xp":int(profile["exp_points"]),"current_streak":int(profile["current_streak"])}
 
 
 @router.get("/student/video-notes")
@@ -1040,315 +1005,62 @@ def delete_video_note(note_id: str, user: dict[str, Any] = Depends(current_user)
 
 
 @router.post("/student/chapter-submissions", status_code=status.HTTP_201_CREATED)
-def submit_chapter_exercise(
-    payload: ChapterExerciseSubmitIn,
-    user: dict[str, Any] = Depends(current_user),
-) -> dict[str, Any]:
-    """Học viên nộp link GitHub Repo bài tập chương -> Validate + Kiểm tra GitHub/Docker Test Cases + Đồng bộ 2 chiều sang Giảng viên."""
-    user_id = user["id"]
-    now = now_utc()
-    repo_url_clean = payload.repo_url.strip()
-    m = GITHUB_REPO_RE.match(repo_url_clean)
-    if not m:
-        raise HTTPException(
-            status_code=422,
-            detail="Vui lòng nhập đường dẫn GitHub Repository hợp lệ (https://github.com/owner/repo).",
-        )
-    owner, repo_name = m.group(1), m.group(2)
-    class_id = SUBJECT_TO_CLASS_ID.get(payload.subject_id, f"class-{payload.subject_id}")
-
+def submit_chapter_exercise(payload: ChapterExerciseSubmitIn, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    """Accept a pinned repository submission; a URL is not a test run or a grade."""
+    match = GITHUB_REPO_RE.fullmatch(payload.repo_url.strip())
+    if not match:
+        raise HTTPException(status_code=422, detail="Vui lòng nhập link repository GitHub hợp lệ.")
+    owner, repo_name = match.group(1), match.group(2)
+    repo_url = f"https://github.com/{owner}/{repo_name}"
     with db() as conn:
-        prof = _ensure_profile(conn, user_id)
-        docker_svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-docker'").fetchone()
-        if docker_svc and not docker_svc["active"]:
-            raise HTTPException(
-                status_code=503,
-                detail="Docker CI/CD Isolated Sandbox Pool hiện đang bảo trì bởi Quản trị viên.",
-            )
-
-        course, active_sec = _require_student_course_enrollment(conn, user, payload.subject_id)
-        if course:
-            if not active_sec:
-                active_sec = conn.execute(
-                    "SELECT * FROM class_sections WHERE course_id=? AND status='active' ORDER BY created_at ASC LIMIT 1",
-                    (course["id"],),
-                ).fetchone()
-            class_id = active_sec["id"] if active_sec else course["id"]
-        sandbox_ok = (bool(course["sandbox_enabled"]) if course else True) and (
-            bool(active_sec["sandbox_enabled"]) if active_sec else True
-        )
-        if course and not sandbox_ok:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Quản trị viên đã tạm khóa Docker Sandbox cho học phần {course['code']}.",
-            )
-
-        gh_info = _verify_github_repo(owner, repo_name)
-
-        configured_cases: list[dict[str, Any]] = []
-        if course:
-            chapters = json.loads(course["chapters_json"] or "[]")
-            matched_chap = None
-            for ch in chapters:
-                assigns = ch.get("assignments") or []
-                if assigns and str(assigns[0].get("id") or "") == payload.exercise_id:
-                    matched_chap = ch
-                    break
-            if not matched_chap:
-                pub_chapters = [ch for ch in chapters if ch.get("status") != "Bản nháp"]
-                idx = payload.chapter_number - 1
-                if 0 <= idx < len(pub_chapters):
-                    matched_chap = pub_chapters[idx]
-                elif 0 <= idx < len(chapters):
-                    matched_chap = chapters[idx]
-            if matched_chap:
-                assigns = matched_chap.get("assignments") or []
-                if assigns and assigns[0].get("testCases"):
-                    configured_cases = assigns[0]["testCases"]
-
-        tests_total = len(configured_cases) if configured_cases else 5
-        has_note = len(payload.student_note.strip()) >= 12
-
-        if gh_info["reachable"] and not gh_info["exists"]:
-            tests_passed = max(1, tests_total - 2)
-            score = 6.0
-            computed_status = "flagged"
-            valgrind_leaks = 0
-            strengths_msg = f"Đã tiếp nhận bài nộp \"{payload.exercise_title}\", đạt {tests_passed}/{tests_total} test cấu trúc cơ bản."
-            improvements_msg = f"Cảnh báo kiểm chứng GitHub: {gh_info['note']} Không truy cập được mã nguồn public để chạy Docker CI/CD toàn phần."
-        elif gh_info["reachable"] and gh_info["size_kb"] == 0:
-            tests_passed = max(0, tests_total - 2)
-            score = 5.5
-            computed_status = "flagged"
-            valgrind_leaks = 0
-            strengths_msg = f"Repository {owner}/{repo_name} đã tồn tại trên GitHub."
-            improvements_msg = "Repository đang rỗng (0 KB mã nguồn). Vui lòng push code giải pháp và nộp lại để Docker Sandbox biên dịch & chấm đủ test cases."
-        else:
-            tests_passed = tests_total
-            score = 9.5 if has_note else 9.0
-            computed_status = "pending"
-            valgrind_leaks = 0
-            strengths_msg = f"Bài nộp \"{payload.exercise_title}\" ({gh_info['note']}) đạt {tests_passed}/{tests_total} Docker test cases trong 38ms với 0 memory leak."
-            improvements_msg = (
-                "Sẵn sàng chuyển sang Phòng Phản Biện AI 3D để bảo vệ quyết định kiến trúc trước Hội đồng."
-                if gh_info["reachable"]
-                else f"Ghi nhận qua Docker Sandbox nội bộ ({gh_info['note']}). Sẵn sàng sang Phòng Phản Biện AI 3D."
-            )
-
-        test_details = (
-            [
-                {
-                    "id": tc.get("id", f"tc-{i+1}"),
-                    "title": tc.get("title", f"Kiểm thử #{i+1}"),
-                    "status": "passed" if i < tests_passed else "failed",
-                    "durationMs": 7 + i * 2,
-                    "isEdgeCase": bool(tc.get("isEdgeCase", i >= len(configured_cases) - 1)),
-                    "note": "" if i < tests_passed else gh_info["note"],
-                }
-                for i, tc in enumerate(configured_cases)
-            ]
-            if configured_cases
-            else [
-                {
-                    "id": f"tc-ch-{i}",
-                    "title": f"Kiểm thử kiến trúc & Edge Case #{i}",
-                    "status": "passed" if i <= tests_passed else "failed",
-                    "durationMs": 7 + i * 2,
-                    "isEdgeCase": i >= 4,
-                    "note": "" if i <= tests_passed else gh_info["note"],
-                }
-                for i in range(1, 6)
-            ]
-        )
-
-        rubric = [
-            {
-                "title": "Yêu cầu Kỹ thuật & Độ chính xác Test Cases",
-                "score": round((tests_passed / max(1, tests_total)) * 10.0, 1),
-                "max": 10,
-                "note": f"Vượt qua {tests_passed}/{tests_total} test cases Docker Sandbox ({gh_info['note']}).",
-            },
-            {
-                "title": "Chất lượng Mã nguồn & Clean Architecture",
-                "score": 9.0 if computed_status == "pending" else 6.0,
-                "max": 10,
-                "note": f"Repository {owner}/{repo_name} — kiểm tra tách module và chuẩn cấu trúc dự án.",
-            },
-            {
-                "title": "An toàn Bộ nhớ & Xử lý Ca biên (Edge Case)",
-                "score": 9.5 if computed_status == "pending" else 6.0,
-                "max": 10,
-                "note": "Sanitizer kiểm thử 0 memory leak; kiểm tra guard clause bảo vệ đầu vào biên.",
-            },
-            {
-                "title": "Giải thích Thiết kế & Tài liệu Kỹ thuật",
-                "score": 9.5 if has_note else 7.5,
-                "max": 10,
-                "note": (
-                    f"Ghi chú kiến trúc: \"{payload.student_note.strip()[:120]}\""
-                    if has_note
-                    else "Nên bổ sung mô tả trade-off kiến trúc ở ghi chú nộp bài và README."
-                ),
-            },
-        ]
-        ai_feedback = {
-            "strengths": strengths_msg,
-            "improvements": improvements_msg,
-            "cleanCodeAnalysis": (
-                "Độ phức tạp Cyclomatic Complexity trung bình đạt 2.2 (mức an toàn cao)."
-                if computed_status == "pending"
-                else "Cần kiểm chứng đầy đủ mã nguồn public trên GitHub để phân tích tĩnh chuyên sâu."
-            ),
-        }
-
-        prev = conn.execute(
-            """SELECT id, dual_submission_id
-               FROM student_chapter_submissions
-               WHERE user_id=? AND subject_id=? AND chapter_number=?
-               ORDER BY submitted_at DESC LIMIT 1""",
-            (user_id, payload.subject_id, payload.chapter_number),
-        ).fetchone()
-        xp_awarded = 0 if prev else min(150, max(50, int(payload.xp)))
-
-        stu_name = user.get("full_name") or user.get("display_name") or "Học viên"
-        stu_code = user.get("user_code") or f"HV{abs(hash(user_id)) % 89999 + 10000}"
-
-        if prev:
-            sub_id = prev["id"]
-            dual_id = prev["dual_submission_id"] or f"sub-stu-{user_id[-6:]}-{payload.subject_id}-ch{payload.chapter_number}"
-            conn.execute(
-                """UPDATE student_chapter_submissions
-                   SET exercise_id = ?, exercise_title = ?, repo_url = ?, student_note = ?,
-                       score = ?, max_score = 10.0, tests_passed = ?, tests_total = ?,
-                       execution_time_ms = 38, anti_plagiarism_score = ?,
-                       rubric_json = ?, ai_feedback_json = ?, dual_submission_id = ?,
-                       submitted_at = ?, status = ?, instructor_grade = NULL,
-                       instructor_feedback = '', graded_by = '', graded_at = '',
-                       student_name = ?, student_code = ?, valgrind_leaks = ?
-                   WHERE id = ?""",
-                (
-                    payload.exercise_id,
-                    payload.exercise_title,
-                    repo_url_clean[:250],
-                    payload.student_note.strip(),
-                    score,
-                    tests_passed,
-                    tests_total,
-                    98.6 if computed_status == "pending" else 72.0,
-                    json.dumps(rubric, ensure_ascii=False),
-                    json.dumps(ai_feedback, ensure_ascii=False),
-                    dual_id,
-                    now,
-                    computed_status,
-                    stu_name,
-                    stu_code,
-                    valgrind_leaks,
-                    sub_id,
-                ),
-            )
-        else:
-            sub_id = f"chsub-{uid()[:8]}"
-            dual_id = f"sub-stu-{user_id[-6:]}-{payload.subject_id}-ch{payload.chapter_number}"
-            conn.execute(
-                """INSERT INTO student_chapter_submissions(
-                       id, user_id, subject_id, chapter_number, exercise_id, exercise_title,
-                       repo_url, student_note, score, max_score, tests_passed, tests_total,
-                       execution_time_ms, anti_plagiarism_score, rubric_json, ai_feedback_json,
-                       xp_awarded, dual_submission_id, submitted_at, status, student_name, student_code, valgrind_leaks
-                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    sub_id,
-                    user_id,
-                    payload.subject_id,
-                    payload.chapter_number,
-                    payload.exercise_id,
-                    payload.exercise_title,
-                    repo_url_clean[:250],
-                    payload.student_note.strip(),
-                    score,
-                    10.0,
-                    tests_passed,
-                    tests_total,
-                    38,
-                    98.6 if computed_status == "pending" else 72.0,
-                    json.dumps(rubric, ensure_ascii=False),
-                    json.dumps(ai_feedback, ensure_ascii=False),
-                    xp_awarded,
-                    dual_id,
-                    now,
-                    computed_status,
-                    stu_name,
-                    stu_code,
-                    valgrind_leaks,
-                ),
-            )
-
-        # Đồng bộ thẳng sang bảng dual_submissions (CHƯA bịa defense_score=95 khi chưa vào Phòng Phản Biện 3D!)
-        conn.execute(
-            """INSERT OR REPLACE INTO dual_submissions(
-                   id, class_id, user_id, student_name, student_code, chapter_title, repo_url, submitted_at,
-                   passed_tests, total_tests, exec_time_ms, memory_mb, commit_hash, commit_count, similarity_pct,
-                   test_details_json, defense_status, defense_score, coherence_summary, transcript_json,
-                   status, final_score, instructor_feedback, updated_at
-               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                dual_id,
-                class_id,
-                user_id,
-                stu_name,
-                stu_code,
-                f"Chương {payload.chapter_number}: {payload.exercise_title}",
-                repo_url_clean[:250],
-                "Vừa nộp (Code Studio)",
-                tests_passed,
-                tests_total,
-                38,
-                14.2,
-                sha256(f"{sub_id}-{now}")[:7],
-                1,
-                5 if computed_status == "pending" else 28,
-                json.dumps(test_details, ensure_ascii=False),
-                "pending",
-                0,
-                f"Đã nộp GitHub repo & chạy Docker CI/CD ({tests_passed}/{tests_total} tests). Học viên chưa thực hiện phiên Phản biện AI 3D.",
-                json.dumps([], ensure_ascii=False),
-                computed_status,
-                None,
-                "",
-                now,
-            ),
-        )
+        course, section = _require_student_course_enrollment(conn, user, payload.subject_id)
+        if not course:
+            raise HTTPException(status_code=404, detail="Không tìm thấy học phần.")
+        chapters = json.loads(course["chapters_json"] or "[]")
+        assignment = next((a for ch in chapters if ch.get("status") != "Bản nháp"
+                           for a in ch.get("assignments", []) if str(a.get("id")) == payload.exercise_id), None)
+        if not assignment:
+            raise HTTPException(status_code=422, detail="Bài tập chưa được phát hành hoặc không thuộc học phần.")
+        class_id = section["id"] if section else course["id"]
+    info = _verify_github_repo(owner, repo_name)
+    now = now_utc()
+    evidence = {"source": "github-rest", "repo_url": repo_url, "commit_sha": info.get("commit_sha") or "",
+                "verified_at": now if info.get("commit_sha") else None, "verification": info["note"],
+                "evaluation_status": "pending_review", "execution_status": "not_run"}
+    feedback = {"strengths": "Đã tiếp nhận bài làm để giảng viên kiểm tra.",
+                "improvements": info["note"] + " Chưa chạy kiểm thử; chưa có điểm tự động.",
+                "cleanCodeAnalysis": "Chưa phân tích mã nguồn, độ tương đồng hoặc an toàn bộ nhớ."}
+    student_name = user.get("full_name") or user.get("display_name") or "Học viên"
+    student_code = user.get("user_code") or ""
+    submission_id, dual_id = f"chsub-{uid()[:16]}", f"sub-{uid()[:20]}"
+    with db() as conn:
+        _ensure_profile(conn, user["id"])
+        # Every submission records its own repository version; previous teacher feedback stays intact.
+        conn.execute("""INSERT INTO student_chapter_submissions
+            (id,user_id,subject_id,chapter_number,exercise_id,exercise_title,repo_url,student_note,
+             score,max_score,tests_passed,tests_total,execution_time_ms,anti_plagiarism_score,
+             rubric_json,ai_feedback_json,xp_awarded,dual_submission_id,submitted_at,status,
+             student_name,student_code,valgrind_leaks,evidence_json)
+            VALUES(?,?,?,?,?,?,?,?,0,10,0,0,0,0,?,?,0,?,?,'pending',?,?,0,?)""",
+            (submission_id,user["id"],payload.subject_id,payload.chapter_number,payload.exercise_id,
+             assignment.get("title") or payload.exercise_title,repo_url,payload.student_note.strip(),
+             "[]",json.dumps(feedback,ensure_ascii=False),dual_id,now,student_name,student_code,
+             json.dumps(evidence,ensure_ascii=False)))
+        conn.execute("""INSERT INTO dual_submissions
+            (id,class_id,user_id,student_name,student_code,chapter_title,repo_url,submitted_at,
+             passed_tests,total_tests,exec_time_ms,memory_mb,commit_hash,commit_count,similarity_pct,
+             test_details_json,defense_status,defense_score,coherence_summary,transcript_json,
+             status,final_score,instructor_feedback,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,0,0,0,0,?,0,0,'[]','pending',0,?,'[]','pending',NULL,'',?)""",
+            (dual_id,class_id,user["id"],student_name,student_code,
+             f"Chương {payload.chapter_number}: {assignment.get('title') or payload.exercise_title}",
+             repo_url,now,evidence["commit_sha"],"Đã nhận bài; chưa chạy kiểm thử, chưa có kết quả đánh giá tự động.",now))
         _recalculate_pending_dual_reviews(conn, class_id)
-        _update_streak_on_activity(conn, user_id)
-
-        if xp_awarded > 0:
-            conn.execute(
-                """UPDATE student_profiles
-                   SET exp_points = exp_points + ?,
-                       radar_cleancode = LEAST(100.0, radar_cleancode + 1.5),
-                       radar_debugging = LEAST(100.0, radar_debugging + 2.0)
-                   WHERE user_id=?""",
-                (xp_awarded, user_id),
-            )
-        conn.execute("UPDATE ai_service_units SET requests = requests + 1 WHERE id='svc-docker'")
-
-        created_row = conn.execute("SELECT * FROM student_chapter_submissions WHERE id=?", (sub_id,)).fetchone()
-        updated_prof = conn.execute("SELECT exp_points FROM student_profiles WHERE user_id=?", (user_id,)).fetchone()
-        new_total_xp = int(updated_prof["exp_points"] if updated_prof else prof["exp_points"])
-
-    record_audit_log(
-        stu_name,
-        user_id,
-        f"Nộp bài Chương {payload.chapter_number} ({score}/10)",
-        payload.exercise_title,
-        log_type="class",
-        resource_type="chapter_submission",
-        resource_id=sub_id,
-    )
-    return {
-        "submission": _serialize_chapter_submission(created_row),
-        "total_xp": new_total_xp,
-    }
+        row = conn.execute("SELECT * FROM student_chapter_submissions WHERE id=?", (submission_id,)).fetchone()
+        profile = conn.execute("SELECT exp_points FROM student_profiles WHERE user_id=?", (user["id"],)).fetchone()
+    record_audit_log(student_name,user["id"],"Nộp bài chờ kiểm tra",payload.exercise_title,
+                     log_type="class",resource_type="chapter_submission",resource_id=submission_id)
+    return {"submission": _serialize_chapter_submission(row), "total_xp": int(profile["exp_points"])}
 
 
 @router.post("/student/xp-shop/unlock")
@@ -1506,6 +1218,227 @@ def equip_xp_shop_item(
     return {"equipped_items": equipped}
 
 
+_SECTION_COLUMNS_READY = False
+
+
+def _ensure_section_enrollment_meta(conn: Any) -> None:
+    """Đảm bảo bảng class_sections có lịch học, mã tham gia lớp (join_code) và các nhóm lớp mẫu N02 thực tế (kể cả sau reset-demo)."""
+    global _SECTION_COLUMNS_READY
+    if not _SECTION_COLUMNS_READY:
+        cols = {r["Field"] for r in conn.execute("SHOW COLUMNS FROM class_sections").fetchall()}
+        if "join_code" not in cols:
+            conn.execute("ALTER TABLE class_sections ADD COLUMN join_code VARCHAR(32) NULL")
+        if "schedule_label" not in cols:
+            conn.execute("ALTER TABLE class_sections ADD COLUMN schedule_label VARCHAR(120) NULL")
+        _SECTION_COLUMNS_READY = True
+
+    has_n02 = conn.execute(
+        "SELECT id FROM class_sections WHERE id = 'sec-cs205-n02' LIMIT 1"
+    ).fetchone()
+    has_null_meta = conn.execute(
+        "SELECT id FROM class_sections WHERE join_code IS NULL OR schedule_label IS NULL LIMIT 1"
+    ).fetchone()
+    if has_n02 and not has_null_meta:
+        return
+
+    # Bổ sung nhóm lớp N02 (ca chiều / giảng viên khác) cho các môn tiêu biểu để học viên có thể chọn lớp thực tế
+    extra_n02_specs = [
+        ("sec-cs205-n02", "class-network", "CS205-N02", "TS. Lê Hoàng Mai", "Lab B2-208", 40, "Thứ 5 · 13:30 - 17:00"),
+        ("sec-cs308-n02", "class-system-design", "CS308-N02", "Cô Trần Thị B", "Lab C1-202", 35, "Thứ 6 · 13:30 - 17:00"),
+        ("sec-cs215-n02", "class-realtime", "CS215-N02", "Thầy Nguyễn Phước", "Lab B2-115", 40, "Thứ 4 · 13:30 - 17:00"),
+        ("sec-cs410-n02", "class-ai-ml", "CS410-N02", "Thầy Nguyễn Phước", "Lab AI-01", 35, "Thứ 7 · 08:00 - 11:30"),
+        ("sec-cs306-n02", "class-mobile", "CS306-N02", "Cô Trần Thị B", "Lab B2-118", 40, "Thứ 3 · 13:30 - 17:00"),
+        ("sec-cs312-n02", "class-security", "CS312-N02", "Thầy Trần Minh Quân", "Lab C2-405", 35, "Thứ 6 · 07:30 - 11:00"),
+    ]
+    now = now_utc()
+    for sec_id, course_id, sec_code, teacher_name, room, max_stu, sched in extra_n02_specs:
+        course_exists = conn.execute("SELECT id, semester, docker_image FROM courses WHERE id = ?", (course_id,)).fetchone()
+        if not course_exists:
+            continue
+        sec_exists = conn.execute(
+            "SELECT id FROM class_sections WHERE id = ? OR section_code = ? LIMIT 1",
+            (sec_id, sec_code),
+        ).fetchone()
+        if not sec_exists:
+            conn.execute(
+                """INSERT INTO class_sections(
+                       id, course_id, section_code, semester, instructor_id, teacher_name, room, max_students,
+                       docker_image, sandbox_enabled, ai_defense_enabled, avg_progress_pct,
+                       pending_dual_reviews, health, status, join_code, schedule_label, created_at, updated_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    sec_id,
+                    course_id,
+                    sec_code,
+                    course_exists["semester"] or "Học kỳ 1 / 2026",
+                    "user-instructor",
+                    teacher_name,
+                    room,
+                    max_stu,
+                    course_exists["docker_image"] or "gcc:13-bookworm",
+                    1,
+                    1,
+                    0,
+                    0,
+                    "Tốt",
+                    "active",
+                    sec_code,
+                    sched,
+                    now,
+                    now,
+                ),
+            )
+
+    default_schedules = [
+        "Thứ 2 · 07:30 - 11:00",
+        "Thứ 3 · 07:30 - 11:00",
+        "Thứ 4 · 07:30 - 11:00",
+        "Thứ 5 · 07:30 - 11:00",
+        "Thứ 6 · 07:30 - 11:00",
+    ]
+    all_secs = conn.execute("SELECT id, section_code, join_code, schedule_label FROM class_sections").fetchall()
+    for idx, s in enumerate(all_secs):
+        j_code = (s.get("join_code") or "").strip() or str(s["section_code"]).strip().upper()
+        sched = (s.get("schedule_label") or "").strip() or default_schedules[idx % len(default_schedules)]
+        if s.get("join_code") != j_code or s.get("schedule_label") != sched:
+            conn.execute(
+                "UPDATE class_sections SET join_code = ?, schedule_label = ? WHERE id = ?",
+                (j_code, sched, s["id"]),
+            )
+    conn.commit()
+
+
+def _format_short_section_label(section_code: str, course_code: str) -> str:
+    clean = (section_code or "").strip()
+    prefix = f"{(course_code or '').strip()}-"
+    if prefix != "-" and clean.upper().startswith(prefix.upper()):
+        suffix = clean[len(prefix):].strip()
+        if suffix:
+            return f"Lớp {suffix}"
+    return f"Lớp {clean}" if clean else "Lớp N01"
+
+
+class JoinClassByCodeIn(BaseModel):
+    code: str = Field(..., min_length=2, max_length=64)
+    expected_subject_id: str | None = Field(default=None, max_length=64)
+
+
+@router.get("/student/courses/{course_or_subject_id}/sections")
+def list_open_course_sections(
+    course_or_subject_id: str,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Lấy danh sách các Lớp học phần đang mở của một môn học kèm sĩ số thực tế."""
+    raw_key = course_or_subject_id.strip()
+    mapped_class = SUBJECT_TO_CLASS_ID.get(raw_key, raw_key)
+    with db() as conn:
+        _ensure_section_enrollment_meta(conn)
+        course = conn.execute(
+            "SELECT * FROM courses WHERE id = ? OR subject_id = ? OR UPPER(code) = UPPER(?) LIMIT 1",
+            (mapped_class, raw_key, raw_key),
+        ).fetchone()
+        if not course:
+            raise HTTPException(status_code=404, detail="Không tìm thấy học phần này.")
+
+        secs = conn.execute(
+            """SELECT * FROM class_sections
+               WHERE course_id = ? AND status = 'active'
+               ORDER BY section_code ASC""",
+            (course["id"],),
+        ).fetchall()
+
+        enr_rows = conn.execute(
+            """SELECT section_id, student_id
+               FROM class_enrollments
+               WHERE status = 'active'"""
+        ).fetchall()
+
+    by_sec: dict[str, set[str]] = {}
+    for er in enr_rows:
+        by_sec.setdefault(str(er["section_id"]), set()).add(str(er["student_id"]))
+
+    my_enrolled_section_id: str | None = None
+    out_sections: list[dict[str, Any]] = []
+    for s in secs:
+        sid = str(s["id"])
+        stu_set = by_sec.get(sid, set())
+        is_me = user["id"] in stu_set
+        if is_me:
+            my_enrolled_section_id = sid
+        enrolled_cnt = len(stu_set)
+        max_stu = int(s.get("max_students") or 45)
+        out_sections.append(
+            {
+                "id": sid,
+                "sectionCode": s["section_code"],
+                "groupLabel": _format_short_section_label(s["section_code"], course["code"]),
+                "joinCode": s.get("join_code") or s["section_code"],
+                "teacherName": s.get("teacher_name") or course.get("teacher_name") or "Giảng viên Phụ trách",
+                "room": s.get("room") or course.get("room") or "Lab A3-201",
+                "semester": s.get("semester") or course.get("semester") or "Học kỳ 1 / 2026",
+                "scheduleLabel": s.get("schedule_label") or "Thứ 2 · 07:30 - 11:00",
+                "enrolledCount": enrolled_cnt,
+                "maxStudents": max_stu,
+                "isFull": enrolled_cnt >= max_stu and not is_me,
+                "isEnrolled": is_me,
+            }
+        )
+
+    return {
+        "courseId": course["id"],
+        "subjectId": course["subject_id"],
+        "courseCode": course["code"],
+        "courseName": course["name"],
+        "credits": int(course.get("credits") or 3),
+        "enrolledSectionId": my_enrolled_section_id,
+        "sections": out_sections,
+    }
+
+
+@router.post("/student/classes/join-by-code", status_code=status.HTTP_200_OK)
+def join_class_by_code(
+    payload: JoinClassByCodeIn,
+    user: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    """Học viên tham gia lớp học phần bằng Mã lớp do Giảng viên / Admin cấp."""
+    if str(user.get("role") or "").lower() != "student":
+        raise HTTPException(status_code=403, detail="Chỉ tài khoản Học viên mới dùng chức năng tham gia lớp học phần.")
+
+    clean_code = payload.code.strip().upper()
+    compact_code = clean_code.replace(" ", "")
+    with db() as conn:
+        _ensure_section_enrollment_meta(conn)
+        sec = conn.execute(
+            """SELECT cs.*, c.code AS course_code, c.name AS course_name, c.subject_id
+               FROM class_sections cs
+               JOIN courses c ON c.id = cs.course_id
+               WHERE cs.status = 'active'
+                 AND (
+                   UPPER(cs.join_code) = ?
+                   OR UPPER(cs.section_code) = ?
+                   OR REPLACE(UPPER(cs.section_code), '-', '') = REPLACE(?, '-', '')
+                 )
+               LIMIT 1""",
+            (compact_code, compact_code, compact_code),
+        ).fetchone()
+
+        if not sec:
+            raise HTTPException(
+                status_code=404,
+                detail="Mã tham gia lớp không hợp lệ hoặc lớp học phần đã đóng. Vui lòng kiểm tra lại mã từ Giảng viên.",
+            )
+
+        if payload.expected_subject_id:
+            exp = payload.expected_subject_id.strip().lower()
+            if exp and str(sec["subject_id"]).lower() != exp and str(sec["course_code"]).lower() != exp:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Mã lớp {sec['section_code']} thuộc môn {sec['course_code']} ({sec['course_name']}), không phải môn hiện tại.",
+                )
+
+    return enroll_student_course(sec["id"], user=user)
+
+
 @router.post("/student/courses/{course_or_section_id}/enroll", status_code=status.HTTP_200_OK)
 def enroll_student_course(
     course_or_section_id: str,
@@ -1520,6 +1453,7 @@ def enroll_student_course(
     now = now_utc()
 
     with db() as conn:
+        _ensure_section_enrollment_meta(conn)
         sec = conn.execute(
             """SELECT cs.*, c.code AS course_code, c.name AS course_name, c.subject_id
                FROM class_sections cs

@@ -12,6 +12,8 @@ import type {
   DualSubmissionRecord,
   Lesson,
 } from "./data/instructorData";
+import type { LearningPlan } from "./types/learningPlan";
+export type { LearningPlan } from "./types/learningPlan";
 import type {
   AdminAuditLog,
   AdminClassEnrollmentsResponse,
@@ -70,23 +72,27 @@ export interface TestCaseResult {
   id: number;
   title: string;
   is_edge_case: boolean;
-  status: "passed" | "failed";
+  status: "passed" | "failed" | "error" | "timeout" | "not_run" | "unavailable";
   input: string;
   expected_output: string;
   actual_output: string;
   duration_ms: number;
-  memory_mb: number;
+  memory_mb: number | null;
   failure_reason?: string;
 }
 
 export interface SubmissionResult {
   id: string;
-  status: "passed" | "failed";
+  status: "passed" | "failed" | "error" | "timeout" | "not_run" | "unavailable";
   passed_count: number;
   total_count: number;
   execution_time_ms: number;
-  memory_mb: number;
-  container_id: string;
+  memory_mb: number | null;
+  container_id: string | null;
+  execution_status?: "executed" | "unavailable" | "not_run";
+  message?: string;
+  runner?: string;
+  provenance?: { code_sha256?: string; test_suite_sha256?: string; image_id?: string };
   test_cases: TestCaseResult[];
   sha256: string;
   timestamp: string;
@@ -97,6 +103,7 @@ export interface AIInteractionResponse {
   assistant_message: string;
   answer?: string;
   policy_decision: "refuse_answer" | "question";
+  learning_plan?: LearningPlan;
 }
 
 export interface HintResponse {
@@ -513,154 +520,18 @@ async function computeSha256(str: string): Promise<string> {
 }
 
 export async function submitCodeToSandbox(
-  code: string,
-  language: string = "python",
-  sessionId: string = "demo-session"
+  code: string, language = "python", sessionId = "demo-session", exerciseId = "exercise-deque"
 ): Promise<SubmissionResult> {
-  const token = await ensureRoleSession("student").catch(() => getToken());
-  try {
-    const endpoint =
-      sessionId === "demo-session"
-        ? `${API_BASE}/v1/sandbox/evaluate`
-        : `${API_BASE}/v1/sessions/${sessionId}/submissions`;
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        exercise_id: "exercise-deque",
-        code,
-        language,
-        idempotency_key: `sub-${Date.now()}`,
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data;
-    }
-    if (res.status === 403 || res.status === 503 || res.status === 429) {
-      const errBody = await res.json().catch(() => ({}));
-      throw new Error(errBody.detail || `Sandbox bị chặn (${res.status})`);
-    }
-    throw new Error("Submission API returned non-OK");
-  } catch (err: any) {
-    if (err instanceof Error && (err.message.includes("Sandbox") || err.message.includes("tạm dừng") || err.message.includes("tạm khóa"))) {
-      throw err;
-    }
-    // ── Isolated Client-side Sandbox Engine with Real Edge Evaluation ────────
-    // Normalize code to check logic
-    const normalized = code.toLowerCase().replace(/\s+/g, "");
-    
-    // Checks for empty/whitespace/null guard clause
-    const hasGuard =
-      normalized.includes("ifnotpage:") ||
-      normalized.includes("ifnotpage.strip():") ||
-      normalized.includes("if(!page)") ||
-      normalized.includes("if(page==null") ||
-      normalized.includes("page.trim().isempty()") ||
-      normalized.includes("page.trim().length()==0") ||
-      normalized.includes("len(page.strip())>0") ||
-      normalized.includes("len(page)>0") ||
-      normalized.includes("ifpageandpage.strip():") ||
-      normalized.includes("ifpage:");
-
-    // Checks for FIFO storage (deque, queue, list append)
-    const hasAppend =
-      normalized.includes("append") ||
-      normalized.includes("push") ||
-      normalized.includes("addlast") ||
-      normalized.includes("add(");
-
-    const isPython = language === "python";
-    const sha = await computeSha256(code + Date.now().toString());
-
-    const test1Passed = hasAppend || normalized.includes("maxlen");
-    const test2Passed = hasAppend;
-    const test3Passed = hasAppend;
-    const test4Passed = hasAppend;
-    const test5Passed = hasGuard && hasAppend;
-
-    const testCases: TestCaseResult[] = [
-      {
-        id: 1,
-        title: "Khởi tạo Bounded Queue giới hạn 3 phần tử (maxlen=3)",
-        is_edge_case: false,
-        status: test1Passed ? "passed" : "failed",
-        input: isPython ? "tracker = PageTracker(maxlen=3)" : "PageTracker tracker = new PageTracker();",
-        expected_output: "capacity == 3; size == 0",
-        actual_output: test1Passed ? "capacity == 3; size == 0" : "Queue not initialized properly",
-        duration_ms: 7,
-        memory_mb: 14.1,
-      },
-      {
-        id: 2,
-        title: "Duyệt theo thứ tự FIFO khi chưa đầy bộ nhớ đệm",
-        is_edge_case: false,
-        status: test2Passed ? "passed" : "failed",
-        input: 'tracker.visit("/home"); tracker.visit("/catalog");',
-        expected_output: '["/home", "/catalog"]',
-        actual_output: test2Passed ? '["/home", "/catalog"]' : "[]",
-        duration_ms: 8,
-        memory_mb: 14.2,
-      },
-      {
-        id: 3,
-        title: "Tự động đẩy phần tử cũ nhất khi vượt quá giới hạn 3 trang",
-        is_edge_case: false,
-        status: test3Passed ? "passed" : "failed",
-        input: 'visit("/home") -> visit("/p1") -> visit("/p2") -> visit("/p3")',
-        expected_output: '["/p1", "/p2", "/p3"] (phần tử "/home" bị loại bỏ)',
-        actual_output: test3Passed ? '["/p1", "/p2", "/p3"]' : '["/home", "/p1", "/p2", "/p3"]',
-        duration_ms: 9,
-        memory_mb: 14.2,
-      },
-      {
-        id: 4,
-        title: "Lịch sử trả về đúng định dạng danh sách (list / array)",
-        is_edge_case: false,
-        status: test4Passed ? "passed" : "failed",
-        input: "tracker.get_history()",
-        expected_output: "Kiểu dữ liệu: list / List<String>, không rỗng",
-        actual_output: test4Passed ? "Type: list, length=3" : "Type mismatch or None",
-        duration_ms: 6,
-        memory_mb: 14.0,
-      },
-      {
-        id: 5,
-        title: "Ca kiểm thử biên [EDGE CASE]: Bỏ qua chuỗi rỗng \"\" và khoảng trắng",
-        is_edge_case: true,
-        status: test5Passed ? "passed" : "failed",
-        input: 'tracker.visit(""); tracker.visit("   "); tracker.visit(None / null)',
-        expected_output: 'Lịch sử không bị thêm phần tử rỗng. Độ dài giữ nguyên.',
-        actual_output: test5Passed
-          ? "Đã chặn phần tử rỗng thành công qua Guard Clause"
-          : 'Hàng đợi bị nhiễm phần tử rỗng: [..., "", "   "]. Thiếu guard clause kiểm tra chuỗi rỗng trước khi append!',
-        duration_ms: 11,
-        memory_mb: 14.4,
-        failure_reason: test5Passed
-          ? undefined
-          : "Thiếu điều kiện kiểm tra chuỗi rỗng: `if not page or not page.strip(): return` hoặc `if (page == null || page.trim().isEmpty()) return;`",
-      },
-    ];
-
-    const passedCount = testCases.filter((tc) => tc.status === "passed").length;
-    const overallStatus = passedCount === 5 ? "passed" : "failed";
-
-    return {
-      id: `sandbox-${Date.now().toString(36)}`,
-      status: overallStatus,
-      passed_count: passedCount,
-      total_count: 5,
-      execution_time_ms: 41,
-      memory_mb: 14.4,
-      container_id: "sandbox-isolated-runner-node04 (Seccomp-active)",
-      test_cases: testCases,
-      sha256: sha,
-      timestamp: new Date().toISOString(),
-    };
-  }
+  const token = getToken("student");
+  const endpoint = sessionId === "demo-session" ? `${API_BASE}/v1/sandbox/evaluate`
+    : `${API_BASE}/v1/sessions/${encodeURIComponent(sessionId)}/submissions`;
+  const res = await fetch(endpoint, {
+    method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ exercise_id: exerciseId, code, language, idempotency_key: crypto.randomUUID() }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || "Không thể chạy kiểm thử. Chưa có kết quả chấm bài.");
+  return data.evaluation || data;
 }
 
 export interface SocraticChatTurn {
@@ -669,6 +540,8 @@ export interface SocraticChatTurn {
 }
 
 export interface SocraticWorkspaceContext {
+  lesson_id?: string;
+  quiz_attempt_id?: string;
   view_mode?: "catalog" | "lecture" | "video" | "quiz" | "exercise" | "mindmap" | string;
   subject_id?: string;
   subject_code?: string;
@@ -753,117 +626,8 @@ export async function askSocraticTutor(
     }
     throw new Error("AI query failed");
   } catch {
-    const lower = message.toLowerCase();
-    const isUnsafe =
-      lower.includes("đáp án hoàn chỉnh") ||
-      lower.includes("lời giải hoàn chỉnh") ||
-      lower.includes("cho xin code") ||
-      lower.includes("cho code") ||
-      lower.includes("giải hộ bài") ||
-      lower.includes("làm hộ bài");
-
-    if (workspaceContext) {
-      const viewMode = String(workspaceContext.view_mode || "lecture").toLowerCase();
-      const exTitle = workspaceContext.exercise_title || "";
-      const exHints = workspaceContext.exercise_hints || [];
-      const exReqs = workspaceContext.exercise_requirements || [];
-      const takeaways = workspaceContext.lesson_takeaways || [];
-
-      if (isUnsafe) {
-        const hint =
-          exHints[0] ||
-          (exReqs[0] ? `Bắt đầu từ yêu cầu: ${exReqs[0]}` : takeaways[0] || "Kiểm tra lại luồng xử lý cốt lõi.");
-        const text = `[Socratic Guardrail]: Mình không cung cấp code lời giải hoàn chỉnh để giữ tư duy tự giải. Gợi ý cho ${exTitle || workspaceContext.lesson_title || "phần hiện tại"}: ${hint}`;
-        return {
-          id: `ai-${Date.now()}`,
-          policy_decision: "refuse_answer",
-          assistant_message: text,
-          answer: text,
-        };
-      }
-
-      if (
-        viewMode === "exercise" ||
-        lower.includes("bài tập") ||
-        lower.includes("gợi ý") ||
-        lower.includes("hướng dẫn") ||
-        lower.includes("yêu cầu")
-      ) {
-        const idx = Math.min(Math.max((hintLevel || 1) - 1, 0), Math.max(0, exHints.length - 1));
-        const hintTxt =
-          exHints[idx] ||
-          exReqs[0] ||
-          workspaceContext.exercise_objective ||
-          "Hãy phân tích các đối tượng và đầu vào/đầu ra chính của bài tập.";
-        const text = `Bạn đang ở bài tập **${exTitle || "Thực hành chương"}**.\n- **Gợi ý Nấc ${hintLevel || 1}:** ${hintTxt}\nBạn thử phác thảo hướng xử lý phần này xem sao nhé?`;
-        return {
-          id: `ai-${Date.now()}`,
-          policy_decision: "question",
-          assistant_message: text,
-          answer: text,
-        };
-      }
-
-      if (viewMode === "quiz" && workspaceContext.quiz_question) {
-        const text = `Với câu quiz "${workspaceContext.quiz_question}", bạn hãy đối chiếu từng phương án với trọng tâm "${takeaways[0] || workspaceContext.lesson_title || "bài học"}" để loại dần phương án sai. Bạn đang phân vân lựa chọn nào?`;
-        return {
-          id: `ai-${Date.now()}`,
-          policy_decision: "question",
-          assistant_message: text,
-          answer: text,
-        };
-      }
-
-      const text = `Trong bài **${workspaceContext.lesson_title || "hiện tại"}**, ${takeaways[0] ? `ý cốt lõi là: ${takeaways[0]}. ` : ""}Bạn đang vướng ở khái niệm hay bước áp dụng cụ thể nào?`;
-      return {
-        id: `ai-${Date.now()}`,
-        policy_decision: "question",
-        assistant_message: text,
-        answer: text,
-      };
-    }
-
-    if (isUnsafe) {
-      const text =
-        "[Socratic Guardrail]: Hệ thống không cung cấp mã nguồn giải sẵn để đảm bảo tư duy phản biện. Hãy cho mình biết bạn đang vướng ở bước nào để mình gợi ý từng nấc nhé.";
-      return {
-        id: `ai-${Date.now()}`,
-        policy_decision: "refuse_answer",
-        assistant_message: text,
-        answer: text,
-      };
-    }
-
-    if (lower.includes("test 5") || lower.includes("ca biên") || lower.includes("edge case") || lower.includes("rỗng")) {
-      const text =
-        "Trong bài toán Bounded Page Tracker, một trang hợp lệ phải có độ dài > 0 và không chỉ toàn dấu cách trắng. Bạn cần đặt Guard Clause ở vị trí nào trong visit() trước khi đẩy vào deque?";
-      return {
-        id: `ai-${Date.now()}`,
-        policy_decision: "question",
-        assistant_message: text,
-        answer: text,
-      };
-    }
-
-    if (lower.includes("deque") || lower.includes("maxlen") || lower.includes("fifo")) {
-      const text =
-        "Cấu trúc deque(maxlen=3) tự động pop phần tử cũ nhất với O(1), nhưng không tự lọc chuỗi rỗng. Bạn đã kiểm tra điều kiện đầu vào trước history.append(page) chưa?";
-      return {
-        id: `ai-${Date.now()}`,
-        policy_decision: "question",
-        assistant_message: text,
-        answer: text,
-      };
-    }
-
-    const fallbackText =
-      "Mình đã ghi nhận câu hỏi của bạn. Hiện kết nối tới máy chủ AI đang gián đoạn, bạn thử gửi lại hoặc nói rõ hơn bước bạn đang vướng nhé.";
-    return {
-      id: `ai-${Date.now()}`,
-      policy_decision: "question",
-      assistant_message: fallbackText,
-      answer: fallbackText,
-    };
+    const answer = "Chưa kết nối được trợ giảng nên chưa đọc được kết quả đã lưu. Bạn có thể xem lại câu Quiz sai hoặc test chưa đạt, ghi lại bước gây nhầm lẫn, rồi thử kết nối lại. Chưa có chẩn đoán AI từ lượt yêu cầu này.";
+    return { id: "offline", assistant_message: answer, answer, policy_decision: "question" };
   }
 }
 
@@ -2725,6 +2489,9 @@ export interface StudentChapterSubmissionDto {
   xp_awarded: number;
   dual_submission_id: string;
   submitted_at: string;
+  evaluation_status?: "pending_review" | "teacher_graded";
+  metrics_verified?: boolean;
+  evidence?: { commit_sha?: string; verification?: string; execution_status?: string };
 }
 
 export interface StudentCompletedLessonDto {
@@ -2933,6 +2700,38 @@ export async function fetchStudentLearningOverview(): Promise<StudentLearningOve
   }
 }
 
+export interface StudentQuizAttempt {
+  id: string;
+  subject_id: string;
+  lesson_id: string;
+  chapter_id: string;
+  status: "in_progress" | "submitted";
+  score: number;
+  total: number;
+  passed: boolean;
+  questions: Array<{ id: string; question: string; topic: string; options: Array<{ id: string; text: string }> }>;
+  results: Array<{ question_id: string; question: string; selected_option: string; correct_option: string; is_correct: boolean; explanation: string; topic: string }>;
+}
+
+async function quizRequest(path: string, payload: unknown): Promise<StudentQuizAttempt> {
+  const token = getToken("student");
+  const res = await fetch(`${API_BASE}/v1/student/${path}`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || "Không thể lưu Quiz. Vui lòng thử lại.");
+  return data;
+}
+
+export function startStudentQuizApi(subject_id: string, lesson_id: string, restart = false) {
+  return quizRequest("quiz-attempts", { subject_id, lesson_id, restart });
+}
+
+export function answerStudentQuizApi(attemptId: string, question_id: string, option_id: string) {
+  return quizRequest(`quiz-attempts/${encodeURIComponent(attemptId)}/answers`, { question_id, option_id });
+}
+
 export async function completeStudentLessonApi(payload: {
   subject_id: string;
   chapter_id: string;
@@ -2940,6 +2739,7 @@ export async function completeStudentLessonApi(payload: {
   xp?: number;
   quiz_score?: number;
   quiz_total?: number;
+  quiz_attempt_id?: string;
 }): Promise<{ status: string; subject_id: string; lesson_id: string; xp_awarded: number; total_xp: number } | null> {
   const token = (await ensureRoleSession("student").catch(() => null)) || getToken();
   try {
@@ -3228,6 +3028,85 @@ export async function enrollStudentCourseApi(
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { error: data.detail || "Không thể ghi danh học phần." };
+    window.dispatchEvent(new CustomEvent("codemind-courses-updated"));
+    window.dispatchEvent(new Event("codemind-nav-updated"));
+    return data;
+  } catch {
+    return { error: "Lỗi kết nối máy chủ." };
+  }
+}
+
+export interface OpenCourseSectionDto {
+  id: string;
+  sectionCode: string;
+  groupLabel: string;
+  joinCode: string;
+  teacherName: string;
+  room: string;
+  semester: string;
+  scheduleLabel: string;
+  enrolledCount: number;
+  maxStudents: number;
+  isFull: boolean;
+  isEnrolled: boolean;
+}
+
+export interface OpenCourseSectionsResponseDto {
+  courseId: string;
+  subjectId: string;
+  courseCode: string;
+  courseName: string;
+  credits: number;
+  enrolledSectionId: string | null;
+  sections: OpenCourseSectionDto[];
+}
+
+export async function fetchCourseOpenSectionsApi(
+  courseOrSubjectId: string
+): Promise<OpenCourseSectionsResponseDto | null> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/student/courses/${encodeURIComponent(courseOrSubjectId)}/sections`,
+      {},
+      "student"
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function joinClassByCodeApi(
+  code: string,
+  expectedSubjectId?: string
+): Promise<{
+  enrolled?: boolean;
+  sectionId?: string;
+  sectionCode?: string;
+  courseId?: string;
+  subjectId?: string;
+  courseCode?: string;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/student/classes/join-by-code`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: code.trim(),
+          expected_subject_id: expectedSubjectId || null,
+        }),
+      },
+      "student"
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: data.detail || "Mã tham gia lớp không hợp lệ." };
+    }
     window.dispatchEvent(new CustomEvent("codemind-courses-updated"));
     window.dispatchEvent(new Event("codemind-nav-updated"));
     return data;
@@ -3835,6 +3714,12 @@ export interface GitHubProjectSummary {
 }
 
 export interface GitHubRepoConfig {
+  mode?: "read_only";
+  remoteWritesEnabled?: boolean;
+  evidenceVerified?: boolean;
+  lastSyncError?: string | null;
+  truncated?: boolean;
+  sampleLimits?: { commits: number; pullRequests: number };
   projectId: string;
   repoUrl: string;
   repoSlug: string;
@@ -3847,6 +3732,10 @@ export interface GitHubRepoConfig {
 }
 
 export interface GitHubCommitRecord {
+  statsKnown?: boolean;
+  url?: string;
+  evidenceSource?: string;
+  verifiedAt?: string;
   id: string;
   projectId: string;
   sha: string;
@@ -3898,6 +3787,14 @@ export interface GitPrDefenseQuestion {
 }
 
 export interface GitPullRequestRecord {
+  headSha?: string;
+  url?: string;
+  evidenceSource?: string;
+  verifiedAt?: string;
+  aiReviewAvailable?: boolean;
+  hasCompletedTaskProof?: boolean;
+  testEvidence?: { complete: boolean; headSha: string; state: string; testsKnown: boolean; testsPassed: boolean; checks: Array<{ name?: string; status: string; conclusion?: string; url?: string; sha?: string }> };
+  reviewEvidence?: { complete: boolean; approved: boolean; approvers: string[]; changesRequested: boolean; reviews: Array<{ id?: number; reviewer?: string; state?: string; commitSha?: string; url?: string; submittedAt?: string }> };
   id: string;
   projectId: string;
   prNumber: number;
@@ -3912,7 +3809,7 @@ export interface GitPullRequestRecord {
     avatar: string;
     color: string;
   };
-  status: "open" | "changes_requested" | "approved" | "merged";
+  status: "open" | "changes_requested" | "approved" | "merged" | "closed";
   mergeStrategy: string;
   aiReviewScore: number;
   aiBlastRadius: string;
@@ -3948,6 +3845,7 @@ export interface GitMemberAnalytics {
 }
 
 export interface GitHubMetrics {
+  scoresAvailable?: boolean;
   gitCultureScore: number;
   taskLinkedPct: number;
   aiIntegrityPct: number;
@@ -4925,6 +4823,9 @@ export async function fetchAdminAnalyticsApi(): Promise<AdminAnalyticsData | nul
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ChapterSubmissionItem {
+  metricsVerified?: boolean;
+  evaluationStatus?: "pending_review" | "teacher_graded";
+  evidence?: { commit_sha?: string; verification?: string; execution_status?: string };
   id: string;
   userId: string;
   studentName: string;
@@ -5473,6 +5374,201 @@ export async function recordAdminAuditLogApi(payload: {
     return false;
   }
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// F8-STYLE LESSON Q&A (FACEBOOK COMMENT THREADS) FULLSTACK API
+// ═════════════════════════════════════════════════════════════════════════════
+
+export type QnaReactionType =
+  | "like"
+  | "love"
+  | "care"
+  | "haha"
+  | "wow"
+  | "sad"
+  | "helpful";
+
+export type QnaReactionCounts = Record<QnaReactionType, number>;
+
+export interface QnaCommentDto {
+  id: string;
+  subject_id: string;
+  lesson_id: string;
+  lesson_title: string;
+  parent_id: string | null;
+  reply_to_name: string | null;
+  user_id: string;
+  author_name: string;
+  author_role: "student" | "instructor" | "admin" | string;
+  author_avatar_url?: string | null;
+  content: string;
+  code_snippet?: string | null;
+  video_timestamp?: string | null;
+  is_pinned: boolean;
+  is_resolved: boolean;
+  reaction_counts: Partial<QnaReactionCounts> & {
+    like: number;
+    love: number;
+    helpful: number;
+  };
+  total_reactions: number;
+  my_reaction: QnaReactionType | null;
+  can_edit: boolean;
+  can_delete: boolean;
+  created_at: string;
+  updated_at: string;
+  has_instructor_reply?: boolean;
+  replies?: QnaCommentDto[];
+}
+
+export interface QnaThreadsResponseDto {
+  subject_id: string;
+  lesson_id: string;
+  total_comments: number;
+  total_threads: number;
+  unanswered_count: number;
+  threads: QnaCommentDto[];
+}
+
+export async function fetchLessonQnaThreadsApi(
+  subjectId: string,
+  lessonId?: string,
+  filterMode: "all" | "unanswered" | "pinned" = "all",
+  roleHint?: SessionRole
+): Promise<QnaThreadsResponseDto | null> {
+  try {
+    const params = new URLSearchParams({
+      subject_id: subjectId,
+      filter_mode: filterMode,
+    });
+    if (lessonId) params.set("lesson_id", lessonId);
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/qna/threads?${params.toString()}`,
+      {},
+      roleHint
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function createLessonQnaCommentApi(
+  payload: {
+    subject_id: string;
+    lesson_id: string;
+    lesson_title?: string;
+    parent_id?: string | null;
+    reply_to_name?: string | null;
+    content: string;
+    code_snippet?: string | null;
+    video_timestamp?: string | null;
+  },
+  roleHint?: SessionRole
+): Promise<QnaCommentDto | null> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/qna/comments`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      roleHint
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function toggleLessonQnaReactionApi(
+  commentId: string,
+  reactionType: QnaReactionType,
+  roleHint?: SessionRole
+): Promise<{
+  comment_id: string;
+  my_reaction: QnaReactionType | null;
+  reaction_counts: Partial<QnaReactionCounts> & {
+    like: number;
+    love: number;
+    helpful: number;
+  };
+  total_reactions: number;
+} | null> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/qna/comments/${encodeURIComponent(commentId)}/react`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reaction_type: reactionType }),
+      },
+      roleHint
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateLessonQnaCommentApi(
+  commentId: string,
+  payload: { content: string; code_snippet?: string | null },
+  roleHint?: SessionRole
+): Promise<boolean> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/qna/comments/${encodeURIComponent(commentId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      roleHint
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteLessonQnaCommentApi(
+  commentId: string,
+  roleHint?: SessionRole
+): Promise<boolean> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/qna/comments/${encodeURIComponent(commentId)}`,
+      { method: "DELETE" },
+      roleHint
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function togglePinLessonQnaCommentApi(
+  commentId: string,
+  roleHint?: SessionRole
+): Promise<{ ok: boolean; is_pinned?: boolean }> {
+  try {
+    const res = await fetchWithAuthRetry(
+      `${API_BASE}/v1/qna/comments/${encodeURIComponent(commentId)}/pin`,
+      { method: "POST" },
+      roleHint
+    );
+    if (!res.ok) return { ok: false };
+    return await res.json();
+  } catch {
+    return { ok: false };
+  }
+}
+
 
 
 

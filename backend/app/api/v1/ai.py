@@ -13,6 +13,7 @@ from app.schemas.submission import AIInteractionIn, SocraticChatIn
 from app.services.ai_tutor import ask_socratic_with_policy
 from app.services.analytics import track_event
 from app.services.gemini_client import record_ai_usage
+from app.services.learning_evidence import EvidenceScopeError, prepare_learning_evidence
 
 router = APIRouter(tags=["AI Tutor"])
 
@@ -24,6 +25,8 @@ def socratic_chat(
 ) -> dict[str, Any]:
     """Chat hỏi đáp Socratic AI Tutor trực tiếp trên LearningWorkspace, áp dụng Guardrail của Admin và Gemini API."""
     strict_refuse = True
+    if payload.session_id:
+        session_owned(payload.session_id, user["id"])
     with db() as conn:
         svc = conn.execute("SELECT active FROM ai_service_units WHERE id='svc-socratic'").fetchone()
         if svc and not svc["active"]:
@@ -53,14 +56,22 @@ def socratic_chat(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail="Bạn đã đạt giới hạn 20 câu hỏi Socratic AI mỗi giờ theo chính sách của Quản trị viên.",
                 )
+        try:
+            workspace_context, learning_plan = prepare_learning_evidence(
+                conn, user, payload.workspace_context.model_dump() if payload.workspace_context else None,
+            )
+        except EvidenceScopeError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     res = ask_socratic_with_policy(
         payload.message,
         payload.code_context,
         strict_refuse=strict_refuse,
-        workspace_context=payload.workspace_context.model_dump() if payload.workspace_context else None,
-        history=[h.model_dump() for h in payload.history],
+        workspace_context=workspace_context,
+        # A new assessment must not inherit old answer feedback from chat history.
+        history=[] if workspace_context.get("view_mode") == "quiz" and not workspace_context.get("quiz_submitted") else [h.model_dump() for h in payload.history[-8:]],
         hint_level=payload.hint_level,
+        learning_plan=learning_plan,
     )
 
     in_tok = int(res.pop("input_tokens", 0) or 0)

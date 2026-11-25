@@ -8,7 +8,6 @@ import {
   Terminal,
   ChevronRight,
   ChevronDown,
-  Sparkles,
   BookOpen,
 } from "lucide-react";
 
@@ -27,7 +26,10 @@ export interface CompactTreeNodeData extends Record<string, unknown> {
   onToggleExpand?: () => void;
 }
 
-function getNodeAnimationDelay(id?: string, nodeType?: "root" | "branch" | "leaf" | "subleaf"): string {
+function getNodeAnimationDelay(
+  id?: string,
+  nodeType?: "root" | "branch" | "leaf" | "subleaf"
+): string {
   if (nodeType === "root" || id === "root" || !id) return "40ms";
   if (id.startsWith("b-")) {
     const num = parseInt(id.replace("b-", ""), 10) || 1;
@@ -44,10 +46,9 @@ function getNodeAnimationDelay(id?: string, nodeType?: "root" | "branch" | "leaf
 }
 
 /**
- * 🌳 CompactTreeMindmapNode (Bản Tinh Tế, Đơn Sắc Chuẩn Kỹ Sư Công Nghệ)
- * - Loại bỏ toàn bộ viền màu cầu vồng (xanh, tím, vàng, lục) và hiệu ứng phát sáng chói mắt (glow/halo).
- * - Sử dụng 1 bảng màu chủ đạo kỹ thuật sạch sẽ: Thẻ trắng/than chì tối giản, viền mảnh sắc nét, bóng mờ chuẩn Linear/Figma.
- * - Nhận diện rõ ràng cấp bậc: Root (Dark Hub) -> Branch (Clean Lesson Card) -> Leaf (Sub-concept).
+ * CompactTreeMindmapNode — Phẳng, Tối Giản, Chỉ Có 1 Chút Điểm Nhấn Tinh Tế (Non-AI Editorial Style)
+ * - Tuyệt đối không dùng màu cầu vồng, không glow neon, không gradient loè loẹt.
+ * - Điểm nhấn vừa đủ: Nút gốc tách nền rõ khối + vạch mảnh xanh lá (emerald) cho bài đã hoàn thành + nút mở nhánh tương phản trắng/đen.
  */
 export function CompactTreeMindmapNode({
   id,
@@ -59,62 +60,70 @@ export function CompactTreeMindmapNode({
 
   const isCompleted = data.status === "completed";
   const isInProgress = data.status === "in-progress";
-
   const animDelay = getNodeAnimationDelay(id, data.nodeType);
 
-  // ─── 1. ROOT NODE (MASTER CORE HUB - CHARCOAL SLATE ARCHITECTURAL CARD) ───
+  // ─── 1. ROOT NODE (TÁCH KHỐI SẮC NÉT, KHÔNG GRADIENT LOÈ LOẸT) ───
   if (isRoot) {
     return (
       <div
         onClick={() => data.hasChildren && data.onToggleExpand?.()}
-        className={`animate-mindmap-node relative min-w-[220px] max-w-[245px] rounded-xl p-4 select-none transition-all duration-200 ${
-          data.hasChildren ? "cursor-pointer hover:border-slate-600 active:scale-[0.99]" : ""
-        } bg-slate-900 text-white dark:bg-[#12141a] border border-slate-700/80 dark:border-slate-800 shadow-sm`}
+        className={`animate-mindmap-node relative min-w-[228px] max-w-[252px] rounded-2xl p-4 select-none transition-all duration-150 ${
+          data.hasChildren ? "cursor-pointer hover:border-slate-500 active:scale-[0.99]" : ""
+        } bg-[#181a20] text-white dark:bg-[#1e222c] border border-slate-700/90 dark:border-slate-600/85 shadow-md`}
         style={{ animationDelay: animDelay }}
       >
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-slate-800 text-slate-200 border border-slate-700/70 flex items-center justify-center font-bold shrink-0 select-none">
-            <GitBranch size={16} strokeWidth={2.2} />
+        <div className="flex items-start gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-white dark:bg-white text-slate-950 dark:text-slate-950 flex items-center justify-center font-bold shrink-0 select-none shadow-2xs">
+            <GitBranch size={15} strokeWidth={2.3} />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="text-[13px] font-bold leading-tight text-white tracking-tight">
+            <h4 className="text-[13px] font-bold leading-snug text-white tracking-tight">
               {data.title}
             </h4>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[10px] text-slate-400 font-mono">Sơ đồ tư duy kiến trúc</span>
-            </div>
+            <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+              Tổng kết kiến thức chương
+            </span>
           </div>
         </div>
 
-        {/* Progress Info */}
-        <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between text-[11px] font-mono">
-          <span className="text-slate-300 font-bold">{data.progressPct}% Nắm vững</span>
-          {data.xp && (
-            <span className="font-semibold text-slate-300 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700/70 text-[10px]">
-              +{data.xp} XP
-            </span>
-          )}
+        {/* Progress Bar gọn sạch */}
+        <div className="mt-3 pt-2.5 border-t border-white/10 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-mono">
+            <span className="text-slate-200 font-bold">{data.progressPct}% nắm vững</span>
+            {data.xp && (
+              <span className="font-semibold text-slate-300 bg-white/[0.07] px-2 py-0.5 rounded border border-white/10 text-[10px]">
+                +{data.xp} XP
+              </span>
+            )}
+          </div>
+          <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                isCompleted || data.progressPct >= 100 ? "bg-emerald-500" : "bg-amber-400"
+              }`}
+              style={{ width: `${Math.max(6, data.progressPct)}%` }}
+            />
+          </div>
         </div>
 
-        {/* Toggle Button */}
         {data.hasChildren && (
-          <div className="mt-2 flex items-center justify-center">
+          <div className="mt-2.5 flex items-center justify-center">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 data.onToggleExpand?.();
               }}
-              className="inline-flex items-center justify-center gap-1 h-4.5 px-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[9px] font-semibold border border-slate-700 transition cursor-pointer active:scale-95"
+              className="inline-flex items-center justify-center gap-1 h-5 px-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] text-slate-200 font-mono text-[9.5px] font-semibold border border-white/10 transition cursor-pointer active:scale-95"
             >
               {data.isExpanded ? (
                 <>
-                  <ChevronDown size={9} strokeWidth={2.2} />
+                  <ChevronDown size={9.5} strokeWidth={2.2} />
                   <span>Thu gọn</span>
                 </>
               ) : (
                 <>
-                  <ChevronRight size={9} strokeWidth={2.2} />
+                  <ChevronRight size={9.5} strokeWidth={2.2} />
                   <span>+{data.childrenCount}</span>
                 </>
               )}
@@ -125,18 +134,24 @@ export function CompactTreeMindmapNode({
         <Handle
           type="source"
           position={Position.Right}
-          className="!w-2.5 !h-2.5 !rounded-full !bg-slate-400 !border-2 !border-slate-900"
+          className="!w-2.5 !h-2.5 !rounded-full !bg-white !border-2 !border-[#181a20]"
         />
       </div>
     );
   }
 
-  // ─── 2. BRANCH NODE (CÀNH BÀI HỌC CHÍNH - CLEAN WHITE / SLATE CARD) ──────
+  // ─── 2. BRANCH NODE (CÀNH BÀI HỌC: PHẲNG SẠCH + VẠCH NHẤN MẢNH BÊN TRÁI) ───
   if (isBranch) {
+    const leftAccentCls = isCompleted
+      ? "border-l-[3px] border-l-emerald-500"
+      : data.isExpanded
+      ? "border-l-[3px] border-l-slate-900 dark:border-l-white"
+      : "border-l-[3px] border-l-slate-300 dark:border-l-slate-600";
+
     return (
       <div
         onClick={() => data.hasChildren && data.onToggleExpand?.()}
-        className={`animate-mindmap-node relative min-w-[215px] max-w-[245px] rounded-xl border px-3.5 py-3 select-none transition-all duration-150 bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm ${
+        className={`animate-mindmap-node relative min-w-[218px] max-w-[248px] rounded-xl border border-slate-200/95 dark:border-slate-700/90 ${leftAccentCls} px-3.5 py-3 select-none transition-all duration-150 bg-white dark:bg-[#171a22] shadow-xs hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm ${
           data.hasChildren ? "cursor-pointer active:scale-[0.99]" : ""
         } ${!isCompleted && !isInProgress ? "opacity-75" : ""}`}
         style={{ animationDelay: animDelay }}
@@ -144,25 +159,39 @@ export function CompactTreeMindmapNode({
         <Handle
           type="target"
           position={Position.Left}
-          className="!w-2.5 !h-2.5 !rounded-full !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-slate-900"
+          className={`!w-2.5 !h-2.5 !rounded-full ${
+            isCompleted ? "!bg-emerald-500" : "!bg-slate-400 dark:!bg-slate-500"
+          } !border-2 !border-white dark:!border-[#171a22]`}
         />
 
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            {/* Neutral Dot */}
-            <span className="h-2 w-2 rounded-full shrink-0 bg-slate-700 dark:bg-slate-300" />
+            <span
+              className={`h-2 w-2 rounded-full shrink-0 ${
+                isCompleted
+                  ? "bg-emerald-500"
+                  : data.isExpanded
+                  ? "bg-slate-900 dark:bg-white"
+                  : "bg-slate-400 dark:bg-slate-500"
+              }`}
+            />
             <h5 className="text-[12.5px] font-bold tracking-tight truncate text-slate-900 dark:text-white">
               {data.title}
             </h5>
           </div>
 
-          {/* Status Badge */}
           {isCompleted ? (
-            <div className="flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0" title="Đã hoàn thành">
+            <div
+              className="flex items-center justify-center text-emerald-500 shrink-0"
+              title="Đã hoàn thành"
+            >
               <CheckCircle2 size={14} strokeWidth={2.2} />
             </div>
           ) : isInProgress ? (
-            <div className="flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0" title="Đang học">
+            <div
+              className="flex items-center justify-center text-slate-400 shrink-0"
+              title="Đang học"
+            >
               <Clock size={13} strokeWidth={2} />
             </div>
           ) : (
@@ -170,28 +199,29 @@ export function CompactTreeMindmapNode({
           )}
         </div>
 
-        {/* Progress & Badge */}
         <div className="mt-2 space-y-1">
           <div className="flex items-center justify-between text-[10.5px] font-mono">
-            <span className="font-bold text-slate-700 dark:text-slate-300">{data.progressPct}%</span>
+            <span className="font-bold text-slate-700 dark:text-slate-300">
+              {data.progressPct}%
+            </span>
             {data.badge && (
-              <span className="font-mono text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/60">
+              <span className="font-mono text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/70">
                 {data.badge}
               </span>
             )}
           </div>
-          {/* Subtle Progress Bar */}
           <div className="h-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full bg-blue-600 dark:bg-blue-500 transition-all duration-300"
+              className={`h-full rounded-full transition-all duration-300 ${
+                isCompleted ? "bg-emerald-500" : "bg-slate-800 dark:bg-slate-300"
+              }`}
               style={{ width: `${data.progressPct}%` }}
             />
           </div>
         </div>
 
-        {/* Nút Mở rộng / Thu gọn chi tiết */}
         {data.hasChildren && (
-          <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/70 flex items-center justify-between">
+          <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
               {data.childrenCount} khái niệm
             </span>
@@ -201,8 +231,16 @@ export function CompactTreeMindmapNode({
                 e.stopPropagation();
                 data.onToggleExpand?.();
               }}
-              title={data.isExpanded ? "Thu gọn nhánh" : `Mở rộng ${data.childrenCount} nhánh`}
-              className="inline-flex items-center justify-center gap-0.5 h-4 px-1.5 rounded text-[9.5px] font-mono font-medium transition cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 active:scale-95"
+              title={
+                data.isExpanded
+                  ? "Thu gọn nhánh"
+                  : `Mở rộng ${data.childrenCount} nhánh`
+              }
+              className={`inline-flex items-center justify-center gap-0.5 h-4.5 px-2 rounded-full text-[9.5px] font-mono font-bold transition cursor-pointer border active:scale-95 ${
+                data.isExpanded
+                  ? "bg-slate-900 text-white dark:text-white border-slate-900 dark:bg-white dark:!text-slate-950 dark:border-white"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border-slate-200/80 dark:border-slate-700"
+              }`}
             >
               {data.isExpanded ? (
                 <>
@@ -222,23 +260,27 @@ export function CompactTreeMindmapNode({
         <Handle
           type="source"
           position={Position.Right}
-          className="!w-2.5 !h-2.5 !rounded-full !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-slate-900"
+          className={`!w-2.5 !h-2.5 !rounded-full ${
+            data.isExpanded
+              ? "!bg-slate-900 dark:!bg-white"
+              : "!bg-slate-400 dark:!bg-slate-500"
+          } !border-2 !border-white dark:!border-[#171a22]`}
         />
       </div>
     );
   }
 
-  // ─── 3. SUBLEAF NODE (CÀNH NHỎ CHUYÊN SÂU - CODE TERMINAL CARD) ─────────
+  // ─── 3. SUBLEAF NODE (CODE / GHI CHÚ NGẮN) ───
   if (isSubleaf) {
     return (
       <div
-        className="animate-mindmap-node relative min-w-[200px] max-w-[230px] rounded-xl border border-slate-200/90 dark:border-slate-800 p-2.5 select-none transition-all shadow-xs bg-slate-50/90 dark:bg-slate-900/90 hover:border-slate-300 dark:hover:border-slate-700"
+        className="animate-mindmap-node relative min-w-[200px] max-w-[232px] rounded-xl border border-slate-200/90 dark:border-slate-700/80 p-2.5 select-none transition-all shadow-2xs bg-slate-50/95 dark:bg-[#14171f] hover:border-slate-300 dark:hover:border-slate-600"
         style={{ animationDelay: animDelay }}
       >
         <Handle
           type="target"
           position={Position.Left}
-          className="!w-2 !h-2 !rounded-full !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-slate-900"
+          className="!w-2 !h-2 !rounded-full !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-[#14171f]"
         />
         <div className="flex items-center justify-between gap-1.5 mb-1.5">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -254,7 +296,7 @@ export function CompactTreeMindmapNode({
           )}
         </div>
         {data.summary && (
-          <p className="text-[10px] text-slate-600 dark:text-slate-400 font-mono leading-relaxed bg-white dark:bg-slate-950 p-2 rounded-lg border border-slate-200/70 dark:border-slate-800/80">
+          <p className="text-[10px] text-slate-600 dark:text-slate-300 font-mono leading-relaxed bg-white dark:bg-[#0d1016] p-2 rounded-lg border border-slate-200/70 dark:border-slate-800">
             {data.summary}
           </p>
         )}
@@ -262,11 +304,11 @@ export function CompactTreeMindmapNode({
     );
   }
 
-  // ─── 4. LEAF NODE (CÁC NÚT KHÁI NIỆM - KNOWLEDGE CARD SẮC NÉT) ─────────
+  // ─── 4. LEAF NODE (KHÁI NIỆM CHI TIẾT) ───
   return (
     <div
       onClick={() => data.hasChildren && data.onToggleExpand?.()}
-      className={`animate-mindmap-node relative min-w-[215px] max-w-[245px] rounded-xl border border-slate-200/90 dark:border-slate-800 p-3 select-none transition-all duration-150 shadow-xs bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm ${
+      className={`animate-mindmap-node relative min-w-[215px] max-w-[246px] rounded-xl border border-slate-200/90 dark:border-slate-700/85 p-3 select-none transition-all duration-150 shadow-2xs bg-white dark:bg-[#171a22] hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-xs ${
         data.hasChildren ? "cursor-pointer active:scale-[0.99]" : ""
       } ${!isCompleted && !isInProgress ? "opacity-75" : ""}`}
       style={{ animationDelay: animDelay }}
@@ -274,29 +316,29 @@ export function CompactTreeMindmapNode({
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2.5 !h-2.5 !rounded-full !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-slate-900"
+        className="!w-2 !h-2 !rounded-full !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-[#171a22]"
       />
 
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-1.5 mb-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <BookOpen size={12} className="text-slate-500 dark:text-slate-400 shrink-0" />
+          <BookOpen size={12} className="text-slate-400 shrink-0" />
           <span className="text-[12px] font-bold text-slate-900 dark:text-white leading-tight truncate">
             {data.title}
           </span>
         </div>
         {isCompleted ? (
           <span className="text-[9.5px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono shrink-0 flex items-center gap-0.5">
-            <CheckCircle2 size={11} /> Nắm vững
+            <CheckCircle2 size={11} /> Đã học
           </span>
         ) : (
-          <span className="text-[9.5px] font-semibold text-slate-500 font-mono shrink-0">
+          <span className="text-[9.5px] font-semibold text-slate-400 font-mono shrink-0">
             {data.progressPct}%
           </span>
         )}
       </div>
 
       {data.summary && (
-        <p className="text-[10.5px] text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
+        <p className="text-[10.5px] text-slate-600 dark:text-slate-300 leading-relaxed font-normal">
           {data.summary}
         </p>
       )}
@@ -307,8 +349,8 @@ export function CompactTreeMindmapNode({
             {data.badge}
           </span>
           {data.xp && (
-            <span className="font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-0.5">
-              <Sparkles size={8} /> +{data.xp} XP
+            <span className="font-semibold text-slate-500 dark:text-slate-400">
+              +{data.xp} XP
             </span>
           )}
         </div>
@@ -322,8 +364,16 @@ export function CompactTreeMindmapNode({
               e.stopPropagation();
               data.onToggleExpand?.();
             }}
-            title={data.isExpanded ? "Thu gọn chi tiết" : `Mở rộng ${data.childrenCount} chi tiết`}
-            className="inline-flex items-center justify-center gap-0.5 h-4 px-1.5 rounded text-[9px] font-mono font-medium transition cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 active:scale-95"
+            title={
+              data.isExpanded
+                ? "Thu gọn chi tiết"
+                : `Mở rộng ${data.childrenCount} chi tiết`
+            }
+            className={`inline-flex items-center justify-center gap-0.5 h-4 px-2 rounded-full text-[9px] font-mono font-semibold transition cursor-pointer border active:scale-95 ${
+              data.isExpanded
+                ? "bg-slate-900 text-white dark:bg-white dark:!text-slate-950 border-slate-900 dark:border-white"
+                : "bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+            }`}
           >
             {data.isExpanded ? (
               <>
@@ -343,7 +393,7 @@ export function CompactTreeMindmapNode({
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2 !h-2 !rounded-full !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-slate-900"
+        className="!w-2 !h-2 !rounded-full !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-[#171a22]"
       />
     </div>
   );

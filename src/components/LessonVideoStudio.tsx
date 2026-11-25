@@ -15,6 +15,10 @@ import {
   ListOrdered,
   Play,
   Lightbulb,
+  PanelRightClose,
+  PanelRightOpen,
+  RotateCcw,
+  Send,
 } from "lucide-react";
 import {
   getF8VideoLecture,
@@ -47,6 +51,7 @@ interface LessonVideoStudioProps {
   isVideoCompleted?: boolean;
   onVideoCompleted?: (lessonId: string) => void;
   onVideoProgressChange?: (watchedSec: number, durationSec: number, completed: boolean) => void;
+  onNotesModeChange?: (open: boolean) => void;
 }
 
 const MENTOR_STUDY_TIPS: Record<MentorMascot, { name: string; mark: string; tip: string }> = {
@@ -89,6 +94,7 @@ export function LessonVideoStudio({
   isVideoCompleted = false,
   onVideoCompleted,
   onVideoProgressChange,
+  onNotesModeChange,
 }: LessonVideoStudioProps) {
   const currentVideo: VideoLectureInfo = getF8VideoLecture(subjectId, lessonId, lessonTitle);
   const resolvedLessonId = lessonId || currentVideo.lessonId || "1.1";
@@ -136,6 +142,7 @@ export function LessonVideoStudio({
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerIdRef = useRef<string>(`yt-${subjectId}-${resolvedLessonId}-${Math.random().toString(36).slice(2, 7)}`);
   const lastReportedSecRef = useRef<number>(0);
+  const realWatchedSecRef = useRef<number>(initialWatchedSeconds || 0);
 
   const isEffectiveCompleted = isVideoCompleted || localWatched;
   const watchProgressPct = isEffectiveCompleted
@@ -230,23 +237,22 @@ export function LessonVideoStudio({
 
     const interval = setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      setRealWatchedSec((prev) => {
-        const next = prev + 1;
-        if (playerState !== 1) {
-          setCurrentSeconds((cs) => cs + 1);
-        }
-        const pct = videoDurationSec > 0 ? (next / videoDurationSec) * 100 : 0;
-        if (next - lastReportedSecRef.current >= 10) {
-          lastReportedSecRef.current = next;
-          onVideoProgressChange?.(next, videoDurationSec, pct >= 80);
-        }
-        if (pct >= 80 && !isEffectiveCompleted) {
-          setLocalWatched(true);
-          onVideoProgressChange?.(next, videoDurationSec, true);
-          onVideoCompleted?.(resolvedLessonId);
-        }
-        return next;
-      });
+      const next = realWatchedSecRef.current + 1;
+      realWatchedSecRef.current = next;
+      setRealWatchedSec(next);
+      if (playerState !== 1) {
+        setCurrentSeconds((cs) => cs + 1);
+      }
+      const pct = videoDurationSec > 0 ? (next / videoDurationSec) * 100 : 0;
+      if (next - lastReportedSecRef.current >= 10) {
+        lastReportedSecRef.current = next;
+        onVideoProgressChange?.(next, videoDurationSec, pct >= 80);
+      }
+      if (pct >= 80 && !isEffectiveCompleted) {
+        setLocalWatched(true);
+        onVideoProgressChange?.(next, videoDurationSec, true);
+        onVideoCompleted?.(resolvedLessonId);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
@@ -292,6 +298,7 @@ export function LessonVideoStudio({
   useEffect(() => {
     let active = true;
     const initSec = initialWatchedSeconds || 0;
+    realWatchedSecRef.current = initSec;
     setCurrentSeconds(initSec);
     setRealWatchedSec(initSec);
     setVideoDurationSec(parseTimeLabelToSeconds(currentVideo.duration, 300));
@@ -333,6 +340,64 @@ export function LessonVideoStudio({
     return `${mins.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  const [isNotesClosing, setIsNotesClosing] = useState(false);
+  const [lockedNoteSec, setLockedNoteSec] = useState<number | null>(null);
+  const [noteColorTag, setNoteColorTag] = useState<string>("orange");
+  const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const notesPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  const NOTE_TAG_SWATCHES = [
+    { id: "stone", label: "Mặc định", prefix: "", dotCls: "bg-stone-300 border-stone-400" },
+    { id: "sky", label: "Định nghĩa", prefix: "[Định nghĩa] ", dotCls: "bg-sky-300 border-sky-500" },
+    { id: "emerald", label: "Code mẫu", prefix: "[Code] ", dotCls: "bg-emerald-300 border-emerald-600" },
+    { id: "orange", label: "Quan trọng", prefix: "[Quan trọng] ", dotCls: "bg-orange-200 border-orange-500" },
+    { id: "indigo", label: "Ôn thi", prefix: "[Ôn thi] ", dotCls: "bg-indigo-300 border-indigo-600" },
+  ];
+
+  const closeNotesDock = () => {
+    if (!isAddingNote || isNotesClosing) return;
+    setIsNotesClosing(true);
+    setTimeout(() => {
+      setIsAddingNote(false);
+      setIsNotesClosing(false);
+      onNotesModeChange?.(false);
+    }, 180);
+  };
+
+  const openNotesDockAtCurrentTime = () => {
+    if (isAddingNote && !isNotesClosing) {
+      closeNotesDock();
+      return;
+    }
+    setIsNotesClosing(false);
+    setLockedNoteSec(currentSeconds);
+    setIsAddingNote(true);
+    onNotesModeChange?.(true);
+    setTimeout(() => {
+      noteInputRef.current?.focus();
+    }, 60);
+  };
+
+  useEffect(() => {
+    if (!isAddingNote) return;
+    const handleOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.("[data-notes-trigger='1']")) return;
+      if (notesPopoverRef.current && !notesPopoverRef.current.contains(e.target as Node)) {
+        closeNotesDock();
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeNotesDock();
+    };
+    document.addEventListener("mousedown", handleOutside);
+    window.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      window.removeEventListener("keydown", handleEsc);
+    };
+  }, [isAddingNote, isNotesClosing]);
+
   const handleSeek = (secs: number) => {
     setCurrentSeconds(secs);
     setVideoTimestamp(secs);
@@ -348,13 +413,19 @@ export function LessonVideoStudio({
   };
 
   const handleAddNote = async () => {
-    const clean = newNoteText.trim();
-    if (!clean) return;
-    const timestamp = formatTime(currentSeconds);
+    const rawClean = newNoteText.trim();
+    if (!rawClean) return;
+    const activeSwatch = NOTE_TAG_SWATCHES.find((s) => s.id === noteColorTag);
+    const clean =
+      activeSwatch?.prefix && !rawClean.startsWith("[")
+        ? `${activeSwatch.prefix}${rawClean}`
+        : rawClean;
+    const targetSec = lockedNoteSec !== null ? lockedNoteSec : currentSeconds;
+    const timestamp = formatTime(targetSec);
     const saved = await createStudentVideoNote({
       subject_id: subjectId,
       lesson_id: resolvedLessonId,
-      time_sec: currentSeconds,
+      time_sec: targetSec,
       timestamp,
       content: clean,
     });
@@ -368,15 +439,14 @@ export function LessonVideoStudio({
         }
       : {
           id: `note-local-${Date.now()}`,
-          timeSec: currentSeconds,
+          timeSec: targetSec,
           timestamp,
           content: clean,
           createdAt: "Vừa xong",
         };
     setNotes((prev) => [newNote, ...prev]);
     setNewNoteText("");
-    setIsAddingNote(false);
-    setActiveTab("notes");
+    setLockedNoteSec(currentSeconds);
   };
 
   const handleDeleteNote = async (noteId: string) => {
@@ -405,189 +475,333 @@ export function LessonVideoStudio({
 
   return (
     <div key={`video-studio-${subjectId}`} className="flex flex-col w-full">
-      {/* ─── VIDEO PLAYER CONTAINER (16:9 F8 STYLE) ─────────────────── */}
-      <div
-        key={`video-screen-${currentVideo.subjectCode}-${effectiveYoutubeId}`}
-        className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-950 overflow-hidden shadow-sm h-auto"
-        style={{ transform: "none" }}
-      >
-        {/* Top bar of video */}
-        <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs text-slate-300">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[11px] shrink-0">
-              {currentVideo.subjectCode}
-            </span>
-            <span className="font-semibold truncate max-w-md text-white text-xs">
-              {effectiveTitle}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-slate-400 text-[11px] shrink-0">
-            <span className="flex items-center gap-1 font-mono">
-              <Clock size={12} />
-              {formatTime(currentSeconds)} / {formatTime(videoDurationSec)}
-            </span>
-            <span className="hidden sm:inline font-mono text-amber-400">
-              Tiến độ xem: {watchProgressPct}%
-            </span>
-          </div>
-        </div>
-
-        {/* Video Screen */}
+      {/* ─── FULL-WIDTH 16:9 VIDEO + FLOATING MARLO DROPDOWN NOTES MODAL (1:1 PROFILE MENU MOTION) ─── */}
+      <div className="relative w-full">
         <div
-          className="relative aspect-video w-full max-h-[500px] bg-black"
-          style={{ transform: "none", isolation: "isolate" }}
-          onMouseDown={() => setHasInteractedWithPlayer(true)}
-          onClick={() => setHasInteractedWithPlayer(true)}
+          key={`video-screen-${currentVideo.subjectCode}-${effectiveYoutubeId}`}
+          className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-950 overflow-hidden shadow-sm h-auto flex flex-col"
+          style={{ transform: "none" }}
         >
-          <iframe
-            ref={iframeRef}
-            key={`${effectiveYoutubeId}-${videoTimestamp}`}
-            onLoad={() => {
-              sendYoutubeHandshake();
-              setTimeout(sendYoutubeHandshake, 800);
-            }}
-            src={`https://www.youtube-nocookie.com/embed/${effectiveYoutubeId}?enablejsapi=1${originParam}&autoplay=${videoTimestamp > 0 ? 1 : 0}&start=${videoTimestamp}&rel=0&modestbranding=1`}
-            title={effectiveTitle}
-            className="w-full h-full border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-        </div>
-
-        {/* Real Watch Progress Bar (Chống ăn gian bấm ngay tại 00:00) */}
-        <div className="px-4 py-2 bg-slate-900 border-t border-slate-800/80 flex items-center gap-3">
-          <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                isEffectiveCompleted ? "bg-emerald-500" : "bg-amber-500"
-              }`}
-              style={{ width: `${watchProgressPct}%` }}
-            />
-          </div>
-          <span className="text-[11px] font-mono text-slate-300 shrink-0">
-            {isEffectiveCompleted
-              ? "100% Đã hoàn thành video"
-              : `Đã xem thực tế ${watchProgressPct}% (${formatTime(realWatchedSec)} · cần ≥80% hoặc hết video)`}
-          </span>
-        </div>
-
-        {/* Bottom Control / Quick Note Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-slate-900/90 border-t border-slate-800 text-xs">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setIsAddingNote(true);
-                setActiveTab("notes");
-              }}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium flex items-center gap-1.5 transition cursor-pointer border border-slate-700 text-xs"
-            >
-              <BookmarkPlus size={13} />
-              <span>Thêm ghi chú tại {formatTime(currentSeconds)}</span>
-            </button>
-            {!hasInteractedWithPlayer && !isEffectiveCompleted && (
-              <span className="text-[11px] text-amber-300/90 hidden md:inline-flex items-center gap-1">
-                <Play size={11} /> Bấm phát video ở trên để hệ thống ghi nhận thời lượng xem thực
+          {/* Top bar of video */}
+          <div className="flex items-center justify-between gap-2 px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs text-slate-300">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <span className="font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[11px] shrink-0">
+                {currentVideo.subjectCode}
               </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* 🎬 Nút xác nhận xem video (chỉ mở khóa khi xem đủ điều kiện, không thể bấm ăn gian ở 00:00) */}
-            {isEffectiveCompleted ? (
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] border border-white/[0.12] px-3 py-1.5 text-slate-100 font-semibold text-xs select-none shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90 text-slate-950 shrink-0">
-                  <Check size={10} strokeWidth={3} />
-                </span>
-                <span className="tracking-tight">Đã xem hết video bài giảng</span>
-              </div>
-            ) : canConfirmWatch ? (
-              <button
-                type="button"
-                onClick={handleMarkVideoFinished}
-                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold transition cursor-pointer flex items-center gap-1.5 text-xs active:scale-95 shadow-md shadow-amber-500/20"
-              >
-                <CheckCircle2 size={13} className="text-slate-950" />
-                <span>Xác nhận hoàn thành xem video</span>
-              </button>
-            ) : (
-              <div
-                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] border border-white/[0.10] px-3 py-1.5 text-slate-300 font-medium text-xs select-none"
-                title="Cần phát video thực tế trên trang tối thiểu 80% thời lượng hoặc hết video"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
-                <span>Đang ghi nhận xem ({watchProgressPct}%/80%)</span>
-              </div>
-            )}
-
-            {isEffectiveCompleted && (
-              <button
-                type="button"
-                onClick={() => onNavigateToTab?.("lecture")}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs active:scale-95"
-                title="Quay lại Bài đọc để bấm hoàn thành bài học và nhận điểm XP"
-              >
-                <FileText size={13} />
-                <span>Đến Bài đọc nhận XP →</span>
-              </button>
-            )}
-
-            <button
-              onClick={handleCopyShare}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer flex items-center gap-1.5 text-xs border border-slate-700"
-              title="Sao chép liên kết bài giảng"
-            >
-              {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Share2 size={13} />}
-              <span className="hidden sm:inline">{copiedLink ? "Đã chép" : "Chia sẻ"}</span>
-            </button>
-            <button
-              onClick={() => onNavigateToTab?.("quiz")}
-              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-900 font-semibold transition cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs"
-            >
-              <span>Làm Quiz kiểm tra</span>
-              <ChevronRight size={13} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── ADD NOTE INLINE FORM ─────────────────────────────────────── */}
-      {isAddingNote && (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900 p-4 space-y-3 transition-all animate-in fade-in slide-in-from-top-2 mb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md font-mono text-xs font-bold bg-blue-600 text-white">
-                {formatTime(currentSeconds)}
+              <span className="font-semibold truncate text-white text-xs">
+                {effectiveTitle}
               </span>
-              <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                Ghi chú bài giảng cá nhân
-              </h4>
             </div>
-            <button
-              onClick={() => setIsAddingNote(false)}
-              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-            >
-              Hủy
-            </button>
+            <div className="flex items-center gap-2.5 text-slate-400 text-[11px] shrink-0">
+              <span className="hidden sm:flex items-center gap-1 font-mono">
+                <Clock size={12} />
+                {formatTime(currentSeconds)} / {formatTime(videoDurationSec)}
+              </span>
+              <span className="hidden md:inline font-mono text-slate-300">
+                Tiến độ: {watchProgressPct}%
+              </span>
+              <button
+                type="button"
+                data-notes-trigger="1"
+                onClick={openNotesDockAtCurrentTime}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold transition-all duration-150 cursor-pointer border whitespace-nowrap active:scale-[0.98] ${
+                  isAddingNote && !isNotesClosing
+                    ? "bg-white dark:bg-white text-slate-950 dark:text-slate-950 border-white shadow-xs"
+                    : "bg-slate-800/90 hover:bg-slate-800 text-slate-200 border-slate-700/80"
+                }`}
+                title="Mở bảng Ghi chú nổi (không đẩy hay che khuất video)"
+              >
+                <BookmarkPlus
+                  size={12}
+                  className={
+                    isAddingNote && !isNotesClosing
+                      ? "text-slate-950 dark:text-slate-950"
+                      : "text-slate-300"
+                  }
+                />
+                <span>Ghi chú ({notes.length})</span>
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newNoteText}
-              onChange={(e) => setNewNoteText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddNote()}
-              placeholder="Nhập nội dung ghi chú bạn muốn lưu tại mốc này..."
-              autoFocus
-              className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+
+          {/* Video Screen */}
+          <div
+            className="relative aspect-video w-full max-h-[500px] bg-black"
+            style={{ transform: "none", isolation: "isolate" }}
+            onMouseDown={() => setHasInteractedWithPlayer(true)}
+            onClick={() => setHasInteractedWithPlayer(true)}
+          >
+            <iframe
+              ref={iframeRef}
+              key={`${effectiveYoutubeId}-${videoTimestamp}`}
+              onLoad={() => {
+                sendYoutubeHandshake();
+                setTimeout(sendYoutubeHandshake, 800);
+              }}
+              src={`https://www.youtube-nocookie.com/embed/${effectiveYoutubeId}?enablejsapi=1${originParam}&autoplay=${videoTimestamp > 0 ? 1 : 0}&start=${videoTimestamp}&rel=0&modestbranding=1`}
+              title={effectiveTitle}
+              className="w-full h-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
             />
-            <button
-              onClick={handleAddNote}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition cursor-pointer"
-            >
-              Lưu ghi chú
-            </button>
+          </div>
+
+          {/* Real Watch Progress Bar */}
+          <div className="px-4 py-2 bg-slate-900 border-t border-slate-800/80 flex items-center gap-3">
+            <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isEffectiveCompleted ? "bg-emerald-500" : "bg-amber-500"
+                }`}
+                style={{ width: `${watchProgressPct}%` }}
+              />
+            </div>
+            <span className="text-[11px] font-mono text-slate-300 shrink-0">
+              {isEffectiveCompleted
+                ? "100% Đã hoàn thành video"
+                : `Đã xem thực tế ${watchProgressPct}% (${formatTime(realWatchedSec)} · cần ≥80% hoặc hết video)`}
+            </span>
+          </div>
+
+          {/* Bottom Control / Quick Note Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 bg-slate-900/90 border-t border-slate-800 text-xs">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-notes-trigger="1"
+                onClick={openNotesDockAtCurrentTime}
+                className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition cursor-pointer border text-xs active:scale-[0.98] ${
+                  isAddingNote && !isNotesClosing
+                    ? "bg-white dark:bg-white text-slate-950 dark:text-slate-950 border-white shadow-xs"
+                    : "bg-slate-800 hover:bg-slate-700 text-white border-slate-700"
+                }`}
+              >
+                <BookmarkPlus
+                  size={13}
+                  className={
+                    isAddingNote && !isNotesClosing
+                      ? "text-slate-950 dark:text-slate-950"
+                      : "text-slate-300"
+                  }
+                />
+                <span>Thêm ghi chú tại {formatTime(currentSeconds)}</span>
+              </button>
+              {!hasInteractedWithPlayer && !isEffectiveCompleted && (
+                <span className="text-[11px] text-slate-400 hidden md:inline-flex items-center gap-1">
+                  <Play size={11} /> Bấm phát video ở trên để hệ thống ghi nhận thời lượng xem thực
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isEffectiveCompleted ? (
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] border border-white/[0.12] px-3 py-1.5 text-slate-100 font-semibold text-xs select-none">
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90 text-slate-950 shrink-0">
+                    <Check size={10} strokeWidth={3} />
+                  </span>
+                  <span className="tracking-tight">Đã xem hết video bài giảng</span>
+                </div>
+              ) : canConfirmWatch ? (
+                <button
+                  type="button"
+                  onClick={handleMarkVideoFinished}
+                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold transition cursor-pointer flex items-center gap-1.5 text-xs active:scale-95 shadow-md shadow-amber-500/20"
+                >
+                  <CheckCircle2 size={13} className="text-slate-950" />
+                  <span>Xác nhận hoàn thành xem video</span>
+                </button>
+              ) : (
+                <div
+                  className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] border border-white/[0.10] px-3 py-1.5 text-slate-300 font-medium text-xs select-none"
+                  title="Cần phát video thực tế trên trang tối thiểu 80% thời lượng hoặc hết video"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>Đang ghi nhận xem ({watchProgressPct}%/80%)</span>
+                </div>
+              )}
+
+              {isEffectiveCompleted && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab?.("lecture")}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs active:scale-95"
+                  title="Quay lại Bài đọc để bấm hoàn thành bài học và nhận điểm XP"
+                >
+                  <FileText size={13} />
+                  <span>Đến Bài đọc nhận XP →</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleCopyShare}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer flex items-center gap-1.5 text-xs border border-slate-700"
+                title="Sao chép liên kết bài giảng"
+              >
+                {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Share2 size={13} />}
+                <span className="hidden sm:inline">{copiedLink ? "Đã chép" : "Chia sẻ"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateToTab?.("quiz")}
+                className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-900 font-semibold transition cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs"
+              >
+                <span>Làm Quiz kiểm tra</span>
+                <ChevronRight size={13} />
+              </button>
+            </div>
           </div>
         </div>
-      )}
+
+        {/* ─── FLOATING NOTES POPOVER (1:1 REPLICA OF HEADER PROFILE DROPDOWN STYLE & MOTION) ─── */}
+        {isAddingNote && (
+          <div
+            ref={notesPopoverRef}
+            role="dialog"
+            aria-label="Sổ ghi chú bài giảng"
+            className={`absolute right-3 top-11 w-[305px] sm:w-[332px] rounded-2xl bg-white dark:bg-[#18191c] border border-slate-200/90 dark:border-white/10 shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18)] dark:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.75)] p-2 z-[95] select-none ${
+              isNotesClosing ? "marlo-dropdown-out" : "marlo-dropdown-in"
+            }`}
+          >
+            {/* Top Eyebrow Header (matches "NGUYỄN BÁ HÒA · HỌC VIÊN" in HeaderProfileDropdown) */}
+            <div className="px-2.5 py-1.5 flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">
+                GHI CHÚ VIDEO · BÀI {resolvedLessonId}
+              </span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold shrink-0">
+                {notes.length} đã lưu
+              </span>
+            </div>
+
+            {/* 5 Color Tag Swatches (1:1 with "GIAO DIỆN NỀN" row in HeaderProfileDropdown!) */}
+            <div className="px-2.5 py-1.5">
+              <div className="flex items-center justify-between text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
+                <span className="inline-flex items-center gap-1.5">
+                  <BookmarkPlus size={11} />
+                  <span>Nhãn ghi chú</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLockedNoteSec(currentSeconds)}
+                  className="inline-flex items-center gap-1 font-mono text-[10.5px] font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:underline normal-case cursor-pointer"
+                  title="Cập nhật lại theo giây phát hiện tại"
+                >
+                  <RotateCcw size={10} />
+                  <span>Mốc {formatTime(lockedNoteSec !== null ? lockedNoteSec : currentSeconds)}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-5 gap-1.5">
+                {NOTE_TAG_SWATCHES.map((sw) => {
+                  const isSelected = noteColorTag === sw.id;
+                  return (
+                    <button
+                      key={sw.id}
+                      type="button"
+                      onClick={() => setNoteColorTag(sw.id)}
+                      title={`Nhãn: ${sw.label}`}
+                      className={`h-7 rounded-lg border-2 flex items-center justify-center transition cursor-pointer ${sw.dotCls} ${
+                        isSelected
+                          ? "ring-2 ring-slate-900 dark:ring-white ring-offset-1 dark:ring-offset-[#18191c] scale-105"
+                          : "opacity-80 hover:opacity-100"
+                      }`}
+                    >
+                      {isSelected && <Check size={12} className="text-slate-900 stroke-[3]" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Note Input Box */}
+            <div className="px-2 pt-1 pb-1.5 space-y-2">
+              <textarea
+                ref={noteInputRef}
+                rows={2}
+                value={newNoteText}
+                onFocus={() => {
+                  if (lockedNoteSec === null) setLockedNoteSec(currentSeconds);
+                }}
+                onChange={(e) => setNewNoteText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleAddNote();
+                  }
+                }}
+                placeholder="Gõ ghi chú nhanh (Nhấn Enter để lưu)..."
+                className="w-full resize-none rounded-xl bg-slate-100/85 dark:bg-white/[0.05] border border-slate-200/90 dark:border-white/10 px-3 py-2 text-[12.5px] leading-relaxed text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-white/25 focus:outline-none select-text transition"
+              />
+
+              <button
+                type="button"
+                disabled={!newNoteText.trim()}
+                onClick={() => void handleAddNote()}
+                className="w-full h-[34px] px-3 rounded-xl flex items-center justify-center gap-2 text-[12.5px] font-semibold bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-slate-950 disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                <Send size={13} />
+                <span>Lưu tại mốc {formatTime(lockedNoteSec !== null ? lockedNoteSec : currentSeconds)}</span>
+              </button>
+            </div>
+
+            <div className="h-px bg-slate-100 dark:bg-white/5 my-1 mx-1.5" />
+
+            {/* Saved Notes Menu Rows */}
+            <div className="max-h-[195px] overflow-y-auto px-1 py-0.5 space-y-0.5">
+              {notes.length === 0 ? (
+                <div className="px-2.5 py-4 text-center text-[12px] text-slate-400 dark:text-slate-500">
+                  Chưa có ghi chú nào được lưu ở bài này.
+                </div>
+              ) : (
+                notes.map((note) => (
+                  <div
+                    key={note.id}
+                    className="group w-full px-2.5 py-2 rounded-xl flex items-start gap-2.5 text-[12.5px] text-slate-700 dark:text-slate-200 hover:bg-slate-100/90 dark:hover:bg-white/5 transition-colors"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSeek(note.timeSec)}
+                      className="mt-0.5 shrink-0 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-900 hover:text-white dark:hover:bg-white dark:hover:text-slate-950 transition cursor-pointer"
+                      title="Tua tới mốc này"
+                    >
+                      {note.timestamp}
+                    </button>
+                    <span
+                      onClick={() => handleSeek(note.timeSec)}
+                      className="flex-1 min-w-0 leading-snug break-words cursor-pointer select-text"
+                    >
+                      {note.content}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteNote(note.id)}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-0.5 rounded transition cursor-pointer shrink-0"
+                      title="Xóa ghi chú"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="h-px bg-slate-100 dark:bg-white/5 my-1 mx-1.5" />
+
+            {/* Bottom Close Action */}
+            <button
+              type="button"
+              onClick={closeNotesDock}
+              className="w-full h-[34px] px-3 rounded-xl flex items-center gap-2.5 text-[12.5px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer text-left"
+            >
+              <PanelRightClose size={15} className="shrink-0" />
+              <span>Đóng sổ ghi chú</span>
+              <span className="ml-auto font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/10 text-slate-400">
+                ESC
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* 🌊 DÒNG CHẤT LỎNG CHẢY TỪ VIDEO PLAYER XUỐNG KHỐI NỘI DUNG DƯỚI */}
       <LiquidCardConnector />
@@ -608,7 +822,7 @@ export function LessonVideoStudio({
         >
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-[#14161a] dark:bg-white text-amber-400 dark:text-slate-950">
+              <span className="font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200">
                 {currentVideo.subjectCode}
               </span>
               <span className="inline-flex items-center gap-1 font-mono text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700">
@@ -617,7 +831,7 @@ export function LessonVideoStudio({
               <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-slate-700">
                 <span
                   className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                    isEffectiveCompleted ? "bg-emerald-500" : "bg-amber-500"
+                    isEffectiveCompleted ? "bg-emerald-500" : "bg-slate-400 dark:bg-slate-500"
                   }`}
                 />
                 {isEffectiveCompleted ? "Đã hoàn thành xem" : `Tiến độ: ${watchProgressPct}%`}
@@ -642,7 +856,7 @@ export function LessonVideoStudio({
           {/* Instructor Line - Editorial Profile Strip */}
           <div className="flex items-center justify-between gap-3.5 py-2.5 px-3.5 rounded-xl bg-slate-50/90 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="h-9 w-9 rounded-xl bg-[#14161a] dark:bg-amber-500/15 text-amber-400 dark:text-amber-300 border border-slate-800/20 dark:border-amber-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-slate-700/90 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
                 <UserCheck size={17} />
               </div>
               <div className="min-w-0">
@@ -658,9 +872,9 @@ export function LessonVideoStudio({
           </div>
 
           {/* Focus Highlight Callout */}
-          <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 border-l-[3px] border-l-amber-500 bg-slate-50/80 dark:bg-slate-950/50 p-4 space-y-1.5">
+          <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 border-l-[3px] border-l-slate-900 dark:border-l-slate-300 bg-slate-50/80 dark:bg-slate-950/50 p-4 space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              <span className="h-2 w-2 rounded-full bg-slate-900 dark:bg-slate-300" />
               <h3 className="text-[11px] font-mono font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                 Nội dung trọng tâm bài giảng
               </h3>
@@ -736,15 +950,15 @@ export function LessonVideoStudio({
                       className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3.5 group ${
                         isCurrentChapter
                           ? "border-slate-300 dark:border-slate-700 border-l-[3px] border-l-slate-900 dark:border-l-white bg-slate-50/90 dark:bg-slate-800/60 shadow-2xs"
-                          : "border-slate-200/80 dark:border-slate-800 hover:border-amber-300/80 dark:hover:border-amber-700/60 bg-white dark:bg-slate-900/50 hover:bg-slate-50/90 dark:hover:bg-slate-800/60"
+                          : "border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/50 hover:bg-slate-50/90 dark:hover:bg-slate-800/60"
                       }`}
                     >
                       <div className="flex flex-col items-center gap-1 shrink-0">
                         <span
                           className={`font-mono text-xs font-bold px-2.5 py-1 rounded-md border transition ${
                             isCurrentChapter
-                              ? "bg-[#14161a] text-amber-400 border-slate-900 dark:bg-amber-500 dark:text-slate-950 dark:border-amber-400"
-                              : "text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 group-hover:bg-[#14161a] group-hover:text-amber-400 group-hover:border-slate-900"
+                              ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white"
+                              : "text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 dark:group-hover:bg-white dark:group-hover:text-slate-950 dark:group-hover:border-white"
                           }`}
                         >
                           {chap.timestamp}
@@ -755,12 +969,12 @@ export function LessonVideoStudio({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition leading-snug">
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white transition leading-snug">
                             {chap.title}
                           </h4>
                           {isCurrentChapter ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-slate-700 text-[10px] font-mono font-bold shrink-0">
-                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                               Đang học
                             </span>
                           ) : (
@@ -789,7 +1003,7 @@ export function LessonVideoStudio({
                       </p>
                       <button
                         type="button"
-                        onClick={() => setIsAddingNote(true)}
+                        onClick={openNotesDockAtCurrentTime}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14161a] dark:bg-white text-white dark:text-slate-950 text-xs font-bold hover:bg-slate-800 transition cursor-pointer"
                       >
                         <BookmarkPlus size={13} />
@@ -800,12 +1014,12 @@ export function LessonVideoStudio({
                     notes.map((note) => (
                       <div
                         key={note.id}
-                        className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 border-l-[3px] border-l-amber-400/80 bg-slate-50/60 dark:bg-slate-950/40 flex items-start justify-between gap-3 group hover:border-slate-300 dark:hover:border-slate-700 transition"
+                        className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 flex items-start justify-between gap-3 group hover:border-slate-300 dark:hover:border-slate-700 transition"
                       >
                         <div className="flex items-start gap-3 flex-1 min-w-0">
                           <button
                             onClick={() => handleSeek(note.timeSec)}
-                            className="font-mono text-xs font-bold text-amber-400 bg-[#14161a] dark:bg-amber-500/15 dark:text-amber-300 px-2.5 py-1 rounded-md border border-slate-800/20 dark:border-amber-500/30 shrink-0 hover:bg-amber-500 hover:text-slate-950 transition cursor-pointer"
+                            className="font-mono text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-200/90 dark:border-slate-700 shrink-0 hover:bg-slate-900 hover:text-white dark:hover:bg-white dark:hover:text-slate-950 transition cursor-pointer"
                             title="Tua tới mốc này"
                           >
                             {note.timestamp}
@@ -842,10 +1056,10 @@ export function LessonVideoStudio({
                         href={res.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-amber-400/70 dark:hover:border-amber-600/60 bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition flex items-center justify-between text-xs text-slate-700 dark:text-slate-300 group cursor-pointer"
+                        className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition flex items-center justify-between text-xs text-slate-700 dark:text-slate-300 group cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0 group-hover:bg-[#14161a] group-hover:text-amber-400 transition">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 shrink-0 group-hover:bg-slate-900 group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-slate-950 transition">
                             {res.type === "slide" ? (
                               <FileText size={14} />
                             ) : res.type === "git" ? (
@@ -854,11 +1068,11 @@ export function LessonVideoStudio({
                               <BookOpen size={14} />
                             )}
                           </span>
-                          <span className="font-semibold group-hover:text-amber-600 dark:group-hover:text-amber-400 transition truncate">
+                          <span className="font-semibold group-hover:text-slate-900 dark:group-hover:text-white transition truncate">
                             {res.title}
                           </span>
                         </div>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-slate-500 dark:text-slate-300 group-hover:text-amber-600 dark:group-hover:text-amber-400 shrink-0">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-slate-500 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white shrink-0">
                           <span>Mở</span>
                           <ExternalLink size={11} />
                         </span>
@@ -869,7 +1083,7 @@ export function LessonVideoStudio({
                         className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-700 dark:text-slate-300"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#14161a] dark:bg-amber-500/15 text-amber-400 dark:text-amber-300 shrink-0">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 shrink-0">
                             <FileText size={14} />
                           </span>
                           <span className="font-semibold truncate">{res.title}</span>
@@ -943,7 +1157,7 @@ export function LessonVideoStudio({
           </div>
 
           {/* Card 2: Chặng tiếp theo */}
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 border-t-[3px] border-t-amber-500 bg-white dark:bg-slate-900 p-5 space-y-3.5 shadow-2xs">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3.5 shadow-2xs">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Chặng tiếp theo
@@ -980,14 +1194,14 @@ export function LessonVideoStudio({
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 p-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#14161a] dark:bg-amber-500/15 text-amber-400 dark:text-amber-300 font-mono text-[10px] font-bold">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-200/80 dark:bg-slate-800 border border-slate-300/70 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-mono text-[10px] font-bold">
                   {mentorMeta.mark}
                 </span>
                 <span className="text-xs font-bold text-slate-900 dark:text-white">
                   Mẹo từ Mentor {mentorMeta.name}
                 </span>
               </div>
-              <Lightbulb size={14} className="text-amber-500 shrink-0" />
+              <Lightbulb size={14} className="text-slate-400 shrink-0" />
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               {mentorMeta.tip}

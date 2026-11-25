@@ -10,6 +10,8 @@ import {
 import AiRichMessage from "./AiRichMessage";
 import { useMarloAiDrawerMotion } from "../utils/marloAnimations";
 import "../marlo-engine/marloStyles.css";
+import type { LearningActionTarget, LearningPlan } from "../types/learningPlan";
+export type { LearningActionTarget } from "../types/learningPlan";
 
 export interface MarloMentor {
   id?: string;
@@ -31,6 +33,7 @@ interface Props {
   workspaceContext?: SocraticWorkspaceContext;
   initialPrompt?: string | null;
   onInitialPromptConsumed?: () => void;
+  onLearningAction?: (target: LearningActionTarget) => void;
 }
 
 interface MessageItem {
@@ -38,6 +41,8 @@ interface MessageItem {
   from: "user" | "mentor";
   text: string;
   time: string;
+  learningPlan?: LearningPlan;
+  contextKey?: string;
 }
 
 const INITIAL_SOCRATIC_MESSAGE =
@@ -65,6 +70,7 @@ export default function MarloAiChatDrawer({
   workspaceContext,
   initialPrompt,
   onInitialPromptConsumed,
+  onLearningAction,
 }: Props) {
   const [chatInput, setChatInput] = useState<string>("");
   const [isAskingAi, setIsAskingAi] = useState<boolean>(false);
@@ -105,8 +111,10 @@ export default function MarloAiChatDrawer({
     : `Chủ đề: ${activeTopic}`;
 
   const contextKey = workspaceContext
-    ? `${viewMode}:${workspaceContext.subject_id || subjectId}:${workspaceContext.chapter_number || ""}:${workspaceContext.lesson_code || ""}:${workspaceContext.exercise_id || ""}:${workspaceContext.quiz_index || ""}`
+    ? `${viewMode}:${workspaceContext.subject_id || subjectId}:${workspaceContext.chapter_number || ""}:${workspaceContext.lesson_id || workspaceContext.lesson_code || ""}:${workspaceContext.exercise_id || ""}:${workspaceContext.quiz_attempt_id || ""}:${workspaceContext.quiz_index || ""}`
     : `${subjectId}:${activeTopic}`;
+  const activeContextRef = useRef(contextKey);
+  activeContextRef.current = contextKey;
 
   useEffect(() => {
     setHintStep(1);
@@ -233,7 +241,7 @@ export default function MarloAiChatDrawer({
     }
 
     const historyTurns: SocraticChatTurn[] = messages
-      .filter((m) => m.id !== "m0" && !m.id.startsWith("reset-"))
+      .filter((m) => m.contextKey === contextKey && m.id !== "m0" && !m.id.startsWith("reset-"))
       .slice(-8)
       .map((m) => ({
         role: m.from === "user" ? "user" : "assistant",
@@ -248,6 +256,7 @@ export default function MarloAiChatDrawer({
         from: "user",
         text: userText,
         time: userTime,
+        contextKey,
       },
     ]);
     setIsAskingAi(true);
@@ -262,6 +271,7 @@ export default function MarloAiChatDrawer({
         hintLevel: usedHintLevel,
       });
 
+      if (activeContextRef.current !== contextKey) return;
       setMessages((prev) => [
         ...prev,
         {
@@ -271,9 +281,12 @@ export default function MarloAiChatDrawer({
             response.answer ||
             "Mình đã nắm ngữ cảnh hiện tại.\n> Bạn muốn hỏi rõ bước nào tiếp theo?",
           time: getCurrentTime(),
+          learningPlan: response.learning_plan,
+          contextKey,
         },
       ]);
     } catch {
+      if (activeContextRef.current !== contextKey) return;
       setMessages((prev) => [
         ...prev,
         {
@@ -283,6 +296,7 @@ export default function MarloAiChatDrawer({
             `Đang ở **${contextLocationLabel}**.\n` +
             "> Bạn cho biết cụ thể đoạn hoặc yêu cầu nào bạn đang vướng để mình gợi ý tiếp nhé!",
           time: getCurrentTime(),
+          contextKey,
         },
       ]);
     } finally {
@@ -321,6 +335,7 @@ export default function MarloAiChatDrawer({
           "- **Chế độ hỗ trợ:** Gợi mở tư duy theo từng nấc, không giải hộ trọn bài.\n" +
           "> Đặt câu hỏi bất kỳ hoặc chọn gợi ý nhanh bên dưới để tiếp tục nhé!",
         time: getCurrentTime(),
+        contextKey,
       },
     ]);
   };
@@ -358,6 +373,9 @@ export default function MarloAiChatDrawer({
           "Sai lầm cần tránh",
         ];
 
+  const evidencePrompt = "Phân tích lỗi sai, test chưa đạt và nhận xét giảng viên; đề xuất ôn lại, luyện tập và làm lại để đo tiến bộ.";
+  const visibleMessages = messages.filter((message) => message.id === "m0" || message.contextKey === contextKey);
+  const latestPlanMessage = [...visibleMessages].reverse().find((message) => message.learningPlan);
   if (!shouldRender) return null;
 
   const drawerNode = (
@@ -421,7 +439,7 @@ export default function MarloAiChatDrawer({
 
         {/* ─── 2. THREAD MESSAGES (Chuẩn Marlo .thread__msgs & .msg) ─── */}
         <div ref={msgsContainerRef} className="thread__msgs flex-1 overflow-y-auto p-4 space-y-3.5">
-          {messages.map((m) => {
+          {visibleMessages.map((m) => {
             const isMine = m.from === "user";
             const isCopied = copiedMsgId === m.id;
             return (
@@ -469,6 +487,57 @@ export default function MarloAiChatDrawer({
                   ) : (
                     <AiRichMessage text={m.text} />
                   )}
+                  {!isMine && m.learningPlan && m.id === latestPlanMessage?.id && (
+                    <div className="mt-3 pt-3 border-t border-[var(--line)] space-y-2" aria-label="Lộ trình từ bằng chứng học tập">
+                      <p className="text-[11px] font-bold text-[var(--ink-2)]">Bằng chứng & bước học tiếp theo</p>
+                      <p className="text-[11px] leading-relaxed text-[var(--muted)]">{m.learningPlan.summary}</p>
+                      {m.learningPlan.evidence.map((item) => (
+                        <div key={`${item.kind}-${item.source_id}`} className="rounded-lg p-2 bg-[var(--card-2)] text-[11px] leading-relaxed">
+                          <span className="font-semibold">{item.label}: </span>{item.detail}
+                        </div>
+                      ))}
+                      {m.learningPlan.progress.quiz && (
+                        <p className="text-[11px] text-[var(--ink-2)]">
+                          Quiz: {m.learningPlan.progress.quiz.latest_score}/{m.learningPlan.progress.quiz.latest_total}
+                          {m.learningPlan.progress.quiz.comparable
+                            ? ` · trước: ${m.learningPlan.progress.quiz.previous_score}/${m.learningPlan.progress.quiz.previous_total} · ${Number(m.learningPlan.progress.quiz.delta_percentage_points) > 0 ? "+" : ""}${m.learningPlan.progress.quiz.delta_percentage_points} điểm % (cùng đề)`
+                            : " · chưa có lượt cùng đề để so sánh"}
+                        </p>
+                      )}
+                      {m.learningPlan.progress.sandbox && (
+                        <p className="text-[11px] text-[var(--ink-2)]">
+                          Test thực chạy: {m.learningPlan.progress.sandbox.passed}/{m.learningPlan.progress.sandbox.total}
+                          {m.learningPlan.progress.sandbox.comparable
+                            ? ` · trước: ${m.learningPlan.progress.sandbox.previous_passed}/${m.learningPlan.progress.sandbox.previous_total} · ${Number(m.learningPlan.progress.sandbox.delta_passed) > 0 ? "+" : ""}${m.learningPlan.progress.sandbox.delta_passed} test`
+                            : " · chưa có bộ test tương đương để so sánh"}
+                        </p>
+                      )}
+                      <div className="space-y-2">
+                        {m.learningPlan.actions.map((action) => (
+                          <div key={action.id} className="rounded-lg border border-[var(--line)] p-2">
+                            <p className="text-[11px] font-semibold">{action.label}</p>
+                            <p className="mt-1 text-[11px] text-[var(--muted)] leading-relaxed whitespace-pre-wrap">{action.instruction}</p>
+                            <button
+                              type="button"
+                              disabled={isAskingAi}
+                              className="ai-chip mt-2 !text-[10px]"
+                              onClick={() => {
+                                if (action.target && onLearningAction) {
+                                  onLearningAction(action.target);
+                                  handleAnimatedClose();
+                                } else {
+                                  void sendUserMessage(`Hướng dẫn từng bước: ${action.instruction}`);
+                                }
+                              }}
+                            >
+                              {action.target && onLearningAction ? "Mở nội dung học" : "Trao đổi bước này"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] leading-relaxed text-[var(--muted)]">{m.learningPlan.progress.verification_note}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -500,6 +569,15 @@ export default function MarloAiChatDrawer({
           ref={chipsRef}
           className="px-3 pt-2.5 pb-1.5 border-t border-[var(--line)] bg-[var(--card)] flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0"
         >
+          <button
+            type="button"
+            disabled={isAskingAi}
+            onClick={() => void sendUserMessage(evidencePrompt)}
+            className="ai-chip"
+            title="Chỉ phân tích kết quả quiz đã chấm, test thực chạy và góp ý đã lưu của bạn"
+          >
+            Ôn theo lỗi đã xác minh
+          </button>
           {quickPrompts.map((qp) => (
             <button
               key={qp}

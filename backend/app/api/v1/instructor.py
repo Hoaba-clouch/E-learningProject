@@ -790,45 +790,6 @@ def list_chapter_submissions(
     """Danh sách bài tập thực hành theo từng chương để Giảng viên thẩm định & chấm điểm theo lớp phụ trách."""
     is_admin = (user.get("role") or "").lower() == "admin"
     with db() as conn:
-        count = conn.execute("SELECT COUNT(*) as c FROM student_chapter_submissions").fetchone()["c"]
-        if count == 0:
-            sample_submissions = [
-                ("chsub-01", "usr-sv-01", "Nguyễn Bá Hòa", "2210801", "oop", 1, "ex-ch1", "Đa hình & Cấu trúc vtable trong C++", "https://github.com/Hoaba-clouch/oop-vtable-cpp", "Cài đặt virtual method table thủ công qua void** function pointers và memory layout probe.", 9.5, 10.0, 5, 5, 32, 98.6, "graded", 9.5, "Kiến trúc con trỏ hàm chính xác, xử lý 0 memory leak.", "Cô Trần Thị B (Giảng viên)", "2026-11-18 10:30"),
-                ("chsub-02", "usr-sv-03", "Võ Nhật Huy", "2210815", "oop", 1, "ex-ch1", "Đa hình & Cấu trúc vtable trong C++", "https://github.com/huy-fullstack/oop-vtable-solution", "Tách riêng header abstract base và concrete implementation.", 9.0, 10.0, 5, 5, 38, 97.2, "pending", None, "", "", "2026-11-18 14:15"),
-                ("chsub-03", "usr-sv-04", "Phan Đình Nghị", "2210829", "oop", 1, "ex-ch1", "Đa hình & Cấu trúc vtable trong C++", "https://github.com/nghi-sys/cpp-oop-polymorphism", "Mô phỏng đa kế thừa và diamond problem bằng virtual inheritance.", 9.2, 10.0, 5, 5, 35, 96.8, "pending", None, "", "", "2026-11-18 15:20"),
-                ("chsub-04", "usr-sv-08", "Trần Minh Tuấn", "2210877", "oop", 1, "ex-ch1", "Đa hình & Cấu trúc vtable trong C++", "https://github.com/tuan-arch/cpp-vtable-lab", "Thử nghiệm so sánh chi phí gọi hàm ảo dynamic dispatch vs direct call.", 8.5, 10.0, 4, 5, 42, 94.0, "flagged", None, "", "", "2026-11-18 16:00"),
-                ("chsub-05", "usr-sv-05", "Nguyễn Minh Khôi", "2210866", "oop", 1, "ex-ch1", "Đa hình & Cấu trúc vtable trong C++", "https://github.com/khoi-dev/cpp-oop-ch1", "Gặp lỗi segmentation fault ở test case biên số 5.", 6.5, 10.0, 3, 5, 58, 89.5, "revision_requested", 6.5, "Test case biên số 5 bị crash (SIGSEGV). Yêu cầu bổ sung guard clause kiểm tra nullptr.", "Cô Trần Thị B (Giảng viên)", "2026-11-18 11:00"),
-                ("chsub-06", "usr-sv-01", "Nguyễn Bá Hòa", "2210801", "oop", 2, "ex-ch2", "Quản lý Bộ nhớ & Smart Pointers (RAII)", "https://github.com/Hoaba-clouch/cpp-raii-smart-ptrs", "Cài đặt custom unique_ptr và shared_ptr với reference count thread-safe.", 9.8, 10.0, 6, 6, 28, 99.1, "pending", None, "", "", "2026-11-18 16:45"),
-                ("chsub-07", "usr-sv-03", "Võ Nhật Huy", "2210815", "dsa", 1, "ex-dsa-ch1", "Đồ thị nâng cao & Thuật toán Dijkstra Heap", "https://github.com/huy-fullstack/dsa-dijkstra-fast", "Dijkstra với Min-Heap tối ưu thời gian O((V+E)logV).", 9.0, 10.0, 5, 5, 40, 96.5, "pending", None, "", "", "2026-11-18 17:10"),
-                ("chsub-08", "usr-sv-04", "Phan Đình Nghị", "2210829", "web", 1, "ex-web-ch1", "FastAPI JWT Authentication & Role RBAC", "https://github.com/nghi-sys/fastapi-jwt-auth", "Bcrypt password hash và Access/Refresh token rotation.", 9.5, 10.0, 6, 6, 24, 98.4, "graded", 9.5, "Kiến trúc 3 tầng chuẩn, bảo mật tốt.", "Cô Trần Thị B (Giảng viên)", "2026-11-18 09:00"),
-            ]
-            for s in sample_submissions:
-                rubric_sample = [
-                    {"title": "Độ chính xác Test Cases Docker", "score": s[10], "max": 10, "note": f"Vượt qua {s[12]}/{s[13]} test cases."},
-                    {"title": "Clean Architecture & Bộ nhớ", "score": s[10] - 0.5, "max": 10, "note": "0 memory leak, code clean."},
-                ]
-                ai_feedback_sample = {
-                    "strengths": f"Bài làm vượt qua {s[12]}/{s[13]} test cases với thời gian {s[14]}ms.",
-                    "improvements": "Có thể bổ sung thêm tài liệu Doxygen cho các public APIs.",
-                }
-                conn.execute(
-                    """INSERT INTO student_chapter_submissions (
-                        id, user_id, student_name, student_code, subject_id, chapter_number,
-                        exercise_id, exercise_title, repo_url, student_note, score, max_score,
-                        tests_passed, tests_total, execution_time_ms, anti_plagiarism_score,
-                        status, instructor_grade, instructor_feedback, graded_by, graded_at,
-                        rubric_json, ai_feedback_json, xp_awarded, submitted_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 100, ?)""",
-                    (
-                        s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8], s[9], s[10], s[11],
-                        s[12], s[13], s[14], s[15], s[16], s[17], s[18], s[19], s[20],
-                        json.dumps(rubric_sample, ensure_ascii=False),
-                        json.dumps(ai_feedback_sample, ensure_ascii=False),
-                        s[20],
-                    ),
-                )
-            conn.commit()
-
         raw_key = (section_id or subject_id or "").strip()
         resolved_section_id: str | None = None
         resolved_subject_id: str | None = None
@@ -917,7 +878,7 @@ def list_chapter_submissions(
             "SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) as pending_c, "
             "SUM(CASE WHEN status='graded' THEN 1 ELSE 0 END) as graded_c, "
             "SUM(CASE WHEN status='flagged' THEN 1 ELSE 0 END) as flagged_c, "
-            "AVG(score) as avg_score "
+            "AVG(CASE WHEN status='graded' THEN instructor_grade ELSE NULL END) as avg_score "
             "FROM student_chapter_submissions" + where_sql
         )
         stat_row = conn.execute(total_q, tuple(base_params)).fetchone()
@@ -935,18 +896,21 @@ def list_chapter_submissions(
             "exerciseTitle": r["exercise_title"],
             "repoUrl": r["repo_url"],
             "studentNote": r["student_note"],
-            "aiScore": r["score"],
+            "aiScore": 0,
+            "metricsVerified": False,
+            "evaluationStatus": "teacher_graded" if r.get("instructor_grade") is not None else "pending_review",
+            "evidence": json.loads(r.get("evidence_json") or "{}"),
             "maxScore": r["max_score"] or 10.0,
-            "testsPassed": r["tests_passed"],
-            "testsTotal": r["tests_total"],
-            "executionTimeMs": r["execution_time_ms"],
-            "antiPlagiarismScore": r["anti_plagiarism_score"],
+            "testsPassed": 0,
+            "testsTotal": 0,
+            "executionTimeMs": 0,
+            "antiPlagiarismScore": 0,
             "status": r["status"] or "pending",
             "instructorGrade": r["instructor_grade"],
             "instructorFeedback": r["instructor_feedback"] or "",
             "gradedBy": r["graded_by"] or "",
             "gradedAt": r["graded_at"] or "",
-            "rubric": json.loads(r["rubric_json"] or "[]"),
+            "rubric": [],
             "aiFeedback": json.loads(r["ai_feedback_json"] or "{}"),
             "submittedAt": r["submitted_at"],
         })

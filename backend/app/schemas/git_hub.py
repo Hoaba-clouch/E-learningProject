@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.github_evidence import GitHubEvidenceError, parse_github_repo
 
 
 class GitRepoUpdateIn(BaseModel):
     repo_url: str = Field(min_length=8, max_length=500)
     target_branch: str = Field(default="main", min_length=1, max_length=120)
     default_merge_strategy: str = Field(default="squash", min_length=2, max_length=40)
+
+    @field_validator("repo_url")
+    @classmethod
+    def validate_repository(cls, value: str) -> str:
+        try:
+            return parse_github_repo(value)[0]
+        except GitHubEvidenceError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 class GitCommitCreateIn(BaseModel):

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef, useLayoutEffect } from "react";
 import MarloSelect from "../components/MarloSelect";
 import MarloCopilotDrawer from "../components/MarloCopilotDrawer";
+import LessonQnaDrawer from "../components/LessonQnaDrawer";
 
 const INITIAL_COPILOT_MESSAGE =
   "**Chào giảng viên!** Tôi là **AI Teaching Co-Pilot** đồng hành cùng học phần của bạn:\n" +
@@ -1550,6 +1551,13 @@ export default function InstructorPanel({
 
 
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [isQnaOpen, setIsQnaOpen] = useState(false);
+  const [qnaTotalCount, setQnaTotalCount] = useState(0);
+  const [qnaUnansweredCount, setQnaUnansweredCount] = useState(0);
+  const handleInstructorQnaCounts = useCallback((total: number, unanswered: number) => {
+    setQnaTotalCount(total);
+    setQnaUnansweredCount(unanswered);
+  }, []);
 
 
 
@@ -3747,6 +3755,21 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsQnaOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#f8c7b6] dark:border-[#6e3a28] bg-[#fff4ef] dark:bg-[#2d1d17] hover:bg-[#ffe7dc] dark:hover:bg-[#3a241d] px-3.5 py-2 text-xs font-bold text-[#f05123] dark:text-[#ff8563] transition cursor-pointer shadow-2xs whitespace-nowrap"
+              title="Xem & giải đáp thắc mắc của học viên trong các bài học"
+            >
+              <MessageSquare size={14} />
+              <span>Hỏi đáp Bài học</span>
+              {(qnaUnansweredCount > 0 || qnaTotalCount > 0) && (
+                <span className="rounded-full bg-[#f05123] px-1.5 py-0.5 text-[10px] font-extrabold leading-none text-white">
+                  {qnaUnansweredCount > 0 ? `${qnaUnansweredCount} mới` : qnaTotalCount}
+                </span>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={() => onNavigate?.("defense-room")}
@@ -10482,6 +10505,18 @@ Kiểm tra kỹ các tình huống biên (Edge Cases) và hoàn thành toàn b�
          ==================================================================== */}
 
 
+
+      {/* F8-Style Student Lesson Q&A Moderation Drawer */}
+      <LessonQnaDrawer
+        isOpen={isQnaOpen}
+        onClose={() => setIsQnaOpen(false)}
+        subjectId={activeClass?.subjectId || activeClass?.id?.replace(/^class-/, "") || "oop"}
+        subjectCode={activeClass?.code}
+        subjectName={activeClass?.name}
+        role="instructor"
+        courseWideMode
+        onCommentCountChange={handleInstructorQnaCounts}
+      />
 
       {/* Marlo Authentic AI Teaching Co-Pilot Drawer */}
       <MarloCopilotDrawer

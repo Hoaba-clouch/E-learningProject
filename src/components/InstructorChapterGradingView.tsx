@@ -155,32 +155,43 @@ export function InstructorChapterGradingView({
   // activeSub phải lấy từ filteredList để tránh hiển thị nhầm bài khác khi search trả 0 kết quả
   const activeSub =
     filteredList.find((s) => s.id === activeSubId) || filteredList[0] || null;
+  const officialGrades = submissions
+    .filter((submission) => submission.status === "graded" && typeof submission.instructorGrade === "number" && Number.isFinite(submission.instructorGrade))
+    .map((submission) => submission.instructorGrade as number);
+  const officialAverage = officialGrades.length > 0
+    ? officialGrades.reduce((sum, grade) => sum + grade, 0) / officialGrades.length : null;
 
   // Sync grading input with active submission
   useEffect(() => {
     if (activeSub) {
-      const initialScore = activeSub.instructorGrade ?? activeSub.score;
-      setGradeInput(initialScore !== null && initialScore !== undefined ? String(initialScore) : "9.0");
+      const initialScore = activeSub.instructorGrade ?? (activeSub.metricsVerified === true ? activeSub.score : undefined);
+      setGradeInput(initialScore !== null && initialScore !== undefined ? String(initialScore) : "");
       setFeedbackInput(activeSub.instructorFeedback || "");
     }
   }, [activeSubId, activeSub]);
 
   const handleAction = async (action: "approve" | "override" | "request_revision") => {
     if (!activeSub) return;
+    if (action === "approve" && activeSub.metricsVerified !== true) {
+      onNotify?.("Chưa có điểm tự động đã xác minh. Hãy nhập điểm thẩm định của giảng viên.");
+      return;
+    }
     if (action === "request_revision" && !feedbackInput.trim()) {
       onNotify?.("⚠️ Vui lòng nhập lời phê / hướng dẫn sửa lỗi trước khi gửi yêu cầu nộp lại.");
       return;
     }
+    const parsedGrade = Number(gradeInput);
+    if (action === "override" && (!gradeInput.trim() || !Number.isFinite(parsedGrade) || parsedGrade < 0 || parsedGrade > 10)) {
+      onNotify?.("Vui lòng nhập điểm giảng viên từ 0 đến 10.");
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const parsedGrade = parseFloat(gradeInput);
-      const gradeVal = isNaN(parsedGrade) ? activeSub.score : Math.max(0, Math.min(10, parsedGrade));
+      const gradeVal = action === "approve" ? activeSub.score : parsedGrade;
       const payload = {
         action,
-        instructor_grade: action === "approve" ? activeSub.score : gradeVal,
-        instructor_feedback:
-          feedbackInput.trim() ||
-          (action === "approve" ? "Đã phê duyệt nghiệm thu theo kết quả Docker Sandbox." : ""),
+        ...(action !== "request_revision" ? { instructor_grade: gradeVal } : {}),
+        instructor_feedback: feedbackInput.trim(),
       };
 
       await gradeInstructorChapterSubmission(activeSub.id, payload);
@@ -245,15 +256,15 @@ export function InstructorChapterGradingView({
 
         <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
           <div className="flex items-center justify-between text-xs text-blue-600 dark:text-blue-400 font-medium">
-            <span>Điểm trung bình AI</span>
+            <span>Điểm trung bình giảng viên</span>
             <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
               <Sparkles size={14} />
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold font-mono text-slate-900 dark:text-white">
-            {summary.avgScore.toFixed(1)} <span className="text-xs text-slate-400 font-normal">/ 10</span>
+            {officialAverage !== null ? officialAverage.toFixed(1) : "—"} <span className="text-xs text-slate-400 font-normal">/ 10</span>
           </div>
-          <span className="text-[11px] text-slate-400">Chấm qua Docker Sandbox</span>
+          <span className="text-[11px] text-slate-400">Chỉ các điểm đã được giảng viên công nhận</span>
         </div>
       </div>
 
@@ -331,7 +342,7 @@ export function InstructorChapterGradingView({
               {loading && <RefreshCw size={13} className="animate-spin text-emerald-500" />}
             </div>
             <span className="text-[11px] font-mono text-slate-500">
-              Docker Sandbox Runner • Valgrind Leak Check
+              Kho mã nguồn • Thẩm định giảng viên
             </span>
           </div>
 
@@ -347,14 +358,13 @@ export function InstructorChapterGradingView({
                     <th className="px-3.5 py-2.5">Học viên</th>
                     <th className="px-3 py-2.5">Chương / Đề bài</th>
                     <th className="px-3 py-2.5">Test Sandbox</th>
-                    <th className="px-3 py-2.5 text-right">Điểm AI / GV</th>
+                    <th className="px-3 py-2.5 text-right">Điểm tự động / GV</th>
                     <th className="px-3 py-2.5 text-center">Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                   {filteredList.map((sub) => {
                     const isSelected = activeSub?.id === sub.id;
-                    const isPassAll = sub.testsPassed === sub.testsTotal;
                     return (
                       <tr
                         key={sub.id}
@@ -395,17 +405,17 @@ export function InstructorChapterGradingView({
                             <span
                               className="px-2 py-0.5 rounded-full text-[10.5px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                             >
-                              {sub.testsPassed}/{sub.testsTotal}
+                              {sub.metricsVerified === true ? `${sub.testsPassed}/${sub.testsTotal}` : "Chưa xác minh"}
                             </span>
                             <span className="text-[10px] font-mono text-slate-400">
-                              {sub.executionTimeMs}ms
+                              {sub.metricsVerified === true ? `${sub.executionTimeMs}ms` : ""}
                             </span>
                           </div>
                         </td>
 
                         <td className="px-3 py-3 text-right">
                           <div className="font-mono font-bold text-xs">
-                            <span className="text-slate-600 dark:text-slate-300 font-bold">{sub.score.toFixed(1)}</span>
+                            <span className="text-slate-600 dark:text-slate-300 font-bold">{sub.metricsVerified === true ? sub.score.toFixed(1) : "—"}</span>
                             <span className="text-slate-400 dark:text-slate-500 mx-1">/</span>
                             <span className={sub.instructorGrade !== null && sub.instructorGrade !== undefined ? "text-slate-900 dark:text-white font-extrabold" : "text-slate-400 font-normal"}>
                               {sub.instructorGrade !== null && sub.instructorGrade !== undefined ? sub.instructorGrade.toFixed(1) : "—"}
@@ -491,8 +501,14 @@ export function InstructorChapterGradingView({
                 )}
               </div>
 
+              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 text-[11px] text-slate-600 dark:text-slate-300">
+                <p><strong>Xác thực nguồn:</strong> {activeSub.evidence?.verification || "Bài nộp cũ chưa có chứng cứ xác thực nguồn."}</p>
+                <p className="font-mono break-all"><strong>Commit đã ghi nhận:</strong> {activeSub.evidence?.commit_sha || "Chưa có SHA được xác minh"}</p>
+                {activeSub.metricsVerified !== true && <p>Chưa có kết quả test, đo tài nguyên hay đối chiếu đạo văn đã xác minh. Điểm cũ do mô phỏng không được dùng để phê duyệt.</p>}
+              </div>
+
               {/* Kết quả Docker Sandbox & Chống đạo văn */}
-              <div className="grid grid-cols-3 gap-2 text-center">
+              {activeSub.metricsVerified === true && <div className="grid grid-cols-2 gap-2 text-center">
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
                   <span className="text-[10px] text-slate-400 block font-medium">Test Sandbox</span>
                   <span className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
@@ -505,16 +521,10 @@ export function InstructorChapterGradingView({
                     {activeSub.executionTimeMs}ms
                   </span>
                 </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block font-medium">Code Integrity</span>
-                  <span className="text-sm font-bold font-mono text-blue-600 dark:text-blue-400">
-                    {activeSub.antiPlagiarismScore.toFixed(0)}%
-                  </span>
-                </div>
-              </div>
+              </div>}
 
               {/* Gợi ý đánh giá của AI */}
-              {activeSub.aiFeedback && (
+              {activeSub.metricsVerified === true && activeSub.aiFeedback && (
                 <div className="p-3 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40 space-y-1 text-xs">
                   <div className="flex items-center gap-1.5 font-bold text-purple-700 dark:text-purple-300">
                     <Sparkles size={13} />
@@ -545,6 +555,7 @@ export function InstructorChapterGradingView({
                       min="0"
                       max="10"
                       value={gradeInput}
+                      placeholder="Chưa có"
                       onChange={(e) => setGradeInput(e.target.value)}
                       className="w-18 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-right font-mono font-bold text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
                     />
@@ -566,16 +577,16 @@ export function InstructorChapterGradingView({
                 </div>
 
                 {/* 3 Nút Hành Động Nghiệp Vụ */}
-                <div className="grid grid-cols-3 gap-2 pt-1">
-                  <button
+                <div className={`grid ${activeSub.metricsVerified === true ? "grid-cols-3" : "grid-cols-2"} gap-2 pt-1`}>
+                  {activeSub.metricsVerified === true && <button
                     type="button"
                     onClick={() => handleAction("approve")}
                     disabled={isSubmitting}
                     className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition shadow-2xs cursor-pointer disabled:opacity-50"
                   >
                     <Check size={14} />
-                    <span>Duyệt điểm AI</span>
-                  </button>
+                    <span>Duyệt điểm đã xác minh</span>
+                  </button>}
 
                   <button
                     type="button"

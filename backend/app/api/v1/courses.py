@@ -8,6 +8,7 @@ from app.api.deps import current_user, record_audit_log, require_instructor
 from app.core.database import db
 from app.core.security import uid
 from app.core.timezone import now_utc
+from app.services.quiz_grading import public_course_chapters
 from app.schemas.courses import (
     AssignmentUpdateIn,
     ChapterCreateIn,
@@ -384,17 +385,22 @@ def list_courses(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]
             )
         else:
             merged["enrolled"] = False
-        serialized.append(_serialize_course(merged, telemetry))
+        item = _serialize_course(merged, telemetry)
+        item["chapters"] = public_course_chapters(item.get("chapters"))
+        serialized.append(item)
     return {"courses": serialized}
 
 
 @router.get("/courses/{course_id}")
-def get_course(course_id: str, _: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+def get_course(course_id: str, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     """Lấy chi tiết 1 học phần theo ID."""
     with db() as conn:
         telemetry = _build_mindmap_telemetry_maps(conn)
         row, _ = _load_course_or_404(conn, course_id)
-    return {"course": _serialize_course(row, telemetry)}
+    result = _serialize_course(row, telemetry)
+    if user.get("role") not in ("instructor", "admin"):
+        result["chapters"] = public_course_chapters(result.get("chapters"))
+    return {"course": result}
 
 
 @router.post("/instructor/courses/{course_id}/chapters", status_code=status.HTTP_201_CREATED)

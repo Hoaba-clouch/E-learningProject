@@ -10,6 +10,18 @@ class LessonCompleteIn(BaseModel):
     xp: int = Field(default=50, ge=0, le=300)
     quiz_score: int = Field(default=0, ge=0, le=100)
     quiz_total: int = Field(default=0, ge=0, le=100)
+    quiz_attempt_id: str | None = Field(default=None, max_length=64)
+
+
+class QuizStartIn(BaseModel):
+    subject_id: str = Field(min_length=1, max_length=64)
+    lesson_id: str = Field(min_length=1, max_length=64)
+    restart: bool = False
+
+
+class QuizAnswerIn(BaseModel):
+    question_id: str = Field(min_length=1, max_length=64)
+    option_id: str = Field(min_length=1, max_length=64)
 
 
 class VideoProgressIn(BaseModel):
